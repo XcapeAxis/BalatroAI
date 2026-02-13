@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyc.*
+
+# Virtual environments
+.venv/
+venv/
+.env
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Balatro runtime and logs
+logs/
+runtime/
+.tmp/
+*.log
+*.tmp
+*.pid
+
+# Sweep benchmark artifacts
+sweep_raw/
+sweep_raw_full/
+sweep_full_raw/
+sweep_full50_raw/
+sweep_*_raw/
+sweep_results*.csv
+sweep_*.csv
