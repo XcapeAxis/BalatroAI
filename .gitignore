@@ -33,3 +33,8 @@ sweep_full50_raw/
 sweep_*_raw/
 sweep_results*.csv
 sweep_*.csv
+# Trainer artifacts
+trainer_data/
+trainer_runs/
+.venv_trainer/
+trainer/config.json
