@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from sim.oracle.generate_p0_trace import TARGETS, generate_trace
-from trainer.env_client import health
+from trainer.env_client import _call_method, health
 
 SCOPE_CHOICES = ["hand_core", "score_core", "p0_hand_score_core", "zones_core", "zones_counts_core", "economy_core", "rng_events_core", "full"]
 TARGET_SCOPE_FALLBACK = {
@@ -159,6 +159,13 @@ def _count_jsonl_lines(path: Path) -> int:
 
 
 def _load_target_preferred_scope(project_root: Path, target: str, global_scope: str) -> str:
+    # Respect explicit non-default global scope, except hard target fallback overrides.
+    if global_scope != "score_core":
+        fallback = TARGET_SCOPE_FALLBACK.get(target)
+        if fallback in SCOPE_CHOICES:
+            return fallback
+        return global_scope
+
     meta_path = project_root / "sim" / "tests" / "fixtures_directed" / f"meta_{target}.json"
     if meta_path.exists():
         try:
@@ -214,6 +221,7 @@ def main() -> int:
         action_path = out_dir / f"action_trace_{target}.jsonl"
         oracle_trace_path = out_dir / f"oracle_trace_{target}.jsonl"
         sim_trace_path = out_dir / f"sim_trace_{target}.jsonl"
+        oracle_start_state_path = out_dir / f"oracle_start_state_{target}.jkr"
         scope_used = _load_target_preferred_scope(project_root, target, args.scope)
 
         row: dict[str, Any] = {
@@ -233,6 +241,7 @@ def main() -> int:
             "dumped_sim": None,
             "artifacts": {
                 "oracle_start_snapshot": _safe_relpath(snapshot_path, project_root),
+                "oracle_start_state": _safe_relpath(oracle_start_state_path, project_root),
                 "action_trace": _safe_relpath(action_path, project_root),
                 "oracle_trace": _safe_relpath(oracle_trace_path, project_root),
                 "sim_trace": _safe_relpath(sim_trace_path, project_root),
@@ -279,6 +288,18 @@ def main() -> int:
             rows.append(row)
             _print_row_summary(row)
             continue
+
+        start_state_path = str(gen.get("oracle_start_state_path") or "").strip()
+        if start_state_path:
+            try:
+                _call_method(args.base_url, "load", {"path": start_state_path}, timeout=float(args.timeout_sec))
+            except Exception as exc:
+                row["status"] = "oracle_fail"
+                row["failure_reason"] = _summarize_failure(f"oracle_fail: failed to load start state: {exc}")
+                row["error"] = row["failure_reason"]
+                rows.append(row)
+                _print_row_summary(row)
+                continue
 
         oracle_cmd = [
             sys.executable,

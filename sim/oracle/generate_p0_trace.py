@@ -797,6 +797,16 @@ def generate_trace(
         start_meta["index_base_detected"] = int(index_base)
         start_meta["index_probe"] = dict(index_probe)
 
+    oracle_start_state_path: str | None = None
+    if out_dir is not None:
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            state_path = out_dir / f"oracle_start_state_{target}.jkr"
+            _call_method(base_url, "save", {"path": str(state_path)}, timeout=timeout_sec)
+            oracle_start_state_path = str(state_path)
+        except Exception:
+            oracle_start_state_path = None
+
     success = False
     hit_info: dict[str, Any] = {}
     failure_reason: str | None = None
@@ -842,6 +852,7 @@ def generate_trace(
         "failure_reason": failure_reason,
         "start_snapshot": start_snapshot,
         "action_trace": builder.action_trace,
+        "oracle_start_state_path": oracle_start_state_path,
     }
 
     if out_dir is not None:
@@ -855,6 +866,7 @@ def generate_trace(
         result["artifact_paths"] = {
             "oracle_start_snapshot": str(snap_path),
             "action_trace": str(action_path),
+            "oracle_start_state": str(out_dir / f"oracle_start_state_{target}.jkr") if oracle_start_state_path else None,
         }
 
     return result
