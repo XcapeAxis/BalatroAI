@@ -159,11 +159,13 @@ def _count_jsonl_lines(path: Path) -> int:
 
 
 def _load_target_preferred_scope(project_root: Path, target: str, global_scope: str) -> str:
-    # Respect explicit non-default global scope, except hard target fallback overrides.
+    # Hard target overrides always win.
+    fallback = TARGET_SCOPE_FALLBACK.get(target)
+    if fallback in SCOPE_CHOICES:
+        return fallback
+
+    # Respect explicit non-default global scope.
     if global_scope != "score_core":
-        fallback = TARGET_SCOPE_FALLBACK.get(target)
-        if fallback in SCOPE_CHOICES:
-            return fallback
         return global_scope
 
     meta_path = project_root / "sim" / "tests" / "fixtures_directed" / f"meta_{target}.json"
@@ -176,9 +178,6 @@ def _load_target_preferred_scope(project_root: Path, target: str, global_scope: 
         except Exception:
             pass
 
-    fallback = TARGET_SCOPE_FALLBACK.get(target)
-    if fallback in SCOPE_CHOICES:
-        return fallback
     return global_scope
 
 

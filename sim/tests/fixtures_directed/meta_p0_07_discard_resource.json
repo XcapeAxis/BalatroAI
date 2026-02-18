@@ -1,5 +1,5 @@
 ﻿{
-    "name":  "p0_07_discard_resource",
-    "preferred_scope":  "zones_core",
-    "notes":  "oracle regression preferred scope override"
+  "name": "p0_07_discard_resource",
+  "preferred_scope": "zones_counts_core",
+  "notes": "oracle regression preferred scope override"
 }
