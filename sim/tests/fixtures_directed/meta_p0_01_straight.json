@@ -1,0 +1,5 @@
+﻿{
+    "name":  "p0_01_straight",
+    "preferred_scope":  "score_core",
+    "notes":  "oracle regression preferred scope override"
+}

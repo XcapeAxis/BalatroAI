@@ -1,0 +1,5 @@
+﻿{
+    "name":  "p0_08_round_eval",
+    "preferred_scope":  "score_core",
+    "notes":  "oracle regression preferred scope override"
+}

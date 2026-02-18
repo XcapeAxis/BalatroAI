@@ -1,0 +1,5 @@
+﻿{
+    "name":  "p0_02_flush",
+    "preferred_scope":  "score_core",
+    "notes":  "oracle regression preferred scope override"
+}
