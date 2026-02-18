@@ -14,9 +14,11 @@ from sim.core.hashing import (
     state_hash_economy_core,
     state_hash_full,
     state_hash_hand_core,
+    state_hash_p0_hand_score_core,
     state_hash_rng_events_core,
     state_hash_score_core,
     state_hash_zones_core,
+    state_hash_zones_counts_core,
 )
 from sim.core.validate import validate_action, validate_trace_line
 from sim.oracle.extract_rng_events import extract_rng_events
@@ -120,7 +122,9 @@ def main() -> int:
                 "state_hash_full": state_hash_full(canonical),
                 "state_hash_hand_core": state_hash_hand_core(canonical),
                 "state_hash_score_core": state_hash_score_core(canonical),
+                "state_hash_p0_hand_score_core": state_hash_p0_hand_score_core(canonical),
                 "state_hash_zones_core": state_hash_zones_core(canonical),
+                "state_hash_zones_counts_core": state_hash_zones_counts_core(canonical),
                 "state_hash_economy_core": state_hash_economy_core(canonical),
                 "state_hash_rng_events_core": state_hash_rng_events_core(canonical),
                 "reward": float(reward),

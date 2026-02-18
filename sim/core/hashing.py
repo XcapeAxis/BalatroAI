@@ -1,7 +1,7 @@
 ﻿import hashlib
 from typing import Any
 
-from sim.core.serde import to_builtin, canonical_dumps
+from sim.core.serde import canonical_dumps, to_builtin
 
 
 def _zone_cards(zones: dict[str, Any], name: str) -> list[dict[str, Any]]:
@@ -9,6 +9,62 @@ def _zone_cards(zones: dict[str, Any], name: str) -> list[dict[str, Any]]:
     if isinstance(raw, list):
         return [c for c in raw if isinstance(c, dict)]
     return []
+
+
+def _normalize_rank(raw_rank: Any) -> str:
+    rank = str(raw_rank or "").strip().upper()
+    if rank == "T":
+        rank = "10"
+    return rank
+
+
+def _normalize_suit(raw_suit: Any) -> str:
+    suit = str(raw_suit or "").strip().upper()
+    return suit[:1] if suit else ""
+
+
+def _normalize_tags(raw_tags: Any) -> list[str]:
+    if isinstance(raw_tags, list):
+        tags = [str(x).strip() for x in raw_tags if str(x).strip()]
+    elif raw_tags is None:
+        tags = []
+    else:
+        text = str(raw_tags).strip()
+        tags = [text] if text else []
+    return sorted(set(tags))
+
+
+def _card_minimal(card: dict[str, Any]) -> dict[str, Any]:
+    value = card.get("value") if isinstance(card.get("value"), dict) else {}
+    rank = _normalize_rank(card.get("rank") or value.get("rank"))
+    suit = _normalize_suit(card.get("suit") or value.get("suit"))
+
+    key = str(card.get("key") or "").strip().upper()
+    if not key and rank and suit:
+        key_rank = "T" if rank == "10" else rank
+        key = f"{suit}_{key_rank}"
+
+    modifier = _normalize_tags(card.get("modifier"))
+    if not modifier:
+        modifier = _normalize_tags(card.get("modifier_tags"))
+
+    state_tags = _normalize_tags(card.get("state"))
+    if not state_tags:
+        state_tags = _normalize_tags(card.get("state_tags"))
+
+    return {
+        "rank": rank,
+        "suit": suit,
+        "key": key,
+        "modifier": modifier,
+        "state": state_tags,
+    }
+
+
+def _zone_cards_min_sorted(zones: dict[str, Any], name: str) -> list[dict[str, Any]]:
+    cards = [_card_minimal(c) for c in _zone_cards(zones, name)]
+    cards.sort(key=canonical_dumps)
+    return cards
 
 
 def _zone_uids(zones: dict[str, Any], name: str) -> list[str]:
@@ -87,6 +143,29 @@ def _filter_score_core(state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _filter_p0_hand_score_core(state: dict[str, Any]) -> dict[str, Any]:
+    state = to_builtin(state)
+    zones = state.get("zones") or {}
+    round_info = state.get("round") or {}
+    score = state.get("score") or {}
+    return {
+        "schema_version": state.get("schema_version"),
+        "zones": {
+            "hand": _zone_cards_min_sorted(zones, "hand"),
+            "played": _zone_cards_min_sorted(zones, "played"),
+        },
+        "round": {
+            "hands_left": round_info.get("hands_left", 0),
+            "discards_left": round_info.get("discards_left", 0),
+        },
+        "score": {
+            "last_hand_type": score.get("last_hand_type", ""),
+            "last_base_chips": score.get("last_base_chips", 0),
+            "last_base_mult": score.get("last_base_mult", 1),
+        },
+    }
+
+
 def _filter_zones_core(state: dict[str, Any]) -> dict[str, Any]:
     state = to_builtin(state)
     zones = state.get("zones") or {}
@@ -103,6 +182,23 @@ def _filter_zones_core(state: dict[str, Any]) -> dict[str, Any]:
         "schema_version": state.get("schema_version"),
         "phase": state.get("phase"),
         "zones": zone_view,
+    }
+
+
+def _filter_zones_counts_core(state: dict[str, Any]) -> dict[str, Any]:
+    state = to_builtin(state)
+    zones = state.get("zones") or {}
+    round_info = state.get("round") or {}
+    counts: dict[str, int] = {}
+    for name in ("deck", "discard", "hand", "played"):
+        counts[name] = len(_zone_cards(zones, name))
+    return {
+        "schema_version": state.get("schema_version"),
+        "zones": counts,
+        "round": {
+            "hands_left": round_info.get("hands_left", 0),
+            "discards_left": round_info.get("discards_left", 0),
+        },
     }
 
 
@@ -172,8 +268,16 @@ def state_hash_score_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_score_core(state)))
 
 
+def state_hash_p0_hand_score_core(state: dict[str, Any]) -> str:
+    return _sha256_text(canonical_dumps(_filter_p0_hand_score_core(state)))
+
+
 def state_hash_zones_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_zones_core(state)))
+
+
+def state_hash_zones_counts_core(state: dict[str, Any]) -> str:
+    return _sha256_text(canonical_dumps(_filter_zones_counts_core(state)))
 
 
 def state_hash_economy_core(state: dict[str, Any]) -> str:
@@ -192,8 +296,16 @@ def score_core_projection(state: dict[str, Any]) -> dict[str, Any]:
     return _filter_score_core(state)
 
 
+def p0_hand_score_core_projection(state: dict[str, Any]) -> dict[str, Any]:
+    return _filter_p0_hand_score_core(state)
+
+
 def zones_core_projection(state: dict[str, Any]) -> dict[str, Any]:
     return _filter_zones_core(state)
+
+
+def zones_counts_core_projection(state: dict[str, Any]) -> dict[str, Any]:
+    return _filter_zones_counts_core(state)
 
 
 def economy_core_projection(state: dict[str, Any]) -> dict[str, Any]:

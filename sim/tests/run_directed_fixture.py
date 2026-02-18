@@ -14,15 +14,19 @@ from sim.core.engine import SimEnv
 from sim.core.hashing import (
     economy_core_projection,
     hand_core_projection,
+    p0_hand_score_core_projection,
     rng_events_core_projection,
     score_core_projection,
     state_hash_economy_core,
     state_hash_full,
     state_hash_hand_core,
+    state_hash_p0_hand_score_core,
     state_hash_rng_events_core,
     state_hash_score_core,
     state_hash_zones_core,
+    state_hash_zones_counts_core,
     zones_core_projection,
+    zones_counts_core_projection,
 )
 from sim.core.validate import validate_action, validate_state, validate_trace_line
 from sim.oracle.extract_rng_events import extract_rng_events
@@ -30,7 +34,9 @@ from sim.oracle.extract_rng_events import extract_rng_events
 SCOPE_TO_HASH_KEY = {
     "hand_core": "state_hash_hand_core",
     "score_core": "state_hash_score_core",
+    "p0_hand_score_core": "state_hash_p0_hand_score_core",
     "zones_core": "state_hash_zones_core",
+    "zones_counts_core": "state_hash_zones_counts_core",
     "economy_core": "state_hash_economy_core",
     "rng_events_core": "state_hash_rng_events_core",
     "full": "state_hash_full",
@@ -44,7 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--oracle-trace", help="Optional oracle trace jsonl for step-by-step diff.")
     parser.add_argument(
         "--scope",
-        choices=["hand_core", "score_core", "zones_core", "economy_core", "rng_events_core", "full"],
+        choices=["hand_core", "score_core", "p0_hand_score_core", "zones_core", "zones_counts_core", "economy_core", "rng_events_core", "full"],
         default="hand_core",
     )
     parser.add_argument("--check-start", action="store_true", help="Compare oracle snapshot vs simulator reset(from_snapshot) before replay.")
@@ -153,8 +159,12 @@ def _scope_projection(scope: str, state: dict[str, Any] | None) -> Any:
         return hand_core_projection(state)
     if scope == "score_core":
         return score_core_projection(state)
+    if scope == "p0_hand_score_core":
+        return p0_hand_score_core_projection(state)
     if scope == "zones_core":
         return zones_core_projection(state)
+    if scope == "zones_counts_core":
+        return zones_counts_core_projection(state)
     if scope == "economy_core":
         return economy_core_projection(state)
     if scope == "rng_events_core":
@@ -396,7 +406,9 @@ def main() -> int:
                 "state_hash_full": state_hash_full(canonical),
                 "state_hash_hand_core": state_hash_hand_core(canonical),
                 "state_hash_score_core": state_hash_score_core(canonical),
+                "state_hash_p0_hand_score_core": state_hash_p0_hand_score_core(canonical),
                 "state_hash_zones_core": state_hash_zones_core(canonical),
+                "state_hash_zones_counts_core": state_hash_zones_counts_core(canonical),
                 "state_hash_economy_core": state_hash_economy_core(canonical),
                 "state_hash_rng_events_core": state_hash_rng_events_core(canonical),
                 "reward": float(reward),

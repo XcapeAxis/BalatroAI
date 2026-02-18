@@ -16,9 +16,9 @@ from typing import Any
 from sim.oracle.generate_p0_trace import TARGETS, generate_trace
 from trainer.env_client import health
 
-SCOPE_CHOICES = ["hand_core", "score_core", "zones_core", "economy_core", "rng_events_core", "full"]
+SCOPE_CHOICES = ["hand_core", "score_core", "p0_hand_score_core", "zones_core", "zones_counts_core", "economy_core", "rng_events_core", "full"]
 TARGET_SCOPE_FALLBACK = {
-    "p0_07_discard_resource": "zones_core",
+    "p0_07_discard_resource": "zones_counts_core",
 }
 
 
