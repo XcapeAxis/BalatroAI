@@ -47,6 +47,7 @@ def parse_args() -> argparse.Namespace:
         choices=["hand_core", "score_core", "zones_core", "economy_core", "rng_events_core", "full"],
         default="hand_core",
     )
+    parser.add_argument("--check-start", action="store_true", help="Compare oracle snapshot vs simulator reset(from_snapshot) before replay.")
     parser.add_argument("--fail-fast", dest="fail_fast", action="store_true", default=True)
     parser.add_argument("--no-fail-fast", dest="fail_fast", action="store_false")
     parser.add_argument("--out-trace", default="sim/runtime/directed_sim_trace.jsonl")
@@ -216,7 +217,27 @@ def _get_by_path(obj: Any, path_str: str) -> tuple[Any, bool]:
     return current, True
 
 
-def _dump_diff_artifacts(
+def _write_dump_payload(
+    *,
+    path: Path,
+    scope: str,
+    projection: Any,
+    first_diff_path: str | None,
+    dump_scope_only: bool,
+) -> None:
+    payload: dict[str, Any] = {
+        "scope": scope,
+        "projection": projection,
+    }
+    if first_diff_path:
+        payload["first_diff_path"] = first_diff_path
+        if not dump_scope_only:
+            subtree, ok = _get_by_path(projection, first_diff_path)
+            payload["first_diff_subtree"] = subtree if ok else "__path_not_found__"
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _dump_step_artifacts(
     *,
     step_id: int,
     scope: str,
@@ -231,28 +252,51 @@ def _dump_diff_artifacts(
     oracle_path = dump_dir / f"oracle_step_{step_id}_{scope}.json"
     sim_path = dump_dir / f"sim_step_{step_id}_{scope}.json"
 
-    oracle_payload: dict[str, Any] = {
-        "step_id": step_id,
-        "scope": scope,
-        "projection": oracle_projection,
-    }
-    sim_payload: dict[str, Any] = {
-        "step_id": step_id,
-        "scope": scope,
-        "projection": sim_projection,
-    }
+    _write_dump_payload(
+        path=oracle_path,
+        scope=scope,
+        projection=oracle_projection,
+        first_diff_path=first_diff_path,
+        dump_scope_only=dump_scope_only,
+    )
+    _write_dump_payload(
+        path=sim_path,
+        scope=scope,
+        projection=sim_projection,
+        first_diff_path=first_diff_path,
+        dump_scope_only=dump_scope_only,
+    )
+    return str(oracle_path), str(sim_path)
 
-    if first_diff_path:
-        oracle_payload["first_diff_path"] = first_diff_path
-        sim_payload["first_diff_path"] = first_diff_path
-        if not dump_scope_only:
-            oracle_subtree, oracle_ok = _get_by_path(oracle_projection, first_diff_path)
-            sim_subtree, sim_ok = _get_by_path(sim_projection, first_diff_path)
-            oracle_payload["first_diff_subtree"] = oracle_subtree if oracle_ok else "__path_not_found__"
-            sim_payload["first_diff_subtree"] = sim_subtree if sim_ok else "__path_not_found__"
 
-    oracle_path.write_text(json.dumps(oracle_payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    sim_path.write_text(json.dumps(sim_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+def _dump_start_artifacts(
+    *,
+    scope: str,
+    dump_dir: Path,
+    oracle_projection: Any,
+    sim_projection: Any,
+    first_diff_path: str | None,
+    dump_scope_only: bool,
+) -> tuple[str, str]:
+    dump_dir.mkdir(parents=True, exist_ok=True)
+
+    oracle_path = dump_dir / f"oracle_start_{scope}.json"
+    sim_path = dump_dir / f"sim_start_{scope}.json"
+
+    _write_dump_payload(
+        path=oracle_path,
+        scope=scope,
+        projection=oracle_projection,
+        first_diff_path=first_diff_path,
+        dump_scope_only=dump_scope_only,
+    )
+    _write_dump_payload(
+        path=sim_path,
+        scope=scope,
+        projection=sim_projection,
+        first_diff_path=first_diff_path,
+        dump_scope_only=dump_scope_only,
+    )
     return str(oracle_path), str(sim_path)
 
 
@@ -282,6 +326,38 @@ def main() -> int:
 
     env = SimEnv(seed=seed)
     state = env.reset(from_snapshot=snapshot)
+
+    # Optional baseline check: compare start snapshot before replay.
+    if args.check_start:
+        sim_start_canonical = to_canonical_state(
+            state,
+            rng_mode=rng_mode,
+            seed=seed,
+            rng_cursor=rng_cursor,
+            rng_events=list((snapshot.get("rng") or {}).get("events") or []),
+        )
+        oracle_start_projection = _scope_projection(args.scope, snapshot)
+        sim_start_projection = _scope_projection(args.scope, sim_start_canonical)
+        start_diff = _first_diff_path(oracle_start_projection, sim_start_projection)
+        if start_diff is not None:
+            path, oracle_val, sim_val = start_diff
+            print(f"START_MISMATCH scope={args.scope}")
+            print(f"start_first_diff_path={path}")
+            print(f"oracle_start_value={oracle_val}")
+            print(f"sim_start_value={sim_val}")
+            if dump_dir is not None:
+                dumped_oracle, dumped_sim = _dump_start_artifacts(
+                    scope=args.scope,
+                    dump_dir=dump_dir,
+                    oracle_projection=oracle_start_projection,
+                    sim_projection=sim_start_projection,
+                    first_diff_path=path,
+                    dump_scope_only=bool(args.dump_scope_only),
+                )
+                print(f"dumped_oracle={dumped_oracle}, dumped_sim={dumped_sim}")
+            if args.fail_fast:
+                print(f"wrote directed sim trace: {out_path}")
+                return 1
 
     mismatches = 0
     hash_key = SCOPE_TO_HASH_KEY[args.scope]
@@ -365,7 +441,7 @@ def main() -> int:
                         print("No snapshots on mismatch step. Re-run with --snapshot-every 1 and oracle trace snapshots.")
 
                     if dump_dir is not None:
-                        dumped_oracle, dumped_sim = _dump_diff_artifacts(
+                        dumped_oracle, dumped_sim = _dump_step_artifacts(
                             step_id=step_id,
                             scope=args.scope,
                             dump_dir=dump_dir,
