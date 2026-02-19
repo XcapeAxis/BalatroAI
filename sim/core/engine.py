@@ -3,6 +3,7 @@ import random
 from typing import Any
 
 from sim.core.score_basic import evaluate_selected_breakdown
+from sim.score.expected_basic import compute_expected_for_action
 
 SUITS = ["C", "D", "H", "S"]
 RANKS = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2"]
@@ -426,6 +427,7 @@ class SimEnv:
                     indices = [int(i) for i in (action.get("indices") or [])]
                     if not indices:
                         raise ValueError("PLAY requires at least one index")
+                    hand_before = copy.deepcopy(self._state["hand"]["cards"])
                     selected = self._pop_cards_by_indices(indices)
                     self._state["played"]["cards"] = selected
                     self._state["discard"]["cards"].extend(selected)
@@ -435,6 +437,18 @@ class SimEnv:
                     base_chips = float(score_info.get("base_chips") or 0.0)
                     base_mult = float(score_info.get("base_mult") or 1.0)
                     gain = float(score_info.get("total_delta") or 0.0)
+
+                    expected_context = action.get("expected_context") if isinstance(action.get("expected_context"), dict) else {}
+                    planet_context = expected_context.get("planet") if isinstance(expected_context.get("planet"), dict) else {}
+                    if planet_context and bool(planet_context.get("applied", True)):
+                        try:
+                            expected = compute_expected_for_action({"hand": {"cards": hand_before}}, action)
+                            if bool(expected.get("available")):
+                                gain = float(expected.get("score") or gain)
+                                base_mult = float(base_mult + float(expected.get("planet_bonus_mult") or 0.0))
+                        except Exception:
+                            pass
+
                     self._state["round"]["chips"] = float(self._state["round"]["chips"]) + gain
                     self._state["score"]["chips"] = float(self._state["round"]["chips"])
                     self._state["score"]["mult"] = float(base_mult)
