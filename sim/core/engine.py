@@ -242,7 +242,9 @@ class SimEnv:
         selecting = phase == "BLIND_SELECT"
 
         hand_cards = _restore_zone("hand")
-        self.max_hand = max(self.max_hand, len(hand_cards))
+        # Balatro observable hand size cap is 8; snapshots may temporarily contain >8 cards (debug/add),
+        # but draw-to-hand should still target the game cap instead of snapshot length.
+        self.max_hand = 8
 
         chips = float(score_info.get("chips") or 0.0)
         self._state = {
@@ -372,6 +374,23 @@ class SimEnv:
             st = self.reset(seed=seed if isinstance(seed, str) else self.seed)
             reward = float((st.get("round") or {}).get("chips") or 0.0) - prev_chips
             return st, reward, bool(st.get("done") or False), info
+
+        if action_type == "MENU":
+            self._state["state"] = "MENU"
+            if isinstance(self._state.get("round"), dict):
+                self._state["round"]["hands_left"] = 0
+                self._state["round"]["discards_left"] = 0
+                self._state["round"]["chips"] = 0.0
+            if isinstance(self._state.get("score"), dict):
+                self._state["score"]["chips"] = 0.0
+            self._state["hand"]["cards"] = []
+            self._state["played"]["cards"] = []
+            self._state["discard"]["cards"] = []
+            self._refresh_done_flags()
+            now = copy.deepcopy(self._state)
+            reward = float((now.get("round") or {}).get("chips") or 0.0) - prev_chips
+            done = bool(now.get("done") or False)
+            return now, reward, done, info
 
         if phase == "BLIND_SELECT":
             if action_type not in {"SELECT", "SKIP", "WAIT"}:

@@ -710,6 +710,16 @@ def generate_discard_resource_target(builder: TraceBuilder) -> tuple[bool, dict[
 
 
 def generate_round_eval_target(builder: TraceBuilder) -> tuple[bool, dict[str, Any], str | None]:
+    # Prefer deterministic high-score synthesis to avoid hidden draw divergence across oracle/sim.
+    syn_ok, syn_info, _ = _try_synthesize_target_hand(builder, "p0_05_straight_flush", "STRAIGHT_FLUSH")
+    if syn_ok:
+        phase = state_phase(builder.state)
+        if phase in {"ROUND_EVAL", "SHOP"}:
+            info = dict(syn_info)
+            info["final_phase"] = phase
+            info["strategy"] = "synthesized_straight_flush"
+            return True, info, None
+
     while builder.steps_used < builder.max_steps:
         phase = state_phase(builder.state)
         if phase in {"ROUND_EVAL", "SHOP"}:
