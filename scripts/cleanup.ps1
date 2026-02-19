@@ -28,6 +28,11 @@ function Remove-DirIfExists([string]$Path) {
 $before = Get-TreeSizeBytes $ProjectRoot
 Write-Host ("before: " + (Format-GB $before))
 
+$artifactsRoot = Join-Path $ProjectRoot "docs/artifacts"
+if (Test-Path $artifactsRoot) {
+  Write-Host "preserve artifacts: $artifactsRoot"
+}
+
 $safeDirs = @(
   "logs",
   "runtime",
@@ -39,7 +44,11 @@ foreach ($d in $safeDirs) { Remove-DirIfExists $d }
 $cacheNames = @("__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache")
 $cacheDirs = Get-ChildItem -Force -Recurse -Directory -ErrorAction SilentlyContinue | Where-Object { $cacheNames -contains $_.Name }
 foreach ($d in $cacheDirs) {
-  Remove-Item -LiteralPath $d.FullName -Recurse -Force -ErrorAction SilentlyContinue
+  $full = $d.FullName
+  if ($full -like "*docs\artifacts*") {
+    continue
+  }
+  Remove-Item -LiteralPath $full -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 $venvCandidates = Get-ChildItem -Force -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '.venv*' -or $_.Name -like 'venv*' }

@@ -78,6 +78,25 @@ function Run-WithRecovery([string]$Label, [string[]]$PyArgs, [string]$Url) {
   throw "[$Label] failed (non-recoverable)"
 }
 
+function Persist-P3Artifacts([string]$ReportPath, [string]$ProjectRootPath) {
+  $artifactDir = Join-Path $ProjectRootPath "docs/artifacts/p3"
+  if (-not (Test-Path $artifactDir)) { New-Item -ItemType Directory -Path $artifactDir -Force | Out-Null }
+  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+
+  $copies = @(
+    @{ Src = $ReportPath; Dest = (Join-Path $artifactDir ("report_p3_" + $stamp + ".json")) },
+    @{ Src = (Join-Path $ProjectRootPath "docs/COVERAGE_P3_JOKERS.md"); Dest = (Join-Path $artifactDir ("COVERAGE_P3_JOKERS_" + $stamp + ".md")) },
+    @{ Src = (Join-Path $ProjectRootPath "docs/COVERAGE_P3_STATUS.md"); Dest = (Join-Path $artifactDir ("COVERAGE_P3_STATUS_" + $stamp + ".md")) }
+  )
+
+  foreach ($item in $copies) {
+    if (Test-Path $item.Src) {
+      Copy-Item -LiteralPath $item.Src -Destination $item.Dest -Force
+      Write-Host ("[P3-artifacts] " + $item.Dest)
+    }
+  }
+}
+
 Ensure-Service -Url $BaseUrl
 if (-not (Test-Path $OutRoot)) { New-Item -ItemType Directory -Path $OutRoot -Force | Out-Null }
 $outRootPath = (Resolve-Path $OutRoot).Path
@@ -126,6 +145,7 @@ if ($RunP3) {
   Write-Host ("P2b report: {0}" -f $p2bReportPath)
   Write-Host ("P3 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4} skipped={5} unsupported={6}" -f $p3Report.passed, $p3Report.total, $p3Report.diff_fail, $p3Report.oracle_fail, $p3Report.gen_fail, $p3Report.skipped, $p3Report.classifier.unsupported)
   Write-Host ("P3 report: {0}" -f $p3ReportPath)
+  Persist-P3Artifacts -ReportPath $p3ReportPath -ProjectRootPath $ProjectRoot
 }
 elseif ($RunP2b) {
   Run-WithRecovery -Label "P2b" -PyArgs $p2bArgs -Url $BaseUrl

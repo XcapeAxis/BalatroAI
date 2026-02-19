@@ -28,3 +28,15 @@ Data policy:
 P3 artifacts generated from final CSV:
 - `balatro_mechanics/derived/joker_template_map.json`
 - `balatro_mechanics/derived/joker_template_unsupported.json`
+
+
+P3 derived artifacts (kept in repo):
+- `balatro_mechanics/derived/joker_template_map.json`
+- `balatro_mechanics/derived/joker_template_unsupported.json`
+- `balatro_mechanics/derived/p3_discovery_clusters.json`
+- `balatro_mechanics/derived/p3_supported_targets.txt`
+
+P3 runtime artifacts (not committed):
+- `sim/tests/fixtures_runtime/oracle_p3_jokers_*`
+- runtime dumps and transient trace outputs
+
