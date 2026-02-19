@@ -1,0 +1,1146 @@
+[
+  {
+    "set_type": "planet",
+    "card_name": "Ceres",
+    "consumable_key": "c_ceres",
+    "key_candidates": [
+      "c_ceres"
+    ],
+    "template": "planet_hand_level_up",
+    "confidence": 0.99,
+    "matched_rules": [
+      "planet:+Mult/+Chips to hand type"
+    ],
+    "params": {
+      "cards_required": 0,
+      "hand_type": "FLUSH_HOUSE",
+      "planet_bonus_mult": 4.0,
+      "planet_bonus_chips": 40.0
+    },
+    "target": "p4_planet_ceres",
+    "raw_fields_used": {
+      "effect_summary": "+4 Mult and +40 Chips to Flush House",
+      "primary_impact": "scoring",
+      "constraints_or_costs": "Secret planet; appears only after associated secret hand is played in current run",
+      "synergies_or_notes": "Hand base score reference: 14 Mult x 140 Chips; Type: Dwarf Planet"
+    }
+  },
+  {
+    "set_type": "planet",
+    "card_name": "Earth",
+    "consumable_key": "c_earth",
+    "key_candidates": [
+      "c_earth"
+    ],
+    "template": "planet_hand_level_up",
+    "confidence": 0.99,
+    "matched_rules": [
+      "planet:+Mult/+Chips to hand type"
+    ],
+    "params": {
+      "cards_required": 0,
+      "hand_type": "FULL_HOUSE",
+      "planet_bonus_mult": 2.0,
+      "planet_bonus_chips": 25.0
+    },
+    "target": "p4_planet_earth",
+    "raw_fields_used": {
+      "effect_summary": "+2 Mult and +25 Chips to Full House",
+      "primary_impact": "scoring",
+      "constraints_or_costs": "",
+      "synergies_or_notes": "Hand base score reference: 4 Mult x 40 Chips; Type: Planet"
+    }
+  },
+  {
+    "set_type": "planet",
+    "card_name": "Eris",
+    "consumable_key": "c_eris",
+    "key_candidates": [
+      "c_eris"
+    ],
+    "template": "planet_hand_level_up",
+    "confidence": 0.99,
+    "matched_rules": [
+      "planet:+Mult/+Chips to hand type"
+    ],
+    "params": {
+      "cards_required": 0,
+      "hand_type": "FLUSH_FIVE",
+      "planet_bonus_mult": 3.0,
+      "planet_bonus_chips": 50.0
+    },
+    "target": "p4_planet_eris",
+    "raw_fields_used": {
+      "effect_summary": "+3 Mult and +50 Chips to Flush Five",
+      "primary_impact": "scoring",
+      "constraints_or_costs": "Secret planet; appears only after associated secret hand is played in current run",
+      "synergies_or_notes": "Hand base score reference: 16 Mult x 160 Chips; Type: Dwarf Planet"
+    }
+  },
+  {
+    "set_type": "planet",
+    "card_name": "Jupiter",
+    "consumable_key": "c_jupiter",
+    "key_candidates": [
+      "c_jupiter"
+    ],
+    "template": "planet_hand_level_up",
+    "confidence": 0.99,
+    "matched_rules": [
+      "planet:+Mult/+Chips to hand type"
+    ],
+    "params": {
+      "cards_required": 0,
+      "hand_type": "FLUSH",
+      "planet_bonus_mult": 2.0,
+      "planet_bonus_chips": 15.0
+    },
+    "target": "p4_planet_jupiter",
+    "raw_fields_used": {
+      "effect_summary": "+2 Mult and +15 Chips to Flush",
+      "primary_impact": "scoring",
+      "constraints_or_costs": "",
+      "synergies_or_notes": "Hand base score reference: 4 Mult x 35 Chips; Type: Planet"
+    }
+  },
+  {
+    "set_type": "planet",
+    "card_name": "Mars",
+    "consumable_key": "c_mars",
+    "key_candidates": [
+      "c_mars"
+    ],
+    "template": "planet_hand_level_up",
+    "confidence": 0.99,
+    "matched_rules": [
+      "planet:+Mult/+Chips to hand type"
+    ],
+    "params": {
+      "cards_required": 0,
+      "hand_type": "FOUR_OF_A_KIND",
+      "planet_bonus_mult": 3.0,
+      "planet_bonus_chips": 30.0
+    },
+    "target": "p4_planet_mars",
+    "raw_fields_used": {
+      "effect_summary": "+3 Mult and +30 Chips to Four of a Kind",
+      "primary_impact": "scoring",
+      "constraints_or_costs": "",
+      "synergies_or_notes": "Hand base score reference: 7 Mult x 60 Chips; Type: Planet"
+    }
+  },
+  {
+    "set_type": "planet",
+    "card_name": "Mercury",
+    "consumable_key": "c_mercury",
+    "key_candidates": [
+      "c_mercury"
+    ],
+    "template": "planet_hand_level_up",
+    "confidence": 0.99,
+    "matched_rules": [
+      "planet:+Mult/+Chips to hand type"
+    ],
+    "params": {
+      "cards_required": 0,
+      "hand_type": "PAIR",
+      "planet_bonus_mult": 1.0,
+      "planet_bonus_chips": 15.0
+    },
+    "target": "p4_planet_mercury",
+    "raw_fields_used": {
+      "effect_summary": "+1 Mult and +15 Chips to Pair",
+      "primary_impact": "scoring",
+      "constraints_or_costs": "",
+      "synergies_or_notes": "Hand base score reference: 2 Mult x 10 Chips; Type: Planet"
+    }
+  },
+  {
+    "set_type": "planet",
+    "card_name": "Neptune",
+    "consumable_key": "c_neptune",
+    "key_candidates": [
+      "c_neptune"
+    ],
+    "template": "planet_hand_level_up",
+    "confidence": 0.99,
+    "matched_rules": [
+      "planet:+Mult/+Chips to hand type"
+    ],
+    "params": {
+      "cards_required": 0,
+      "hand_type": "STRAIGHT_FLUSH",
+      "planet_bonus_mult": 4.0,
+      "planet_bonus_chips": 40.0
+    },
+    "target": "p4_planet_neptune",
+    "raw_fields_used": {
+      "effect_summary": "+4 Mult and +40 Chips to Straight Flush",
+      "primary_impact": "scoring",
+      "constraints_or_costs": "",
+      "synergies_or_notes": "Hand base score reference: 8 Mult x 100 Chips; Type: Planet"
+    }
+  },
+  {
+    "set_type": "planet",
+    "card_name": "Planet X",
+    "consumable_key": "c_planet_x",
+    "key_candidates": [
+      "c_planet_x"
+    ],
+    "template": "planet_hand_level_up",
+    "confidence": 0.99,
+    "matched_rules": [
+      "planet:+Mult/+Chips to hand type"
+    ],
+    "params": {
+      "cards_required": 0,
+      "hand_type": "FIVE_OF_A_KIND",
+      "planet_bonus_mult": 3.0,
+      "planet_bonus_chips": 35.0
+    },
+    "target": "p4_planet_planet_x",
+    "raw_fields_used": {
+      "effect_summary": "+3 Mult and +35 Chips to Five of a Kind",
+      "primary_impact": "scoring",
+      "constraints_or_costs": "Secret planet; appears only after associated secret hand is played in current run",
+      "synergies_or_notes": "Hand base score reference: 12 Mult x 120 Chips; Type: Planet?"
+    }
+  },
+  {
+    "set_type": "planet",
+    "card_name": "Pluto",
+    "consumable_key": "c_pluto",
+    "key_candidates": [
+      "c_pluto"
+    ],
+    "template": "planet_hand_level_up",
+    "confidence": 0.99,
+    "matched_rules": [
+      "planet:+Mult/+Chips to hand type"
+    ],
+    "params": {
+      "cards_required": 0,
+      "hand_type": "HIGH_CARD",
+      "planet_bonus_mult": 1.0,
+      "planet_bonus_chips": 10.0
+    },
+    "target": "p4_planet_pluto",
+    "raw_fields_used": {
+      "effect_summary": "+1 Mult and +10 Chips to High Card",
+      "primary_impact": "scoring",
+      "constraints_or_costs": "",
+      "synergies_or_notes": "Hand base score reference: 1 Mult x 5 Chips; Type: Dwarf Planet"
+    }
+  },
+  {
+    "set_type": "planet",
+    "card_name": "Saturn",
+    "consumable_key": "c_saturn",
+    "key_candidates": [
+      "c_saturn"
+    ],
+    "template": "planet_hand_level_up",
+    "confidence": 0.99,
+    "matched_rules": [
+      "planet:+Mult/+Chips to hand type"
+    ],
+    "params": {
+      "cards_required": 0,
+      "hand_type": "STRAIGHT",
+      "planet_bonus_mult": 3.0,
+      "planet_bonus_chips": 30.0
+    },
+    "target": "p4_planet_saturn",
+    "raw_fields_used": {
+      "effect_summary": "+3 Mult and +30 Chips to Straight",
+      "primary_impact": "scoring",
+      "constraints_or_costs": "",
+      "synergies_or_notes": "Hand base score reference: 4 Mult x 30 Chips; Type: Planet"
+    }
+  },
+  {
+    "set_type": "planet",
+    "card_name": "Uranus",
+    "consumable_key": "c_uranus",
+    "key_candidates": [
+      "c_uranus"
+    ],
+    "template": "planet_hand_level_up",
+    "confidence": 0.99,
+    "matched_rules": [
+      "planet:+Mult/+Chips to hand type"
+    ],
+    "params": {
+      "cards_required": 0,
+      "hand_type": "TWO_PAIR",
+      "planet_bonus_mult": 1.0,
+      "planet_bonus_chips": 20.0
+    },
+    "target": "p4_planet_uranus",
+    "raw_fields_used": {
+      "effect_summary": "+1 Mult and +20 Chips to Two Pair",
+      "primary_impact": "scoring",
+      "constraints_or_costs": "",
+      "synergies_or_notes": "Hand base score reference: 2 Mult x 20 Chips; Type: Planet"
+    }
+  },
+  {
+    "set_type": "planet",
+    "card_name": "Venus",
+    "consumable_key": "c_venus",
+    "key_candidates": [
+      "c_venus"
+    ],
+    "template": "planet_hand_level_up",
+    "confidence": 0.99,
+    "matched_rules": [
+      "planet:+Mult/+Chips to hand type"
+    ],
+    "params": {
+      "cards_required": 0,
+      "hand_type": "THREE_OF_A_KIND",
+      "planet_bonus_mult": 2.0,
+      "planet_bonus_chips": 20.0
+    },
+    "target": "p4_planet_venus",
+    "raw_fields_used": {
+      "effect_summary": "+2 Mult and +20 Chips to Three of a Kind",
+      "primary_impact": "scoring",
+      "constraints_or_costs": "",
+      "synergies_or_notes": "Hand base score reference: 3 Mult x 30 Chips; Type: Planet"
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "Death (XIII)",
+    "consumable_key": "c_death",
+    "key_candidates": [
+      "c_death"
+    ],
+    "template": "tarot_copy_left_to_right",
+    "confidence": 0.97,
+    "matched_rules": [
+      "death:convert left card into right card"
+    ],
+    "params": {
+      "cards_required": 2
+    },
+    "target": "p4_tarot_death",
+    "raw_fields_used": {
+      "effect_summary": "Select 2 cards, convert the left card into the right card (Drag to rearrange)",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "Judgement (XX)",
+    "consumable_key": "c_judgement",
+    "key_candidates": [
+      "c_judgement"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_tarot_judgement",
+    "raw_fields_used": {
+      "effect_summary": "Creates a random Joker card (without in-run stickers ) (Must have room)",
+      "primary_impact": "other",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "Justice (VIII)",
+    "consumable_key": "c_justice",
+    "key_candidates": [
+      "c_justice"
+    ],
+    "template": "tarot_enhance_single",
+    "confidence": 0.97,
+    "matched_rules": [
+      "single selected card enhancement"
+    ],
+    "params": {
+      "cards_required": 1,
+      "tarot_name": "justice"
+    },
+    "target": "p4_tarot_justice",
+    "raw_fields_used": {
+      "effect_summary": "Enhances 1 selected card into a Glass Card",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "Strength (XI)",
+    "consumable_key": "c_strength",
+    "key_candidates": [
+      "c_strength"
+    ],
+    "template": "tarot_rank_up_to2",
+    "confidence": 0.97,
+    "matched_rules": [
+      "strength:increase rank of up to 2 selected cards"
+    ],
+    "params": {
+      "cards_required": 2
+    },
+    "target": "p4_tarot_strength",
+    "raw_fields_used": {
+      "effect_summary": "Increases rank of up to 2 selected cards by 1 (Rank order: A→2→3→4→5→6→7→8→9→10→J→Q→K→A)",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "Temperance (XIV)",
+    "consumable_key": "c_temperance",
+    "key_candidates": [
+      "c_temperance"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_tarot_temperance",
+    "raw_fields_used": {
+      "effect_summary": "Gives the total sell value of all current Jokers (Max of $50 )",
+      "primary_impact": "economy",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Chariot (VII)",
+    "consumable_key": "c_chariot",
+    "key_candidates": [
+      "c_chariot",
+      "c_the_chariot"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_tarot_chariot",
+    "raw_fields_used": {
+      "effect_summary": "Enhances 1 selected card into a Steel Card",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Devil (XV)",
+    "consumable_key": "c_devil",
+    "key_candidates": [
+      "c_devil",
+      "c_the_devil"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_tarot_devil",
+    "raw_fields_used": {
+      "effect_summary": "Enhances 1 selected card into a Gold Card",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Emperor (IV)",
+    "consumable_key": "c_emperor",
+    "key_candidates": [
+      "c_emperor",
+      "c_the_emperor"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_tarot_emperor",
+    "raw_fields_used": {
+      "effect_summary": "Creates up to 2 random Tarot cards (Must have room)",
+      "primary_impact": "other",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Empress (III)",
+    "consumable_key": "c_empress",
+    "key_candidates": [
+      "c_empress",
+      "c_the_empress"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_tarot_empress",
+    "raw_fields_used": {
+      "effect_summary": "Enhances 2 selected cards to Mult Cards",
+      "primary_impact": "scoring; deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Fool (0)",
+    "consumable_key": "c_fool",
+    "key_candidates": [
+      "c_fool",
+      "c_the_fool"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_tarot_fool",
+    "raw_fields_used": {
+      "effect_summary": "Creates a copy of the last Tarot or Planet card used. ( The Fool excluded)",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Hanged Man (XII)",
+    "consumable_key": "c_hanged_man",
+    "key_candidates": [
+      "c_hanged_man",
+      "c_the_hanged_man"
+    ],
+    "template": "tarot_destroy_upto2",
+    "confidence": 0.96,
+    "matched_rules": [
+      "destroy up to 2 selected cards"
+    ],
+    "params": {
+      "cards_required": 2
+    },
+    "target": "p4_tarot_hanged_man",
+    "raw_fields_used": {
+      "effect_summary": "Destroys up to 2 selected cards",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Hermit (IX)",
+    "consumable_key": "c_hermit",
+    "key_candidates": [
+      "c_hermit",
+      "c_the_hermit"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_tarot_hermit",
+    "raw_fields_used": {
+      "effect_summary": "Doubles money (Max of $20 )",
+      "primary_impact": "economy",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Hierophant (V)",
+    "consumable_key": "c_hierophant",
+    "key_candidates": [
+      "c_hierophant",
+      "c_the_hierophant",
+      "c_heirophant"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_tarot_hierophant",
+    "raw_fields_used": {
+      "effect_summary": "Enhances 2 selected cards to Bonus Cards",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The High Priestess (II)",
+    "consumable_key": "c_high_priestess",
+    "key_candidates": [
+      "c_high_priestess",
+      "c_the_high_priestess"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_tarot_high_priestess",
+    "raw_fields_used": {
+      "effect_summary": "Creates up to 2 random Planet cards (Must have room)",
+      "primary_impact": "other",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Lovers (VI)",
+    "consumable_key": "c_lovers",
+    "key_candidates": [
+      "c_lovers",
+      "c_the_lovers"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_tarot_lovers",
+    "raw_fields_used": {
+      "effect_summary": "Enhances 1 selected card into a Wild Card",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Magician (I)",
+    "consumable_key": "c_magician",
+    "key_candidates": [
+      "c_magician",
+      "c_the_magician"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_tarot_magician",
+    "raw_fields_used": {
+      "effect_summary": "Enhances 2 selected cards to Lucky Cards",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Moon (XVIII)",
+    "consumable_key": "c_moon",
+    "key_candidates": [
+      "c_moon",
+      "c_the_moon"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_tarot_moon",
+    "raw_fields_used": {
+      "effect_summary": "Converts up to 3 selected cards to Clubs",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Star (XVII)",
+    "consumable_key": "c_star",
+    "key_candidates": [
+      "c_star",
+      "c_the_star"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_tarot_star",
+    "raw_fields_used": {
+      "effect_summary": "Converts up to 3 selected cards to Diamonds",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Sun (XIX)",
+    "consumable_key": "c_sun",
+    "key_candidates": [
+      "c_sun",
+      "c_the_sun"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_tarot_sun",
+    "raw_fields_used": {
+      "effect_summary": "Converts up to 3 selected cards to Hearts",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Tower (XVI)",
+    "consumable_key": "c_tower",
+    "key_candidates": [
+      "c_tower",
+      "c_the_tower"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_tarot_tower",
+    "raw_fields_used": {
+      "effect_summary": "Enhances 1 selected card into a Stone Card",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Wheel of Fortune (X)",
+    "consumable_key": "c_wheel_of_fortune",
+    "key_candidates": [
+      "c_wheel_of_fortune",
+      "c_the_wheel_of_fortune"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_tarot_wheel_of_fortune",
+    "raw_fields_used": {
+      "effect_summary": "1 in 4 chance to add Foil , Holographic , or Polychrome edition to a random Joker",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The World (XXI)",
+    "consumable_key": "c_world",
+    "key_candidates": [
+      "c_world",
+      "c_the_world"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_tarot_world",
+    "raw_fields_used": {
+      "effect_summary": "Converts up to 3 selected cards to Spades",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Ankh",
+    "consumable_key": "c_ankh",
+    "key_candidates": [
+      "c_ankh"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_spectral_ankh",
+    "raw_fields_used": {
+      "effect_summary": "Creates a copy of 1 of your Jokers at random, then destroys the others, leaving you with two identical Jokers. ( Editions are also copied, except Negative)",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Aura",
+    "consumable_key": "c_aura",
+    "key_candidates": [
+      "c_aura"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_spectral_aura",
+    "raw_fields_used": {
+      "effect_summary": "Add Foil , Holographic , or Polychrome edition (determined at random) to 1 selected card in hand.",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Black Hole",
+    "consumable_key": "c_black_hole",
+    "key_candidates": [
+      "c_black_hole"
+    ],
+    "template": "spectral_black_hole_all_hands_level_up",
+    "confidence": 0.99,
+    "matched_rules": [
+      "black_hole:upgrade every poker hand by one level"
+    ],
+    "params": {
+      "cards_required": 0
+    },
+    "target": "p4_spectral_black_hole",
+    "raw_fields_used": {
+      "effect_summary": "Upgrades every poker hand (including secret hands not yet discovered) by one level.",
+      "primary_impact": "scoring",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Cryptid",
+    "consumable_key": "c_cryptid",
+    "key_candidates": [
+      "c_cryptid"
+    ],
+    "template": "spectral_copy_selected_card_twice",
+    "confidence": 0.97,
+    "matched_rules": [
+      "copy selected hand card twice"
+    ],
+    "params": {
+      "cards_required": 1
+    },
+    "target": "p4_spectral_cryptid",
+    "raw_fields_used": {
+      "effect_summary": "Creates 2 exact copies (including Enhancements, Editions and Seals ) of a selected card in your hand.",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Deja Vu",
+    "consumable_key": "c_deja_vu",
+    "key_candidates": [
+      "c_deja_vu"
+    ],
+    "template": "spectral_seal_single",
+    "confidence": 0.98,
+    "matched_rules": [
+      "single selected card seal"
+    ],
+    "params": {
+      "cards_required": 1,
+      "spectral_name": "deja_vu"
+    },
+    "target": "p4_spectral_deja_vu",
+    "raw_fields_used": {
+      "effect_summary": "Adds a Red Seal to 1 selected card.",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Ectoplasm",
+    "consumable_key": "c_ectoplasm",
+    "key_candidates": [
+      "c_ectoplasm"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_spectral_ectoplasm",
+    "raw_fields_used": {
+      "effect_summary": "Add Negative to a random Joker , but -1 Hand Size , plus another -1 hand size for each time Ectoplasm has been used this run, e.g. using Ectoplasm 3 times in the same run decreases hand size by a total of 6 (1+2+3)",
+      "primary_impact": "deck_change; hand_or_discard",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Familiar",
+    "consumable_key": "c_familiar",
+    "key_candidates": [
+      "c_familiar"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_spectral_familiar",
+    "raw_fields_used": {
+      "effect_summary": "Destroy 1 random card in your hand, but add 3 random Enhanced face cards instead.",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": "Cannot be used when hand size is 1"
+    }
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Grim",
+    "consumable_key": "c_grim",
+    "key_candidates": [
+      "c_grim"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_spectral_grim",
+    "raw_fields_used": {
+      "effect_summary": "Destroy 1 random card in your hand, but add 2 random Enhanced Aces instead.",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": "Cannot be used when hand size is 1"
+    }
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Hex",
+    "consumable_key": "c_hex",
+    "key_candidates": [
+      "c_hex"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_spectral_hex",
+    "raw_fields_used": {
+      "effect_summary": "Adds Polychrome to a random Joker , and destroys the rest.",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Immolate",
+    "consumable_key": "c_immolate",
+    "key_candidates": [
+      "c_immolate"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_spectral_immolate",
+    "raw_fields_used": {
+      "effect_summary": "Destroys 5 random cards in hand, but gain $20 .",
+      "primary_impact": "deck_change; economy",
+      "constraints_or_costs": "",
+      "synergies_or_notes": "Cannot be used when hand size is 1"
+    }
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Incantation",
+    "consumable_key": "c_incantation",
+    "key_candidates": [
+      "c_incantation"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_spectral_incantation",
+    "raw_fields_used": {
+      "effect_summary": "Destroy 1 random card in your hand, but add 4 random Enhanced numbered cards instead.",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": "Cannot be used when hand size is 1"
+    }
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Medium",
+    "consumable_key": "c_medium",
+    "key_candidates": [
+      "c_medium"
+    ],
+    "template": "spectral_seal_single",
+    "confidence": 0.98,
+    "matched_rules": [
+      "single selected card seal"
+    ],
+    "params": {
+      "cards_required": 1,
+      "spectral_name": "medium"
+    },
+    "target": "p4_spectral_medium",
+    "raw_fields_used": {
+      "effect_summary": "Adds a Purple Seal to 1 selected card.",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Ouija",
+    "consumable_key": "c_ouija",
+    "key_candidates": [
+      "c_ouija"
+    ],
+    "template": "spectral_all_hand_random_rank_minus_hand_size",
+    "confidence": 0.9,
+    "matched_rules": [
+      "convert all hand cards to a single random rank and reduce hand size"
+    ],
+    "params": {
+      "cards_required": 0
+    },
+    "target": "p4_spectral_ouija",
+    "raw_fields_used": {
+      "effect_summary": "Converts all cards in hand to a single random rank , but -1 Hand Size .",
+      "primary_impact": "deck_change; hand_or_discard",
+      "constraints_or_costs": "",
+      "synergies_or_notes": "Cannot be used when hand size is 1"
+    }
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Sigil",
+    "consumable_key": "c_sigil",
+    "key_candidates": [
+      "c_sigil"
+    ],
+    "template": "spectral_all_hand_random_suit",
+    "confidence": 0.92,
+    "matched_rules": [
+      "convert all hand cards to a single random suit"
+    ],
+    "params": {
+      "cards_required": 0
+    },
+    "target": "p4_spectral_sigil",
+    "raw_fields_used": {
+      "effect_summary": "Converts all cards in hand to a single random suit .",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": "Cannot be used when hand size is 1"
+    }
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Talisman",
+    "consumable_key": "c_talisman",
+    "key_candidates": [
+      "c_talisman"
+    ],
+    "template": "spectral_seal_single",
+    "confidence": 0.98,
+    "matched_rules": [
+      "single selected card seal"
+    ],
+    "params": {
+      "cards_required": 1,
+      "spectral_name": "talisman"
+    },
+    "target": "p4_spectral_talisman",
+    "raw_fields_used": {
+      "effect_summary": "Add a Gold Seal to 1 selected card.",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "The Soul",
+    "consumable_key": "c_soul",
+    "key_candidates": [
+      "c_soul",
+      "c_the_soul"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_spectral_soul",
+    "raw_fields_used": {
+      "effect_summary": "Creates a Legendary Joker. (Must have room) Artwork: This card is animated, with the gem beating like a heart, or perhaps something inside is trying to break out...",
+      "primary_impact": "other",
+      "constraints_or_costs": "Must have room",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Trance",
+    "consumable_key": "c_trance",
+    "key_candidates": [
+      "c_trance"
+    ],
+    "template": "spectral_seal_single",
+    "confidence": 0.98,
+    "matched_rules": [
+      "single selected card seal"
+    ],
+    "params": {
+      "cards_required": 1,
+      "spectral_name": "trance"
+    },
+    "target": "p4_spectral_trance",
+    "raw_fields_used": {
+      "effect_summary": "Adds a Blue Seal to 1 selected card.",
+      "primary_impact": "deck_change",
+      "constraints_or_costs": "",
+      "synergies_or_notes": ""
+    }
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Wraith",
+    "consumable_key": "c_wraith",
+    "key_candidates": [
+      "c_wraith"
+    ],
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p4_spectral_wraith",
+    "raw_fields_used": {
+      "effect_summary": "Creates a random Rare Joker (must have room), but sets money to $0 .",
+      "primary_impact": "economy",
+      "constraints_or_costs": "Must have room",
+      "synergies_or_notes": ""
+    }
+  }
+]

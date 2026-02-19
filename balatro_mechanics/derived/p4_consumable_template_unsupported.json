@@ -1,0 +1,254 @@
+[
+  {
+    "set_type": "tarot",
+    "card_name": "Judgement (XX)",
+    "consumable_key": "c_judgement",
+    "target": "p4_tarot_judgement",
+    "reason": "probabilistic_or_random",
+    "effect_summary": "Creates a random Joker card (without in-run stickers ) (Must have room)",
+    "primary_impact": "other"
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "Temperance (XIV)",
+    "consumable_key": "c_temperance",
+    "target": "p4_tarot_temperance",
+    "reason": "economy_or_shop_related",
+    "effect_summary": "Gives the total sell value of all current Jokers (Max of $50 )",
+    "primary_impact": "economy"
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Chariot (VII)",
+    "consumable_key": "c_chariot",
+    "target": "p4_tarot_chariot",
+    "reason": "unsupported_tarot_complex_or_non_deterministic",
+    "effect_summary": "Enhances 1 selected card into a Steel Card",
+    "primary_impact": "deck_change"
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Devil (XV)",
+    "consumable_key": "c_devil",
+    "target": "p4_tarot_devil",
+    "reason": "unsupported_tarot_complex_or_non_deterministic",
+    "effect_summary": "Enhances 1 selected card into a Gold Card",
+    "primary_impact": "deck_change"
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Emperor (IV)",
+    "consumable_key": "c_emperor",
+    "target": "p4_tarot_emperor",
+    "reason": "probabilistic_or_random",
+    "effect_summary": "Creates up to 2 random Tarot cards (Must have room)",
+    "primary_impact": "other"
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Empress (III)",
+    "consumable_key": "c_empress",
+    "target": "p4_tarot_empress",
+    "reason": "unsupported_tarot_complex_or_non_deterministic",
+    "effect_summary": "Enhances 2 selected cards to Mult Cards",
+    "primary_impact": "scoring; deck_change"
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Fool (0)",
+    "consumable_key": "c_fool",
+    "target": "p4_tarot_fool",
+    "reason": "unsupported_tarot_complex_or_non_deterministic",
+    "effect_summary": "Creates a copy of the last Tarot or Planet card used. ( The Fool excluded)",
+    "primary_impact": "deck_change"
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Hermit (IX)",
+    "consumable_key": "c_hermit",
+    "target": "p4_tarot_hermit",
+    "reason": "economy_or_shop_related",
+    "effect_summary": "Doubles money (Max of $20 )",
+    "primary_impact": "economy"
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Hierophant (V)",
+    "consumable_key": "c_hierophant",
+    "target": "p4_tarot_hierophant",
+    "reason": "unsupported_tarot_complex_or_non_deterministic",
+    "effect_summary": "Enhances 2 selected cards to Bonus Cards",
+    "primary_impact": "deck_change"
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The High Priestess (II)",
+    "consumable_key": "c_high_priestess",
+    "target": "p4_tarot_high_priestess",
+    "reason": "probabilistic_or_random",
+    "effect_summary": "Creates up to 2 random Planet cards (Must have room)",
+    "primary_impact": "other"
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Lovers (VI)",
+    "consumable_key": "c_lovers",
+    "target": "p4_tarot_lovers",
+    "reason": "unsupported_tarot_complex_or_non_deterministic",
+    "effect_summary": "Enhances 1 selected card into a Wild Card",
+    "primary_impact": "deck_change"
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Magician (I)",
+    "consumable_key": "c_magician",
+    "target": "p4_tarot_magician",
+    "reason": "unsupported_tarot_complex_or_non_deterministic",
+    "effect_summary": "Enhances 2 selected cards to Lucky Cards",
+    "primary_impact": "deck_change"
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Moon (XVIII)",
+    "consumable_key": "c_moon",
+    "target": "p4_tarot_moon",
+    "reason": "unsupported_tarot_complex_or_non_deterministic",
+    "effect_summary": "Converts up to 3 selected cards to Clubs",
+    "primary_impact": "deck_change"
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Star (XVII)",
+    "consumable_key": "c_star",
+    "target": "p4_tarot_star",
+    "reason": "unsupported_tarot_complex_or_non_deterministic",
+    "effect_summary": "Converts up to 3 selected cards to Diamonds",
+    "primary_impact": "deck_change"
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Sun (XIX)",
+    "consumable_key": "c_sun",
+    "target": "p4_tarot_sun",
+    "reason": "unsupported_tarot_complex_or_non_deterministic",
+    "effect_summary": "Converts up to 3 selected cards to Hearts",
+    "primary_impact": "deck_change"
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Tower (XVI)",
+    "consumable_key": "c_tower",
+    "target": "p4_tarot_tower",
+    "reason": "unsupported_tarot_complex_or_non_deterministic",
+    "effect_summary": "Enhances 1 selected card into a Stone Card",
+    "primary_impact": "deck_change"
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The Wheel of Fortune (X)",
+    "consumable_key": "c_wheel_of_fortune",
+    "target": "p4_tarot_wheel_of_fortune",
+    "reason": "probabilistic_or_random",
+    "effect_summary": "1 in 4 chance to add Foil , Holographic , or Polychrome edition to a random Joker",
+    "primary_impact": "deck_change"
+  },
+  {
+    "set_type": "tarot",
+    "card_name": "The World (XXI)",
+    "consumable_key": "c_world",
+    "target": "p4_tarot_world",
+    "reason": "unsupported_tarot_complex_or_non_deterministic",
+    "effect_summary": "Converts up to 3 selected cards to Spades",
+    "primary_impact": "deck_change"
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Ankh",
+    "consumable_key": "c_ankh",
+    "target": "p4_spectral_ankh",
+    "reason": "probabilistic_or_random",
+    "effect_summary": "Creates a copy of 1 of your Jokers at random, then destroys the others, leaving you with two identical Jokers. ( Editions are also copied, except Negative)",
+    "primary_impact": "deck_change"
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Aura",
+    "consumable_key": "c_aura",
+    "target": "p4_spectral_aura",
+    "reason": "probabilistic_or_random",
+    "effect_summary": "Add Foil , Holographic , or Polychrome edition (determined at random) to 1 selected card in hand.",
+    "primary_impact": "deck_change"
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Ectoplasm",
+    "consumable_key": "c_ectoplasm",
+    "target": "p4_spectral_ectoplasm",
+    "reason": "probabilistic_or_random",
+    "effect_summary": "Add Negative to a random Joker , but -1 Hand Size , plus another -1 hand size for each time Ectoplasm has been used this run, e.g. using Ectoplasm 3 times in the same run decreases hand size by a total of 6 (1+2+3)",
+    "primary_impact": "deck_change; hand_or_discard"
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Familiar",
+    "consumable_key": "c_familiar",
+    "target": "p4_spectral_familiar",
+    "reason": "probabilistic_or_random",
+    "effect_summary": "Destroy 1 random card in your hand, but add 3 random Enhanced face cards instead.",
+    "primary_impact": "deck_change"
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Grim",
+    "consumable_key": "c_grim",
+    "target": "p4_spectral_grim",
+    "reason": "probabilistic_or_random",
+    "effect_summary": "Destroy 1 random card in your hand, but add 2 random Enhanced Aces instead.",
+    "primary_impact": "deck_change"
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Hex",
+    "consumable_key": "c_hex",
+    "target": "p4_spectral_hex",
+    "reason": "probabilistic_or_random",
+    "effect_summary": "Adds Polychrome to a random Joker , and destroys the rest.",
+    "primary_impact": "deck_change"
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Immolate",
+    "consumable_key": "c_immolate",
+    "target": "p4_spectral_immolate",
+    "reason": "probabilistic_or_random",
+    "effect_summary": "Destroys 5 random cards in hand, but gain $20 .",
+    "primary_impact": "deck_change; economy"
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Incantation",
+    "consumable_key": "c_incantation",
+    "target": "p4_spectral_incantation",
+    "reason": "probabilistic_or_random",
+    "effect_summary": "Destroy 1 random card in your hand, but add 4 random Enhanced numbered cards instead.",
+    "primary_impact": "deck_change"
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "The Soul",
+    "consumable_key": "c_soul",
+    "target": "p4_spectral_soul",
+    "reason": "cross_round_or_complex_state",
+    "effect_summary": "Creates a Legendary Joker. (Must have room) Artwork: This card is animated, with the gem beating like a heart, or perhaps something inside is trying to break out...",
+    "primary_impact": "other"
+  },
+  {
+    "set_type": "spectral",
+    "card_name": "Wraith",
+    "consumable_key": "c_wraith",
+    "target": "p4_spectral_wraith",
+    "reason": "probabilistic_or_random",
+    "effect_summary": "Creates a random Rare Joker (must have room), but sets money to $0 .",
+    "primary_impact": "economy"
+  }
+]
