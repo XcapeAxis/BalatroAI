@@ -25,6 +25,7 @@ from sim.core.score_observed import compute_score_observed
 from sim.core.validate import validate_action, validate_trace_line
 from sim.oracle.canonicalize_real import canonicalize_real_state
 from sim.oracle.extract_rng_events import extract_rng_events
+from sim.score.expected_basic import compute_expected_for_action
 from trainer.env_client import ConnectionError, RPCError, _call_method, get_state, health
 
 
@@ -204,6 +205,7 @@ def main() -> int:
                 done = bool((canonical.get("flags") or {}).get("done") or False)
                 reward = _round_chips(next_state) - _round_chips(state)
                 score_observed = compute_score_observed(state, next_state)
+                computed_expected = compute_expected_for_action(state, executed_action)
                 canonical_with_observed = dict(canonical)
                 canonical_with_observed["score_observed"] = dict(score_observed)
                 include_snapshot = (
@@ -230,6 +232,7 @@ def main() -> int:
                     "reward": float(reward),
                     "done": done,
                     "score_observed": score_observed,
+                    "computed_expected": computed_expected,
                     "info": {
                         "source": "oracle",
                         "overridden": overridden,

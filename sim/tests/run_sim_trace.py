@@ -24,6 +24,7 @@ from sim.core.hashing import (
 from sim.core.score_observed import compute_score_observed
 from sim.core.validate import validate_action, validate_trace_line
 from sim.oracle.extract_rng_events import extract_rng_events
+from sim.score.expected_basic import compute_expected_for_action
 from sim.pybind.sim_env import SimEnvBackend
 
 
@@ -112,6 +113,7 @@ def main() -> int:
                 rng_events=events,
             )
             score_observed = compute_score_observed(state, next_state)
+            computed_expected = compute_expected_for_action(state, executed_action)
             canonical_with_observed = dict(canonical)
             canonical_with_observed["score_observed"] = dict(score_observed)
 
@@ -139,6 +141,7 @@ def main() -> int:
                 "reward": float(reward),
                 "done": bool(done),
                 "score_observed": score_observed,
+                "computed_expected": computed_expected,
                 "info": {
                     "source": "sim",
                     "overridden": overridden,

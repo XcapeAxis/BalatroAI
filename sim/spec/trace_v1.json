@@ -83,6 +83,35 @@
     },
     "state_hash_p0_hand_score_observed_core": {
       "type": "string"
+    },
+    "computed_expected": {
+      "type": "object",
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "action_type": {
+          "type": "string"
+        },
+        "hand_type": {
+          "type": "string"
+        },
+        "base_chips": {
+          "type": "number"
+        },
+        "base_mult": {
+          "type": "number"
+        },
+        "score": {
+          "type": "number"
+        },
+        "source_csv": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
     }
   }
 }
