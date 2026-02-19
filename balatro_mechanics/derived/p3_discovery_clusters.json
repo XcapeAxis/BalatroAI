@@ -1,0 +1,1910 @@
+{
+  "generated_at": "2026-02-19T14:05:49.654538+00:00",
+  "total_unsupported": 109,
+  "cluster_count": 47,
+  "clusters": [
+    {
+      "cluster_id": "cluster_001",
+      "size": 7,
+      "dominant_trigger": "passive",
+      "trigger_distribution": {
+        "passive": 7
+      },
+      "reason_distribution": {
+        "economy": 5,
+        "cross_round": 1,
+        "no_safe_template_match": 1
+      },
+      "top_tokens": [
+        "start",
+        "available",
+        "round",
+        "end",
+        "money",
+        "earn",
+        "deck",
+        "change",
+        "discard",
+        "sell",
+        "value",
+        "currently",
+        "full",
+        "no",
+        "used",
+        "discards"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Cloud 9",
+        "Delayed Gratification",
+        "Drunkard",
+        "Egg",
+        "Gift Card",
+        "Golden Joker",
+        "Rocket"
+      ],
+      "members": [
+        "Cloud 9",
+        "Delayed Gratification",
+        "Drunkard",
+        "Egg",
+        "Gift Card",
+        "Golden Joker",
+        "Rocket"
+      ],
+      "member_keys": [
+        "j_cloud_9",
+        "j_delayed_gratification",
+        "j_drunkard",
+        "j_egg",
+        "j_gift_card",
+        "j_golden_joker",
+        "j_rocket"
+      ]
+    },
+    {
+      "cluster_id": "cluster_002",
+      "size": 6,
+      "dominant_trigger": "unknown",
+      "trigger_distribution": {
+        "unknown": 6
+      },
+      "reason_distribution": {
+        "cross_round": 4,
+        "no_safe_template_match": 2
+      },
+      "top_tokens": [
+        "mult",
+        "start",
+        "available",
+        "add",
+        "currently",
+        "shop",
+        "reroll",
+        "tarot",
+        "run",
+        "used",
+        "slot",
+        "x1",
+        "included",
+        "stencil",
+        "empty",
+        "23"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Flash Card",
+        "Fortune Teller",
+        "Joker Stencil",
+        "Misprint",
+        "Popcorn",
+        "Red Card"
+      ],
+      "members": [
+        "Flash Card",
+        "Fortune Teller",
+        "Joker Stencil",
+        "Misprint",
+        "Popcorn",
+        "Red Card"
+      ],
+      "member_keys": [
+        "j_flash_card",
+        "j_fortune_teller",
+        "j_joker_stencil",
+        "j_misprint",
+        "j_popcorn",
+        "j_red_card"
+      ]
+    },
+    {
+      "cluster_id": "cluster_003",
+      "size": 5,
+      "dominant_trigger": "unknown",
+      "trigger_distribution": {
+        "unknown": 5
+      },
+      "reason_distribution": {
+        "cross_round": 5
+      },
+      "top_tokens": [
+        "currently",
+        "start",
+        "add",
+        "available",
+        "mult",
+        "deck",
+        "change",
+        "chips",
+        "money",
+        "remaining",
+        "104",
+        "you",
+        "find",
+        "face",
+        "x1",
+        "soul"
+      ],
+      "suggested_template": "face_mult_rule",
+      "difficulty": "low",
+      "representatives": [
+        "Abstract Joker",
+        "Blue Joker",
+        "Bull",
+        "Canio",
+        "Ceremonial Dagger"
+      ],
+      "members": [
+        "Abstract Joker",
+        "Blue Joker",
+        "Bull",
+        "Canio",
+        "Ceremonial Dagger"
+      ],
+      "member_keys": [
+        "j_abstract_joker",
+        "j_blue_joker",
+        "j_bull",
+        "j_canio",
+        "j_ceremonial_dagger"
+      ]
+    },
+    {
+      "cluster_id": "cluster_004",
+      "size": 5,
+      "dominant_trigger": "mixed",
+      "trigger_distribution": {
+        "mixed": 5
+      },
+      "reason_distribution": {
+        "cross_round": 5
+      },
+      "top_tokens": [
+        "currently",
+        "start",
+        "available",
+        "mult",
+        "discard",
+        "add",
+        "every",
+        "discarded",
+        "round",
+        "x1",
+        "x0",
+        "consecutive",
+        "without",
+        "chips",
+        "suit",
+        "changes"
+      ],
+      "suggested_template": "discard_to_chips_rule",
+      "difficulty": "med",
+      "representatives": [
+        "Castle",
+        "Green Joker",
+        "Hit the Road",
+        "Obelisk",
+        "Ride the Bus"
+      ],
+      "members": [
+        "Castle",
+        "Green Joker",
+        "Hit the Road",
+        "Obelisk",
+        "Ride the Bus"
+      ],
+      "member_keys": [
+        "j_castle",
+        "j_green_joker",
+        "j_hit_the_road",
+        "j_obelisk",
+        "j_ride_the_bus"
+      ]
+    },
+    {
+      "cluster_id": "cluster_005",
+      "size": 5,
+      "dominant_trigger": "on_scored",
+      "trigger_distribution": {
+        "on_scored": 4,
+        "unknown": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 5
+      },
+      "top_tokens": [
+        "start",
+        "available",
+        "retrigger",
+        "all",
+        "every",
+        "chips",
+        "add",
+        "final",
+        "round",
+        "permanently",
+        "100",
+        "hands",
+        "next",
+        "10"
+      ],
+      "suggested_template": "deterministic_scoring_rule",
+      "difficulty": "med",
+      "representatives": [
+        "Dusk",
+        "Hack",
+        "Hiker",
+        "Ice Cream",
+        "Seltzer"
+      ],
+      "members": [
+        "Dusk",
+        "Hack",
+        "Hiker",
+        "Ice Cream",
+        "Seltzer"
+      ],
+      "member_keys": [
+        "j_dusk",
+        "j_hack",
+        "j_hiker",
+        "j_ice_cream",
+        "j_seltzer"
+      ]
+    },
+    {
+      "cluster_id": "cluster_006",
+      "size": 4,
+      "dominant_trigger": "on_scored",
+      "trigger_distribution": {
+        "on_scored": 4
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 2,
+        "probabilistic": 1,
+        "economy": 1
+      },
+      "top_tokens": [
+        "suit",
+        "mult",
+        "least",
+        "x1",
+        "round",
+        "changes",
+        "30",
+        "deck",
+        "earn",
+        "end",
+        "start",
+        "available",
+        "chance",
+        "heart",
+        "give",
+        "money"
+      ],
+      "suggested_template": "suit_mult_rule",
+      "difficulty": "low",
+      "representatives": [
+        "Ancient Joker",
+        "Bloodstone",
+        "Rough Gem",
+        "The Idol"
+      ],
+      "members": [
+        "Ancient Joker",
+        "Bloodstone",
+        "Rough Gem",
+        "The Idol"
+      ],
+      "member_keys": [
+        "j_ancient_joker",
+        "j_bloodstone",
+        "j_rough_gem",
+        "j_the_idol"
+      ]
+    },
+    {
+      "cluster_id": "cluster_007",
+      "size": 4,
+      "dominant_trigger": "unknown",
+      "trigger_distribution": {
+        "unknown": 4
+      },
+      "reason_distribution": {
+        "cross_round": 3,
+        "probabilistic": 1
+      },
+      "top_tokens": [
+        "mult",
+        "start",
+        "available",
+        "currently",
+        "x1",
+        "x0",
+        "25",
+        "blind",
+        "every",
+        "time",
+        "deck",
+        "change",
+        "resets",
+        "boss",
+        "sold",
+        "defeated"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Campfire",
+        "Constellation",
+        "Hologram",
+        "Madness"
+      ],
+      "members": [
+        "Campfire",
+        "Constellation",
+        "Hologram",
+        "Madness"
+      ],
+      "member_keys": [
+        "j_campfire",
+        "j_constellation",
+        "j_hologram",
+        "j_madness"
+      ]
+    },
+    {
+      "cluster_id": "cluster_008",
+      "size": 4,
+      "dominant_trigger": "unknown",
+      "trigger_distribution": {
+        "unknown": 4
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 2,
+        "probabilistic": 2
+      },
+      "top_tokens": [
+        "mult",
+        "start",
+        "available",
+        "round",
+        "been",
+        "poker",
+        "x3",
+        "destroyed",
+        "chance",
+        "end",
+        "deck",
+        "change",
+        "run",
+        "add",
+        "already",
+        "gros"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Card Sharp",
+        "Cavendish",
+        "Gros Michel",
+        "Supernova"
+      ],
+      "members": [
+        "Card Sharp",
+        "Cavendish",
+        "Gros Michel",
+        "Supernova"
+      ],
+      "member_keys": [
+        "j_card_sharp",
+        "j_cavendish",
+        "j_gros_michel",
+        "j_supernova"
+      ]
+    },
+    {
+      "cluster_id": "cluster_009",
+      "size": 4,
+      "dominant_trigger": "unknown",
+      "trigger_distribution": {
+        "unknown": 4
+      },
+      "reason_distribution": {
+        "insufficient_fields": 3,
+        "probabilistic": 1
+      },
+      "top_tokens": [
+        "must",
+        "create",
+        "room",
+        "start",
+        "available",
+        "tarot",
+        "selected",
+        "blind",
+        "straight",
+        "poker",
+        "every",
+        "discover",
+        "common",
+        "jokers",
+        "ace",
+        "contains"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Cartomancer",
+        "Riff-Raff",
+        "Superposition",
+        "Séance"
+      ],
+      "members": [
+        "Cartomancer",
+        "Riff-Raff",
+        "Superposition",
+        "Séance"
+      ],
+      "member_keys": [
+        "j_cartomancer",
+        "j_riff_raff",
+        "j_superposition",
+        "j_s_ance"
+      ]
+    },
+    {
+      "cluster_id": "cluster_010",
+      "size": 4,
+      "dominant_trigger": "passive",
+      "trigger_distribution": {
+        "passive": 4
+      },
+      "reason_distribution": {
+        "economy": 2,
+        "no_safe_template_match": 2
+      },
+      "top_tokens": [
+        "start",
+        "available",
+        "money",
+        "free",
+        "sell",
+        "reroll",
+        "shop",
+        "20",
+        "go",
+        "debt",
+        "up",
+        "double",
+        "create",
+        "tag",
+        "current",
+        "disable"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Chaos the Clown",
+        "Credit Card",
+        "Diet Cola",
+        "Luchador"
+      ],
+      "members": [
+        "Chaos the Clown",
+        "Credit Card",
+        "Diet Cola",
+        "Luchador"
+      ],
+      "member_keys": [
+        "j_chaos_the_clown",
+        "j_credit_card",
+        "j_diet_cola",
+        "j_luchador"
+      ]
+    },
+    {
+      "cluster_id": "cluster_011",
+      "size": 4,
+      "dominant_trigger": "passive",
+      "trigger_distribution": {
+        "passive": 4
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 4
+      },
+      "top_tokens": [
+        "start",
+        "available",
+        "all",
+        "straights",
+        "made",
+        "flushes",
+        "size",
+        "considered",
+        "face",
+        "ex",
+        "allows",
+        "rank",
+        "10",
+        "gaps"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Four Fingers",
+        "Juggler",
+        "Pareidolia",
+        "Shortcut"
+      ],
+      "members": [
+        "Four Fingers",
+        "Juggler",
+        "Pareidolia",
+        "Shortcut"
+      ],
+      "member_keys": [
+        "j_four_fingers",
+        "j_juggler",
+        "j_pareidolia",
+        "j_shortcut"
+      ]
+    },
+    {
+      "cluster_id": "cluster_012",
+      "size": 4,
+      "dominant_trigger": "unknown",
+      "trigger_distribution": {
+        "unknown": 3,
+        "mixed": 1
+      },
+      "reason_distribution": {
+        "cross_round": 4
+      },
+      "top_tokens": [
+        "only",
+        "currently",
+        "deck",
+        "appear",
+        "shop",
+        "there",
+        "mult",
+        "x0",
+        "x1",
+        "change",
+        "start",
+        "available",
+        "every",
+        "25",
+        "full",
+        "glass"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Glass Joker",
+        "Lucky Cat",
+        "Steel Joker",
+        "Stone Joker"
+      ],
+      "members": [
+        "Glass Joker",
+        "Lucky Cat",
+        "Steel Joker",
+        "Stone Joker"
+      ],
+      "member_keys": [
+        "j_glass_joker",
+        "j_lucky_cat",
+        "j_steel_joker",
+        "j_stone_joker"
+      ]
+    },
+    {
+      "cluster_id": "cluster_013",
+      "size": 3,
+      "dominant_trigger": "on_scored",
+      "trigger_distribution": {
+        "on_scored": 2,
+        "passive": 1
+      },
+      "reason_distribution": {
+        "probabilistic": 3
+      },
+      "top_tokens": [
+        "chance",
+        "start",
+        "available",
+        "tarot",
+        "must",
+        "create",
+        "room",
+        "face",
+        "money",
+        "give",
+        "booster",
+        "any",
+        "opened",
+        "pack",
+        "shop"
+      ],
+      "suggested_template": "deterministic_scoring_rule",
+      "difficulty": "med",
+      "representatives": [
+        "8 Ball",
+        "Business Card",
+        "Hallucination"
+      ],
+      "members": [
+        "8 Ball",
+        "Business Card",
+        "Hallucination"
+      ],
+      "member_keys": [
+        "j_8_ball",
+        "j_business_card",
+        "j_hallucination"
+      ]
+    },
+    {
+      "cluster_id": "cluster_014",
+      "size": 3,
+      "dominant_trigger": "unknown",
+      "trigger_distribution": {
+        "unknown": 3
+      },
+      "reason_distribution": {
+        "cross_round": 3
+      },
+      "top_tokens": [
+        "mult",
+        "currently",
+        "least",
+        "you",
+        "add",
+        "deck",
+        "full",
+        "change",
+        "every",
+        "same",
+        "polychrome",
+        "money",
+        "time",
+        "jokers",
+        "16",
+        "enhanced"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Bootstraps",
+        "Driver's License",
+        "Erosion"
+      ],
+      "members": [
+        "Bootstraps",
+        "Driver's License",
+        "Erosion"
+      ],
+      "member_keys": [
+        "j_bootstraps",
+        "j_driver_s_license",
+        "j_erosion"
+      ]
+    },
+    {
+      "cluster_id": "cluster_015",
+      "size": 3,
+      "dominant_trigger": "unknown",
+      "trigger_distribution": {
+        "unknown": 3
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 3
+      },
+      "top_tokens": [
+        "start",
+        "available",
+        "hands",
+        "selected",
+        "blind",
+        "discard",
+        "all",
+        "lose",
+        "discards",
+        "every",
+        "mult",
+        "remaining",
+        "x4",
+        "adds",
+        "one",
+        "stone"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Burglar",
+        "Loyalty Card",
+        "Marble Joker"
+      ],
+      "members": [
+        "Burglar",
+        "Loyalty Card",
+        "Marble Joker"
+      ],
+      "member_keys": [
+        "j_burglar",
+        "j_loyalty_card",
+        "j_marble_joker"
+      ]
+    },
+    {
+      "cluster_id": "cluster_016",
+      "size": 3,
+      "dominant_trigger": "on_discard",
+      "trigger_distribution": {
+        "on_discard": 3
+      },
+      "reason_distribution": {
+        "economy": 3
+      },
+      "top_tokens": [
+        "discard",
+        "start",
+        "available",
+        "money",
+        "earn",
+        "discarded",
+        "round",
+        "more",
+        "face",
+        "same",
+        "time",
+        "every",
+        "rank",
+        "changes",
+        "only",
+        "deck"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Faceless Joker",
+        "Mail-In Rebate",
+        "Trading Card"
+      ],
+      "members": [
+        "Faceless Joker",
+        "Mail-In Rebate",
+        "Trading Card"
+      ],
+      "member_keys": [
+        "j_faceless_joker",
+        "j_mail_in_rebate",
+        "j_trading_card"
+      ]
+    },
+    {
+      "cluster_id": "cluster_017",
+      "size": 3,
+      "dominant_trigger": "mixed",
+      "trigger_distribution": {
+        "mixed": 3
+      },
+      "reason_distribution": {
+        "cross_round": 2,
+        "no_safe_template_match": 1
+      },
+      "top_tokens": [
+        "mult",
+        "discard",
+        "start",
+        "available",
+        "discarded",
+        "x0",
+        "currently",
+        "x1",
+        "loses",
+        "x2",
+        "01",
+        "removes",
+        "enhanced",
+        "enhancement",
+        "23",
+        "every"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Ramen",
+        "Vampire",
+        "Yorick"
+      ],
+      "members": [
+        "Ramen",
+        "Vampire",
+        "Yorick"
+      ],
+      "member_keys": [
+        "j_ramen",
+        "j_vampire",
+        "j_yorick"
+      ]
+    },
+    {
+      "cluster_id": "cluster_018",
+      "size": 3,
+      "dominant_trigger": "mixed",
+      "trigger_distribution": {
+        "mixed": 3
+      },
+      "reason_distribution": {
+        "cross_round": 3
+      },
+      "top_tokens": [
+        "start",
+        "add",
+        "available",
+        "currently",
+        "chips",
+        "contains",
+        "straight",
+        "15",
+        "mult",
+        "two",
+        "pair",
+        "exactly"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Runner",
+        "Spare Trousers",
+        "Square Joker"
+      ],
+      "members": [
+        "Runner",
+        "Spare Trousers",
+        "Square Joker"
+      ],
+      "member_keys": [
+        "j_runner",
+        "j_spare_trousers",
+        "j_square_joker"
+      ]
+    },
+    {
+      "cluster_id": "cluster_019",
+      "size": 2,
+      "dominant_trigger": "unknown",
+      "trigger_distribution": {
+        "unknown": 2
+      },
+      "reason_distribution": {
+        "insufficient_fields": 2
+      },
+      "top_tokens": [
+        "ability",
+        "copies",
+        "win",
+        "run",
+        "right",
+        "discard",
+        "leftmost",
+        "royal",
+        "flush"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Blueprint",
+        "Brainstorm"
+      ],
+      "members": [
+        "Blueprint",
+        "Brainstorm"
+      ],
+      "member_keys": [
+        "j_blueprint",
+        "j_brainstorm"
+      ]
+    },
+    {
+      "cluster_id": "cluster_020",
+      "size": 2,
+      "dominant_trigger": "passive",
+      "trigger_distribution": {
+        "passive": 2
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 2
+      },
+      "top_tokens": [
+        "win",
+        "rounds",
+        "size",
+        "discards",
+        "round",
+        "discard",
+        "run",
+        "12",
+        "fewer",
+        "consecutive",
+        "only",
+        "fine",
+        "single",
+        "playing"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Merry Andy",
+        "Troubadour"
+      ],
+      "members": [
+        "Merry Andy",
+        "Troubadour"
+      ],
+      "member_keys": [
+        "j_merry_andy",
+        "j_troubadour"
+      ]
+    },
+    {
+      "cluster_id": "cluster_021",
+      "size": 2,
+      "dominant_trigger": "on_played",
+      "trigger_distribution": {
+        "on_played": 2
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1,
+        "probabilistic": 1
+      },
+      "top_tokens": [
+        "start",
+        "available",
+        "gold",
+        "all",
+        "become",
+        "face",
+        "chance",
+        "poker",
+        "upgrade",
+        "level"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Midas Mask",
+        "Space Joker"
+      ],
+      "members": [
+        "Midas Mask",
+        "Space Joker"
+      ],
+      "member_keys": [
+        "j_midas_mask",
+        "j_space_joker"
+      ]
+    },
+    {
+      "cluster_id": "cluster_022",
+      "size": 2,
+      "dominant_trigger": "held_in_hand",
+      "trigger_distribution": {
+        "held_in_hand": 2
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1,
+        "probabilistic": 1
+      },
+      "top_tokens": [
+        "held",
+        "start",
+        "available",
+        "all",
+        "abilities",
+        "retrigger",
+        "chance",
+        "face",
+        "money",
+        "give"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Mime",
+        "Reserved Parking"
+      ],
+      "members": [
+        "Mime",
+        "Reserved Parking"
+      ],
+      "member_keys": [
+        "j_mime",
+        "j_reserved_parking"
+      ]
+    },
+    {
+      "cluster_id": "cluster_023",
+      "size": 2,
+      "dominant_trigger": "passive",
+      "trigger_distribution": {
+        "passive": 2
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 2
+      },
+      "top_tokens": [
+        "start",
+        "available",
+        "every",
+        "counts",
+        "reduces",
+        "size",
+        "round"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Splash",
+        "Turtle Bean"
+      ],
+      "members": [
+        "Splash",
+        "Turtle Bean"
+      ],
+      "member_keys": [
+        "j_splash",
+        "j_turtle_bean"
+      ]
+    },
+    {
+      "cluster_id": "cluster_024",
+      "size": 2,
+      "dominant_trigger": "on_played",
+      "trigger_distribution": {
+        "on_played": 1,
+        "passive": 1
+      },
+      "reason_distribution": {
+        "economy": 2
+      },
+      "top_tokens": [
+        "end",
+        "start",
+        "available",
+        "money",
+        "earn",
+        "round",
+        "poker",
+        "changes",
+        "every",
+        "interest",
+        "you",
+        "extra"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "To Do List",
+        "To the Moon"
+      ],
+      "members": [
+        "To Do List",
+        "To the Moon"
+      ],
+      "member_keys": [
+        "j_to_do_list",
+        "j_to_the_moon"
+      ]
+    },
+    {
+      "cluster_id": "cluster_025",
+      "size": 1,
+      "dominant_trigger": "passive",
+      "trigger_distribution": {
+        "passive": 1
+      },
+      "reason_distribution": {
+        "economy": 1
+      },
+      "top_tokens": [
+        "every",
+        "all",
+        "planet",
+        "free",
+        "shop",
+        "packs",
+        "celestial",
+        "discover"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Astronomer"
+      ],
+      "members": [
+        "Astronomer"
+      ],
+      "member_keys": [
+        "j_astronomer"
+      ]
+    },
+    {
+      "cluster_id": "cluster_026",
+      "size": 1,
+      "dominant_trigger": "on_other_jokers",
+      "trigger_distribution": {
+        "on_other_jokers": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "top_tokens": [
+        "uncommon",
+        "mult",
+        "start",
+        "available",
+        "x1",
+        "jokers",
+        "give"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Baseball Card"
+      ],
+      "members": [
+        "Baseball Card"
+      ],
+      "member_keys": [
+        "j_baseball_card"
+      ]
+    },
+    {
+      "cluster_id": "cluster_027",
+      "size": 1,
+      "dominant_trigger": "on_discard",
+      "trigger_distribution": {
+        "on_discard": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "top_tokens": [
+        "discard",
+        "50",
+        "first",
+        "poker",
+        "level",
+        "discarded",
+        "sell",
+        "upgrade",
+        "round"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Burnt Joker"
+      ],
+      "members": [
+        "Burnt Joker"
+      ],
+      "member_keys": [
+        "j_burnt_joker"
+      ]
+    },
+    {
+      "cluster_id": "cluster_028",
+      "size": 1,
+      "dominant_trigger": "passive",
+      "trigger_distribution": {
+        "passive": 1
+      },
+      "reason_distribution": {
+        "probabilistic": 1
+      },
+      "top_tokens": [
+        "gold",
+        "add",
+        "seal",
+        "random",
+        "round",
+        "begins",
+        "deck",
+        "playing",
+        "change"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Certificate"
+      ],
+      "members": [
+        "Certificate"
+      ],
+      "member_keys": [
+        "j_certificate"
+      ]
+    },
+    {
+      "cluster_id": "cluster_029",
+      "size": 1,
+      "dominant_trigger": "unknown",
+      "trigger_distribution": {
+        "unknown": 1
+      },
+      "reason_distribution": {
+        "insufficient_fields": 1
+      },
+      "top_tokens": [
+        "every",
+        "boss",
+        "find",
+        "disables",
+        "effect",
+        "soul",
+        "blind"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Chicot"
+      ],
+      "members": [
+        "Chicot"
+      ],
+      "member_keys": [
+        "j_chicot"
+      ]
+    },
+    {
+      "cluster_id": "cluster_030",
+      "size": 1,
+      "dominant_trigger": "on_played",
+      "trigger_distribution": {
+        "on_played": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "top_tokens": [
+        "permanent",
+        "start",
+        "add",
+        "available",
+        "only",
+        "deck",
+        "first",
+        "copy",
+        "draw",
+        "round",
+        "change"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "DNA"
+      ],
+      "members": [
+        "DNA"
+      ],
+      "member_keys": [
+        "j_dna"
+      ]
+    },
+    {
+      "cluster_id": "cluster_031",
+      "size": 1,
+      "dominant_trigger": "on_scored",
+      "trigger_distribution": {
+        "on_scored": 1
+      },
+      "reason_distribution": {
+        "economy": 1
+      },
+      "top_tokens": [
+        "gold",
+        "only",
+        "contains",
+        "deck",
+        "money",
+        "appear",
+        "earn",
+        "shop",
+        "there",
+        "play"
+      ],
+      "suggested_template": "deterministic_scoring_rule",
+      "difficulty": "med",
+      "representatives": [
+        "Golden Ticket"
+      ],
+      "members": [
+        "Golden Ticket"
+      ],
+      "member_keys": [
+        "j_golden_ticket"
+      ]
+    },
+    {
+      "cluster_id": "cluster_032",
+      "size": 1,
+      "dominant_trigger": "on_scored",
+      "trigger_distribution": {
+        "on_scored": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "top_tokens": [
+        "boss",
+        "times",
+        "retrigger",
+        "used",
+        "beat",
+        "first",
+        "high",
+        "additional",
+        "blind"
+      ],
+      "suggested_template": "deterministic_scoring_rule",
+      "difficulty": "med",
+      "representatives": [
+        "Hanging Chad"
+      ],
+      "members": [
+        "Hanging Chad"
+      ],
+      "member_keys": [
+        "j_hanging_chad"
+      ]
+    },
+    {
+      "cluster_id": "cluster_033",
+      "size": 1,
+      "dominant_trigger": "passive",
+      "trigger_distribution": {
+        "passive": 1
+      },
+      "reason_distribution": {
+        "probabilistic": 1
+      },
+      "top_tokens": [
+        "while",
+        "currently",
+        "jokers",
+        "more",
+        "removes",
+        "game",
+        "win",
+        "rounds",
+        "negative",
+        "deck",
+        "money",
+        "sell",
+        "never",
+        "than",
+        "duplicate",
+        "copy"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Invisible Joker"
+      ],
+      "members": [
+        "Invisible Joker"
+      ],
+      "member_keys": [
+        "j_invisible_joker"
+      ]
+    },
+    {
+      "cluster_id": "cluster_034",
+      "size": 1,
+      "dominant_trigger": "unknown",
+      "trigger_distribution": {
+        "unknown": 1
+      },
+      "reason_distribution": {
+        "economy": 1
+      },
+      "top_tokens": [
+        "without",
+        "ability",
+        "triggers",
+        "boss",
+        "one",
+        "using",
+        "money",
+        "earn",
+        "discards",
+        "blind",
+        "defeat"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Matador"
+      ],
+      "members": [
+        "Matador"
+      ],
+      "member_keys": [
+        "j_matador"
+      ]
+    },
+    {
+      "cluster_id": "cluster_035",
+      "size": 1,
+      "dominant_trigger": "passive",
+      "trigger_distribution": {
+        "passive": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "top_tokens": [
+        "least",
+        "death",
+        "chips",
+        "25",
+        "add",
+        "required",
+        "destructs",
+        "lose",
+        "runs",
+        "five",
+        "self",
+        "prevents"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Mr. Bones"
+      ],
+      "members": [
+        "Mr. Bones"
+      ],
+      "member_keys": [
+        "j_mr_bones"
+      ]
+    },
+    {
+      "cluster_id": "cluster_036",
+      "size": 1,
+      "dominant_trigger": "passive",
+      "trigger_distribution": {
+        "passive": 1
+      },
+      "reason_distribution": {
+        "probabilistic": 1
+      },
+      "top_tokens": [
+        "least",
+        "all",
+        "chips",
+        "ex",
+        "probabilities",
+        "single",
+        "doubles",
+        "000",
+        "earn",
+        "listed",
+        "10"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Oops! All 6s"
+      ],
+      "members": [
+        "Oops! All 6s"
+      ],
+      "member_keys": [
+        "j_oops_all_6s"
+      ]
+    },
+    {
+      "cluster_id": "cluster_037",
+      "size": 1,
+      "dominant_trigger": "passive",
+      "trigger_distribution": {
+        "passive": 1
+      },
+      "reason_distribution": {
+        "probabilistic": 1
+      },
+      "top_tokens": [
+        "end",
+        "find",
+        "creates",
+        "possession",
+        "negative",
+        "consumable",
+        "deck",
+        "soul",
+        "copy",
+        "shop",
+        "random",
+        "change"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Perkeo"
+      ],
+      "members": [
+        "Perkeo"
+      ],
+      "member_keys": [
+        "j_perkeo"
+      ]
+    },
+    {
+      "cluster_id": "cluster_038",
+      "size": 1,
+      "dominant_trigger": "passive",
+      "trigger_distribution": {
+        "passive": 1
+      },
+      "reason_distribution": {
+        "economy": 1
+      },
+      "top_tokens": [
+        "least",
+        "end",
+        "run",
+        "planet",
+        "unique",
+        "money",
+        "400",
+        "earn",
+        "used",
+        "round"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Satellite"
+      ],
+      "members": [
+        "Satellite"
+      ],
+      "member_keys": [
+        "j_satellite"
+      ]
+    },
+    {
+      "cluster_id": "cluster_039",
+      "size": 1,
+      "dominant_trigger": "passive",
+      "trigger_distribution": {
+        "passive": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "top_tokens": [
+        "tarot",
+        "multiple",
+        "mult",
+        "spectral",
+        "times",
+        "add",
+        "planet",
+        "ante",
+        "appear",
+        "level",
+        "may",
+        "reach"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Showman"
+      ],
+      "members": [
+        "Showman"
+      ],
+      "member_keys": [
+        "j_showman"
+      ]
+    },
+    {
+      "cluster_id": "cluster_040",
+      "size": 1,
+      "dominant_trigger": "passive",
+      "trigger_distribution": {
+        "passive": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "top_tokens": [
+        "spectral",
+        "start",
+        "available",
+        "must",
+        "room",
+        "deck",
+        "create",
+        "first",
+        "single",
+        "destroy",
+        "round",
+        "change"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Sixth Sense"
+      ],
+      "members": [
+        "Sixth Sense"
+      ],
+      "member_keys": [
+        "j_sixth_sense"
+      ]
+    },
+    {
+      "cluster_id": "cluster_041",
+      "size": 1,
+      "dominant_trigger": "passive",
+      "trigger_distribution": {
+        "passive": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "top_tokens": [
+        "count",
+        "diamonds",
+        "hearts",
+        "more",
+        "same",
+        "deck",
+        "spades",
+        "clubs",
+        "suit",
+        "wild"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Smeared Joker"
+      ],
+      "members": [
+        "Smeared Joker"
+      ],
+      "member_keys": [
+        "j_smeared_joker"
+      ]
+    },
+    {
+      "cluster_id": "cluster_042",
+      "size": 1,
+      "dominant_trigger": "on_scored",
+      "trigger_distribution": {
+        "on_scored": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "top_tokens": [
+        "all",
+        "retrigger",
+        "face",
+        "300",
+        "across",
+        "runs",
+        "play"
+      ],
+      "suggested_template": "deterministic_scoring_rule",
+      "difficulty": "med",
+      "representatives": [
+        "Sock and Buskin"
+      ],
+      "members": [
+        "Sock and Buskin"
+      ],
+      "member_keys": [
+        "j_sock_and_buskin"
+      ]
+    },
+    {
+      "cluster_id": "cluster_043",
+      "size": 1,
+      "dominant_trigger": "unknown",
+      "trigger_distribution": {
+        "unknown": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "top_tokens": [
+        "least",
+        "chips",
+        "add",
+        "250",
+        "single",
+        "size",
+        "000",
+        "earn",
+        "million",
+        "100"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Stuntman"
+      ],
+      "members": [
+        "Stuntman"
+      ],
+      "member_keys": [
+        "j_stuntman"
+      ]
+    },
+    {
+      "cluster_id": "cluster_044",
+      "size": 1,
+      "dominant_trigger": "unknown",
+      "trigger_distribution": {
+        "unknown": 1
+      },
+      "reason_distribution": {
+        "cross_round": 1
+      },
+      "top_tokens": [
+        "20",
+        "all",
+        "mult",
+        "adds",
+        "add",
+        "owned",
+        "currently",
+        "other",
+        "sell",
+        "money",
+        "total",
+        "jokers",
+        "value"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Swashbuckler"
+      ],
+      "members": [
+        "Swashbuckler"
+      ],
+      "member_keys": [
+        "j_swashbuckler"
+      ]
+    },
+    {
+      "cluster_id": "cluster_045",
+      "size": 1,
+      "dominant_trigger": "unknown",
+      "trigger_distribution": {
+        "unknown": 1
+      },
+      "reason_distribution": {
+        "cross_round": 1
+      },
+      "top_tokens": [
+        "menu",
+        "saved",
+        "mult",
+        "main",
+        "25",
+        "run",
+        "continue",
+        "currently",
+        "x1",
+        "blind",
+        "x0",
+        "skipped"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Throwback"
+      ],
+      "members": [
+        "Throwback"
+      ],
+      "member_keys": [
+        "j_throwback"
+      ]
+    },
+    {
+      "cluster_id": "cluster_046",
+      "size": 1,
+      "dominant_trigger": "unknown",
+      "trigger_distribution": {
+        "unknown": 1
+      },
+      "reason_distribution": {
+        "economy": 1
+      },
+      "top_tokens": [
+        "tarot",
+        "start",
+        "available",
+        "money",
+        "create",
+        "less"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Vagabond"
+      ],
+      "members": [
+        "Vagabond"
+      ],
+      "member_keys": [
+        "j_vagabond"
+      ]
+    },
+    {
+      "cluster_id": "cluster_047",
+      "size": 1,
+      "dominant_trigger": "mixed",
+      "trigger_distribution": {
+        "mixed": 1
+      },
+      "reason_distribution": {
+        "cross_round": 1
+      },
+      "top_tokens": [
+        "win",
+        "chips",
+        "rounds",
+        "run",
+        "add",
+        "currently",
+        "fewer",
+        "18"
+      ],
+      "suggested_template": "complex_or_unknown_rule",
+      "difficulty": "high",
+      "representatives": [
+        "Wee Joker"
+      ],
+      "members": [
+        "Wee Joker"
+      ],
+      "member_keys": [
+        "j_wee_joker"
+      ]
+    }
+  ]
+}
