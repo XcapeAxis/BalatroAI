@@ -38,3 +38,18 @@ trainer_data/
 trainer_runs/
 .venv_trainer/
 trainer/config.json
+# Simulator runtime artifacts
+sim/runtime/
+sim/tests/fixtures_runtime/
+# Balatro mechanics data artifacts
+balatro_mechanics/raw/
+balatro_mechanics/intermediate/
+balatro_mechanics/tmp/
+balatro_mechanics/**/*.jsonl
+balatro_mechanics/**/*.parquet
+balatro_mechanics/**/*.tmp
+
+# Allow curated outputs
+!balatro_mechanics/*.csv
+!balatro_mechanics/manifest.json
+!balatro_mechanics/manifest_*.json
