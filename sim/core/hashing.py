@@ -349,6 +349,73 @@ def _extract_consumable_keys(state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+
+def _extract_market_keys(state: dict[str, Any], field: str) -> dict[str, Any]:
+    raw = state.get(field)
+    if not isinstance(raw, dict):
+        return {"count": 0, "limit": 0, "cards": []}
+
+    cards_raw = raw.get("cards")
+    cards = cards_raw if isinstance(cards_raw, list) else []
+    keys: list[str] = []
+    for card in cards:
+        if isinstance(card, dict):
+            key = str(card.get("key") or "").strip().lower()
+            if key:
+                keys.append(key)
+    keys.sort()
+    return {
+        "count": int(raw.get("count") or len(keys)),
+        "limit": int(raw.get("limit") or 0),
+        "cards": keys,
+    }
+
+
+def _extract_used_vouchers(state: dict[str, Any]) -> list[str]:
+    raw = state.get("used_vouchers")
+    out: list[str] = []
+    if isinstance(raw, dict):
+        out.extend(str(k).strip().lower() for k in raw.keys() if str(k).strip())
+    elif isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, dict):
+                key = str(item.get("key") or item.get("id") or "").strip().lower()
+                if key:
+                    out.append(key)
+            else:
+                key = str(item).strip().lower()
+                if key:
+                    out.append(key)
+    elif isinstance(raw, str):
+        key = raw.strip().lower()
+        if key:
+            out.append(key)
+    return sorted(set(out))
+
+
+def _extract_joker_ids(state: dict[str, Any]) -> list[str]:
+    raw = state.get("jokers")
+    out: list[str] = []
+    if isinstance(raw, dict):
+        cards = raw.get("cards") if isinstance(raw.get("cards"), list) else []
+        for card in cards:
+            if isinstance(card, dict):
+                key = str(card.get("key") or card.get("id") or "").strip().lower()
+                if key:
+                    out.append(key)
+    elif isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, dict):
+                key = str(item.get("joker_id") or item.get("key") or item.get("id") or "").strip().lower()
+                if key:
+                    out.append(key)
+            else:
+                key = str(item).strip().lower()
+                if key:
+                    out.append(key)
+    return sorted(out)
+
+
 def _filter_p4_consumable_observed_core(state: dict[str, Any]) -> dict[str, Any]:
     state = to_builtin(state)
     zones = state.get("zones") or {}
@@ -396,6 +463,40 @@ def _filter_p5_modifier_observed_core(state: dict[str, Any]) -> dict[str, Any]:
             "discards_left": round_info.get("discards_left", 0),
         },
         "consumables": _extract_consumable_keys(state),
+        "score_observed": {
+            "total": float(observed.get("total") or 0.0),
+            "delta": float(observed.get("delta") or 0.0),
+        },
+    }
+
+
+
+def _filter_p5_voucher_pack_observed_core(state: dict[str, Any]) -> dict[str, Any]:
+    state = to_builtin(state)
+    zones = state.get("zones") or {}
+    round_info = state.get("round") or {}
+    observed = state.get("score_observed") or {}
+    hand_count = len(_zone_cards(zones, "hand"))
+
+    joker_ids = _extract_joker_ids(state)
+
+    return {
+        "schema_version": state.get("schema_version"),
+        "zones": {
+            "hand_count": hand_count,
+        },
+        "round": {
+            "hands_left": round_info.get("hands_left", 0),
+            "discards_left": round_info.get("discards_left", 0),
+        },
+        "jokers": {
+            "count": len(joker_ids),
+            "ids": joker_ids,
+        },
+        "consumables": _extract_consumable_keys(state),
+        "vouchers": _extract_market_keys(state, "vouchers"),
+        "packs": _extract_market_keys(state, "packs"),
+        "used_vouchers": _extract_used_vouchers(state),
         "score_observed": {
             "total": float(observed.get("total") or 0.0),
             "delta": float(observed.get("delta") or 0.0),
@@ -537,6 +638,10 @@ def state_hash_p5_modifier_observed_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_p5_modifier_observed_core(state)))
 
 
+def state_hash_p5_voucher_pack_observed_core(state: dict[str, Any]) -> str:
+    return _sha256_text(canonical_dumps(_filter_p5_voucher_pack_observed_core(state)))
+
+
 def state_hash_zones_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_zones_core(state)))
 
@@ -592,6 +697,10 @@ def p4_consumable_observed_core_projection(state: dict[str, Any]) -> dict[str, A
 
 def p5_modifier_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
     return _filter_p5_modifier_observed_core(state)
+
+
+def p5_voucher_pack_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
+    return _filter_p5_voucher_pack_observed_core(state)
 
 
 def zones_core_projection(state: dict[str, Any]) -> dict[str, Any]:

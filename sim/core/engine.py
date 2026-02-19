@@ -126,6 +126,52 @@ class SimEnv:
             "cards": out_cards,
         }
 
+
+    def _restore_market(self, raw_market: Any) -> dict[str, Any]:
+        if not isinstance(raw_market, dict):
+            return {"count": 0, "limit": 0, "highlighted_limit": 0, "cards": []}
+
+        cards_raw = raw_market.get("cards")
+        cards = cards_raw if isinstance(cards_raw, list) else []
+        out_cards: list[dict[str, Any]] = []
+        for card in cards:
+            if not isinstance(card, dict):
+                continue
+            out_cards.append(
+                {
+                    "key": str(card.get("key") or "").strip().lower(),
+                    "label": str(card.get("label") or "").strip(),
+                    "set": str(card.get("set") or "").strip().upper(),
+                }
+            )
+
+        return {
+            "count": int(raw_market.get("count") or len(out_cards)),
+            "limit": int(raw_market.get("limit") or 0),
+            "highlighted_limit": int(raw_market.get("highlighted_limit") or 0),
+            "cards": out_cards,
+        }
+
+    def _restore_used_vouchers(self, raw_used: Any) -> list[str]:
+        out: list[str] = []
+        if isinstance(raw_used, dict):
+            out.extend(str(k).strip().lower() for k in raw_used.keys() if str(k).strip())
+        elif isinstance(raw_used, list):
+            for item in raw_used:
+                if isinstance(item, dict):
+                    key = str(item.get("key") or item.get("id") or "").strip().lower()
+                    if key:
+                        out.append(key)
+                else:
+                    key = str(item).strip().lower()
+                    if key:
+                        out.append(key)
+        elif isinstance(raw_used, str):
+            key = raw_used.strip().lower()
+            if key:
+                out.append(key)
+        return sorted(set(out))
+
     def _make_blinds(self, ante: int, selected: str, selecting: bool) -> dict[str, dict[str, Any]]:
         scores = self._target_scores(ante)
         out: dict[str, dict[str, Any]] = {}
@@ -351,6 +397,10 @@ class SimEnv:
             "money": float(economy_info.get("money") or 0.0),
             "jokers": list(canonical_state.get("jokers") or []),
             "consumables": self._restore_consumables(canonical_state.get("consumables")),
+            "shop": self._restore_market(canonical_state.get("shop")),
+            "vouchers": self._restore_market(canonical_state.get("vouchers")),
+            "packs": self._restore_market(canonical_state.get("packs")),
+            "used_vouchers": self._restore_used_vouchers(canonical_state.get("used_vouchers")),
             "hands": self._restore_hands(canonical_state.get("hands")),
             "ante_num": ante_num,
             "round_num": int(round_info.get("round_num") or 1),
@@ -393,6 +443,10 @@ class SimEnv:
             "money": 4,
             "jokers": [],
             "consumables": {"count": 0, "limit": 2, "highlighted_limit": 1, "cards": []},
+            "shop": {"count": 0, "limit": 0, "highlighted_limit": 0, "cards": []},
+            "vouchers": {"count": 0, "limit": 0, "highlighted_limit": 0, "cards": []},
+            "packs": {"count": 0, "limit": 0, "highlighted_limit": 0, "cards": []},
+            "used_vouchers": [],
             "hands": self._default_hands(),
             "ante_num": 1,
             "round_num": 1,

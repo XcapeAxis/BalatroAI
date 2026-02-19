@@ -180,6 +180,53 @@ def _canonicalize_consumables(raw_consumables: Any) -> dict[str, Any]:
     }
 
 
+def _canonicalize_market_cards(raw_market: Any) -> dict[str, Any]:
+    if not isinstance(raw_market, dict):
+        return {"count": 0, "limit": 0, "highlighted_limit": 0, "cards": []}
+
+    cards_raw = raw_market.get("cards")
+    cards = cards_raw if isinstance(cards_raw, list) else []
+    out_cards: list[dict[str, Any]] = []
+    for card in cards:
+        if not isinstance(card, dict):
+            continue
+        out_cards.append(
+            {
+                "key": str(card.get("key") or "").strip().lower(),
+                "label": str(card.get("label") or "").strip(),
+                "set": str(card.get("set") or "").strip().upper(),
+            }
+        )
+
+    return {
+        "count": int(raw_market.get("count") or len(out_cards)),
+        "limit": int(raw_market.get("limit") or 0),
+        "highlighted_limit": int(raw_market.get("highlighted_limit") or 0),
+        "cards": out_cards,
+    }
+
+
+def _canonicalize_used_vouchers(raw_used: Any) -> list[str]:
+    out: list[str] = []
+    if isinstance(raw_used, dict):
+        out.extend(str(k).strip().lower() for k in raw_used.keys() if str(k).strip())
+    elif isinstance(raw_used, list):
+        for item in raw_used:
+            if isinstance(item, dict):
+                key = str(item.get("key") or item.get("id") or "").strip().lower()
+                if key:
+                    out.append(key)
+            else:
+                key = str(item).strip().lower()
+                if key:
+                    out.append(key)
+    elif isinstance(raw_used, str):
+        key = raw_used.strip().lower()
+        if key:
+            out.append(key)
+    return sorted(set(out))
+
+
 def to_canonical_state(
     raw_state: dict[str, Any],
     *,
@@ -204,6 +251,10 @@ def to_canonical_state(
         "zones": zones,
         "hands": _canonicalize_hands(raw_state.get("hands")),
         "consumables": _canonicalize_consumables(raw_state.get("consumables")),
+        "shop": _canonicalize_market_cards(raw_state.get("shop")),
+        "vouchers": _canonicalize_market_cards(raw_state.get("vouchers")),
+        "packs": _canonicalize_market_cards(raw_state.get("packs")),
+        "used_vouchers": _canonicalize_used_vouchers(raw_state.get("used_vouchers")),
         "round": {
             "hands_left": int(round_info.get("hands_left") or 0),
             "discards_left": int(round_info.get("discards_left") or 0),

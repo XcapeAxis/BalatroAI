@@ -185,6 +185,53 @@ def _extract_consumables(raw_state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _extract_market_cards(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {"count": 0, "limit": 0, "highlighted_limit": 0, "cards": []}
+
+    cards = raw.get("cards") if isinstance(raw.get("cards"), list) else []
+    out_cards: list[dict[str, Any]] = []
+    for card in cards:
+        if not isinstance(card, dict):
+            continue
+        out_cards.append(
+            {
+                "key": str(card.get("key") or "").strip().lower(),
+                "label": str(card.get("label") or "").strip(),
+                "set": str(card.get("set") or "").strip().upper(),
+            }
+        )
+
+    return {
+        "count": int(raw.get("count") or len(out_cards)),
+        "limit": int(raw.get("limit") or 0),
+        "highlighted_limit": int(raw.get("highlighted_limit") or 0),
+        "cards": out_cards,
+    }
+
+
+def _extract_used_vouchers(raw_state: dict[str, Any]) -> list[str]:
+    raw = raw_state.get("used_vouchers")
+    out: list[str] = []
+    if isinstance(raw, dict):
+        out.extend(str(k).strip().lower() for k in raw.keys() if str(k).strip())
+    elif isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, dict):
+                key = str(item.get("key") or item.get("id") or "").strip().lower()
+                if key:
+                    out.append(key)
+            else:
+                key = str(item).strip().lower()
+                if key:
+                    out.append(key)
+    elif isinstance(raw, str):
+        key = raw.strip().lower()
+        if key:
+            out.append(key)
+    return sorted(set(out))
+
+
 def _extract_hands(raw_state: dict[str, Any]) -> dict[str, Any]:
     hands = raw_state.get("hands")
     levels: dict[str, dict[str, float]] = {}
@@ -235,6 +282,10 @@ def canonicalize_real_state(
         "zones": zones,
         "hands": _extract_hands(raw_state),
         "consumables": _extract_consumables(raw_state),
+        "shop": _extract_market_cards(raw_state.get("shop")),
+        "vouchers": _extract_market_cards(raw_state.get("vouchers")),
+        "packs": _extract_market_cards(raw_state.get("packs")),
+        "used_vouchers": _extract_used_vouchers(raw_state),
         "round": {
             "hands_left": int(round_info.get("hands_left") or 0),
             "discards_left": int(round_info.get("discards_left") or 0),
