@@ -75,6 +75,9 @@ def main() -> int:
         print("ERROR: empty action trace")
         return 2
 
+    actions_count = len(actions)
+    states_written = 0
+
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -141,12 +144,18 @@ def main() -> int:
 
             validate_trace_line(trace_line)
             fp.write(json.dumps(trace_line, ensure_ascii=False) + "\n")
+            states_written += 1
 
             state = next_state
             if done and args.stop_on_done:
                 break
 
     env.close()
+    print(f"trace_contract sim: actions={actions_count}, sim_states={states_written}")
+    if states_written != actions_count:
+        print("ERROR: trace contract violation in sim trace (states != actions)")
+        return 1
+
     print(f"wrote sim trace: {out_path}")
     return 0
 
