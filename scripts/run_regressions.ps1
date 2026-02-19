@@ -112,7 +112,7 @@ $p2Out = Join-Path $outRootPath "oracle_p2_smoke_v1_regression"
 $p2bOut = Join-Path $outRootPath "oracle_p2b_smoke_v1_regression"
 $p3Out = Join-Path $outRootPath "oracle_p3_jokers_v1_regression"
 $p4Out = Join-Path $outRootPath "oracle_p4_consumables_v1_regression"
-$p5Out = Join-Path $outRootPath "oracle_p5_modifiers_v1_regression"
+$p5Out = Join-Path $outRootPath "oracle_p5_voucher_pack_v1_regression"
 
 $p0Args = @("-B", "sim/oracle/batch_build_p0_oracle_fixtures.py", "--base-url", $BaseUrl, "--out-dir", $p0Out, "--max-steps", "160", "--scope", "p0_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p0Out "dumps"))
 $p1Args = @("-B", "sim/oracle/batch_build_p1_smoke.py", "--base-url", $BaseUrl, "--out-dir", $p1Out, "--max-steps", "120", "--scope", "p1_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p1Out "dumps"))
@@ -120,7 +120,7 @@ $p2Args = @("-B", "sim/oracle/batch_build_p2_smoke.py", "--base-url", $BaseUrl, 
 $p2bArgs = @("-B", "sim/oracle/batch_build_p2b_smoke.py", "--base-url", $BaseUrl, "--out-dir", $p2bOut, "--max-steps", "200", "--scope", "p2b_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p2bOut "dumps"))
 $p3Args = @("-B", "sim/oracle/batch_build_p3_joker_fixtures.py", "--base-url", $BaseUrl, "--out-dir", $p3Out, "--max-steps", "160", "--scope", "p3_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p3Out "dumps"))
 $p4Args = @("-B", "sim/oracle/batch_build_p4_consumable_fixtures.py", "--base-url", $BaseUrl, "--targets-file", "balatro_mechanics/derived/p4_supported_targets.txt", "--out-dir", $p4Out, "--max-steps", "220", "--scope", "p4_consumable_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p4Out "dumps"))
-$p5Args = @("-B", "sim/oracle/batch_build_p5_modifier_fixtures.py", "--base-url", $BaseUrl, "--targets-file", "balatro_mechanics/derived/p5_supported_targets.txt", "--out-dir", $p5Out, "--max-steps", "260", "--scope", "p5_modifier_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p5Out "dumps"))
+$p5Args = @("-B", "sim/oracle/batch_build_p5_voucher_pack_fixtures.py", "--base-url", $BaseUrl, "--targets-file", "balatro_mechanics/derived/p5_supported_targets.txt", "--out-dir", $p5Out, "--max-steps", "260", "--scope", "p5_voucher_pack_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p5Out "dumps"))
 
 Run-WithRecovery -Label "P0" -PyArgs $p0Args -Url $BaseUrl
 Run-WithRecovery -Label "P1" -PyArgs $p1Args -Url $BaseUrl
@@ -170,7 +170,7 @@ if ($RunP3 -or $RunP4 -or $RunP5) {
       $p5Report = Get-Content $p5ReportPath -Raw | ConvertFrom-Json
       Write-Host ("P5 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4} skipped={5} unsupported={6}" -f $p5Report.passed, $p5Report.total, $p5Report.diff_fail, $p5Report.oracle_fail, $p5Report.gen_fail, $p5Report.skipped, $p5Report.classifier.unsupported)
       Write-Host ("P5 report: {0}" -f $p5ReportPath)
-      Persist-ArtifactSet -Prefix "P5" -ReportPath $p5ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P5_MODIFIERS.md", "docs/COVERAGE_P5_STATUS.md")
+      Persist-ArtifactSet -Prefix "P5" -ReportPath $p5ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P5_VOUCHERS_PACKS.md", "docs/COVERAGE_P5_STATUS.md")
     }
   }
 }
