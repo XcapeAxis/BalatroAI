@@ -20,6 +20,7 @@ from sim.core.hashing import (
     state_hash_zones_core,
     state_hash_zones_counts_core,
 )
+from sim.core.score_observed import compute_score_observed
 from sim.core.validate import validate_action, validate_trace_line
 from sim.oracle.extract_rng_events import extract_rng_events
 from sim.pybind.sim_env import SimEnvBackend
@@ -109,6 +110,7 @@ def main() -> int:
                 rng_cursor=rng_cursor,
                 rng_events=events,
             )
+            score_observed = compute_score_observed(state, next_state)
 
             include_snapshot = (
                 step_id == 0
@@ -132,6 +134,7 @@ def main() -> int:
                 "state_hash_rng_events_core": state_hash_rng_events_core(canonical),
                 "reward": float(reward),
                 "done": bool(done),
+                "score_observed": score_observed,
                 "info": {
                     "source": "sim",
                     "overridden": overridden,
