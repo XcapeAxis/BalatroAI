@@ -83,3 +83,5 @@ Balatro_Mechanics_CSV_UPDATED_20260219/
 local_scratch/
 local_only/
 
+# Local persisted regression artifacts (keep on disk, do not commit)
+docs/artifacts/**

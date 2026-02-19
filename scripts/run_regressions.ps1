@@ -1,10 +1,11 @@
-﻿param(
+param(
   [string]$BaseUrl = "http://127.0.0.1:12346",
   [string]$OutRoot = "sim/tests/fixtures_runtime",
   [string]$Seed = "AAAAAAA",
   [switch]$RunP2b,
   [switch]$RunP3,
-  [switch]$RunP4
+  [switch]$RunP4,
+  [switch]$RunP5
 )
 
 Set-StrictMode -Version Latest
@@ -79,41 +80,25 @@ function Run-WithRecovery([string]$Label, [string[]]$PyArgs, [string]$Url) {
   throw "[$Label] failed (non-recoverable)"
 }
 
-function Persist-P3Artifacts([string]$ReportPath, [string]$ProjectRootPath) {
-  $artifactDir = Join-Path $ProjectRootPath "docs/artifacts/p3"
+function Persist-ArtifactSet([string]$Prefix, [string]$ReportPath, [string]$ProjectRootPath, [string[]]$ExtraDocs) {
+  $artifactDir = Join-Path $ProjectRootPath ("docs/artifacts/" + $Prefix.ToLower())
   if (-not (Test-Path $artifactDir)) { New-Item -ItemType Directory -Path $artifactDir -Force | Out-Null }
   $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
-  $copies = @(
-    @{ Src = $ReportPath; Dest = (Join-Path $artifactDir ("report_p3_" + $stamp + ".json")) },
-    @{ Src = (Join-Path $ProjectRootPath "docs/COVERAGE_P3_JOKERS.md"); Dest = (Join-Path $artifactDir ("COVERAGE_P3_JOKERS_" + $stamp + ".md")) },
-    @{ Src = (Join-Path $ProjectRootPath "docs/COVERAGE_P3_STATUS.md"); Dest = (Join-Path $artifactDir ("COVERAGE_P3_STATUS_" + $stamp + ".md")) }
-  )
-
-  foreach ($item in $copies) {
-    if (Test-Path $item.Src) {
-      Copy-Item -LiteralPath $item.Src -Destination $item.Dest -Force
-      Write-Host ("[P3-artifacts] " + $item.Dest)
-    }
+  $reportDest = Join-Path $artifactDir ("report_" + $Prefix.ToLower() + "_" + $stamp + ".json")
+  if (Test-Path $ReportPath) {
+    Copy-Item -LiteralPath $ReportPath -Destination $reportDest -Force
+    Write-Host ("[" + $Prefix + "-artifacts] " + $reportDest)
   }
-}
 
-function Persist-P4Artifacts([string]$ReportPath, [string]$ProjectRootPath) {
-  $artifactDir = Join-Path $ProjectRootPath "docs/artifacts/p4"
-  if (-not (Test-Path $artifactDir)) { New-Item -ItemType Directory -Path $artifactDir -Force | Out-Null }
-  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-
-  $copies = @(
-    @{ Src = $ReportPath; Dest = (Join-Path $artifactDir ("report_p4_" + $stamp + ".json")) },
-    @{ Src = (Join-Path $ProjectRootPath "docs/COVERAGE_P4_CONSUMABLES.md"); Dest = (Join-Path $artifactDir ("COVERAGE_P4_CONSUMABLES_" + $stamp + ".md")) },
-    @{ Src = (Join-Path $ProjectRootPath "docs/COVERAGE_P4_STATUS.md"); Dest = (Join-Path $artifactDir ("COVERAGE_P4_STATUS_" + $stamp + ".md")) }
-  )
-
-  foreach ($item in $copies) {
-    if (Test-Path $item.Src) {
-      Copy-Item -LiteralPath $item.Src -Destination $item.Dest -Force
-      Write-Host ("[P4-artifacts] " + $item.Dest)
-    }
+  foreach ($doc in $ExtraDocs) {
+    $src = Join-Path $ProjectRootPath $doc
+    if (-not (Test-Path $src)) { continue }
+    $name = [System.IO.Path]::GetFileNameWithoutExtension($doc)
+    $ext = [System.IO.Path]::GetExtension($doc)
+    $dest = Join-Path $artifactDir ($name + "_" + $stamp + $ext)
+    Copy-Item -LiteralPath $src -Destination $dest -Force
+    Write-Host ("[" + $Prefix + "-artifacts] " + $dest)
   }
 }
 
@@ -127,6 +112,7 @@ $p2Out = Join-Path $outRootPath "oracle_p2_smoke_v1_regression"
 $p2bOut = Join-Path $outRootPath "oracle_p2b_smoke_v1_regression"
 $p3Out = Join-Path $outRootPath "oracle_p3_jokers_v1_regression"
 $p4Out = Join-Path $outRootPath "oracle_p4_consumables_v1_regression"
+$p5Out = Join-Path $outRootPath "oracle_p5_modifiers_v1_regression"
 
 $p0Args = @("-B", "sim/oracle/batch_build_p0_oracle_fixtures.py", "--base-url", $BaseUrl, "--out-dir", $p0Out, "--max-steps", "160", "--scope", "p0_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p0Out "dumps"))
 $p1Args = @("-B", "sim/oracle/batch_build_p1_smoke.py", "--base-url", $BaseUrl, "--out-dir", $p1Out, "--max-steps", "120", "--scope", "p1_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p1Out "dumps"))
@@ -134,6 +120,7 @@ $p2Args = @("-B", "sim/oracle/batch_build_p2_smoke.py", "--base-url", $BaseUrl, 
 $p2bArgs = @("-B", "sim/oracle/batch_build_p2b_smoke.py", "--base-url", $BaseUrl, "--out-dir", $p2bOut, "--max-steps", "200", "--scope", "p2b_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p2bOut "dumps"))
 $p3Args = @("-B", "sim/oracle/batch_build_p3_joker_fixtures.py", "--base-url", $BaseUrl, "--out-dir", $p3Out, "--max-steps", "160", "--scope", "p3_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p3Out "dumps"))
 $p4Args = @("-B", "sim/oracle/batch_build_p4_consumable_fixtures.py", "--base-url", $BaseUrl, "--targets-file", "balatro_mechanics/derived/p4_supported_targets.txt", "--out-dir", $p4Out, "--max-steps", "220", "--scope", "p4_consumable_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p4Out "dumps"))
+$p5Args = @("-B", "sim/oracle/batch_build_p5_modifier_fixtures.py", "--base-url", $BaseUrl, "--targets-file", "balatro_mechanics/derived/p5_supported_targets.txt", "--out-dir", $p5Out, "--max-steps", "260", "--scope", "p5_modifier_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p5Out "dumps"))
 
 Run-WithRecovery -Label "P0" -PyArgs $p0Args -Url $BaseUrl
 Run-WithRecovery -Label "P1" -PyArgs $p1Args -Url $BaseUrl
@@ -148,7 +135,7 @@ Write-Host ("P0 report: {0}" -f $p0ReportPath)
 Write-Host ("P1 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4}" -f $p1Report.passed, $p1Report.total, $p1Report.diff_fail, $p1Report.oracle_fail, $p1Report.gen_fail)
 Write-Host ("P1 report: {0}" -f $p1ReportPath)
 
-if ($RunP3 -or $RunP4) {
+if ($RunP3 -or $RunP4 -or $RunP5) {
   Run-WithRecovery -Label "P2" -PyArgs $p2Args -Url $BaseUrl
   Run-WithRecovery -Label "P2b" -PyArgs $p2bArgs -Url $BaseUrl
   Run-WithRecovery -Label "P3" -PyArgs $p3Args -Url $BaseUrl
@@ -167,15 +154,24 @@ if ($RunP3 -or $RunP4) {
   Write-Host ("P2b report: {0}" -f $p2bReportPath)
   Write-Host ("P3 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4} skipped={5} unsupported={6}" -f $p3Report.passed, $p3Report.total, $p3Report.diff_fail, $p3Report.oracle_fail, $p3Report.gen_fail, $p3Report.skipped, $p3Report.classifier.unsupported)
   Write-Host ("P3 report: {0}" -f $p3ReportPath)
-  Persist-P3Artifacts -ReportPath $p3ReportPath -ProjectRootPath $ProjectRoot
+  Persist-ArtifactSet -Prefix "P3" -ReportPath $p3ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P3_JOKERS.md", "docs/COVERAGE_P3_STATUS.md")
 
-  if ($RunP4) {
+  if ($RunP4 -or $RunP5) {
     Run-WithRecovery -Label "P4" -PyArgs $p4Args -Url $BaseUrl
     $p4ReportPath = Join-Path $p4Out "report_p4.json"
     $p4Report = Get-Content $p4ReportPath -Raw | ConvertFrom-Json
     Write-Host ("P4 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4} skipped={5} unsupported={6}" -f $p4Report.passed, $p4Report.total, $p4Report.diff_fail, $p4Report.oracle_fail, $p4Report.gen_fail, $p4Report.skipped, $p4Report.classifier.unsupported)
     Write-Host ("P4 report: {0}" -f $p4ReportPath)
-    Persist-P4Artifacts -ReportPath $p4ReportPath -ProjectRootPath $ProjectRoot
+    Persist-ArtifactSet -Prefix "P4" -ReportPath $p4ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P4_CONSUMABLES.md", "docs/COVERAGE_P4_STATUS.md")
+
+    if ($RunP5) {
+      Run-WithRecovery -Label "P5" -PyArgs $p5Args -Url $BaseUrl
+      $p5ReportPath = Join-Path $p5Out "report_p5.json"
+      $p5Report = Get-Content $p5ReportPath -Raw | ConvertFrom-Json
+      Write-Host ("P5 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4} skipped={5} unsupported={6}" -f $p5Report.passed, $p5Report.total, $p5Report.diff_fail, $p5Report.oracle_fail, $p5Report.gen_fail, $p5Report.skipped, $p5Report.classifier.unsupported)
+      Write-Host ("P5 report: {0}" -f $p5ReportPath)
+      Persist-ArtifactSet -Prefix "P5" -ReportPath $p5ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P5_MODIFIERS.md", "docs/COVERAGE_P5_STATUS.md")
+    }
   }
 }
 elseif ($RunP2b) {
@@ -189,4 +185,3 @@ elseif ($RunP2b) {
   Write-Host ("P2b report: {0}" -f $p2bReportPath)
   Write-Host ("P2b analyzer: {0}" -f (Join-Path $p2bOut "score_mismatch_table_p2b.md"))
 }
-
