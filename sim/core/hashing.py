@@ -171,11 +171,14 @@ def _filter_p0_hand_score_observed_core(state: dict[str, Any]) -> dict[str, Any]
     zones = state.get("zones") or {}
     round_info = state.get("round") or {}
     observed = state.get("score_observed") or {}
+    phase = str(state.get("phase") or "")
+
+    hand_count = len(_zone_cards(zones, "hand")) if phase == "SELECTING_HAND" else 0
+
     return {
         "schema_version": state.get("schema_version"),
         "zones": {
-            "hand": _zone_cards_min_sorted(zones, "hand"),
-            "played": _zone_cards_min_sorted(zones, "played"),
+            "hand_count": hand_count,
         },
         "round": {
             "hands_left": round_info.get("hands_left", 0),
