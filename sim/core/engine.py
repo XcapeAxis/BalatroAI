@@ -440,12 +440,19 @@ class SimEnv:
 
                     expected_context = action.get("expected_context") if isinstance(action.get("expected_context"), dict) else {}
                     planet_context = expected_context.get("planet") if isinstance(expected_context.get("planet"), dict) else {}
-                    if planet_context and bool(planet_context.get("applied", True)):
+                    modifier_context = expected_context.get("modifier") if isinstance(expected_context.get("modifier"), dict) else {}
+                    use_expected = (
+                        (planet_context and bool(planet_context.get("applied", True)))
+                        or (modifier_context and bool(modifier_context.get("applied", True)))
+                    )
+                    if use_expected:
                         try:
                             expected = compute_expected_for_action({"hand": {"cards": hand_before}}, action)
                             if bool(expected.get("available")):
                                 gain = float(expected.get("score") or gain)
-                                base_mult = float(base_mult + float(expected.get("planet_bonus_mult") or 0.0))
+                                bonus_mult = float(expected.get("planet_bonus_mult") or 0.0) + float(expected.get("modifier_bonus_mult_add") or 0.0)
+                                bonus_scale = float(expected.get("modifier_bonus_mult_scale") or 1.0)
+                                base_mult = float((base_mult + bonus_mult) * bonus_scale)
                         except Exception:
                             pass
 

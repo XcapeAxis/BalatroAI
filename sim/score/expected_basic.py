@@ -235,11 +235,15 @@ def _planet_context(action: dict[str, Any], pre_state: dict[str, Any], hand_type
     return level_gain, planet_key
 
 
-def _modifier_delta(scoring_cards: list[dict[str, Any]]) -> tuple[float, float, float, list[str]]:
+def _modifier_delta(
+    scoring_cards: list[dict[str, Any]],
+    modifier_context: dict[str, Any] | None = None,
+) -> tuple[float, float, float, list[str]]:
     chips_add = 0.0
     mult_add = 0.0
     mult_scale = 1.0
     partial_reasons: list[str] = []
+    recognized_from_cards = False
 
     for card in scoring_cards:
         mod = card.get("modifier_map") if isinstance(card.get("modifier_map"), dict) else {}
@@ -249,24 +253,56 @@ def _modifier_delta(scoring_cards: list[dict[str, Any]]) -> tuple[float, float, 
 
         if enh == "BONUS":
             chips_add += 30.0
+            recognized_from_cards = True
         elif enh == "MULT":
             mult_add += 4.0
+            recognized_from_cards = True
         elif enh == "GLASS":
             mult_scale *= 2.0
+            recognized_from_cards = True
         elif enh in {"STONE", "STEEL", "LUCKY", "WILD", "GOLD"}:
             partial_reasons.append(f"enhancement_{enh.lower()}_partial")
 
         if edi == "FOIL":
             chips_add += 50.0
+            recognized_from_cards = True
         elif edi == "HOLO":
             mult_add += 10.0
+            recognized_from_cards = True
         elif edi == "POLYCHROME":
             mult_scale *= 1.5
+            recognized_from_cards = True
         elif edi == "NEGATIVE":
             partial_reasons.append("edition_negative_not_scoring")
 
         if seal in {"RED", "GOLD", "BLUE", "PURPLE"}:
             partial_reasons.append(f"seal_{seal.lower()}_partial")
+
+    if modifier_context and not recognized_from_cards:
+        ctx_enh = _normalize_text(modifier_context.get("enhancement"))
+        ctx_edi = _normalize_text(modifier_context.get("edition"))
+        ctx_seal = _normalize_text(modifier_context.get("seal"))
+
+        if ctx_enh == "BONUS":
+            chips_add += 30.0
+        elif ctx_enh == "MULT":
+            mult_add += 4.0
+        elif ctx_enh == "GLASS":
+            mult_scale *= 2.0
+        elif ctx_enh in {"STONE", "STEEL", "LUCKY", "WILD", "GOLD"}:
+            partial_reasons.append(f"enhancement_{ctx_enh.lower()}_partial")
+
+        if ctx_edi == "FOIL":
+            chips_add += 50.0
+        elif ctx_edi == "HOLO":
+            mult_add += 10.0
+        elif ctx_edi == "POLYCHROME":
+            mult_scale *= 1.5
+        elif ctx_edi == "NEGATIVE":
+            partial_reasons.append("edition_negative_not_scoring")
+
+        if ctx_seal in {"RED", "GOLD", "BLUE", "PURPLE"}:
+            partial_reasons.append(f"seal_{ctx_seal.lower()}_partial")
 
     # Keep order stable / deduplicated
     seen = set()
@@ -309,6 +345,9 @@ def compute_expected_for_action(pre_state: dict[str, Any], action: dict[str, Any
             "hand_size": len(hand_cards),
         }
 
+    expected_context = action.get("expected_context") if isinstance(action.get("expected_context"), dict) else {}
+    modifier_context = expected_context.get("modifier") if isinstance(expected_context.get("modifier"), dict) else None
+
     selected = [hand_cards[i] for i in indices]
     score_breakdown = evaluate_selected_breakdown(selected)
     hand_type = _normalize_hand_type(score_breakdown.get("hand_type"))
@@ -345,7 +384,7 @@ def compute_expected_for_action(pre_state: dict[str, Any], action: dict[str, Any
             planet_bonus_chips = float(chips_bonus) * planet_levels
             planet_bonus_mult = float(mult_bonus) * planet_levels
 
-    mod_chips, mod_mult_add, mod_mult_scale, partial_reasons = _modifier_delta(scoring_cards)
+    mod_chips, mod_mult_add, mod_mult_scale, partial_reasons = _modifier_delta(scoring_cards, modifier_context)
 
     total_chips_term = float(base_chips) + rank_chips + planet_bonus_chips + mod_chips
     total_mult_term = float(base_mult) + planet_bonus_mult + mod_mult_add
