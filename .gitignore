@@ -53,3 +53,14 @@ balatro_mechanics/**/*.tmp
 !balatro_mechanics/*.csv
 !balatro_mechanics/manifest.json
 !balatro_mechanics/manifest_*.json
+
+# Additional cleanup ignores
+sim/tests/fixtures_runtime/**
+sim/runtime/**
+trainer_runs/**
+trainer_data/**
+**/__pycache__/**
+.pytest_cache/**
+.mypy_cache/**
+.ruff_cache/**
+*.bak
