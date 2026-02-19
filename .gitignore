@@ -1,4 +1,4 @@
-# Python
+﻿# Python
 __pycache__/
 *.py[cod]
 *.pyo
@@ -74,3 +74,7 @@ runtime/**
 **/*.log
 **/*.tmp
 **/*.bak
+
+# Local source dump for mechanics (canonicalized copy goes to balatro_mechanics/)
+Balatro_Mechanics_CSV_UPDATED_20260219/
+

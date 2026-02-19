@@ -19,3 +19,12 @@ Recommended structure:
 Data policy:
 - Keep source/provenance metadata in manifest.
 - Avoid committing bulky temporary extraction outputs.
+## Final vs Derived Boundary
+
+- `balatro_mechanics/*.csv` and `balatro_mechanics/manifest*.json` are curated final inputs.
+- `balatro_mechanics/derived/` stores deterministic derived artifacts produced by tooling (for example joker template maps and coverage summaries).
+- Raw scraping notebooks, intermediate merges, and temporary exports belong in ignored folders (`raw/`, `intermediate/`, `tmp/`) and are not committed.
+
+P3 artifacts generated from final CSV:
+- `balatro_mechanics/derived/joker_template_map.json`
+- `balatro_mechanics/derived/joker_template_unsupported.json`

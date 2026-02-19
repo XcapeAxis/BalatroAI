@@ -2,7 +2,8 @@
   [string]$BaseUrl = "http://127.0.0.1:12346",
   [string]$OutRoot = "sim/tests/fixtures_runtime",
   [string]$Seed = "AAAAAAA",
-  [switch]$RunP2b
+  [switch]$RunP2b,
+  [switch]$RunP3
 )
 
 Set-StrictMode -Version Latest
@@ -83,10 +84,15 @@ $outRootPath = (Resolve-Path $OutRoot).Path
 
 $p0Out = Join-Path $outRootPath "oracle_p0_v6_regression"
 $p1Out = Join-Path $outRootPath "oracle_p1_smoke_v3_regression"
+$p2Out = Join-Path $outRootPath "oracle_p2_smoke_v1_regression"
 $p2bOut = Join-Path $outRootPath "oracle_p2b_smoke_v1_regression"
+$p3Out = Join-Path $outRootPath "oracle_p3_jokers_v1_regression"
 
 $p0Args = @("-B", "sim/oracle/batch_build_p0_oracle_fixtures.py", "--base-url", $BaseUrl, "--out-dir", $p0Out, "--max-steps", "160", "--scope", "p0_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p0Out "dumps"))
 $p1Args = @("-B", "sim/oracle/batch_build_p1_smoke.py", "--base-url", $BaseUrl, "--out-dir", $p1Out, "--max-steps", "120", "--scope", "p1_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p1Out "dumps"))
+$p2Args = @("-B", "sim/oracle/batch_build_p2_smoke.py", "--base-url", $BaseUrl, "--out-dir", $p2Out, "--max-steps", "160", "--scope", "p2_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p2Out "dumps"))
+$p2bArgs = @("-B", "sim/oracle/batch_build_p2b_smoke.py", "--base-url", $BaseUrl, "--out-dir", $p2bOut, "--max-steps", "200", "--scope", "p2b_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p2bOut "dumps"))
+$p3Args = @("-B", "sim/oracle/batch_build_p3_joker_fixtures.py", "--base-url", $BaseUrl, "--out-dir", $p3Out, "--max-steps", "160", "--scope", "p3_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p3Out "dumps"))
 
 Run-WithRecovery -Label "P0" -PyArgs $p0Args -Url $BaseUrl
 Run-WithRecovery -Label "P1" -PyArgs $p1Args -Url $BaseUrl
@@ -101,20 +107,29 @@ Write-Host ("P0 report: {0}" -f $p0ReportPath)
 Write-Host ("P1 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4}" -f $p1Report.passed, $p1Report.total, $p1Report.diff_fail, $p1Report.oracle_fail, $p1Report.gen_fail)
 Write-Host ("P1 report: {0}" -f $p1ReportPath)
 
-if ($RunP2b) {
-  $p2bArgs = @(
-    "-B", "sim/oracle/batch_build_p2b_smoke.py",
-    "--base-url", $BaseUrl,
-    "--out-dir", $p2bOut,
-    "--max-steps", "200",
-    "--scope", "p2b_hand_score_observed_core",
-    "--seed", $Seed,
-    "--resume",
-    "--dump-on-diff", (Join-Path $p2bOut "dumps")
-  )
-  $p2bAnalyzeArgs = @("-B", "sim/oracle/analyze_p2b_mismatch.py", "--fixtures-dir", $p2bOut)
-
+if ($RunP3) {
+  Run-WithRecovery -Label "P2" -PyArgs $p2Args -Url $BaseUrl
   Run-WithRecovery -Label "P2b" -PyArgs $p2bArgs -Url $BaseUrl
+  Run-WithRecovery -Label "P3" -PyArgs $p3Args -Url $BaseUrl
+
+  $p2ReportPath = Join-Path $p2Out "report_p2.json"
+  $p2bReportPath = Join-Path $p2bOut "report_p2b.json"
+  $p3ReportPath = Join-Path $p3Out "report_p3.json"
+
+  $p2Report = Get-Content $p2ReportPath -Raw | ConvertFrom-Json
+  $p2bReport = Get-Content $p2bReportPath -Raw | ConvertFrom-Json
+  $p3Report = Get-Content $p3ReportPath -Raw | ConvertFrom-Json
+
+  Write-Host ("P2 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4} skipped={5}" -f $p2Report.passed, $p2Report.total, $p2Report.diff_fail, $p2Report.oracle_fail, $p2Report.gen_fail, $p2Report.skipped)
+  Write-Host ("P2 report: {0}" -f $p2ReportPath)
+  Write-Host ("P2b summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4} skipped={5}" -f $p2bReport.passed, $p2bReport.total, $p2bReport.diff_fail, $p2bReport.oracle_fail, $p2bReport.gen_fail, $p2bReport.skipped)
+  Write-Host ("P2b report: {0}" -f $p2bReportPath)
+  Write-Host ("P3 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4} skipped={5} unsupported={6}" -f $p3Report.passed, $p3Report.total, $p3Report.diff_fail, $p3Report.oracle_fail, $p3Report.gen_fail, $p3Report.skipped, $p3Report.classifier.unsupported)
+  Write-Host ("P3 report: {0}" -f $p3ReportPath)
+}
+elseif ($RunP2b) {
+  Run-WithRecovery -Label "P2b" -PyArgs $p2bArgs -Url $BaseUrl
+  $p2bAnalyzeArgs = @("-B", "sim/oracle/analyze_p2b_mismatch.py", "--fixtures-dir", $p2bOut)
   Run-Py -Label "P2b-analyzer" -PyArgs $p2bAnalyzeArgs | Out-Null
 
   $p2bReportPath = Join-Path $p2bOut "report_p2b.json"
@@ -123,3 +138,4 @@ if ($RunP2b) {
   Write-Host ("P2b report: {0}" -f $p2bReportPath)
   Write-Host ("P2b analyzer: {0}" -f (Join-Path $p2bOut "score_mismatch_table_p2b.md"))
 }
+
