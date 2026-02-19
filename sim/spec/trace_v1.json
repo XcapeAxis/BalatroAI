@@ -106,14 +106,54 @@
           "type": "number"
         },
         "source_csv": {
-          "type": "string"
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
         },
         "reason": {
           "type": "string"
+        },
+        "score_core": {
+          "type": "number"
+        },
+        "score_joker_delta": {
+          "type": "number"
+        },
+        "score_total_expected": {
+          "type": "number"
+        },
+        "effective_mult": {
+          "type": "number"
+        },
+        "joker_bonus_chips": {
+          "type": "number"
+        },
+        "joker_bonus_mult_add": {
+          "type": "number"
+        },
+        "joker_bonus_mult_scale": {
+          "type": "number"
+        },
+        "joker_breakdown": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
         }
       }
     },
     "state_hash_p1_hand_score_observed_core": {
+      "type": "string"
+    },
+    "state_hash_p2_hand_score_observed_core": {
       "type": "string"
     }
   }
