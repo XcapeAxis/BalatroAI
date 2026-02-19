@@ -1,0 +1,129 @@
+{
+  "base_url": "http://127.0.0.1:12346",
+  "seed": "AAAAAAA",
+  "health": true,
+  "methods": {
+    "add": {
+      "ok": true,
+      "value": null,
+      "note": null
+    },
+    "set": {
+      "ok": true,
+      "value": null,
+      "note": null
+    },
+    "use": {
+      "ok": false,
+      "note": "RPC use error: Consumable 'The Empress' requires card selection and can only be used in SELECTING_HAND state"
+    },
+    "buy": {
+      "ok": true,
+      "value": null,
+      "note": null
+    },
+    "pack": {
+      "ok": false,
+      "note": "RPC pack error: Method 'pack' requires one of these states: SMODS_BOOSTER_OPENED"
+    },
+    "start": {
+      "ok": false,
+      "note": "RPC start error: Method 'start' requires one of these states: MENU, GAME_OVER"
+    },
+    "next_round": {
+      "ok": true,
+      "value": null,
+      "note": null
+    },
+    "skip": {
+      "ok": true,
+      "value": null,
+      "note": null
+    },
+    "select": {
+      "ok": true,
+      "value": null,
+      "note": null
+    },
+    "play": {
+      "ok": true,
+      "value": null,
+      "note": null
+    },
+    "discard": {
+      "ok": true,
+      "value": null,
+      "note": null
+    }
+  },
+  "voucher": {
+    "direct_add": {
+      "ok": true,
+      "value": {
+        "added_key": "v_paint_brush",
+        "voucher_count": 2,
+        "buy_index": 1
+      },
+      "note": null
+    },
+    "direct_buy": {
+      "ok": false,
+      "note": "RPC buy error: [SMODS balatrobot \"src/lua/endpoints/buy.lua\"]:182: attempt to index field 'buy_button' (a nil value)"
+    },
+    "recommended_strategy": "shop_buy",
+    "sequence_template": [
+      "menu",
+      "start",
+      "select",
+      "set(chips)",
+      "play",
+      "cash_out",
+      "set(money)",
+      "buy(voucher=0)"
+    ]
+  },
+  "pack": {
+    "direct_add": {
+      "ok": true,
+      "value": {
+        "added_key": "p_arcana_normal_1",
+        "pack_count": 2,
+        "buy_index": 1,
+        "slot_note": "resolved with {'card': 0}"
+      },
+      "note": null
+    },
+    "buy_pack": {
+      "ok": true,
+      "value": {
+        "phase": "SMODS_BOOSTER_OPENED"
+      },
+      "note": null
+    },
+    "resolve_pack": {
+      "ok": true,
+      "value": {
+        "params": {
+          "card": 0
+        },
+        "phase": "SHOP"
+      },
+      "note": null
+    },
+    "recommended_strategy": "direct_add",
+    "sequence_template": [
+      "menu",
+      "start",
+      "select",
+      "set(chips)",
+      "play",
+      "cash_out",
+      "set(money)",
+      "buy(pack=0)",
+      "pack(card=0|...) to free slot",
+      "add(pack_key)",
+      "buy(pack=index)",
+      "pack(card=0|cards=[...])"
+    ]
+  }
+}

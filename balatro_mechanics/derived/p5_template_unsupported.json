@@ -1,0 +1,37 @@
+[
+  {
+    "set_type": "pack",
+    "item_name": "Mega Arcana Pack",
+    "item_key": "p_arcana_mega_1",
+    "target": "p5_pack_mega_arcana_pack",
+    "reason": "multi_pick_complex:mega_pack"
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Mega Buffoon Pack",
+    "item_key": "p_buffoon_mega_1",
+    "target": "p5_pack_mega_buffoon_pack",
+    "reason": "multi_pick_complex:mega_pack"
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Mega Celestial Pack",
+    "item_key": "p_celestial_mega_1",
+    "target": "p5_pack_mega_celestial_pack",
+    "reason": "multi_pick_complex:mega_pack"
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Mega Spectral Pack",
+    "item_key": "p_spectral_mega_1",
+    "target": "p5_pack_mega_spectral_pack",
+    "reason": "multi_pick_complex:mega_pack"
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Mega Standard Pack",
+    "item_key": "p_standard_mega_1",
+    "target": "p5_pack_mega_standard_pack",
+    "reason": "multi_pick_complex:mega_pack"
+  }
+]

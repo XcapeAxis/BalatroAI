@@ -1,0 +1,1239 @@
+[
+  {
+    "set_type": "voucher",
+    "item_name": "Antimatter",
+    "item_key": "antimatter",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_antimatter",
+        "v_antimatter_norm",
+        "v_antimatter_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_antimatter",
+    "raw_fields_used": {
+      "voucher_name": "Antimatter",
+      "tier_or_upgrade_path": "Blank -> Antimatter",
+      "effect_summary": "+1 Joker slot",
+      "primary_impact": "other",
+      "constraints": "Redeem Blank 10 total times",
+      "notes": "The Antimatter Voucher is always displayed in game as if it was a negative edition and applies the same effect as negative Jokers. If all vouchers have been purchased in a run, blank will appear in the shop."
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Blank",
+    "item_key": "blank",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_blank",
+        "v_blank_norm",
+        "v_blank_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_blank",
+    "raw_fields_used": {
+      "voucher_name": "Blank",
+      "tier_or_upgrade_path": "Blank -> Antimatter",
+      "effect_summary": "Does nothing?",
+      "primary_impact": "other",
+      "constraints": "",
+      "notes": "Upgrade unlock condition: Redeem Blank 10 total times; The Antimatter Voucher is always displayed in game as if it was a negative edition and applies the same effect as negative Jokers. If all vouchers have been purchased in a run, blank will appear in the shop."
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Clearance Sale",
+    "item_key": "clearance_sale",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_clearance_sale",
+        "v_clearance_sale_norm",
+        "v_clearance_sale_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_clearance_sale",
+    "raw_fields_used": {
+      "voucher_name": "Clearance Sale",
+      "tier_or_upgrade_path": "Clearance Sale -> Liquidation",
+      "effect_summary": "All cards and packs in shop are 25% off",
+      "primary_impact": "shop",
+      "constraints": "",
+      "notes": "Upgrade unlock condition: Redeem at least 10 Voucher cards in one run; Also reduces the sell value of your present jokers Prices are rounded half down"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Crystal Ball",
+    "item_key": "crystal_ball",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_crystal_ball",
+        "v_crystal_ball_norm",
+        "v_crystal_ball_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_crystal_ball",
+    "raw_fields_used": {
+      "voucher_name": "Crystal Ball",
+      "tier_or_upgrade_path": "Crystal Ball -> Omen Globe",
+      "effect_summary": "+1 consumable slot",
+      "primary_impact": "other",
+      "constraints": "",
+      "notes": "Upgrade unlock condition: Use a total of 25 Tarot cards from booster packs; Omen Globe has a 20% individual chance to replace the Tarot card with a Spectral card for every card in the Arcana Pack"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Director's Cut",
+    "item_key": "director_s_cut",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_director_s_cut",
+        "v_directors_cut",
+        "v_director_s_cut_norm",
+        "v_director_s_cut_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_director_s_cut",
+    "raw_fields_used": {
+      "voucher_name": "Director's Cut",
+      "tier_or_upgrade_path": "Director's Cut -> Retcon",
+      "effect_summary": "Reroll Boss Blind 1 time per Ante, $10 per roll",
+      "primary_impact": "economy; shop",
+      "constraints": "",
+      "notes": "Upgrade unlock condition: Discover 25 Blinds"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Glow Up",
+    "item_key": "glow_up",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_glow_up",
+        "v_glow_up_norm",
+        "v_glow_up_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_glow_up",
+    "raw_fields_used": {
+      "voucher_name": "Glow Up",
+      "tier_or_upgrade_path": "Hone -> Glow Up",
+      "effect_summary": "Foil , Holographic , and Polychrome cards appear 4X more often",
+      "primary_impact": "other",
+      "constraints": "Have at least 5 Joker cards with Foil, Holographic, or Polychrome (or Negative) effect",
+      "notes": "Polychrome on Jokers actually appears 3x more often for Hone and 7x more often for Glow Up"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Grabber",
+    "item_key": "grabber",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_grabber",
+        "v_grabber_norm",
+        "v_grabber_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_grabber",
+    "raw_fields_used": {
+      "voucher_name": "Grabber",
+      "tier_or_upgrade_path": "Grabber -> Nacho Tong",
+      "effect_summary": "Permanently gain +1 hand per round",
+      "primary_impact": "other",
+      "constraints": "",
+      "notes": "Upgrade unlock condition: Play a total of 2500 cards"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Hieroglyph",
+    "item_key": "hieroglyph",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_hieroglyph",
+        "v_hieroglyph_norm",
+        "v_hieroglyph_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_hieroglyph",
+    "raw_fields_used": {
+      "voucher_name": "Hieroglyph",
+      "tier_or_upgrade_path": "Hieroglyph -> Petroglyph",
+      "effect_summary": "-1 Ante, -1 hand each round",
+      "primary_impact": "other",
+      "constraints": "",
+      "notes": "Upgrade unlock condition: Reach Ante level 12"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Hone",
+    "item_key": "hone",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_hone",
+        "v_hone_norm",
+        "v_hone_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_hone",
+    "raw_fields_used": {
+      "voucher_name": "Hone",
+      "tier_or_upgrade_path": "Hone -> Glow Up",
+      "effect_summary": "Foil , Holographic , and Polychrome cards appear 2X more often",
+      "primary_impact": "other",
+      "constraints": "",
+      "notes": "Upgrade unlock condition: Have at least 5 Joker cards with Foil, Holographic, or Polychrome (or Negative) effect; Polychrome on Jokers actually appears 3x more often for Hone and 7x more often for Glow Up"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Illusion",
+    "item_key": "illusion",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_illusion",
+        "v_illusion_norm",
+        "v_illusion_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_illusion",
+    "raw_fields_used": {
+      "voucher_name": "Illusion",
+      "tier_or_upgrade_path": "Magic Trick -> Illusion",
+      "effect_summary": "Playing cards in shop may have an Enhancement , Edition , and/or a Seal",
+      "primary_impact": "deck_change; shop",
+      "constraints": "Buy a total of 20 Playing cards from the shop",
+      "notes": "Illusion is currently (v1.0.1o-FULL) bugged, and cards in the shop cannot have seals, only enhancements and/or editions, and is unaffected by Hone/Glow Up."
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Liquidation",
+    "item_key": "liquidation",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_liquidation",
+        "v_liquidation_norm",
+        "v_liquidation_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_liquidation",
+    "raw_fields_used": {
+      "voucher_name": "Liquidation",
+      "tier_or_upgrade_path": "Clearance Sale -> Liquidation",
+      "effect_summary": "All cards and packs in shop are 50% off",
+      "primary_impact": "shop",
+      "constraints": "Redeem at least 10 Voucher cards in one run",
+      "notes": "Also reduces the sell value of your present jokers Prices are rounded half down"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Magic Trick",
+    "item_key": "magic_trick",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_magic_trick",
+        "v_magic_trick_norm",
+        "v_magic_trick_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_magic_trick",
+    "raw_fields_used": {
+      "voucher_name": "Magic Trick",
+      "tier_or_upgrade_path": "Magic Trick -> Illusion",
+      "effect_summary": "Playing cards can be purchased from the shop",
+      "primary_impact": "shop",
+      "constraints": "",
+      "notes": "Upgrade unlock condition: Buy a total of 20 Playing cards from the shop; Illusion is currently (v1.0.1o-FULL) bugged, and cards in the shop cannot have seals, only enhancements and/or editions, and is unaffected by Hone/Glow Up."
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Money Tree",
+    "item_key": "money_tree",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_money_tree",
+        "v_money_tree_norm",
+        "v_money_tree_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_money_tree",
+    "raw_fields_used": {
+      "voucher_name": "Money Tree",
+      "tier_or_upgrade_path": "Seed Money -> Money Tree",
+      "effect_summary": "Raise the cap on interest earned in each round to $20",
+      "primary_impact": "economy",
+      "constraints": "Max out the interest per round earnings for ten consecutive rounds",
+      "notes": "Does nothing when playing the Green Deck."
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Nacho Tong",
+    "item_key": "nacho_tong",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_nacho_tong",
+        "v_nacho_tong_norm",
+        "v_nacho_tong_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_nacho_tong",
+    "raw_fields_used": {
+      "voucher_name": "Nacho Tong",
+      "tier_or_upgrade_path": "Grabber -> Nacho Tong",
+      "effect_summary": "Permanently gain an additional +1 hand per round",
+      "primary_impact": "deck_change",
+      "constraints": "Play a total of 2500 cards",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Observatory",
+    "item_key": "observatory",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_observatory",
+        "v_observatory_norm",
+        "v_observatory_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_observatory",
+    "raw_fields_used": {
+      "voucher_name": "Observatory",
+      "tier_or_upgrade_path": "Telescope -> Observatory",
+      "effect_summary": "Planet cards in your consumable area give X1.5 Mult for their specified poker hand",
+      "primary_impact": "scoring",
+      "constraints": "Use a total of 25 Planet cards from booster packs",
+      "notes": "Telescope picks the higher tier hand in case of multiple most played hands"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Omen Globe",
+    "item_key": "omen_globe",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_omen_globe",
+        "v_omen_globe_norm",
+        "v_omen_globe_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_omen_globe",
+    "raw_fields_used": {
+      "voucher_name": "Omen Globe",
+      "tier_or_upgrade_path": "Crystal Ball -> Omen Globe",
+      "effect_summary": "Spectral cards may appear in any of the Arcana Packs",
+      "primary_impact": "shop",
+      "constraints": "Use a total of 25 Tarot cards from booster packs",
+      "notes": "Omen Globe has a 20% individual chance to replace the Tarot card with a Spectral card for every card in the Arcana Pack"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Overstock",
+    "item_key": "overstock",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_overstock",
+        "v_overstock_norm",
+        "v_overstock_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_overstock",
+    "raw_fields_used": {
+      "voucher_name": "Overstock",
+      "tier_or_upgrade_path": "Overstock -> Overstock Plus",
+      "effect_summary": "+1 card slot available in shop (to 3 slots)",
+      "primary_impact": "shop",
+      "constraints": "",
+      "notes": "Upgrade unlock condition: Spend a total of $2500 at the shop; Also immediately restocks any empty card slots in the Shop when purchased"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Overstock Plus",
+    "item_key": "overstock_plus",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_overstock_plus",
+        "v_overstock_plus_norm",
+        "v_overstock_plus_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_overstock_plus",
+    "raw_fields_used": {
+      "voucher_name": "Overstock Plus",
+      "tier_or_upgrade_path": "Overstock -> Overstock Plus",
+      "effect_summary": "+1 card slot available in shop (to 4 slots)",
+      "primary_impact": "shop",
+      "constraints": "Spend a total of $2500 at the shop",
+      "notes": "Also immediately restocks any empty card slots in the Shop when purchased"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Paint Brush",
+    "item_key": "paint_brush",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_paint_brush",
+        "v_paint_brush_norm",
+        "v_paint_brush_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_paint_brush",
+    "raw_fields_used": {
+      "voucher_name": "Paint Brush",
+      "tier_or_upgrade_path": "Paint Brush -> Palette",
+      "effect_summary": "+1 hand size",
+      "primary_impact": "hand_or_discard",
+      "constraints": "",
+      "notes": "Upgrade unlock condition: Reduce your hand size down to 5 cards"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Palette",
+    "item_key": "palette",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_palette",
+        "v_palette_norm",
+        "v_palette_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_palette",
+    "raw_fields_used": {
+      "voucher_name": "Palette",
+      "tier_or_upgrade_path": "Paint Brush -> Palette",
+      "effect_summary": "+1 hand size again",
+      "primary_impact": "hand_or_discard",
+      "constraints": "Reduce your hand size down to 5 cards",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Petroglyph",
+    "item_key": "petroglyph",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_petroglyph",
+        "v_petroglyph_norm",
+        "v_petroglyph_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_petroglyph",
+    "raw_fields_used": {
+      "voucher_name": "Petroglyph",
+      "tier_or_upgrade_path": "Hieroglyph -> Petroglyph",
+      "effect_summary": "-1 Ante again, -1 discard each round",
+      "primary_impact": "hand_or_discard",
+      "constraints": "Reach Ante level 12",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Planet Merchant",
+    "item_key": "planet_merchant",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_planet_merchant",
+        "v_planet_merchant_norm",
+        "v_planet_merchant_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_planet_merchant",
+    "raw_fields_used": {
+      "voucher_name": "Planet Merchant",
+      "tier_or_upgrade_path": "Planet Merchant -> Planet Tycoon",
+      "effect_summary": "Planet cards appear 2X more frequently in the shop",
+      "primary_impact": "shop",
+      "constraints": "",
+      "notes": "Upgrade unlock condition: Buy a total of 50 Planet cards from the shop; For details, see The Shop#Vouchers"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Planet Tycoon",
+    "item_key": "planet_tycoon",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_planet_tycoon",
+        "v_planet_tycoon_norm",
+        "v_planet_tycoon_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_planet_tycoon",
+    "raw_fields_used": {
+      "voucher_name": "Planet Tycoon",
+      "tier_or_upgrade_path": "Planet Merchant -> Planet Tycoon",
+      "effect_summary": "Planet cards appear 4X more frequently in the shop",
+      "primary_impact": "shop",
+      "constraints": "Buy a total of 50 Planet cards from the shop",
+      "notes": "For details, see The Shop#Vouchers"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Recyclomancy",
+    "item_key": "recyclomancy",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_recyclomancy",
+        "v_recyclomancy_norm",
+        "v_recyclomancy_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_recyclomancy",
+    "raw_fields_used": {
+      "voucher_name": "Recyclomancy",
+      "tier_or_upgrade_path": "Wasteful -> Recyclomancy",
+      "effect_summary": "Permanently gain an additional +1 discard each round",
+      "primary_impact": "deck_change; hand_or_discard",
+      "constraints": "Discard a total of 2500 cards",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Reroll Glut",
+    "item_key": "reroll_glut",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_reroll_glut",
+        "v_reroll_glut_norm",
+        "v_reroll_glut_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_reroll_glut",
+    "raw_fields_used": {
+      "voucher_name": "Reroll Glut",
+      "tier_or_upgrade_path": "Reroll Surplus -> Reroll Glut",
+      "effect_summary": "Rerolls cost an additional $2 less",
+      "primary_impact": "deck_change; economy; shop",
+      "constraints": "Reroll the shop a total of 100 times",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Reroll Surplus",
+    "item_key": "reroll_surplus",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_reroll_surplus",
+        "v_reroll_surplus_norm",
+        "v_reroll_surplus_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_reroll_surplus",
+    "raw_fields_used": {
+      "voucher_name": "Reroll Surplus",
+      "tier_or_upgrade_path": "Reroll Surplus -> Reroll Glut",
+      "effect_summary": "Rerolls cost $2 less",
+      "primary_impact": "economy; shop",
+      "constraints": "",
+      "notes": "Upgrade unlock condition: Reroll the shop a total of 100 times"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Retcon",
+    "item_key": "retcon",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_retcon",
+        "v_retcon_norm",
+        "v_retcon_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_retcon",
+    "raw_fields_used": {
+      "voucher_name": "Retcon",
+      "tier_or_upgrade_path": "Director's Cut -> Retcon",
+      "effect_summary": "Reroll Boss Blind unlimited times, $10 per roll",
+      "primary_impact": "economy; shop",
+      "constraints": "Discover 25 Blinds",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Seed Money",
+    "item_key": "seed_money",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_seed_money",
+        "v_seed_money_norm",
+        "v_seed_money_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_seed_money",
+    "raw_fields_used": {
+      "voucher_name": "Seed Money",
+      "tier_or_upgrade_path": "Seed Money -> Money Tree",
+      "effect_summary": "Raise the cap on interest earned in each round to $10",
+      "primary_impact": "economy",
+      "constraints": "",
+      "notes": "Upgrade unlock condition: Max out the interest per round earnings for ten consecutive rounds; Does nothing when playing the Green Deck."
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Tarot Merchant",
+    "item_key": "tarot_merchant",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_tarot_merchant",
+        "v_tarot_merchant_norm",
+        "v_tarot_merchant_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_tarot_merchant",
+    "raw_fields_used": {
+      "voucher_name": "Tarot Merchant",
+      "tier_or_upgrade_path": "Tarot Merchant -> Tarot Tycoon",
+      "effect_summary": "Tarot cards appear 2X more frequently in the shop",
+      "primary_impact": "shop",
+      "constraints": "",
+      "notes": "Upgrade unlock condition: Buy a total of 50 Tarot cards from the shop; For details, see The Shop#Vouchers"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Tarot Tycoon",
+    "item_key": "tarot_tycoon",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_tarot_tycoon",
+        "v_tarot_tycoon_norm",
+        "v_tarot_tycoon_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_tarot_tycoon",
+    "raw_fields_used": {
+      "voucher_name": "Tarot Tycoon",
+      "tier_or_upgrade_path": "Tarot Merchant -> Tarot Tycoon",
+      "effect_summary": "Tarot cards appear 4X more frequently in the shop",
+      "primary_impact": "shop",
+      "constraints": "Buy a total of 50 Tarot cards from the shop",
+      "notes": "For details, see The Shop#Vouchers"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Telescope",
+    "item_key": "telescope",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_telescope",
+        "v_telescope_norm",
+        "v_telescope_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_telescope",
+    "raw_fields_used": {
+      "voucher_name": "Telescope",
+      "tier_or_upgrade_path": "Telescope -> Observatory",
+      "effect_summary": "Celestial Packs always contain the Planet card for your most played poker hand",
+      "primary_impact": "scoring; shop",
+      "constraints": "",
+      "notes": "Upgrade unlock condition: Use a total of 25 Planet cards from booster packs; Telescope picks the higher tier hand in case of multiple most played hands"
+    }
+  },
+  {
+    "set_type": "voucher",
+    "item_name": "Wasteful",
+    "item_key": "wasteful",
+    "template": "voucher_shop_event_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "voucher:shop_event_observed"
+    ],
+    "params": {
+      "strategy": "add_voucher_then_buy_then_wait",
+      "voucher_key_candidates": [
+        "v_wasteful",
+        "v_wasteful_norm",
+        "v_wasteful_plus"
+      ],
+      "allow_shop_fallback": true
+    },
+    "target": "p5_voucher_wasteful",
+    "raw_fields_used": {
+      "voucher_name": "Wasteful",
+      "tier_or_upgrade_path": "Wasteful -> Recyclomancy",
+      "effect_summary": "Permanently gain +1 discard each round",
+      "primary_impact": "hand_or_discard",
+      "constraints": "",
+      "notes": "Upgrade unlock condition: Discard a total of 2500 cards"
+    }
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Arcana Pack",
+    "item_key": "p_arcana_normal_1",
+    "template": "pack_open_pick_first_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "pack:open_pick_first_observed"
+    ],
+    "params": {
+      "strategy": "add_pack_then_buy_then_pack_then_wait",
+      "pack_key": "p_arcana_normal_1",
+      "allow_shop_fallback": true,
+      "pack_select_policy": "first_playable"
+    },
+    "target": "p5_pack_arcana_pack",
+    "raw_fields_used": {
+      "pack_name": "Arcana Pack",
+      "pack_type": "Arcana",
+      "size_variant": "Normal",
+      "offered_items_summary": "Choose 1 of up to 3 Tarot cards to be used immediately",
+      "shop_availability_notes": "Two booster packs offered each shop; restock on next shop visit",
+      "notes": "Cost: $4"
+    }
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Buffoon Pack",
+    "item_key": "p_buffoon_normal_1",
+    "template": "pack_open_pick_first_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "pack:open_pick_first_observed"
+    ],
+    "params": {
+      "strategy": "add_pack_then_buy_then_pack_then_wait",
+      "pack_key": "p_buffoon_normal_1",
+      "allow_shop_fallback": true,
+      "pack_select_policy": "first_playable"
+    },
+    "target": "p5_pack_buffoon_pack",
+    "raw_fields_used": {
+      "pack_name": "Buffoon Pack",
+      "pack_type": "Buffoon",
+      "size_variant": "Normal",
+      "offered_items_summary": "Choose 1 of up to 2 Joker cards",
+      "shop_availability_notes": "Two booster packs offered each shop; restock on next shop visit",
+      "notes": "Cost: $4"
+    }
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Celestial Pack",
+    "item_key": "p_celestial_normal_1",
+    "template": "pack_open_pick_first_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "pack:open_pick_first_observed"
+    ],
+    "params": {
+      "strategy": "add_pack_then_buy_then_pack_then_wait",
+      "pack_key": "p_celestial_normal_1",
+      "allow_shop_fallback": true,
+      "pack_select_policy": "first_playable"
+    },
+    "target": "p5_pack_celestial_pack",
+    "raw_fields_used": {
+      "pack_name": "Celestial Pack",
+      "pack_type": "Celestial",
+      "size_variant": "Normal",
+      "offered_items_summary": "Choose 1 of up to 3 Planet cards to be used immediately",
+      "shop_availability_notes": "Two booster packs offered each shop; restock on next shop visit",
+      "notes": "Cost: $4"
+    }
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Jumbo Arcana Pack",
+    "item_key": "p_arcana_jumbo_1",
+    "template": "pack_open_pick_first_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "pack:open_pick_first_observed"
+    ],
+    "params": {
+      "strategy": "add_pack_then_buy_then_pack_then_wait",
+      "pack_key": "p_arcana_jumbo_1",
+      "allow_shop_fallback": true,
+      "pack_select_policy": "first_playable"
+    },
+    "target": "p5_pack_jumbo_arcana_pack",
+    "raw_fields_used": {
+      "pack_name": "Jumbo Arcana Pack",
+      "pack_type": "Arcana",
+      "size_variant": "Jumbo",
+      "offered_items_summary": "Choose 1 of up to 5 Tarot cards to be used immediately",
+      "shop_availability_notes": "Two booster packs offered each shop; restock on next shop visit",
+      "notes": "Cost: $6"
+    }
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Jumbo Buffoon Pack",
+    "item_key": "p_buffoon_jumbo_1",
+    "template": "pack_open_pick_first_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "pack:open_pick_first_observed"
+    ],
+    "params": {
+      "strategy": "add_pack_then_buy_then_pack_then_wait",
+      "pack_key": "p_buffoon_jumbo_1",
+      "allow_shop_fallback": true,
+      "pack_select_policy": "first_playable"
+    },
+    "target": "p5_pack_jumbo_buffoon_pack",
+    "raw_fields_used": {
+      "pack_name": "Jumbo Buffoon Pack",
+      "pack_type": "Buffoon",
+      "size_variant": "Jumbo",
+      "offered_items_summary": "Choose 1 of up to 4 Joker cards",
+      "shop_availability_notes": "Two booster packs offered each shop; restock on next shop visit",
+      "notes": "Cost: $6"
+    }
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Jumbo Celestial Pack",
+    "item_key": "p_celestial_jumbo_1",
+    "template": "pack_open_pick_first_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "pack:open_pick_first_observed"
+    ],
+    "params": {
+      "strategy": "add_pack_then_buy_then_pack_then_wait",
+      "pack_key": "p_celestial_jumbo_1",
+      "allow_shop_fallback": true,
+      "pack_select_policy": "first_playable"
+    },
+    "target": "p5_pack_jumbo_celestial_pack",
+    "raw_fields_used": {
+      "pack_name": "Jumbo Celestial Pack",
+      "pack_type": "Celestial",
+      "size_variant": "Jumbo",
+      "offered_items_summary": "Choose 1 of up to 5 Planet cards to be used immediately",
+      "shop_availability_notes": "Two booster packs offered each shop; restock on next shop visit",
+      "notes": "Cost: $6"
+    }
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Jumbo Spectral Pack",
+    "item_key": "p_spectral_jumbo_1",
+    "template": "pack_open_pick_first_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "pack:open_pick_first_observed"
+    ],
+    "params": {
+      "strategy": "add_pack_then_buy_then_pack_then_wait",
+      "pack_key": "p_spectral_jumbo_1",
+      "allow_shop_fallback": true,
+      "pack_select_policy": "first_playable"
+    },
+    "target": "p5_pack_jumbo_spectral_pack",
+    "raw_fields_used": {
+      "pack_name": "Jumbo Spectral Pack",
+      "pack_type": "Spectral",
+      "size_variant": "Jumbo",
+      "offered_items_summary": "Choose 1 of up to 4 Spectral cards to be used immediately",
+      "shop_availability_notes": "Two booster packs offered each shop; restock on next shop visit",
+      "notes": "Cost: $6"
+    }
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Jumbo Standard Pack",
+    "item_key": "p_standard_jumbo_1",
+    "template": "pack_open_pick_first_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "pack:open_pick_first_observed"
+    ],
+    "params": {
+      "strategy": "add_pack_then_buy_then_pack_then_wait",
+      "pack_key": "p_standard_jumbo_1",
+      "allow_shop_fallback": true,
+      "pack_select_policy": "first_playable"
+    },
+    "target": "p5_pack_jumbo_standard_pack",
+    "raw_fields_used": {
+      "pack_name": "Jumbo Standard Pack",
+      "pack_type": "Standard",
+      "size_variant": "Jumbo",
+      "offered_items_summary": "Choose 1 of up to 5 Playing cards to add to your deck",
+      "shop_availability_notes": "Two booster packs offered each shop; restock on next shop visit",
+      "notes": "Cost: $6"
+    }
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Mega Arcana Pack",
+    "item_key": "p_arcana_mega_1",
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p5_pack_mega_arcana_pack",
+    "raw_fields_used": {
+      "pack_name": "Mega Arcana Pack",
+      "pack_type": "Arcana",
+      "size_variant": "Mega",
+      "offered_items_summary": "Choose up to 2 of 5 Tarot Cards to be used immediately.",
+      "shop_availability_notes": "Two booster packs offered each shop; restock on next shop visit",
+      "notes": "Cost: $8"
+    }
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Mega Buffoon Pack",
+    "item_key": "p_buffoon_mega_1",
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p5_pack_mega_buffoon_pack",
+    "raw_fields_used": {
+      "pack_name": "Mega Buffoon Pack",
+      "pack_type": "Buffoon",
+      "size_variant": "Mega",
+      "offered_items_summary": "Choose up to 2 of 4 Joker Cards.",
+      "shop_availability_notes": "Two booster packs offered each shop; restock on next shop visit",
+      "notes": "Cost: $8"
+    }
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Mega Celestial Pack",
+    "item_key": "p_celestial_mega_1",
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p5_pack_mega_celestial_pack",
+    "raw_fields_used": {
+      "pack_name": "Mega Celestial Pack",
+      "pack_type": "Celestial",
+      "size_variant": "Mega",
+      "offered_items_summary": "Choose up to 2 of 5 Planet Cards to be used immediately.",
+      "shop_availability_notes": "Two booster packs offered each shop; restock on next shop visit",
+      "notes": "Cost: $8"
+    }
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Mega Spectral Pack",
+    "item_key": "p_spectral_mega_1",
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p5_pack_mega_spectral_pack",
+    "raw_fields_used": {
+      "pack_name": "Mega Spectral Pack",
+      "pack_type": "Spectral",
+      "size_variant": "Mega",
+      "offered_items_summary": "Choose up to 2 of 4 Spectral Cards to be used immediately.",
+      "shop_availability_notes": "Two booster packs offered each shop; restock on next shop visit",
+      "notes": "Cost: $8"
+    }
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Mega Standard Pack",
+    "item_key": "p_standard_mega_1",
+    "template": null,
+    "confidence": 0.0,
+    "matched_rules": [],
+    "params": {},
+    "target": "p5_pack_mega_standard_pack",
+    "raw_fields_used": {
+      "pack_name": "Mega Standard Pack",
+      "pack_type": "Standard",
+      "size_variant": "Mega",
+      "offered_items_summary": "Choose up to 2 of 5 Playing Cards to add to your Deck.",
+      "shop_availability_notes": "Two booster packs offered each shop; restock on next shop visit",
+      "notes": "Cost: $8"
+    }
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Spectral Pack",
+    "item_key": "p_spectral_normal_1",
+    "template": "pack_open_pick_first_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "pack:open_pick_first_observed"
+    ],
+    "params": {
+      "strategy": "add_pack_then_buy_then_pack_then_wait",
+      "pack_key": "p_spectral_normal_1",
+      "allow_shop_fallback": true,
+      "pack_select_policy": "first_playable"
+    },
+    "target": "p5_pack_spectral_pack",
+    "raw_fields_used": {
+      "pack_name": "Spectral Pack",
+      "pack_type": "Spectral",
+      "size_variant": "Normal",
+      "offered_items_summary": "Choose 1 of up to 2 Spectral cards to be used immediately",
+      "shop_availability_notes": "Two booster packs offered each shop; restock on next shop visit",
+      "notes": "Cost: $4"
+    }
+  },
+  {
+    "set_type": "pack",
+    "item_name": "Standard Pack",
+    "item_key": "p_standard_normal_1",
+    "template": "pack_open_pick_first_observed",
+    "confidence": 0.9,
+    "matched_rules": [
+      "pack:open_pick_first_observed"
+    ],
+    "params": {
+      "strategy": "add_pack_then_buy_then_pack_then_wait",
+      "pack_key": "p_standard_normal_1",
+      "allow_shop_fallback": true,
+      "pack_select_policy": "first_playable"
+    },
+    "target": "p5_pack_standard_pack",
+    "raw_fields_used": {
+      "pack_name": "Standard Pack",
+      "pack_type": "Standard",
+      "size_variant": "Normal",
+      "offered_items_summary": "Choose 1 of up to 3 Playing cards to add to your deck",
+      "shop_availability_notes": "Two booster packs offered each shop; restock on next shop visit",
+      "notes": "Cost: $4"
+    }
+  }
+]
