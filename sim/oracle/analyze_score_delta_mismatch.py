@@ -13,7 +13,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from sim.core.score_basic import evaluate_selected
+from sim.core.score_basic import evaluate_selected, evaluate_selected_breakdown
 from sim.score.expected_basic import compute_expected_for_action
 
 RANK_CHIPS = {
@@ -201,20 +201,21 @@ def main() -> int:
         detected_hand_type_expected = ""
         base_chips = None
         base_mult = None
+
+        cards_for_eval = [{"rank": _normalize_rank(c.get("rank") or _rank_from_key(c.get("key"))), "suit": str(c.get("suit") or "")} for c in selected_cards]
+        score_breakdown = evaluate_selected_breakdown(cards_for_eval)
+        detected_hand_type_expected = str(score_breakdown.get("hand_type") or "")
+        base_chips = float(score_breakdown.get("base_chips") or 0.0)
+        base_mult = float(score_breakdown.get("base_mult") or 1.0)
+        sum_rank = float(score_breakdown.get("scoring_rank_chips") or 0.0)
+        predicted_core = float(score_breakdown.get("total_delta") or 0.0)
+
         if bool(expected_from_csv.get("available")):
-            detected_hand_type_expected = str(expected_from_csv.get("hand_type") or "")
-            base_chips = float(expected_from_csv.get("base_chips") or 0.0)
-            base_mult = float(expected_from_csv.get("base_mult") or 1.0)
-        else:
-            cards_for_eval = [{"rank": _normalize_rank(c.get("rank") or _rank_from_key(c.get("key"))), "suit": str(c.get("suit") or "")} for c in selected_cards]
-            h_type, b_chips, b_mult = evaluate_selected(cards_for_eval)
-            detected_hand_type_expected = str(h_type or "")
-            base_chips = float(b_chips)
-            base_mult = float(b_mult)
+            csv_hand = str(expected_from_csv.get("hand_type") or "")
+            if csv_hand:
+                detected_hand_type_expected = csv_hand
 
         detected_hand_type_sim = _sim_hand_type_from_trace_line(sim0)
-        sum_rank = _sum_rank_chips(selected_cards)
-        predicted_core = (float(base_chips or 0.0) + sum_rank) * float(base_mult or 1.0)
 
         oracle_score_obs = oracle0.get("score_observed") if isinstance(oracle0.get("score_observed"), dict) else {}
         sim_score_obs = sim0.get("score_observed") if isinstance(sim0.get("score_observed"), dict) else {}

@@ -2,7 +2,7 @@
 import random
 from typing import Any
 
-from sim.core.score_basic import evaluate_selected
+from sim.core.score_basic import evaluate_selected_breakdown
 
 SUITS = ["C", "D", "H", "S"]
 RANKS = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2"]
@@ -411,8 +411,11 @@ class SimEnv:
                     self._state["played"]["cards"] = selected
                     self._state["discard"]["cards"].extend(selected)
 
-                    hand_type, base_chips, base_mult = evaluate_selected(selected)
-                    gain = float(base_chips * base_mult)
+                    score_info = evaluate_selected_breakdown(selected)
+                    hand_type = str(score_info.get("hand_type") or "")
+                    base_chips = float(score_info.get("base_chips") or 0.0)
+                    base_mult = float(score_info.get("base_mult") or 1.0)
+                    gain = float(score_info.get("total_delta") or 0.0)
                     self._state["round"]["chips"] = float(self._state["round"]["chips"]) + gain
                     self._state["score"]["chips"] = float(self._state["round"]["chips"])
                     self._state["score"]["mult"] = float(base_mult)
