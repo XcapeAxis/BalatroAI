@@ -112,6 +112,9 @@
           "type": "string"
         }
       }
+    },
+    "state_hash_p1_hand_score_observed_core": {
+      "type": "string"
     }
   }
 }
