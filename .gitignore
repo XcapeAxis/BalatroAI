@@ -36,6 +36,8 @@ sweep_*.csv
 # Trainer artifacts
 trainer_data/
 trainer_runs/
+trainer_data/**/*.jsonl
+trainer_data/**/*.lock
 .venv_trainer/
 trainer/config.json
 # Simulator runtime artifacts
