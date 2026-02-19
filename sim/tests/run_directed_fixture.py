@@ -61,6 +61,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stop-on-done", action="store_true")
     parser.add_argument("--dump-on-diff", default=None, help="Directory for mismatch dump artifacts.")
     parser.add_argument("--dump-scope-only", action="store_true", help="Dump scope projection only, omit first_diff_path subtree.")
+    parser.add_argument("--trace-offset-oracle", type=int, default=0, help=argparse.SUPPRESS)
+    parser.add_argument("--trace-offset-sim", type=int, default=0, help=argparse.SUPPRESS)
     return parser.parse_args()
 
 
@@ -424,13 +426,30 @@ def main() -> int:
             validate_trace_line(trace_line)
             fp.write(json.dumps(trace_line, ensure_ascii=False) + "\n")
 
-            if oracle_trace and step_id < len(oracle_trace):
-                oracle_line = oracle_trace[step_id]
+            if oracle_trace:
+                action_index = step_id - int(args.trace_offset_sim)
+                if action_index < 0:
+                    state = next_state
+                    if done and args.stop_on_done:
+                        break
+                    continue
+
+                oracle_index = action_index + int(args.trace_offset_oracle)
+                if oracle_index < 0 or oracle_index >= len(oracle_trace):
+                    print(
+                        f"ERROR: oracle trace index out of range for compare "
+                        f"(compared_step={step_id}, action_index={action_index}, oracle_index={oracle_index}, oracle_len={len(oracle_trace)})"
+                    )
+                    return 1
+
+                oracle_line = oracle_trace[oracle_index]
                 oracle_hash = oracle_line.get(hash_key)
                 sim_hash = trace_line.get(hash_key)
                 if oracle_hash != sim_hash:
                     mismatches += 1
                     print(f"MISMATCH step={step_id} scope={args.scope}")
+                    print(f"compared_step={step_id}, action_index={action_index}")
+                    print(f"oracle_state_id={oracle_line.get('step_id')}, sim_state_id={trace_line.get('step_id')}")
                     print(f"oracle_hash={oracle_hash}")
                     print(f"sim_hash={sim_hash}")
 
