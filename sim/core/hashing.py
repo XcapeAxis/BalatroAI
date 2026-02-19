@@ -241,6 +241,55 @@ def _filter_p2_hand_score_observed_core(state: dict[str, Any]) -> dict[str, Any]
     }
 
 
+def _filter_p2b_hand_score_observed_core(state: dict[str, Any]) -> dict[str, Any]:
+    state = to_builtin(state)
+    zones = state.get("zones") or {}
+    round_info = state.get("round") or {}
+    observed = state.get("score_observed") or {}
+    phase = str(state.get("phase") or "")
+
+    hand_count = len(_zone_cards(zones, "hand")) if phase == "SELECTING_HAND" else 0
+
+    return {
+        "schema_version": state.get("schema_version"),
+        "zones": {
+            "hand_count": hand_count,
+        },
+        "round": {
+            "hands_left": round_info.get("hands_left", 0),
+            "discards_left": round_info.get("discards_left", 0),
+        },
+        "score_observed": {
+            "total": float(observed.get("total") or 0.0),
+            "delta": float(observed.get("delta") or 0.0),
+        },
+    }
+
+
+
+def _filter_p3_hand_score_observed_core(state: dict[str, Any]) -> dict[str, Any]:
+    state = to_builtin(state)
+    zones = state.get("zones") or {}
+    round_info = state.get("round") or {}
+    observed = state.get("score_observed") or {}
+    phase = str(state.get("phase") or "")
+
+    hand_count = len(_zone_cards(zones, "hand")) if phase == "SELECTING_HAND" else 0
+
+    return {
+        "schema_version": state.get("schema_version"),
+        "zones": {
+            "hand_count": hand_count,
+        },
+        "round": {
+            "hands_left": round_info.get("hands_left", 0),
+            "discards_left": round_info.get("discards_left", 0),
+        },
+        "score_observed": {
+            "total": float(observed.get("total") or 0.0),
+            "delta": float(observed.get("delta") or 0.0),
+        },
+    }
 def _filter_zones_core(state: dict[str, Any]) -> dict[str, Any]:
     state = to_builtin(state)
     zones = state.get("zones") or {}
@@ -359,6 +408,13 @@ def state_hash_p2_hand_score_observed_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_p2_hand_score_observed_core(state)))
 
 
+def state_hash_p2b_hand_score_observed_core(state: dict[str, Any]) -> str:
+    return _sha256_text(canonical_dumps(_filter_p2b_hand_score_observed_core(state)))
+
+
+
+def state_hash_p3_hand_score_observed_core(state: dict[str, Any]) -> str:
+    return _sha256_text(canonical_dumps(_filter_p3_hand_score_observed_core(state)))
 def state_hash_zones_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_zones_core(state)))
 
@@ -399,6 +455,13 @@ def p2_hand_score_observed_core_projection(state: dict[str, Any]) -> dict[str, A
     return _filter_p2_hand_score_observed_core(state)
 
 
+def p2b_hand_score_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
+    return _filter_p2b_hand_score_observed_core(state)
+
+
+
+def p3_hand_score_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
+    return _filter_p3_hand_score_observed_core(state)
 def zones_core_projection(state: dict[str, Any]) -> dict[str, Any]:
     return _filter_zones_core(state)
 
@@ -413,3 +476,4 @@ def economy_core_projection(state: dict[str, Any]) -> dict[str, Any]:
 
 def rng_events_core_projection(state: dict[str, Any]) -> dict[str, Any]:
     return _filter_rng_events_core(state)
+
