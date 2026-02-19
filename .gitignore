@@ -64,3 +64,13 @@ trainer_data/**
 .mypy_cache/**
 .ruff_cache/**
 *.bak
+
+# Maintenance ignores
+.venv_trainer/**
+.venv*/**
+venv*/**
+logs/**
+runtime/**
+**/*.log
+**/*.tmp
+**/*.bak
