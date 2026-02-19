@@ -1,0 +1,110 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sim/spec/state_v1.json",
+  "title": "Canonical State v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "phase",
+    "zones",
+    "round",
+    "score",
+    "economy",
+    "jokers",
+    "rng",
+    "flags"
+  ],
+  "properties": {
+    "schema_version": {"const": "state_v1"},
+    "phase": {"type": "string"},
+    "zones": {
+      "type": "object",
+      "required": ["deck", "discard", "hand", "played"],
+      "properties": {
+        "deck": {"$ref": "#/$defs/card_array"},
+        "discard": {"$ref": "#/$defs/card_array"},
+        "hand": {"$ref": "#/$defs/card_array"},
+        "played": {"$ref": "#/$defs/card_array"}
+      }
+    },
+    "round": {
+      "type": "object",
+      "required": ["hands_left", "discards_left", "ante", "round_num", "blind"],
+      "properties": {
+        "hands_left": {"type": "integer"},
+        "discards_left": {"type": "integer"},
+        "ante": {"type": "integer"},
+        "round_num": {"type": "integer"},
+        "blind": {"type": "string"}
+      }
+    },
+    "score": {
+      "type": "object",
+      "required": ["chips", "mult", "target_chips", "last_hand_type", "last_base_chips", "last_base_mult"],
+      "properties": {
+        "chips": {"type": "number"},
+        "mult": {"type": "number"},
+        "target_chips": {"type": "number"},
+        "last_hand_type": {"type": "string"},
+        "last_base_chips": {"type": "number"},
+        "last_base_mult": {"type": "number"}
+      }
+    },
+    "economy": {
+      "type": "object",
+      "required": ["money"],
+      "properties": {
+        "money": {"type": "number"}
+      }
+    },
+    "jokers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["joker_id", "counters", "disabled"],
+        "properties": {
+          "joker_id": {"type": "string"},
+          "counters": {"type": "object"},
+          "disabled": {"type": "boolean"}
+        }
+      }
+    },
+    "rng": {
+      "type": "object",
+      "required": ["mode", "seed", "cursor", "events"],
+      "properties": {
+        "mode": {"enum": ["oracle_stream", "native"]},
+        "seed": {"type": ["string", "null"]},
+        "cursor": {"type": "integer"},
+        "events": {"type": "array"}
+      }
+    },
+    "flags": {
+      "type": "object",
+      "required": ["done", "won"],
+      "properties": {
+        "done": {"type": "boolean"},
+        "won": {"type": "boolean"}
+      }
+    }
+  },
+  "$defs": {
+    "card": {
+      "type": "object",
+      "required": ["uid", "rank", "suit", "key", "modifier", "state"],
+      "properties": {
+        "uid": {"type": "string"},
+        "rank": {"type": "string"},
+        "suit": {"type": "string"},
+        "key": {"type": "string"},
+        "modifier": {"type": "array", "items": {"type": "string"}},
+        "state": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    },
+    "card_array": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/card"}
+    }
+  }
+}

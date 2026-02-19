@@ -1,0 +1,7 @@
+﻿{
+  "name": "p0_02_two_pair_play",
+  "scope": "hand_core",
+  "description": "Exercise two-pair style selections and ensure score bookkeeping stays stable.",
+  "tags": ["p0", "two_pair", "play"],
+  "expected_behavior": "Selected cards are consumed correctly and canonical hashes are reproducible."
+}

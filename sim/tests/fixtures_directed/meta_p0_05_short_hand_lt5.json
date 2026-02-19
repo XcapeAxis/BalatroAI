@@ -1,0 +1,7 @@
+﻿{
+  "name": "p0_05_short_hand_lt5",
+  "scope": "hand_core",
+  "description": "Validate play/discard behavior with fewer than five selected cards.",
+  "tags": ["p0", "short_hand", "play", "discard"],
+  "expected_behavior": "No index errors with short selections; replay remains deterministic."
+}

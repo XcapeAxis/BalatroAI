@@ -1,0 +1,7 @@
+﻿{
+  "name": "p0_03_straight_play",
+  "scope": "hand_core",
+  "description": "Directed straight-oriented replay path for basic hand classification checks.",
+  "tags": ["p0", "straight", "play"],
+  "expected_behavior": "Step replay is deterministic and transitions remain valid through multiple plays."
+}

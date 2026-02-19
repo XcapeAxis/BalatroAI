@@ -1,0 +1,7 @@
+﻿{
+  "name": "p0_04_flush_play",
+  "scope": "hand_core",
+  "description": "Flush-oriented trace with play + discard mix.",
+  "tags": ["p0", "flush", "play", "discard"],
+  "expected_behavior": "Simulator preserves legal flow and emits stable canonical states."
+}

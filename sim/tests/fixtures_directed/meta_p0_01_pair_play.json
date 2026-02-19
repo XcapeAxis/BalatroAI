@@ -1,0 +1,7 @@
+﻿{
+  "name": "p0_01_pair_play",
+  "scope": "hand_core",
+  "description": "Replay a simple pair-oriented play path to stabilize pair scoring transitions.",
+  "tags": ["p0", "pair", "play"],
+  "expected_behavior": "Simulator executes play/discard without crash and produces deterministic hand_core hash sequence."
+}

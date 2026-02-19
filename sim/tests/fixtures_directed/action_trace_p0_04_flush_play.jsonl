@@ -1,0 +1,5 @@
+﻿{"schema_version":"action_v1","phase":"MENU","action_type":"START","seed":"AAAAAAA"}
+{"schema_version":"action_v1","phase":"BLIND_SELECT","action_type":"SELECT","index":0}
+{"schema_version":"action_v1","phase":"SELECTING_HAND","action_type":"PLAY","indices":[0,2,4,6,7]}
+{"schema_version":"action_v1","phase":"SELECTING_HAND","action_type":"DISCARD","indices":[1,3]}
+{"schema_version":"action_v1","phase":"SELECTING_HAND","action_type":"PLAY","indices":[0,1,2,3,4]}

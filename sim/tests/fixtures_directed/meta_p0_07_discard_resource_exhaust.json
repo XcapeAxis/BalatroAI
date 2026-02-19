@@ -1,0 +1,7 @@
+﻿{
+  "name": "p0_07_discard_resource_exhaust",
+  "scope": "hand_core",
+  "description": "Discard exhaustion regression fixture for discards_left edge behavior.",
+  "tags": ["p0", "discard", "resource"],
+  "expected_behavior": "When discards_left reaches zero simulator stays stable and continues stepping."
+}

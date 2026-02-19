@@ -1,0 +1,7 @@
+﻿{
+  "name": "p0_08_round_eval_cash_out",
+  "scope": "full",
+  "description": "Macro-phase closure fixture for ROUND_EVAL -> CASH_OUT -> SHOP/NEXT_ROUND.",
+  "tags": ["p0", "round_eval", "cash_out", "macro"],
+  "expected_behavior": "CASH_OUT then NEXT_ROUND transitions cleanly without phase deadlock."
+}

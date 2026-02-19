@@ -1,0 +1,7 @@
+﻿{
+  "name": "p0_06_play_order_sensitive",
+  "scope": "hand_core",
+  "description": "Order-sensitive fixture: selected cards must preserve indices input order.",
+  "tags": ["p0", "order", "play"],
+  "expected_behavior": "Played zone card order follows action.indices order while pop deletion remains index-safe."
+}
