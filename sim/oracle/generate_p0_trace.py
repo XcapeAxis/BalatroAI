@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from sim.core.score_basic import evaluate_selected
+from sim.core.score_basic import evaluate_selected, evaluate_selected_breakdown
 from sim.oracle.canonicalize_real import canonicalize_real_state
 from trainer.env_client import ConnectionError, RPCError, _call_method, get_state, health
 
@@ -114,8 +114,10 @@ def enumerate_index_combos(n: int, max_k: int = 5) -> list[list[int]]:
 
 def score_combo(hand_cards: list[dict[str, Any]], indices: list[int]) -> tuple[str, float]:
     cards = [simplify_for_eval(hand_cards[i]) for i in indices]
-    hand_type, base_chips, base_mult = evaluate_selected(cards)
-    return normalize_hand_type(hand_type), float(base_chips * base_mult)
+    score_info = evaluate_selected_breakdown(cards)
+    hand_type = str(score_info.get("hand_type") or "")
+    total_delta = float(score_info.get("total_delta") or 0.0)
+    return normalize_hand_type(hand_type), total_delta
 
 
 def best_combo(hand_cards: list[dict[str, Any]]) -> list[int]:
