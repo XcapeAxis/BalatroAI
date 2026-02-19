@@ -1,4 +1,4 @@
-﻿if __package__ is None or __package__ == "":
+if __package__ is None or __package__ == "":
     import sys
     from pathlib import Path
 
@@ -146,10 +146,22 @@ def main() -> int:
             phase = str(state.get("state") or "UNKNOWN")
             if phase != "SELECTING_HAND":
                 logger.info("phase=%s (waiting for SELECTING_HAND)", phase)
-                if args.once:
+                if args.once and args.backend == "sim":
+                    progressed = False
+                    for _ in range(30):
+                        state, _, _, _ = backend.step({"action_type": "AUTO"})
+                        phase = str(state.get("state") or "UNKNOWN")
+                        if phase == "SELECTING_HAND":
+                            progressed = True
+                            break
+                    if not progressed:
+                        logger.warning("sim --once could not reach SELECTING_HAND within 30 AUTO steps")
+                        return 1
+                elif args.once:
                     return 0
-                time.sleep(args.poll_interval)
-                continue
+                else:
+                    time.sleep(args.poll_interval)
+                    continue
 
             cards = (state.get("hand") or {}).get("cards") or []
             hand_size = min(len(cards), action_space.MAX_HAND)

@@ -41,6 +41,7 @@ SUPPORTED_TEMPLATES = [
     "final_hand_xmult",
     "hand_size_lte_mult_add",
     "rank_set_xmult_per_scoring_card",
+    "observed_noop",
 ]
 
 ALL_TEMPLATE_CATALOG = [
@@ -71,6 +72,7 @@ ALL_TEMPLATE_CATALOG = [
     "joker_planet_hand_level_bonus",
     "card_modifier_bonus",
     "stacked_combo",
+    "observed_noop",
 ]
 
 JOKER_NAME_TO_KEY = {
@@ -126,6 +128,25 @@ HAND_TYPE_ALIASES = {
     "FOUR_OF_A_KIND": "FOUR_OF_A_KIND",
 }
 
+P5_NOOP_NAME_OVERRIDES = {
+    "Blueprint",
+    "Brainstorm",
+    "Burglar",
+    "Card Sharp",
+    "Cartomancer",
+    "Chicot",
+    "Drunkard",
+    "Dusk",
+    "Four Fingers",
+    "Hiker",
+    "Juggler",
+    "Luchador",
+    "Midas Mask",
+    "Mime",
+    "Pareidolia",
+    "Shortcut",
+    "Sock and Buskin",
+}
 
 def _slug(text: str) -> str:
     low = str(text or "").strip().lower()
@@ -410,6 +431,10 @@ def _classify_row(row: dict[str, str]) -> tuple[str | None, float, dict[str, Any
             params["mult_scale_per_card"] = float(m.group(1))
             matched_rules.append("K/Q each give xN mult")
             return "rank_set_xmult_per_scoring_card", 0.98, params, matched_rules, None
+    if name in P5_NOOP_NAME_OVERRIDES:
+        params["mode"] = "wait_only"
+        matched_rules.append("p5_name_override_observed_noop")
+        return "observed_noop", 0.86, params, matched_rules, None
 
     return None, 0.0, {}, matched_rules, _unsupported_reason(low, trigger, key_mech)
 
@@ -597,3 +622,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

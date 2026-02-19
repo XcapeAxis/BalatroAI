@@ -1,4 +1,4 @@
-﻿import copy
+import copy
 import random
 from typing import Any
 
@@ -499,6 +499,10 @@ class SimEnv:
                     self._state["discard"]["cards"].extend(selected)
                     self._state["round"]["discards_left"] = int(self._state["round"]["discards_left"]) - 1
                     self._draw_to_hand()
+                    if int(self._state["round"]["hands_left"]) <= 0 and int(self._state["round"]["discards_left"]) <= 0:
+                        self._state["state"] = "GAME_OVER"
+                    else:
+                        self._state["state"] = "SELECTING_HAND"
 
             elif action_type == "PLAY":
                 if int(self._state["round"]["hands_left"]) <= 0:
