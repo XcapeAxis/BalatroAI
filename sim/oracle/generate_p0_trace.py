@@ -269,7 +269,7 @@ def wait_until_actionable(base_url: str, timeout_sec: float, wait_sleep: float) 
 
 
 class TraceBuilder:
-    def __init__(self, base_url: str, state: dict[str, Any], seed: str, index_base: int, timeout_sec: float, wait_sleep: float, max_steps: int):
+    def __init__(self, base_url: str, state: dict[str, Any], seed: str, index_base: int, timeout_sec: float, wait_sleep: float, max_steps: int, start_state_save_path: str | None = None):
         self.base_url = base_url
         self.state = state
         self.seed = seed
@@ -279,6 +279,7 @@ class TraceBuilder:
         self.max_steps = max_steps
         self.action_trace: list[dict[str, Any]] = []
         self.start_snapshot_override: dict[str, Any] | None = None
+        self.start_state_save_path = start_state_save_path
 
     @property
     def steps_used(self) -> int:
@@ -550,6 +551,11 @@ def _try_synthesize_target_hand(builder: TraceBuilder, target: str, target_hand_
         return False, {}, "synthesis_indices_missing"
 
     builder.start_snapshot_override = json.loads(json.dumps(builder.state, ensure_ascii=False))
+    if builder.start_state_save_path:
+        try:
+            _call_method(builder.base_url, "save", {"path": builder.start_state_save_path}, timeout=builder.timeout_sec)
+        except Exception:
+            pass
 
     builder.step("PLAY", indices=indices)
     observed = current_last_hand_type(builder.state)
@@ -781,6 +787,15 @@ def generate_trace(
             "action_trace": [],
         }
 
+    oracle_start_state_path: str | None = None
+    if out_dir is not None:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        oracle_start_state_path = str(out_dir / f"oracle_start_state_{target}.jkr")
+        try:
+            _call_method(base_url, "save", {"path": oracle_start_state_path}, timeout=timeout_sec)
+        except Exception:
+            pass
+
     builder = TraceBuilder(
         base_url=base_url,
         state=state,
@@ -789,6 +804,7 @@ def generate_trace(
         timeout_sec=timeout_sec,
         wait_sleep=wait_sleep,
         max_steps=max_steps,
+        start_state_save_path=oracle_start_state_path,
     )
 
     start_snapshot = canonical_snapshot(builder.state, seed=seed)
@@ -796,16 +812,6 @@ def generate_trace(
     if isinstance(start_meta, dict):
         start_meta["index_base_detected"] = int(index_base)
         start_meta["index_probe"] = dict(index_probe)
-
-    oracle_start_state_path: str | None = None
-    if out_dir is not None:
-        try:
-            out_dir.mkdir(parents=True, exist_ok=True)
-            state_path = out_dir / f"oracle_start_state_{target}.jkr"
-            _call_method(base_url, "save", {"path": str(state_path)}, timeout=timeout_sec)
-            oracle_start_state_path = str(state_path)
-        except Exception:
-            oracle_start_state_path = None
 
     success = False
     hit_info: dict[str, Any] = {}
