@@ -141,6 +141,9 @@ def main() -> int:
         print("ERROR: action trace is empty")
         return 2
 
+    actions_count = len(actions)
+    states_written = 0
+
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -232,6 +235,7 @@ def main() -> int:
 
                 validate_trace_line(trace_line)
                 fp.write(json.dumps(trace_line, ensure_ascii=False) + "\n")
+                states_written += 1
 
                 state = next_state
                 if done and args.stop_on_done:
@@ -239,6 +243,11 @@ def main() -> int:
             except Exception as exc:
                 print(f"ERROR: step={step_id} unexpected: {exc}")
                 return 1
+
+    print(f"trace_contract oracle: actions={actions_count}, oracle_states={states_written}")
+    if states_written != actions_count:
+        print("ERROR: trace contract violation in oracle trace (states != actions)")
+        return 1
 
     print(f"wrote oracle trace: {out_path}")
     return 0
