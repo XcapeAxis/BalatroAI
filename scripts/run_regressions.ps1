@@ -1,7 +1,8 @@
 ﻿param(
   [string]$BaseUrl = "http://127.0.0.1:12346",
   [string]$OutRoot = "sim/tests/fixtures_runtime",
-  [string]$Seed = "AAAAAAA"
+  [string]$Seed = "AAAAAAA",
+  [switch]$RunP2b
 )
 
 Set-StrictMode -Version Latest
@@ -79,8 +80,10 @@ function Run-WithRecovery([string]$Label, [string[]]$PyArgs, [string]$Url) {
 Ensure-Service -Url $BaseUrl
 if (-not (Test-Path $OutRoot)) { New-Item -ItemType Directory -Path $OutRoot -Force | Out-Null }
 $outRootPath = (Resolve-Path $OutRoot).Path
+
 $p0Out = Join-Path $outRootPath "oracle_p0_v6_regression"
 $p1Out = Join-Path $outRootPath "oracle_p1_smoke_v3_regression"
+$p2bOut = Join-Path $outRootPath "oracle_p2b_smoke_v1_regression"
 
 $p0Args = @("-B", "sim/oracle/batch_build_p0_oracle_fixtures.py", "--base-url", $BaseUrl, "--out-dir", $p0Out, "--max-steps", "160", "--scope", "p0_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p0Out "dumps"))
 $p1Args = @("-B", "sim/oracle/batch_build_p1_smoke.py", "--base-url", $BaseUrl, "--out-dir", $p1Out, "--max-steps", "120", "--scope", "p1_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p1Out "dumps"))
@@ -98,6 +101,25 @@ Write-Host ("P0 report: {0}" -f $p0ReportPath)
 Write-Host ("P1 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4}" -f $p1Report.passed, $p1Report.total, $p1Report.diff_fail, $p1Report.oracle_fail, $p1Report.gen_fail)
 Write-Host ("P1 report: {0}" -f $p1ReportPath)
 
+if ($RunP2b) {
+  $p2bArgs = @(
+    "-B", "sim/oracle/batch_build_p2b_smoke.py",
+    "--base-url", $BaseUrl,
+    "--out-dir", $p2bOut,
+    "--max-steps", "200",
+    "--scope", "p2b_hand_score_observed_core",
+    "--seed", $Seed,
+    "--resume",
+    "--dump-on-diff", (Join-Path $p2bOut "dumps")
+  )
+  $p2bAnalyzeArgs = @("-B", "sim/oracle/analyze_p2b_mismatch.py", "--fixtures-dir", $p2bOut)
 
+  Run-WithRecovery -Label "P2b" -PyArgs $p2bArgs -Url $BaseUrl
+  Run-Py -Label "P2b-analyzer" -PyArgs $p2bAnalyzeArgs | Out-Null
 
-
+  $p2bReportPath = Join-Path $p2bOut "report_p2b.json"
+  $p2bReport = Get-Content $p2bReportPath -Raw | ConvertFrom-Json
+  Write-Host ("P2b summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4} skipped={5}" -f $p2bReport.passed, $p2bReport.total, $p2bReport.diff_fail, $p2bReport.oracle_fail, $p2bReport.gen_fail, $p2bReport.skipped)
+  Write-Host ("P2b report: {0}" -f $p2bReportPath)
+  Write-Host ("P2b analyzer: {0}" -f (Join-Path $p2bOut "score_mismatch_table_p2b.md"))
+}
