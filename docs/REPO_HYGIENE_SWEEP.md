@@ -54,3 +54,13 @@
 - `docs/artifacts/p3/report_*.json`: present
 - `docs/artifacts/p4/report_*.json`: present
 - `docs/artifacts/p5/report_*.json`: present
+
+
+## Final Gate Validation
+- Command: `powershell -ExecutionPolicy Bypass -File scripts/run_regressions.ps1 -RunP5`
+- Result: **PASS**
+- Summary: P0 8/8, P1 6/6, P2 12/12, P2b 18/18, P3 58/58, P4 24/24, P5 42/42.
+
+## Post-Cleanup Verification
+- Command: `powershell -ExecutionPolicy Bypass -File scripts/cleanup.ps1`
+- `docs/artifacts/p3`, `docs/artifacts/p4`, `docs/artifacts/p5` report files still present.
