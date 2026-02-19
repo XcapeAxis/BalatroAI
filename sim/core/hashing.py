@@ -193,7 +193,7 @@ def _filter_zones_core(state: dict[str, Any]) -> dict[str, Any]:
     zones = state.get("zones") or {}
 
     zone_view: dict[str, Any] = {}
-    for name in ("deck", "discard", "hand", "played"):
+    for name in ("deck", "discard", "hand"):
         uids = _zone_uids(zones, name)
         zone_view[name] = {
             "len": len(uids),
@@ -212,7 +212,7 @@ def _filter_zones_counts_core(state: dict[str, Any]) -> dict[str, Any]:
     zones = state.get("zones") or {}
     round_info = state.get("round") or {}
     counts: dict[str, int] = {}
-    for name in ("deck", "discard", "hand", "played"):
+    for name in ("deck", "discard", "hand"):
         counts[name] = len(_zone_cards(zones, name))
     return {
         "schema_version": state.get("schema_version"),

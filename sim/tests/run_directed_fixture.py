@@ -329,6 +329,24 @@ def _dump_start_artifacts(
     return str(oracle_path), str(sim_path)
 
 
+def _phase_default_action(state: dict[str, Any], seed: str) -> dict[str, Any]:
+    phase = str(state.get("state") or "UNKNOWN")
+    if phase == "BLIND_SELECT":
+        return {"action_type": "SELECT", "index": 0}
+    if phase == "SELECTING_HAND":
+        hand = (state.get("hand") or {}).get("cards") or []
+        if hand:
+            return {"action_type": "PLAY", "indices": [0]}
+        return {"action_type": "WAIT"}
+    if phase == "ROUND_EVAL":
+        return {"action_type": "CASH_OUT"}
+    if phase == "SHOP":
+        return {"action_type": "NEXT_ROUND"}
+    if phase in {"MENU", "GAME_OVER"}:
+        return {"action_type": "START", "seed": seed}
+    return {"action_type": "WAIT"}
+
+
 def main() -> int:
     args = parse_args()
 
@@ -393,12 +411,24 @@ def main() -> int:
 
     with out_path.open("w", encoding="utf-8-sig", newline="\n") as fp:
         for step_id, action in enumerate(actions):
-            executed_action = dict(action)
+            input_action = dict(action)
+            executed_action = dict(input_action)
+            overridden = False
             try:
                 next_state, reward, done, info = env.step(executed_action)
             except Exception as exc:
-                print(f"ERROR: step {step_id} action failed: {exc}")
-                return 1
+                fallback = _phase_default_action(state, seed)
+                fallback["_fallback_reason"] = str(exc)
+                executed_action = fallback
+                overridden = True
+                try:
+                    next_state, reward, done, info = env.step(executed_action)
+                except Exception as fallback_exc:
+                    print(f"ERROR: step {step_id} action failed: {exc}; fallback failed: {fallback_exc}")
+                    return 1
+            info = dict(info)
+            info["overridden"] = bool(info.get("overridden") or overridden)
+            info["input_action"] = input_action
 
             events = extract_rng_events(state, next_state)
             rng_cursor += len(events)
@@ -440,6 +470,8 @@ def main() -> int:
                 "info": {
                     "source": "directed_sim",
                     "engine_info": info,
+                    "overridden": bool(info.get("overridden") or False),
+                    "input_action": input_action,
                 },
             }
             if include_snapshot:
