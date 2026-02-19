@@ -1,11 +1,22 @@
-param(
-  [switch]$RemoveVenv
+﻿param(
+  [switch]$RemoveVenv,
+  [switch]$KeepFixturesRuntime
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $ProjectRoot
+
+function Stop-LocalBalatroProcesses {
+  foreach ($n in @("Balatro", "balatrobot", "uvx")) {
+    $procs = Get-Process -Name $n -ErrorAction SilentlyContinue
+    if ($procs) {
+      Write-Host ("stop process " + $n)
+      $procs | Stop-Process -Force -ErrorAction SilentlyContinue
+    }
+  }
+}
 
 function Get-TreeSizeBytes([string]$Path) {
   if (-not (Test-Path $Path)) { return 0 }
@@ -22,8 +33,13 @@ function Remove-DirIfExists([string]$Path) {
   if (Test-Path $Path) {
     Write-Host "remove $Path"
     Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path $Path) {
+      Write-Host ("warn: still exists (possibly locked): " + $Path)
+    }
   }
 }
+
+Stop-LocalBalatroProcesses
 
 $before = Get-TreeSizeBytes $ProjectRoot
 Write-Host ("before: " + (Format-GB $before))
@@ -36,9 +52,14 @@ if (Test-Path $artifactsRoot) {
 $safeDirs = @(
   "logs",
   "runtime",
-  "sim/tests/fixtures_runtime",
-  "sim/runtime"
+  "trainer_data",
+  "trainer_runs"
 )
+if (-not $KeepFixturesRuntime) {
+  $safeDirs += @("sim/tests/fixtures_runtime", "sim/runtime")
+} else {
+  Write-Host "keep fixtures runtime enabled (-KeepFixturesRuntime)"
+}
 foreach ($d in $safeDirs) { Remove-DirIfExists $d }
 
 $cacheNames = @("__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache")
