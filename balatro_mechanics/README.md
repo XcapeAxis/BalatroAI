@@ -40,3 +40,13 @@ P3 runtime artifacts (not committed):
 - `sim/tests/fixtures_runtime/oracle_p3_jokers_*`
 - runtime dumps and transient trace outputs
 
+
+
+P4 derived artifacts (kept in repo):
+- `balatro_mechanics/derived/p4_consumable_template_map.json`
+- `balatro_mechanics/derived/p4_consumable_template_unsupported.json`
+- `balatro_mechanics/derived/p4_supported_targets.txt`
+
+P4 runtime artifacts (not committed):
+- `sim/tests/fixtures_runtime/oracle_p4_consumables_*`
+- runtime dumps and transient trace outputs

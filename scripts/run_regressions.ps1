@@ -3,7 +3,8 @@
   [string]$OutRoot = "sim/tests/fixtures_runtime",
   [string]$Seed = "AAAAAAA",
   [switch]$RunP2b,
-  [switch]$RunP3
+  [switch]$RunP3,
+  [switch]$RunP4
 )
 
 Set-StrictMode -Version Latest
@@ -97,6 +98,25 @@ function Persist-P3Artifacts([string]$ReportPath, [string]$ProjectRootPath) {
   }
 }
 
+function Persist-P4Artifacts([string]$ReportPath, [string]$ProjectRootPath) {
+  $artifactDir = Join-Path $ProjectRootPath "docs/artifacts/p4"
+  if (-not (Test-Path $artifactDir)) { New-Item -ItemType Directory -Path $artifactDir -Force | Out-Null }
+  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+
+  $copies = @(
+    @{ Src = $ReportPath; Dest = (Join-Path $artifactDir ("report_p4_" + $stamp + ".json")) },
+    @{ Src = (Join-Path $ProjectRootPath "docs/COVERAGE_P4_CONSUMABLES.md"); Dest = (Join-Path $artifactDir ("COVERAGE_P4_CONSUMABLES_" + $stamp + ".md")) },
+    @{ Src = (Join-Path $ProjectRootPath "docs/COVERAGE_P4_STATUS.md"); Dest = (Join-Path $artifactDir ("COVERAGE_P4_STATUS_" + $stamp + ".md")) }
+  )
+
+  foreach ($item in $copies) {
+    if (Test-Path $item.Src) {
+      Copy-Item -LiteralPath $item.Src -Destination $item.Dest -Force
+      Write-Host ("[P4-artifacts] " + $item.Dest)
+    }
+  }
+}
+
 Ensure-Service -Url $BaseUrl
 if (-not (Test-Path $OutRoot)) { New-Item -ItemType Directory -Path $OutRoot -Force | Out-Null }
 $outRootPath = (Resolve-Path $OutRoot).Path
@@ -106,12 +126,14 @@ $p1Out = Join-Path $outRootPath "oracle_p1_smoke_v3_regression"
 $p2Out = Join-Path $outRootPath "oracle_p2_smoke_v1_regression"
 $p2bOut = Join-Path $outRootPath "oracle_p2b_smoke_v1_regression"
 $p3Out = Join-Path $outRootPath "oracle_p3_jokers_v1_regression"
+$p4Out = Join-Path $outRootPath "oracle_p4_consumables_v1_regression"
 
 $p0Args = @("-B", "sim/oracle/batch_build_p0_oracle_fixtures.py", "--base-url", $BaseUrl, "--out-dir", $p0Out, "--max-steps", "160", "--scope", "p0_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p0Out "dumps"))
 $p1Args = @("-B", "sim/oracle/batch_build_p1_smoke.py", "--base-url", $BaseUrl, "--out-dir", $p1Out, "--max-steps", "120", "--scope", "p1_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p1Out "dumps"))
 $p2Args = @("-B", "sim/oracle/batch_build_p2_smoke.py", "--base-url", $BaseUrl, "--out-dir", $p2Out, "--max-steps", "160", "--scope", "p2_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p2Out "dumps"))
 $p2bArgs = @("-B", "sim/oracle/batch_build_p2b_smoke.py", "--base-url", $BaseUrl, "--out-dir", $p2bOut, "--max-steps", "200", "--scope", "p2b_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p2bOut "dumps"))
 $p3Args = @("-B", "sim/oracle/batch_build_p3_joker_fixtures.py", "--base-url", $BaseUrl, "--out-dir", $p3Out, "--max-steps", "160", "--scope", "p3_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p3Out "dumps"))
+$p4Args = @("-B", "sim/oracle/batch_build_p4_consumable_fixtures.py", "--base-url", $BaseUrl, "--targets-file", "balatro_mechanics/derived/p4_supported_targets.txt", "--out-dir", $p4Out, "--max-steps", "220", "--scope", "p4_consumable_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p4Out "dumps"))
 
 Run-WithRecovery -Label "P0" -PyArgs $p0Args -Url $BaseUrl
 Run-WithRecovery -Label "P1" -PyArgs $p1Args -Url $BaseUrl
@@ -126,7 +148,7 @@ Write-Host ("P0 report: {0}" -f $p0ReportPath)
 Write-Host ("P1 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4}" -f $p1Report.passed, $p1Report.total, $p1Report.diff_fail, $p1Report.oracle_fail, $p1Report.gen_fail)
 Write-Host ("P1 report: {0}" -f $p1ReportPath)
 
-if ($RunP3) {
+if ($RunP3 -or $RunP4) {
   Run-WithRecovery -Label "P2" -PyArgs $p2Args -Url $BaseUrl
   Run-WithRecovery -Label "P2b" -PyArgs $p2bArgs -Url $BaseUrl
   Run-WithRecovery -Label "P3" -PyArgs $p3Args -Url $BaseUrl
@@ -146,6 +168,15 @@ if ($RunP3) {
   Write-Host ("P3 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4} skipped={5} unsupported={6}" -f $p3Report.passed, $p3Report.total, $p3Report.diff_fail, $p3Report.oracle_fail, $p3Report.gen_fail, $p3Report.skipped, $p3Report.classifier.unsupported)
   Write-Host ("P3 report: {0}" -f $p3ReportPath)
   Persist-P3Artifacts -ReportPath $p3ReportPath -ProjectRootPath $ProjectRoot
+
+  if ($RunP4) {
+    Run-WithRecovery -Label "P4" -PyArgs $p4Args -Url $BaseUrl
+    $p4ReportPath = Join-Path $p4Out "report_p4.json"
+    $p4Report = Get-Content $p4ReportPath -Raw | ConvertFrom-Json
+    Write-Host ("P4 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4} skipped={5} unsupported={6}" -f $p4Report.passed, $p4Report.total, $p4Report.diff_fail, $p4Report.oracle_fail, $p4Report.gen_fail, $p4Report.skipped, $p4Report.classifier.unsupported)
+    Write-Host ("P4 report: {0}" -f $p4ReportPath)
+    Persist-P4Artifacts -ReportPath $p4ReportPath -ProjectRootPath $ProjectRoot
+  }
 }
 elseif ($RunP2b) {
   Run-WithRecovery -Label "P2b" -PyArgs $p2bArgs -Url $BaseUrl
