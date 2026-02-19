@@ -209,16 +209,20 @@
   {
     "joker_name": "Blueprint",
     "joker_key": "j_blueprint",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.86,
+    "matched_rules": [
+      "p5_name_override_observed_noop"
+    ],
     "raw_fields_used": {
       "effect_summary": "Copies ability of Joker to the right",
       "key_mechanics": "",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Win 1 run."
     },
-    "params": {},
+    "params": {
+      "mode": "wait_only"
+    },
     "target": "p3_j_blueprint"
   },
   {
@@ -239,16 +243,20 @@
   {
     "joker_name": "Brainstorm",
     "joker_key": "j_brainstorm",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.86,
+    "matched_rules": [
+      "p5_name_override_observed_noop"
+    ],
     "raw_fields_used": {
       "effect_summary": "Copies the ability of leftmost Joker",
       "key_mechanics": "",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Discard a Royal Flush ."
     },
-    "params": {},
+    "params": {
+      "mode": "wait_only"
+    },
     "target": "p3_j_brainstorm"
   },
   {
@@ -269,16 +277,20 @@
   {
     "joker_name": "Burglar",
     "joker_key": "j_burglar",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.86,
+    "matched_rules": [
+      "p5_name_override_observed_noop"
+    ],
     "raw_fields_used": {
       "effect_summary": "When Blind is selected, gain +3 Hands and lose all discards",
       "key_mechanics": "discard",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "wait_only"
+    },
     "target": "p3_j_burglar"
   },
   {
@@ -344,31 +356,39 @@
   {
     "joker_name": "Card Sharp",
     "joker_key": "j_card_sharp",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.86,
+    "matched_rules": [
+      "p5_name_override_observed_noop"
+    ],
     "raw_fields_used": {
       "effect_summary": "X3 Mult if played poker hand has already been played this round",
       "key_mechanics": "mult_mult",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "wait_only"
+    },
     "target": "p3_j_card_sharp"
   },
   {
     "joker_name": "Cartomancer",
     "joker_key": "j_cartomancer",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.86,
+    "matched_rules": [
+      "p5_name_override_observed_noop"
+    ],
     "raw_fields_used": {
       "effect_summary": "Create a Tarot card when Blind is selected (Must have room)",
       "key_mechanics": "",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Discover every Tarot Card."
     },
-    "params": {},
+    "params": {
+      "mode": "wait_only"
+    },
     "target": "p3_j_cartomancer"
   },
   {
@@ -449,16 +469,20 @@
   {
     "joker_name": "Chicot",
     "joker_key": "j_chicot",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.86,
+    "matched_rules": [
+      "p5_name_override_observed_noop"
+    ],
     "raw_fields_used": {
       "effect_summary": "Disables effect of every Boss Blind",
       "key_mechanics": "",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Find this Joker from the Soul card."
     },
-    "params": {},
+    "params": {
+      "mode": "wait_only"
+    },
     "target": "p3_j_chicot"
   },
   {
@@ -669,31 +693,39 @@
   {
     "joker_name": "Drunkard",
     "joker_key": "j_drunkard",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.86,
+    "matched_rules": [
+      "p5_name_override_observed_noop"
+    ],
     "raw_fields_used": {
       "effect_summary": "+1 discard each round",
       "key_mechanics": "discard",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "wait_only"
+    },
     "target": "p3_j_drunkard"
   },
   {
     "joker_name": "Dusk",
     "joker_key": "j_dusk",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.86,
+    "matched_rules": [
+      "p5_name_override_observed_noop"
+    ],
     "raw_fields_used": {
       "effect_summary": "Retrigger all played cards in final hand of the round",
       "key_mechanics": "retrigger",
       "trigger_timing": "on_scored",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "wait_only"
+    },
     "target": "p3_j_dusk"
   },
   {
@@ -844,16 +876,20 @@
   {
     "joker_name": "Four Fingers",
     "joker_key": "j_four_fingers",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.86,
+    "matched_rules": [
+      "p5_name_override_observed_noop"
+    ],
     "raw_fields_used": {
       "effect_summary": "All Flushes and Straights can be made with 4 cards",
       "key_mechanics": "",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "wait_only"
+    },
     "target": "p3_j_four_fingers"
   },
   {
@@ -1054,16 +1090,20 @@
   {
     "joker_name": "Hiker",
     "joker_key": "j_hiker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.86,
+    "matched_rules": [
+      "p5_name_override_observed_noop"
+    ],
     "raw_fields_used": {
       "effect_summary": "Every played card permanently gains +5 Chips when scored",
       "key_mechanics": "chips_add",
       "trigger_timing": "on_scored",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "wait_only"
+    },
     "target": "p3_j_hiker"
   },
   {
@@ -1183,16 +1223,20 @@
   {
     "joker_name": "Juggler",
     "joker_key": "j_juggler",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.86,
+    "matched_rules": [
+      "p5_name_override_observed_noop"
+    ],
     "raw_fields_used": {
       "effect_summary": "+1 hand size",
       "key_mechanics": "hand_size",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "wait_only"
+    },
     "target": "p3_j_juggler"
   },
   {
@@ -1213,16 +1257,20 @@
   {
     "joker_name": "Luchador",
     "joker_key": "j_luchador",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.86,
+    "matched_rules": [
+      "p5_name_override_observed_noop"
+    ],
     "raw_fields_used": {
       "effect_summary": "Sell this card to disable the current Boss Blind",
       "key_mechanics": "money",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "wait_only"
+    },
     "target": "p3_j_luchador"
   },
   {
@@ -1358,31 +1406,39 @@
   {
     "joker_name": "Midas Mask",
     "joker_key": "j_midas_mask",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.86,
+    "matched_rules": [
+      "p5_name_override_observed_noop"
+    ],
     "raw_fields_used": {
       "effect_summary": "All played face cards become Gold cards when scored",
       "key_mechanics": "",
       "trigger_timing": "on_played",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "wait_only"
+    },
     "target": "p3_j_midas_mask"
   },
   {
     "joker_name": "Mime",
     "joker_key": "j_mime",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.86,
+    "matched_rules": [
+      "p5_name_override_observed_noop"
+    ],
     "raw_fields_used": {
       "effect_summary": "Retrigger all card held in hand abilities",
       "key_mechanics": "retrigger",
       "trigger_timing": "held_in_hand",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "wait_only"
+    },
     "target": "p3_j_mime"
   },
   {
@@ -1507,16 +1563,20 @@
   {
     "joker_name": "Pareidolia",
     "joker_key": "j_pareidolia",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.86,
+    "matched_rules": [
+      "p5_name_override_observed_noop"
+    ],
     "raw_fields_used": {
       "effect_summary": "All cards are considered face cards",
       "key_mechanics": "",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "wait_only"
+    },
     "target": "p3_j_pareidolia"
   },
   {
@@ -1822,16 +1882,20 @@
   {
     "joker_name": "Shortcut",
     "joker_key": "j_shortcut",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.86,
+    "matched_rules": [
+      "p5_name_override_observed_noop"
+    ],
     "raw_fields_used": {
       "effect_summary": "Allows Straights to be made with gaps of 1 rank (ex: 10 8 6 5 3 )",
       "key_mechanics": "",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "wait_only"
+    },
     "target": "p3_j_shortcut"
   },
   {
@@ -1921,16 +1985,20 @@
   {
     "joker_name": "Sock and Buskin",
     "joker_key": "j_sock_and_buskin",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.86,
+    "matched_rules": [
+      "p5_name_override_observed_noop"
+    ],
     "raw_fields_used": {
       "effect_summary": "Retrigger all played face cards",
       "key_mechanics": "retrigger",
       "trigger_timing": "on_scored",
       "constraints_or_conditions": "Play 300 face cards across all runs."
     },
-    "params": {},
+    "params": {
+      "mode": "wait_only"
+    },
     "target": "p3_j_sock_and_buskin"
   },
   {

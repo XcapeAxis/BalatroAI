@@ -56,14 +56,6 @@
     "key_mechanics": "chips_add; deck_change"
   },
   {
-    "joker_name": "Blueprint",
-    "joker_key": "j_blueprint",
-    "reason": "insufficient_structured_fields",
-    "effect_summary": "Copies ability of Joker to the right",
-    "trigger_timing": "unknown",
-    "key_mechanics": ""
-  },
-  {
     "joker_name": "Bootstraps",
     "joker_key": "j_bootstraps",
     "reason": "cross_round_state",
@@ -72,28 +64,12 @@
     "key_mechanics": "mult_add; money"
   },
   {
-    "joker_name": "Brainstorm",
-    "joker_key": "j_brainstorm",
-    "reason": "insufficient_structured_fields",
-    "effect_summary": "Copies the ability of leftmost Joker",
-    "trigger_timing": "unknown",
-    "key_mechanics": ""
-  },
-  {
     "joker_name": "Bull",
     "joker_key": "j_bull",
     "reason": "cross_round_state",
     "effect_summary": "+2 Chips for each $1 you have (Currently +0 Chips )",
     "trigger_timing": "unknown",
     "key_mechanics": "chips_add; money"
-  },
-  {
-    "joker_name": "Burglar",
-    "joker_key": "j_burglar",
-    "reason": "no_safe_template_match",
-    "effect_summary": "When Blind is selected, gain +3 Hands and lose all discards",
-    "trigger_timing": "unknown",
-    "key_mechanics": "discard"
   },
   {
     "joker_name": "Burnt Joker",
@@ -126,22 +102,6 @@
     "effect_summary": "This Joker gains X1 Mult when a face card is destroyed (Currently X1 Mult )",
     "trigger_timing": "unknown",
     "key_mechanics": "mult_mult; deck_change"
-  },
-  {
-    "joker_name": "Card Sharp",
-    "joker_key": "j_card_sharp",
-    "reason": "no_safe_template_match",
-    "effect_summary": "X3 Mult if played poker hand has already been played this round",
-    "trigger_timing": "unknown",
-    "key_mechanics": "mult_mult"
-  },
-  {
-    "joker_name": "Cartomancer",
-    "joker_key": "j_cartomancer",
-    "reason": "insufficient_structured_fields",
-    "effect_summary": "Create a Tarot card when Blind is selected (Must have room)",
-    "trigger_timing": "unknown",
-    "key_mechanics": ""
   },
   {
     "joker_name": "Castle",
@@ -182,14 +142,6 @@
     "effect_summary": "1 free Reroll per shop",
     "trigger_timing": "passive",
     "key_mechanics": "shop"
-  },
-  {
-    "joker_name": "Chicot",
-    "joker_key": "j_chicot",
-    "reason": "insufficient_structured_fields",
-    "effect_summary": "Disables effect of every Boss Blind",
-    "trigger_timing": "unknown",
-    "key_mechanics": ""
   },
   {
     "joker_name": "Cloud 9",
@@ -248,22 +200,6 @@
     "key_mechanics": "mult_mult; deck_change"
   },
   {
-    "joker_name": "Drunkard",
-    "joker_key": "j_drunkard",
-    "reason": "no_safe_template_match",
-    "effect_summary": "+1 discard each round",
-    "trigger_timing": "passive",
-    "key_mechanics": "discard"
-  },
-  {
-    "joker_name": "Dusk",
-    "joker_key": "j_dusk",
-    "reason": "no_safe_template_match",
-    "effect_summary": "Retrigger all played cards in final hand of the round",
-    "trigger_timing": "on_scored",
-    "key_mechanics": "retrigger"
-  },
-  {
     "joker_name": "Egg",
     "joker_key": "j_egg",
     "reason": "economy_or_shop_related",
@@ -302,14 +238,6 @@
     "effect_summary": "+1 Mult per Tarot card used this run (Currently +0 )",
     "trigger_timing": "unknown",
     "key_mechanics": "mult_add"
-  },
-  {
-    "joker_name": "Four Fingers",
-    "joker_key": "j_four_fingers",
-    "reason": "no_safe_template_match",
-    "effect_summary": "All Flushes and Straights can be made with 4 cards",
-    "trigger_timing": "passive",
-    "key_mechanics": ""
   },
   {
     "joker_name": "Gift Card",
@@ -384,14 +312,6 @@
     "key_mechanics": "retrigger"
   },
   {
-    "joker_name": "Hiker",
-    "joker_key": "j_hiker",
-    "reason": "no_safe_template_match",
-    "effect_summary": "Every played card permanently gains +5 Chips when scored",
-    "trigger_timing": "on_scored",
-    "key_mechanics": "chips_add"
-  },
-  {
     "joker_name": "Hit the Road",
     "joker_key": "j_hit_the_road",
     "reason": "cross_round_state",
@@ -432,28 +352,12 @@
     "key_mechanics": "mult_mult"
   },
   {
-    "joker_name": "Juggler",
-    "joker_key": "j_juggler",
-    "reason": "no_safe_template_match",
-    "effect_summary": "+1 hand size",
-    "trigger_timing": "passive",
-    "key_mechanics": "hand_size"
-  },
-  {
     "joker_name": "Loyalty Card",
     "joker_key": "j_loyalty_card",
     "reason": "no_safe_template_match",
     "effect_summary": "X4 Mult every 6 hands played 5 remaining",
     "trigger_timing": "unknown",
     "key_mechanics": "mult_mult"
-  },
-  {
-    "joker_name": "Luchador",
-    "joker_key": "j_luchador",
-    "reason": "no_safe_template_match",
-    "effect_summary": "Sell this card to disable the current Boss Blind",
-    "trigger_timing": "passive",
-    "key_mechanics": "money"
   },
   {
     "joker_name": "Lucky Cat",
@@ -504,22 +408,6 @@
     "key_mechanics": "hand_size; discard"
   },
   {
-    "joker_name": "Midas Mask",
-    "joker_key": "j_midas_mask",
-    "reason": "no_safe_template_match",
-    "effect_summary": "All played face cards become Gold cards when scored",
-    "trigger_timing": "on_played",
-    "key_mechanics": ""
-  },
-  {
-    "joker_name": "Mime",
-    "joker_key": "j_mime",
-    "reason": "no_safe_template_match",
-    "effect_summary": "Retrigger all card held in hand abilities",
-    "trigger_timing": "held_in_hand",
-    "key_mechanics": "retrigger"
-  },
-  {
     "joker_name": "Misprint",
     "joker_key": "j_misprint",
     "reason": "no_safe_template_match",
@@ -548,14 +436,6 @@
     "joker_key": "j_oops_all_6s",
     "reason": "probabilistic_trigger",
     "effect_summary": "Doubles all listed probabilities (ex: 1 in 3 -> 2 in 3 )",
-    "trigger_timing": "passive",
-    "key_mechanics": ""
-  },
-  {
-    "joker_name": "Pareidolia",
-    "joker_key": "j_pareidolia",
-    "reason": "no_safe_template_match",
-    "effect_summary": "All cards are considered face cards",
     "trigger_timing": "passive",
     "key_mechanics": ""
   },
@@ -656,14 +536,6 @@
     "key_mechanics": "retrigger"
   },
   {
-    "joker_name": "Shortcut",
-    "joker_key": "j_shortcut",
-    "reason": "no_safe_template_match",
-    "effect_summary": "Allows Straights to be made with gaps of 1 rank (ex: 10 8 6 5 3 )",
-    "trigger_timing": "passive",
-    "key_mechanics": ""
-  },
-  {
     "joker_name": "Showman",
     "joker_key": "j_showman",
     "reason": "no_safe_template_match",
@@ -686,14 +558,6 @@
     "effect_summary": "Hearts and Diamonds count as the same suit, Spades and Clubs count as the same suit",
     "trigger_timing": "passive",
     "key_mechanics": ""
-  },
-  {
-    "joker_name": "Sock and Buskin",
-    "joker_key": "j_sock_and_buskin",
-    "reason": "no_safe_template_match",
-    "effect_summary": "Retrigger all played face cards",
-    "trigger_timing": "on_scored",
-    "key_mechanics": "retrigger"
   },
   {
     "joker_name": "Space Joker",
