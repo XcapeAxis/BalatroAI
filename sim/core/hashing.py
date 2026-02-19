@@ -375,6 +375,33 @@ def _filter_p4_consumable_observed_core(state: dict[str, Any]) -> dict[str, Any]
             "delta": float(observed.get("delta") or 0.0),
         },
     }
+
+
+def _filter_p5_modifier_observed_core(state: dict[str, Any]) -> dict[str, Any]:
+    state = to_builtin(state)
+    zones = state.get("zones") or {}
+    round_info = state.get("round") or {}
+    observed = state.get("score_observed") or {}
+    hand_cards = _zone_cards_min_sorted(zones, "hand")
+    modified_hand_count = sum(1 for c in hand_cards if c.get("modifier") or c.get("state"))
+
+    return {
+        "schema_version": state.get("schema_version"),
+        "zones": {
+            "hand_count": len(hand_cards),
+            "modified_hand_count": int(modified_hand_count),
+        },
+        "round": {
+            "hands_left": round_info.get("hands_left", 0),
+            "discards_left": round_info.get("discards_left", 0),
+        },
+        "consumables": _extract_consumable_keys(state),
+        "score_observed": {
+            "total": float(observed.get("total") or 0.0),
+            "delta": float(observed.get("delta") or 0.0),
+        },
+    }
+
 def _filter_zones_core(state: dict[str, Any]) -> dict[str, Any]:
     state = to_builtin(state)
     zones = state.get("zones") or {}
@@ -506,6 +533,10 @@ def state_hash_p4_consumable_observed_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_p4_consumable_observed_core(state)))
 
 
+def state_hash_p5_modifier_observed_core(state: dict[str, Any]) -> str:
+    return _sha256_text(canonical_dumps(_filter_p5_modifier_observed_core(state)))
+
+
 def state_hash_zones_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_zones_core(state)))
 
@@ -559,6 +590,10 @@ def p4_consumable_observed_core_projection(state: dict[str, Any]) -> dict[str, A
     return _filter_p4_consumable_observed_core(state)
 
 
+def p5_modifier_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
+    return _filter_p5_modifier_observed_core(state)
+
+
 def zones_core_projection(state: dict[str, Any]) -> dict[str, Any]:
     return _filter_zones_core(state)
 
@@ -573,4 +608,5 @@ def economy_core_projection(state: dict[str, Any]) -> dict[str, Any]:
 
 def rng_events_core_projection(state: dict[str, Any]) -> dict[str, Any]:
     return _filter_rng_events_core(state)
+
 
