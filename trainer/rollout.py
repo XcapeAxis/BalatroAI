@@ -1,4 +1,4 @@
-if __package__ is None or __package__ == "":
+﻿if __package__ is None or __package__ == "":
     import sys
     from pathlib import Path
 
@@ -6,7 +6,6 @@ if __package__ is None or __package__ == "":
 import argparse
 import queue
 import threading
-import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -17,11 +16,8 @@ from trainer.env_client import (
     EnvHandle,
     RPCError,
     StateError,
-    _call_method,
-    act_batch,
     close_pool,
-    get_state,
-    health,
+    create_backend,
 )
 from trainer.expert_policy import choose_action
 from trainer.features import extract_features
@@ -39,11 +35,12 @@ from trainer.utils import (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Rollout data generator for Balatro BC training.")
+    parser.add_argument("--backend", choices=["real", "sim"], default="real", help="Environment backend.")
     parser.add_argument(
         "--base-urls",
         type=str,
         default="http://127.0.0.1:12346",
-        help="Comma-separated base urls with ports.",
+        help="Comma-separated base urls with ports (real backend) or worker ids (sim backend).",
     )
     parser.add_argument("--episodes", type=int, default=10, help="Total episodes to collect.")
     parser.add_argument("--out", type=str, default="trainer_data/dataset.jsonl", help="Output jsonl path.")
@@ -65,26 +62,33 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _resolve_urls(args: argparse.Namespace) -> list[str]:
-    urls = parse_base_urls(args.base_urls)
-    if args.launch_instances:
-        if not urls:
+def _resolve_targets(args: argparse.Namespace) -> list[str]:
+    if args.backend == "real":
+        urls = parse_base_urls(args.base_urls)
+        if args.launch_instances and not urls:
             count = args.workers if args.workers > 0 else 1
             urls = build_urls_from_ports(args.base_host, args.base_port, count)
-    if not urls:
-        raise ValueError("No base URLs resolved. Provide --base-urls or use --launch-instances.")
-    return urls
+        if not urls:
+            raise ValueError("No base URLs resolved. Provide --base-urls or use --launch-instances.")
+        return urls
+
+    # simulator backend
+    tokens = [t.strip() for t in str(args.base_urls or "").split(",") if t.strip()]
+    if not tokens:
+        count = args.workers if args.workers > 0 else 1
+        tokens = [f"sim://{i}" for i in range(count)]
+    return tokens
 
 
-def _make_handles(args: argparse.Namespace, urls: list[str], logger):
+def _make_handles(args: argparse.Namespace, targets: list[str], logger):
     handles: dict[str, EnvHandle] = {}
-    if not args.launch_instances:
+    if args.backend != "real" or not args.launch_instances:
         return handles
     if not args.love_path or not args.lovely_path:
         raise ValueError("--love-path and --lovely-path are required when --launch-instances is enabled.")
 
     logs_path = str((Path.cwd() / "logs").resolve())
-    for url in urls:
+    for url in targets:
         handles[url] = EnvHandle(
             base_url=url,
             launcher=args.launcher,
@@ -110,6 +114,8 @@ def _start_handles(handles: dict[str, EnvHandle], stagger_start: float, logger) 
             raise RuntimeError(f"Handle failed health check: {url}")
         logger.info("Healthy instance: %s", url)
         if stagger_start > 0 and i < len(urls) - 1:
+            import time
+
             time.sleep(stagger_start)
 
 
@@ -122,43 +128,28 @@ def _stop_handles(handles: dict[str, EnvHandle]) -> None:
 
 
 def _calc_reward(prev_state: dict | None, cur_state: dict) -> tuple[float, str]:
-    cur = int((cur_state.get("round") or {}).get("chips") or 0)
+    cur = float((cur_state.get("round") or {}).get("chips") or 0)
     if prev_state is None:
         return 0.0, "chips_delta_proxy"
-    prev = int((prev_state.get("round") or {}).get("chips") or 0)
+    prev = float((prev_state.get("round") or {}).get("chips") or 0)
     return float(cur - prev), "chips_delta_proxy"
 
 
-def _apply_macro(base_url: str, macro_action: str, macro_params: dict, timeout_sec: float, idle_sleep: float) -> dict:
-    macro_action = macro_action or "wait"
-    macro_params = macro_params or {}
-
-    if macro_action == "wait":
-        time.sleep(max(0.0, idle_sleep))
-        return get_state(base_url, timeout=timeout_sec)
-
-    if macro_action in {
-        "select",
-        "cash_out",
-        "next_round",
-        "menu",
-        "skip",
-        "reroll",
-        "start",
-    }:
-        _call_method(base_url, macro_action, macro_params, timeout=timeout_sec)
-        return get_state(base_url, timeout=timeout_sec)
-
-    # Unknown macro action: fail open with wait.
-    time.sleep(max(0.0, idle_sleep))
-    return get_state(base_url, timeout=timeout_sec)
+def _build_macro_action(decision, idle_sleep: float) -> dict:
+    macro_action = str(decision.macro_action or "wait").upper()
+    macro_params = dict(decision.macro_params or {})
+    action = {"action_type": macro_action}
+    if macro_action == "WAIT":
+        action["sleep"] = max(0.0, float(idle_sleep))
+    action.update(macro_params)
+    return action
 
 
 def _run_episode(
-    base_url: str,
+    backend,
+    source_id: str,
     instance_id: int,
     episode_id: int,
-    timeout_sec: float,
     include_obs_raw: bool,
     max_steps: int,
     idle_sleep: float,
@@ -166,12 +157,7 @@ def _run_episode(
 ):
     records: list[dict] = []
 
-    state = get_state(base_url, timeout=timeout_sec)
-    if state.get("state") in {"MENU", "GAME_OVER"}:
-        start_seed = f"{seed_prefix}-{episode_id}"
-        _call_method(base_url, "start", {"deck": "RED", "stake": "WHITE", "seed": start_seed}, timeout=timeout_sec)
-        state = get_state(base_url, timeout=timeout_sec)
-
+    state = backend.reset(seed=f"{seed_prefix}-{episode_id}")
     prev_state = None
 
     for step_id in range(max_steps):
@@ -191,7 +177,7 @@ def _run_episode(
             "episode_id": episode_id,
             "step_id": step_id,
             "instance_id": instance_id,
-            "base_url": base_url,
+            "base_url": source_id,
             "phase": phase,
             "done": bool(done),
             "hand_size": hand_size,
@@ -206,6 +192,10 @@ def _run_episode(
         if include_obs_raw:
             record["obs_raw"] = state
 
+        records.append(record)
+        if done:
+            break
+
         if phase == "SELECTING_HAND" and hand_size > 0 and decision.action_type is not None and decision.mask_int is not None:
             legal_ids = action_space.legal_action_ids(hand_size)
             expert_action_id = action_space.encode(hand_size, decision.action_type, decision.mask_int)
@@ -215,29 +205,16 @@ def _run_episode(
             record["expert_action_id"] = expert_action_id
             record["macro_action"] = None
 
-            next_state = act_batch(
-                base_url,
-                decision.action_type,
-                indices,
-                timeout=timeout_sec,
-            )
+            action = {
+                "action_type": decision.action_type,
+                "indices": indices,
+            }
         else:
-            macro_action = decision.macro_action or "wait"
-            macro_params = decision.macro_params or {}
-            next_state = _apply_macro(
-                base_url,
-                macro_action=macro_action,
-                macro_params=macro_params,
-                timeout_sec=timeout_sec,
-                idle_sleep=idle_sleep,
-            )
+            action = _build_macro_action(decision, idle_sleep=idle_sleep)
 
-        records.append(record)
+        next_state, _, _, _ = backend.step(action)
         prev_state = state
         state = next_state
-
-        if done:
-            break
 
     return records
 
@@ -256,15 +233,15 @@ def main() -> int:
         return 2
 
     try:
-        urls = _resolve_urls(args)
+        targets = _resolve_targets(args)
     except ValueError as exc:
         logger.error("%s", exc)
         return 2
 
-    workers = args.workers if args.workers > 0 else len(urls)
-    workers = max(1, min(workers, len(urls)))
+    workers = args.workers if args.workers > 0 else len(targets)
+    workers = max(1, min(workers, len(targets)))
 
-    handles = _make_handles(args, urls, logger)
+    handles = _make_handles(args, targets, logger)
 
     try:
         _start_handles(handles, args.stagger_start, logger)
@@ -274,9 +251,12 @@ def main() -> int:
         close_pool()
         return 1
 
-    for url in urls:
-        if not health(url):
-            logger.warning("Initial health check failed for %s", url)
+    if args.backend == "real":
+        for target in targets:
+            backend = create_backend("real", base_url=target, timeout_sec=args.timeout_sec, seed=args.seed_prefix, logger=logger)
+            if not backend.health():
+                logger.warning("Initial health check failed for %s", target)
+            backend.close()
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -289,86 +269,100 @@ def main() -> int:
     stats_lock = threading.Lock()
     write_lock = threading.Lock()
 
-    def worker_fn(worker_idx: int, base_url: str):
-        handle = handles.get(base_url)
+    def worker_fn(worker_idx: int, target: str):
+        backend = create_backend(
+            args.backend,
+            base_url=target if args.backend == "real" else None,
+            timeout_sec=args.timeout_sec,
+            seed=f"{args.seed_prefix}-w{worker_idx}",
+            logger=logger,
+        )
+        handle = handles.get(target)
         consecutive_failures = 0
 
-        while True:
-            try:
-                episode_id = episode_queue.get_nowait()
-            except queue.Empty:
-                return
-
-            with stats_lock:
-                stats.episodes_started += 1
-
-            try:
-                records = _run_episode(
-                    base_url=base_url,
-                    instance_id=worker_idx,
-                    episode_id=episode_id,
-                    timeout_sec=args.timeout_sec,
-                    include_obs_raw=args.include_obs_raw,
-                    max_steps=args.max_steps_per_episode,
-                    idle_sleep=args.idle_sleep,
-                    seed_prefix=args.seed_prefix,
-                )
-                hand_steps = sum(1 for r in records if r["phase"] == "SELECTING_HAND")
-
-                with write_lock:
-                    for record in records:
-                        writer.write_record(record)
-
-                with stats_lock:
-                    stats.episodes_succeeded += 1
-                    stats.steps_total += len(records)
-                    stats.hand_steps += hand_steps
-
-                consecutive_failures = 0
-                logger.info(
-                    "worker=%d episode=%d done records=%d hand_records=%d",
-                    worker_idx,
-                    episode_id,
-                    len(records),
-                    hand_steps,
-                )
-            except (ConnectionError, RPCError, StateError, TimeoutError, RuntimeError) as exc:
-                with stats_lock:
-                    stats.episodes_failed += 1
-                logger.warning(
-                    "worker=%d episode=%d failed on %s: %s",
-                    worker_idx,
-                    episode_id,
-                    base_url,
-                    exc,
-                )
-
-                consecutive_failures += 1
-                if args.restart_on_fail:
-                    if handle is not None:
-                        ok = handle.restart(timeout_sec=60.0)
-                        if not ok:
-                            logger.error("worker=%d restart failed for %s", worker_idx, base_url)
-                    else:
-                        healthy = health(base_url)
-                        if not healthy:
-                            logger.warning("worker=%d base_url still unhealthy (non-managed): %s", worker_idx, base_url)
-                if consecutive_failures >= args.max_consecutive_failures:
-                    logger.error(
-                        "worker=%d reached max consecutive failures=%d, stopping this worker",
-                        worker_idx,
-                        args.max_consecutive_failures,
-                    )
+        try:
+            while True:
+                try:
+                    episode_id = episode_queue.get_nowait()
+                except queue.Empty:
                     return
-            finally:
-                episode_queue.task_done()
+
+                with stats_lock:
+                    stats.episodes_started += 1
+
+                try:
+                    records = _run_episode(
+                        backend=backend,
+                        source_id=target,
+                        instance_id=worker_idx,
+                        episode_id=episode_id,
+                        include_obs_raw=args.include_obs_raw,
+                        max_steps=args.max_steps_per_episode,
+                        idle_sleep=args.idle_sleep,
+                        seed_prefix=args.seed_prefix,
+                    )
+                    hand_steps = sum(1 for r in records if r["phase"] == "SELECTING_HAND")
+
+                    with write_lock:
+                        for record in records:
+                            writer.write_record(record)
+
+                    with stats_lock:
+                        stats.episodes_succeeded += 1
+                        stats.steps_total += len(records)
+                        stats.hand_steps += hand_steps
+
+                    consecutive_failures = 0
+                    logger.info(
+                        "worker=%d episode=%d done records=%d hand_records=%d backend=%s target=%s",
+                        worker_idx,
+                        episode_id,
+                        len(records),
+                        hand_steps,
+                        args.backend,
+                        target,
+                    )
+                except (ConnectionError, RPCError, StateError, TimeoutError, RuntimeError, ValueError) as exc:
+                    with stats_lock:
+                        stats.episodes_failed += 1
+                    logger.warning(
+                        "worker=%d episode=%d failed on %s: %s",
+                        worker_idx,
+                        episode_id,
+                        target,
+                        exc,
+                    )
+
+                    consecutive_failures += 1
+                    if args.restart_on_fail:
+                        if args.backend == "real" and handle is not None:
+                            ok = handle.restart(timeout_sec=60.0)
+                            if not ok:
+                                logger.error("worker=%d restart failed for %s", worker_idx, target)
+                        elif args.backend == "real":
+                            if not backend.health():
+                                logger.warning("worker=%d target still unhealthy (non-managed): %s", worker_idx, target)
+                        else:
+                            backend.reset(seed=f"{args.seed_prefix}-recover-{worker_idx}")
+
+                    if consecutive_failures >= args.max_consecutive_failures:
+                        logger.error(
+                            "worker=%d reached max consecutive failures=%d, stopping this worker",
+                            worker_idx,
+                            args.max_consecutive_failures,
+                        )
+                        return
+                finally:
+                    episode_queue.task_done()
+        finally:
+            backend.close()
 
     rc = 0
     with JsonlWriter(out_path) as writer:
         with ThreadPoolExecutor(max_workers=workers) as pool:
             for idx in range(workers):
-                base_url = urls[idx % len(urls)]
-                pool.submit(worker_fn, idx, base_url)
+                target = targets[idx % len(targets)]
+                pool.submit(worker_fn, idx, target)
 
             episode_queue.join()
 
@@ -392,6 +386,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
-

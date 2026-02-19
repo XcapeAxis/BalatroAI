@@ -1,8 +1,9 @@
-if __package__ is None or __package__ == "":
+﻿if __package__ is None or __package__ == "":
     import sys
     from pathlib import Path
 
     sys.path.append(str(Path(__file__).resolve().parent.parent))
+
 
 import json
 import logging
@@ -11,6 +12,7 @@ import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Protocol
 from urllib.parse import urlparse
 
 import requests
@@ -29,6 +31,23 @@ class ConnectionError(RuntimeError):
 
 class StateError(RuntimeError):
     pass
+
+
+class EnvBackend(Protocol):
+    def reset(self, seed: str | None = None) -> dict[str, Any]:
+        ...
+
+    def get_state(self) -> dict[str, Any]:
+        ...
+
+    def step(self, action: dict[str, Any]) -> tuple[dict[str, Any], float, bool, dict[str, Any]]:
+        ...
+
+    def health(self) -> bool:
+        ...
+
+    def close(self) -> None:
+        ...
 
 
 _SERVE_SUPPORT_CACHE: dict[tuple[str, ...], bool] = {}
@@ -229,6 +248,164 @@ def act_batch(
     return get_state(base_url, timeout=timeout)
 
 
+def _round_chips(state: dict[str, Any]) -> float:
+    return float((state.get("round") or {}).get("chips") or 0.0)
+
+
+def _phase_default_action(state: dict[str, Any], seed: str) -> dict[str, Any]:
+    phase = str(state.get("state") or "UNKNOWN")
+    if phase == "BLIND_SELECT":
+        return {"action_type": "SELECT", "index": 0}
+    if phase == "SELECTING_HAND":
+        hand = (state.get("hand") or {}).get("cards") or []
+        if hand:
+            return {"action_type": PLAY, "indices": [0]}
+        return {"action_type": "WAIT"}
+    if phase == "ROUND_EVAL":
+        return {"action_type": "CASH_OUT"}
+    if phase == "SHOP":
+        return {"action_type": "NEXT_ROUND"}
+    if phase in {"MENU", "GAME_OVER"}:
+        return {"action_type": "START", "seed": seed}
+    return {"action_type": "WAIT"}
+
+
+@dataclass
+class RealBackend:
+    base_url: str
+    timeout_sec: float = 8.0
+    seed: str = "AAAAAAA"
+    logger: logging.Logger | None = None
+
+    def health(self) -> bool:
+        return health(self.base_url)
+
+    def get_state(self) -> dict[str, Any]:
+        return get_state(self.base_url, timeout=self.timeout_sec)
+
+    def reset(self, seed: str | None = None) -> dict[str, Any]:
+        if seed is not None:
+            self.seed = seed
+        state = self.get_state()
+        phase = str(state.get("state") or "UNKNOWN")
+        if phase in {"MENU", "GAME_OVER"}:
+            _call_method(
+                self.base_url,
+                "start",
+                {"deck": "RED", "stake": "WHITE", "seed": self.seed},
+                timeout=self.timeout_sec,
+            )
+            state = self.get_state()
+        return state
+
+    def step(self, action: dict[str, Any]) -> tuple[dict[str, Any], float, bool, dict[str, Any]]:
+        if not isinstance(action, dict):
+            raise ValueError("action must be dict")
+
+        before = self.get_state()
+        action_type = str(action.get("action_type") or "WAIT").upper()
+
+        if action_type == "AUTO":
+            action = _phase_default_action(before, self.seed)
+            action_type = str(action.get("action_type") or "WAIT").upper()
+
+        if action_type in {PLAY, DISCARD}:
+            indices = [int(x) for x in (action.get("indices") or [])]
+            after = act_batch(self.base_url, action_type, indices, timeout=self.timeout_sec, logger=self.logger)
+
+        elif action_type == "SELECT":
+            _call_method(self.base_url, "select", {"index": int(action.get("index", 0))}, timeout=self.timeout_sec)
+            after = self.get_state()
+
+        elif action_type == "CASH_OUT":
+            _call_method(self.base_url, "cash_out", {}, timeout=self.timeout_sec)
+            after = self.get_state()
+
+        elif action_type == "NEXT_ROUND":
+            _call_method(self.base_url, "next_round", {}, timeout=self.timeout_sec)
+            after = self.get_state()
+
+        elif action_type == "START":
+            seed = str(action.get("seed") or self.seed)
+            self.seed = seed
+            params = {"deck": "RED", "stake": "WHITE", "seed": seed}
+            _call_method(self.base_url, "start", params, timeout=self.timeout_sec)
+            after = self.get_state()
+
+        elif action_type == "MENU":
+            _call_method(self.base_url, "menu", {}, timeout=self.timeout_sec)
+            after = self.get_state()
+
+        elif action_type == "SKIP":
+            _call_method(self.base_url, "skip", {}, timeout=self.timeout_sec)
+            after = self.get_state()
+
+        elif action_type == "REROLL":
+            _call_method(self.base_url, "reroll", {}, timeout=self.timeout_sec)
+            after = self.get_state()
+
+        elif action_type == "WAIT":
+            time.sleep(max(0.0, float(action.get("sleep") or 0.05)))
+            after = self.get_state()
+
+        else:
+            fallback = _phase_default_action(before, self.seed)
+            if self.logger is not None:
+                self.logger.warning("Unknown action_type=%s, fallback to %s", action_type, fallback)
+            return self.step(fallback)
+
+        reward = _round_chips(after) - _round_chips(before)
+        done = str(after.get("state") or "") == "GAME_OVER"
+        info = {"backend": "real", "action_type": action_type}
+        return after, float(reward), done, info
+
+    def close(self) -> None:
+        return None
+
+
+class SimBackend:
+    def __init__(self, seed: str = "AAAAAAA"):
+        from sim.pybind.sim_env import SimEnvBackend as _SimEnvBackend
+
+        self.seed = seed
+        self._backend = _SimEnvBackend(seed=seed)
+
+    def health(self) -> bool:
+        return True
+
+    def get_state(self) -> dict[str, Any]:
+        return self._backend.get_state()
+
+    def reset(self, seed: str | None = None) -> dict[str, Any]:
+        if seed is not None:
+            self.seed = seed
+        return self._backend.reset(seed=self.seed)
+
+    def step(self, action: dict[str, Any]) -> tuple[dict[str, Any], float, bool, dict[str, Any]]:
+        return self._backend.step(action)
+
+    def close(self) -> None:
+        self._backend.close()
+
+
+def create_backend(
+    backend: str,
+    *,
+    base_url: str | None = None,
+    timeout_sec: float = 8.0,
+    seed: str = "AAAAAAA",
+    logger: logging.Logger | None = None,
+) -> EnvBackend:
+    kind = str(backend or "real").lower()
+    if kind == "real":
+        if not base_url:
+            raise ValueError("base_url is required for RealBackend")
+        return RealBackend(base_url=base_url, timeout_sec=timeout_sec, seed=seed, logger=logger)
+    if kind == "sim":
+        return SimBackend(seed=seed)
+    raise ValueError(f"Unknown backend: {backend}")
+
+
 def _supports_serve_subcommand(cmd_prefix: list[str]) -> bool:
     key = tuple(cmd_prefix)
     if key in _SERVE_SUPPORT_CACHE:
@@ -400,6 +577,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Minimal CLI for env_client adapter.")
     parser.add_argument("--base-url", default="http://127.0.0.1:12346")
+    parser.add_argument("--backend", choices=["real", "sim"], default="real")
     parser.add_argument("--health", action="store_true", help="Check env health")
     parser.add_argument("--get-state", action="store_true", help="Fetch and print gamestate")
     parser.add_argument("--act", choices=[PLAY, DISCARD], help="Execute hand action")
@@ -415,17 +593,25 @@ if __name__ == "__main__":
     if args.show_config:
         print(json.dumps(load_config(force_reload=True), ensure_ascii=False, indent=2))
 
+    if args.backend == "real":
+        backend = create_backend("real", base_url=args.base_url, timeout_sec=args.timeout)
+    else:
+        backend = create_backend("sim", seed="AAAAAAA")
+
     if args.health:
-        print(json.dumps({"healthy": health(args.base_url)}, ensure_ascii=False))
+        print(json.dumps({"healthy": backend.health()}, ensure_ascii=False))
 
     if args.get_state:
-        state = get_state(args.base_url, timeout=args.timeout)
+        state = backend.get_state()
         print(json.dumps(state, ensure_ascii=False, indent=2))
 
     if args.act:
         idx = [int(x) for x in args.indices.split(",") if x.strip()]
-        state = act_batch(args.base_url, args.act, idx, timeout=args.timeout)
-        print(json.dumps(state, ensure_ascii=False, indent=2))
+        state, reward, done, info = backend.step({"action_type": args.act, "indices": idx})
+        print(json.dumps({"state": state, "reward": reward, "done": done, "info": info}, ensure_ascii=False, indent=2))
 
     if not args.health and not args.get_state and not args.act and not args.show_config and args.set_index_base is None:
         print("No action selected. Use --help for options.")
+
+    backend.close()
+

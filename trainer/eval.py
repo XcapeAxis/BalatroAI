@@ -5,11 +5,10 @@
     sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import argparse
-import time
 
 from trainer import action_space
 from trainer.dataset import iter_train_samples
-from trainer.env_client import _call_method, act_batch, get_state
+from trainer.env_client import create_backend
 from trainer.expert_policy import choose_action
 from trainer.features import extract_features
 from trainer.utils import setup_logger, warn_if_unstable_python
@@ -35,7 +34,8 @@ def parse_args():
 
     parser.add_argument("--dataset", default=None, help="Dataset jsonl for offline eval.")
 
-    parser.add_argument("--base-url", default="http://127.0.0.1:12346", help="Base URL for online eval.")
+    parser.add_argument("--backend", choices=["real", "sim"], default="real", help="Backend used in --online mode.")
+    parser.add_argument("--base-url", default="http://127.0.0.1:12346", help="Base URL for online eval (real backend).")
     parser.add_argument("--episodes", type=int, default=5, help="Online episodes.")
     parser.add_argument("--max-steps-per-episode", type=int, default=300)
     parser.add_argument("--timeout-sec", type=float, default=8.0)
@@ -196,6 +196,7 @@ def run_offline(args, model, device, torch):
     )
     return 0
 
+
 def run_online(args, model, device, torch):
     logger = setup_logger("trainer.eval.online")
     wins = 0
@@ -203,68 +204,75 @@ def run_online(args, model, device, torch):
     money_sum = 0.0
     steps_sum = 0
 
-    for episode in range(args.episodes):
-        try:
-            state = get_state(args.base_url, timeout=args.timeout_sec)
-            if state.get("state") in {"MENU", "GAME_OVER"}:
-                _call_method(
-                    args.base_url,
-                    "start",
-                    {"deck": "RED", "stake": "WHITE", "seed": f"{args.seed_prefix}-{episode}"},
-                    timeout=args.timeout_sec,
-                )
-                state = get_state(args.base_url, timeout=args.timeout_sec)
-        except Exception as exc:
-            logger.warning("episode=%d failed to initialize: %s", episode, exc)
-            continue
+    backend = create_backend(
+        args.backend,
+        base_url=args.base_url if args.backend == "real" else None,
+        timeout_sec=args.timeout_sec,
+        seed=args.seed_prefix,
+        logger=logger,
+    )
 
-        ep_steps = 0
-        for _ in range(args.max_steps_per_episode):
-            phase = str(state.get("state") or "UNKNOWN")
-            if phase == "GAME_OVER":
-                episodes_finished += 1
-                if bool(state.get("won")):
-                    wins += 1
-                money_sum += float(state.get("money") or 0.0)
-                break
+    try:
+        for episode in range(args.episodes):
+            try:
+                state = backend.reset(seed=f"{args.seed_prefix}-{episode}")
+            except Exception as exc:
+                logger.warning("episode=%d failed to initialize: %s", episode, exc)
+                continue
 
-            if phase == "SELECTING_HAND":
-                hand_size = min(len((state.get("hand") or {}).get("cards") or []), action_space.MAX_HAND)
-                if hand_size <= 0:
-                    time.sleep(0.05)
-                    state = get_state(args.base_url, timeout=args.timeout_sec)
-                    ep_steps += 1
-                    continue
+            ep_steps = 0
+            ep_done = False
+            for _ in range(args.max_steps_per_episode):
+                phase = str(state.get("state") or "UNKNOWN")
+                if phase == "GAME_OVER":
+                    episodes_finished += 1
+                    ep_done = True
+                    if bool(state.get("won")):
+                        wins += 1
+                    money_sum += float(state.get("money") or 0.0)
+                    break
 
-                legal_ids = action_space.legal_action_ids(hand_size)
-                batch = _state_to_batch(state, torch)
-                batch = {k: v.to(device) for k, v in batch.items()}
+                if phase == "SELECTING_HAND":
+                    hand_size = min(len((state.get("hand") or {}).get("cards") or []), action_space.MAX_HAND)
+                    if hand_size <= 0:
+                        state, _, _, _ = backend.step({"action_type": "WAIT", "sleep": 0.05})
+                        ep_steps += 1
+                        continue
 
-                with torch.no_grad():
-                    logits = model(batch)
+                    legal_ids = action_space.legal_action_ids(hand_size)
+                    batch = _state_to_batch(state, torch)
+                    batch = {k: v.to(device) for k, v in batch.items()}
 
-                legal_mask = torch.zeros((1, args.max_actions), dtype=torch.float32, device=device)
-                for aid in legal_ids:
-                    legal_mask[0, aid] = 1.0
-                masked = torch.where(legal_mask > 0, logits, torch.full_like(logits, -1e9))
-                aid = int(masked.argmax(dim=1).item())
+                    with torch.no_grad():
+                        logits = model(batch)
 
-                atype, mask = action_space.decode(hand_size, aid)
-                indices = action_space.mask_to_indices(mask, hand_size)
-                state = act_batch(args.base_url, atype, indices, timeout=args.timeout_sec)
-            else:
-                decision = choose_action(state, start_seed=f"{args.seed_prefix}-{episode}")
-                macro = decision.macro_action or "wait"
-                params = decision.macro_params or {}
-                if macro == "wait":
-                    time.sleep(0.05)
+                    legal_mask = torch.zeros((1, args.max_actions), dtype=torch.float32, device=device)
+                    for aid in legal_ids:
+                        legal_mask[0, aid] = 1.0
+                    masked = torch.where(legal_mask > 0, logits, torch.full_like(logits, -1e9))
+                    aid = int(masked.argmax(dim=1).item())
+
+                    atype, mask = action_space.decode(hand_size, aid)
+                    indices = action_space.mask_to_indices(mask, hand_size)
+                    state, _, _, _ = backend.step({"action_type": atype, "indices": indices})
                 else:
-                    _call_method(args.base_url, macro, params, timeout=args.timeout_sec)
-                state = get_state(args.base_url, timeout=args.timeout_sec)
+                    decision = choose_action(state, start_seed=f"{args.seed_prefix}-{episode}")
+                    macro = str(decision.macro_action or "wait").upper()
+                    params = dict(decision.macro_params or {})
+                    action = {"action_type": macro}
+                    action.update(params)
+                    if macro == "WAIT":
+                        action["sleep"] = 0.05
+                    state, _, _, _ = backend.step(action)
 
-            ep_steps += 1
+                ep_steps += 1
 
-        steps_sum += ep_steps
+            steps_sum += ep_steps
+            if not ep_done:
+                episodes_finished += 1
+                money_sum += float(state.get("money") or 0.0)
+    finally:
+        backend.close()
 
     if episodes_finished == 0:
         logger.error("Online eval completed with zero finished episodes")
@@ -278,7 +286,6 @@ def run_online(args, model, device, torch):
         steps_sum / max(1, episodes_finished),
     )
     return 0
-
 
 def main() -> int:
     args = parse_args()
@@ -307,4 +314,6 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
 

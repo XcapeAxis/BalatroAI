@@ -1,4 +1,4 @@
-﻿# Trainer Pipeline (Balatro + balatrobot HTTP)
+﻿# Trainer Pipeline (Balatro + balatrobot HTTP / simulator)
 
 This directory provides a modular trainer scaffold for hand-level behavior cloning:
 
@@ -17,7 +17,7 @@ python -m pip install -r trainer/requirements.txt
 
 ## E2E Smoke (One-Click)
 
-1. Create stable trainer venv and install dependencies (handles Python 3.15 alpha fallback):
+1. Create stable trainer venv and install dependencies:
 
 ```powershell
 .\trainer\scripts\setup_trainer_env.ps1
@@ -31,19 +31,21 @@ python -m pip install -r trainer/requirements.txt
 
 ## 2. Generate Dataset
 
-### Single instance (already running)
+### Real backend (balatrobot)
 
 ```bash
 python trainer/rollout.py \
+  --backend real \
   --base-urls http://127.0.0.1:12346 \
   --episodes 20 \
-  --out trainer_data/dataset.jsonl
+  --out trainer_data/dataset_real.jsonl
 ```
 
-### Multi-instance with managed launch
+### Real backend + managed launch
 
 ```bash
 python trainer/rollout.py \
+  --backend real \
   --launch-instances \
   --launcher uvx \
   --uvx-path uvx \
@@ -52,7 +54,17 @@ python trainer/rollout.py \
   --lovely-path "D:\\SteamLibrary\\steamapps\\common\\Balatro\\version.dll" \
   --episodes 50 \
   --restart-on-fail \
-  --out trainer_data/dataset.jsonl
+  --out trainer_data/dataset_real.jsonl
+```
+
+### Sim backend
+
+```bash
+python trainer/rollout.py \
+  --backend sim \
+  --episodes 50 \
+  --workers 4 \
+  --out trainer_data/dataset_sim.jsonl
 ```
 
 Notes:
@@ -64,7 +76,7 @@ Notes:
 
 ```bash
 python trainer/train_bc.py \
-  --train-jsonl trainer_data/dataset.jsonl \
+  --train-jsonl trainer_data/dataset_real.jsonl \
   --epochs 8 \
   --batch-size 64 \
   --out-dir trainer_runs/bc_v1
@@ -84,34 +96,46 @@ Outputs:
 python trainer/eval.py \
   --offline \
   --model trainer_runs/bc_v1/best.pt \
-  --dataset trainer_data/dataset.jsonl
+  --dataset trainer_data/dataset_real.jsonl
 ```
 
-### Online
+### Online (real backend)
 
 ```bash
 python trainer/eval.py \
   --online \
+  --backend real \
   --model trainer_runs/bc_v1/best.pt \
   --base-url http://127.0.0.1:12346 \
   --episodes 10
 ```
 
+### Online (sim backend)
+
+```bash
+python trainer/eval.py \
+  --online \
+  --backend sim \
+  --model trainer_runs/bc_v1/best.pt \
+  --episodes 10
+```
+
 ## 5. Inference Assistant
 
-### Suggest only
+### Suggest only (real backend)
 
 ```bash
 python trainer/infer_assistant.py \
+  --backend real \
   --base-url http://127.0.0.1:12346 \
   --model trainer_runs/bc_v1/best.pt
 ```
 
-### Suggest + execute top-1
+### Suggest + execute top-1 (sim backend)
 
 ```bash
 python trainer/infer_assistant.py \
-  --base-url http://127.0.0.1:12346 \
+  --backend sim \
   --model trainer_runs/bc_v1/best.pt \
   --execute
 ```

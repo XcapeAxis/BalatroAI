@@ -1,4 +1,4 @@
-if __package__ is None or __package__ == "":
+﻿if __package__ is None or __package__ == "":
     import sys
     from pathlib import Path
 
@@ -8,7 +8,7 @@ import argparse
 import time
 
 from trainer import action_space
-from trainer.env_client import act_batch, get_state
+from trainer.env_client import create_backend
 from trainer.features import extract_features
 from trainer.utils import format_action, setup_logger, warn_if_unstable_python
 
@@ -24,12 +24,14 @@ def _require_torch():
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Inference assistant for Balatro hand decisions.")
+    parser.add_argument("--backend", choices=["real", "sim"], default="real")
     parser.add_argument("--base-url", default="http://127.0.0.1:12346")
     parser.add_argument("--model", required=True)
     parser.add_argument("--max-actions", type=int, default=action_space.max_actions())
     parser.add_argument("--topk", type=int, default=3)
     parser.add_argument("--poll-interval", type=float, default=0.25)
     parser.add_argument("--timeout-sec", type=float, default=8.0)
+    parser.add_argument("--seed", default="AAAAAAA")
     parser.add_argument("--execute", action="store_true", help="Execute top-1 recommendation.")
     parser.add_argument("--once", action="store_true", help="Run one loop and exit.")
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
@@ -119,74 +121,88 @@ def main() -> int:
     model.load_state_dict(state_dict, strict=True)
     model.eval()
 
-    while True:
-        try:
-            state = get_state(args.base_url, timeout=args.timeout_sec)
-        except Exception as exc:
-            logger.warning("Failed to fetch state: %s", exc)
-            if args.once:
-                return 1
-            time.sleep(args.poll_interval)
-            continue
+    backend = create_backend(
+        args.backend,
+        base_url=args.base_url if args.backend == "real" else None,
+        timeout_sec=args.timeout_sec,
+        seed=args.seed,
+        logger=logger,
+    )
 
-        phase = str(state.get("state") or "UNKNOWN")
-        if phase != "SELECTING_HAND":
-            logger.info("phase=%s (waiting for SELECTING_HAND)", phase)
-            if args.once:
-                return 0
-            time.sleep(args.poll_interval)
-            continue
+    try:
+        if args.backend == "sim":
+            backend.reset(seed=args.seed)
 
-        cards = (state.get("hand") or {}).get("cards") or []
-        hand_size = min(len(cards), action_space.MAX_HAND)
-        if hand_size <= 0:
-            logger.info("No hand cards available.")
-            if args.once:
-                return 0
-            time.sleep(args.poll_interval)
-            continue
-
-        legal_ids = action_space.legal_action_ids(hand_size)
-        batch = _state_to_batch(state, torch)
-        batch = {k: v.to(device) for k, v in batch.items()}
-
-        with torch.no_grad():
-            logits = model(batch)
-
-        legal_mask = torch.zeros((1, args.max_actions), dtype=torch.float32, device=device)
-        for aid in legal_ids:
-            legal_mask[0, aid] = 1.0
-        masked = torch.where(legal_mask > 0, logits, torch.full_like(logits, -1e9))
-
-        k = min(max(1, args.topk), masked.shape[1])
-        top_vals, top_ids = torch.topk(masked, k=k, dim=1)
-
-        decoded = []
-        for i in range(k):
-            aid = int(top_ids[0, i].item())
-            score = float(top_vals[0, i].item())
-            atype, mask_int = action_space.decode(hand_size, aid)
-            idxs = action_space.mask_to_indices(mask_int, hand_size)
-            decoded.append((aid, atype, idxs, score))
-
-        logger.info("Top-%d suggestions:", k)
-        for rank, (aid, atype, idxs, score) in enumerate(decoded, start=1):
-            logger.info("  #%d action_id=%d score=%.4f action_type=%s indices=%s", rank, aid, score, atype, idxs)
-
-        if args.execute and decoded:
-            _, atype, idxs, _ = decoded[0]
+        while True:
             try:
-                _ = act_batch(args.base_url, atype, idxs, timeout=args.timeout_sec, logger=logger)
-                logger.info("Executed top-1: %s", format_action(atype, idxs))
+                state = backend.get_state()
             except Exception as exc:
-                logger.error("Execution failed: %s", exc)
+                logger.warning("Failed to fetch state: %s", exc)
                 if args.once:
                     return 1
+                time.sleep(args.poll_interval)
+                continue
 
-        if args.once:
-            return 0
+            phase = str(state.get("state") or "UNKNOWN")
+            if phase != "SELECTING_HAND":
+                logger.info("phase=%s (waiting for SELECTING_HAND)", phase)
+                if args.once:
+                    return 0
+                time.sleep(args.poll_interval)
+                continue
 
-        time.sleep(args.poll_interval)
+            cards = (state.get("hand") or {}).get("cards") or []
+            hand_size = min(len(cards), action_space.MAX_HAND)
+            if hand_size <= 0:
+                logger.info("No hand cards available.")
+                if args.once:
+                    return 0
+                time.sleep(args.poll_interval)
+                continue
+
+            legal_ids = action_space.legal_action_ids(hand_size)
+            batch = _state_to_batch(state, torch)
+            batch = {k: v.to(device) for k, v in batch.items()}
+
+            with torch.no_grad():
+                logits = model(batch)
+
+            legal_mask = torch.zeros((1, args.max_actions), dtype=torch.float32, device=device)
+            for aid in legal_ids:
+                legal_mask[0, aid] = 1.0
+            masked = torch.where(legal_mask > 0, logits, torch.full_like(logits, -1e9))
+
+            k = min(max(1, args.topk), masked.shape[1])
+            top_vals, top_ids = torch.topk(masked, k=k, dim=1)
+
+            decoded = []
+            for i in range(k):
+                aid = int(top_ids[0, i].item())
+                score = float(top_vals[0, i].item())
+                atype, mask_int = action_space.decode(hand_size, aid)
+                idxs = action_space.mask_to_indices(mask_int, hand_size)
+                decoded.append((aid, atype, idxs, score))
+
+            logger.info("Top-%d suggestions:", k)
+            for rank, (aid, atype, idxs, score) in enumerate(decoded, start=1):
+                logger.info("  #%d action_id=%d score=%.4f action_type=%s indices=%s", rank, aid, score, atype, idxs)
+
+            if args.execute and decoded:
+                _, atype, idxs, _ = decoded[0]
+                try:
+                    _, _, _, _ = backend.step({"action_type": atype, "indices": idxs})
+                    logger.info("Executed top-1: %s", format_action(atype, idxs))
+                except Exception as exc:
+                    logger.error("Execution failed: %s", exc)
+                    if args.once:
+                        return 1
+
+            if args.once:
+                return 0
+
+            time.sleep(args.poll_interval)
+    finally:
+        backend.close()
 
 
 if __name__ == "__main__":
