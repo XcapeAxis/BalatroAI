@@ -1,0 +1,901 @@
+[
+  {
+    "set_type": "enhancement",
+    "item_name": "Bonus Cards",
+    "item_key": "bonus_cards",
+    "template": "enhancement_bonus_play_scoring",
+    "confidence": 0.95,
+    "matched_rules": [
+      "enhancement:bonus_cards"
+    ],
+    "params": {
+      "template": "enhancement_bonus_play_scoring",
+      "consumable_candidates": [
+        "c_heirophant",
+        "c_hierophant"
+      ],
+      "cards_required": 1,
+      "strategy": "apply_consumable_then_play",
+      "expected_context": {
+        "modifier": {
+          "applied": true,
+          "enhancement": "BONUS"
+        }
+      }
+    },
+    "target": "p5_enhancement_bonus_cards",
+    "raw_fields_used": {
+      "modifier_name": "Bonus Cards",
+      "applies_to": "playing_card",
+      "effect_summary": "Enhanced card gives an additional +30 Chips when scored",
+      "scoring_impact": "Enhanced card gives an additional +30 Chips when scored",
+      "other_impact": "scoring; deck_change",
+      "constraints": "",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "enhancement",
+    "item_name": "Glass Cards",
+    "item_key": "glass_cards",
+    "template": "enhancement_glass_play_scoring",
+    "confidence": 0.95,
+    "matched_rules": [
+      "enhancement:glass_cards"
+    ],
+    "params": {
+      "template": "enhancement_glass_play_scoring",
+      "consumable_candidates": [
+        "c_justice"
+      ],
+      "cards_required": 1,
+      "strategy": "apply_consumable_then_play",
+      "expected_context": {
+        "modifier": {
+          "applied": true,
+          "enhancement": "GLASS"
+        }
+      }
+    },
+    "target": "p5_enhancement_glass_cards",
+    "raw_fields_used": {
+      "modifier_name": "Glass Cards",
+      "applies_to": "playing_card",
+      "effect_summary": "Enhanced card gives X2 Mult when scored 1 in 4 chance to destroy card after all scoring is finished",
+      "scoring_impact": "Enhanced card gives X2 Mult when scored 1 in 4 chance to destroy card after all scoring is finished",
+      "other_impact": "scoring; deck_change",
+      "constraints": "",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "enhancement",
+    "item_name": "Gold Cards",
+    "item_key": "gold_cards",
+    "template": "enhancement_apply_noop",
+    "confidence": 0.95,
+    "matched_rules": [
+      "enhancement:gold_cards"
+    ],
+    "params": {
+      "template": "enhancement_apply_noop",
+      "consumable_candidates": [
+        "c_devil"
+      ],
+      "cards_required": 1,
+      "strategy": "apply_consumable_then_wait",
+      "expected_context": {
+        "modifier": {
+          "applied": true,
+          "enhancement": "GOLD"
+        }
+      }
+    },
+    "target": "p5_enhancement_gold_cards",
+    "raw_fields_used": {
+      "modifier_name": "Gold Cards",
+      "applies_to": "playing_card",
+      "effect_summary": "Enhanced card gives $3 if held in hand at end of round",
+      "scoring_impact": "",
+      "other_impact": "deck_change; economy",
+      "constraints": "",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "enhancement",
+    "item_name": "Lucky Cards",
+    "item_key": "lucky_cards",
+    "template": "enhancement_apply_noop",
+    "confidence": 0.95,
+    "matched_rules": [
+      "enhancement:lucky_cards"
+    ],
+    "params": {
+      "template": "enhancement_apply_noop",
+      "consumable_candidates": [
+        "c_magician"
+      ],
+      "cards_required": 1,
+      "strategy": "apply_consumable_then_wait",
+      "expected_context": {
+        "modifier": {
+          "applied": true,
+          "enhancement": "LUCKY"
+        }
+      }
+    },
+    "target": "p5_enhancement_lucky_cards",
+    "raw_fields_used": {
+      "modifier_name": "Lucky Cards",
+      "applies_to": "playing_card",
+      "effect_summary": "Enhanced card has a 1 in 5 chance to give +20 Mult Enhanced card has a 1 in 15 chance to give $20 (Both effects are rolled separately, and both can trigger on the same turn)",
+      "scoring_impact": "Enhanced card has a 1 in 5 chance to give +20 Mult Enhanced card has a 1 in 15 chance to give $20 (Both effects are rolled separately, and both can trigger on the same turn)",
+      "other_impact": "scoring; deck_change; economy",
+      "constraints": "",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "enhancement",
+    "item_name": "Mult Cards",
+    "item_key": "mult_cards",
+    "template": "enhancement_mult_play_scoring",
+    "confidence": 0.95,
+    "matched_rules": [
+      "enhancement:mult_cards"
+    ],
+    "params": {
+      "template": "enhancement_mult_play_scoring",
+      "consumable_candidates": [
+        "c_empress"
+      ],
+      "cards_required": 1,
+      "strategy": "apply_consumable_then_play",
+      "expected_context": {
+        "modifier": {
+          "applied": true,
+          "enhancement": "MULT"
+        }
+      }
+    },
+    "target": "p5_enhancement_mult_cards",
+    "raw_fields_used": {
+      "modifier_name": "Mult Cards",
+      "applies_to": "playing_card",
+      "effect_summary": "Enhanced card gives +4 Mult when scored",
+      "scoring_impact": "Enhanced card gives +4 Mult when scored",
+      "other_impact": "scoring; deck_change",
+      "constraints": "",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "enhancement",
+    "item_name": "Steel Cards",
+    "item_key": "steel_cards",
+    "template": "enhancement_apply_noop",
+    "confidence": 0.95,
+    "matched_rules": [
+      "enhancement:steel_cards"
+    ],
+    "params": {
+      "template": "enhancement_apply_noop",
+      "consumable_candidates": [
+        "c_chariot"
+      ],
+      "cards_required": 1,
+      "strategy": "apply_consumable_then_wait",
+      "expected_context": {
+        "modifier": {
+          "applied": true,
+          "enhancement": "STEEL"
+        }
+      }
+    },
+    "target": "p5_enhancement_steel_cards",
+    "raw_fields_used": {
+      "modifier_name": "Steel Cards",
+      "applies_to": "playing_card",
+      "effect_summary": "Enhanced card gives X1.5 Mult while held in hand",
+      "scoring_impact": "Enhanced card gives X1.5 Mult while held in hand",
+      "other_impact": "scoring; deck_change",
+      "constraints": "",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "enhancement",
+    "item_name": "Stone Cards",
+    "item_key": "stone_cards",
+    "template": "enhancement_apply_noop",
+    "confidence": 0.95,
+    "matched_rules": [
+      "enhancement:stone_cards"
+    ],
+    "params": {
+      "template": "enhancement_apply_noop",
+      "consumable_candidates": [
+        "c_tower"
+      ],
+      "cards_required": 1,
+      "strategy": "apply_consumable_then_wait",
+      "expected_context": {
+        "modifier": {
+          "applied": true,
+          "enhancement": "STONE"
+        }
+      }
+    },
+    "target": "p5_enhancement_stone_cards",
+    "raw_fields_used": {
+      "modifier_name": "Stone Cards",
+      "applies_to": "playing_card",
+      "effect_summary": "Enhanced card's value is set to +50 Chips Enhanced card has no rank or suit Enhanced card always scores",
+      "scoring_impact": "Enhanced card's value is set to +50 Chips Enhanced card has no rank or suit Enhanced card always scores",
+      "other_impact": "scoring; deck_change",
+      "constraints": "",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "enhancement",
+    "item_name": "Wild Cards",
+    "item_key": "wild_cards",
+    "template": "enhancement_apply_noop",
+    "confidence": 0.95,
+    "matched_rules": [
+      "enhancement:wild_cards"
+    ],
+    "params": {
+      "template": "enhancement_apply_noop",
+      "consumable_candidates": [
+        "c_lovers"
+      ],
+      "cards_required": 1,
+      "strategy": "apply_consumable_then_wait",
+      "expected_context": {
+        "modifier": {
+          "applied": true,
+          "enhancement": "WILD"
+        }
+      }
+    },
+    "target": "p5_enhancement_wild_cards",
+    "raw_fields_used": {
+      "modifier_name": "Wild Cards",
+      "applies_to": "playing_card",
+      "effect_summary": "Enhanced card is considered to be every suit simultaneously",
+      "scoring_impact": "Enhanced card is considered to be every suit simultaneously",
+      "other_impact": "scoring; deck_change",
+      "constraints": "",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "edition",
+    "item_name": "Base",
+    "item_key": "base",
+    "template": "edition_observed_noop",
+    "confidence": 0.9,
+    "matched_rules": [
+      "edition:base->noop_observed"
+    ],
+    "params": {
+      "strategy": "wait_only",
+      "cards_required": 0,
+      "expected_context": {
+        "modifier": {
+          "applied": true,
+          "edition": "BASE"
+        }
+      }
+    },
+    "target": "p5_edition_base",
+    "raw_fields_used": {
+      "edition_name": "Base",
+      "applies_to": "playing_card;joker",
+      "effect_summary": "Playing: No extra effects | Joker: No extra effects | Consumable: No extra effects",
+      "scoring_impact": "No extra effects | No extra effects",
+      "other_impact": "other",
+      "constraints": "",
+      "notes": "Editions are permanent and cannot be overwritten"
+    }
+  },
+  {
+    "set_type": "edition",
+    "item_name": "Foil",
+    "item_key": "foil",
+    "template": "edition_observed_noop",
+    "confidence": 0.9,
+    "matched_rules": [
+      "edition:foil->noop_observed"
+    ],
+    "params": {
+      "strategy": "wait_only",
+      "cards_required": 0,
+      "expected_context": {
+        "modifier": {
+          "applied": true,
+          "edition": "FOIL"
+        }
+      }
+    },
+    "target": "p5_edition_foil",
+    "raw_fields_used": {
+      "edition_name": "Foil",
+      "applies_to": "playing_card;joker",
+      "effect_summary": "Playing: +50 Chips when scored | Joker: +50 Chips directly before the Joker is reached during scoring | Consumable: N/A",
+      "scoring_impact": "+50 Chips when scored | +50 Chips directly before the Joker is reached during scoring",
+      "other_impact": "scoring",
+      "constraints": "",
+      "notes": "Editions are permanent and cannot be overwritten"
+    }
+  },
+  {
+    "set_type": "edition",
+    "item_name": "Holographic",
+    "item_key": "holographic",
+    "template": "edition_observed_noop",
+    "confidence": 0.9,
+    "matched_rules": [
+      "edition:holographic->noop_observed"
+    ],
+    "params": {
+      "strategy": "wait_only",
+      "cards_required": 0,
+      "expected_context": {
+        "modifier": {
+          "applied": true,
+          "edition": "HOLOGRAPHIC"
+        }
+      }
+    },
+    "target": "p5_edition_holographic",
+    "raw_fields_used": {
+      "edition_name": "Holographic",
+      "applies_to": "playing_card;joker",
+      "effect_summary": "Playing: +10 Mult when scored | Joker: +10 Mult directly before the Joker is reached during scoring | Consumable: N/A",
+      "scoring_impact": "+10 Mult when scored | +10 Mult directly before the Joker is reached during scoring",
+      "other_impact": "scoring",
+      "constraints": "",
+      "notes": "Editions are permanent and cannot be overwritten"
+    }
+  },
+  {
+    "set_type": "edition",
+    "item_name": "Negative",
+    "item_key": "negative",
+    "template": "edition_observed_noop",
+    "confidence": 0.9,
+    "matched_rules": [
+      "edition:negative->noop_observed"
+    ],
+    "params": {
+      "strategy": "wait_only",
+      "cards_required": 0,
+      "expected_context": {
+        "modifier": {
+          "applied": true,
+          "edition": "NEGATIVE"
+        }
+      }
+    },
+    "target": "p5_edition_negative",
+    "raw_fields_used": {
+      "edition_name": "Negative",
+      "applies_to": "playing_card;joker;consumable",
+      "effect_summary": "Playing: N/A | Joker: +1 Joker slot | Consumable: +1 Consumable slot (Can only be acquired through Perkeo (Creates a [[Negative|{{hl|edition|Negative}}]] copy of {{hl|orange|1}} random [[Consumables|{{hl|orange|consumable}}]] card in your possession at the end of the [[The Shop|{{hl|orange|shop}}]] Find this [[Jokers|Joker]] from the [[Spectral Cards|{{hl|sblue|Soul}}]] card. Legendary Effect N/A (Passive) Perkeo.png) )",
+      "scoring_impact": "",
+      "other_impact": "deck_change; shop",
+      "constraints": "Consumable Negative only from specific generation sources",
+      "notes": "Editions are permanent and cannot be overwritten"
+    }
+  },
+  {
+    "set_type": "edition",
+    "item_name": "Polychrome",
+    "item_key": "polychrome",
+    "template": "edition_observed_noop",
+    "confidence": 0.9,
+    "matched_rules": [
+      "edition:polychrome->noop_observed"
+    ],
+    "params": {
+      "strategy": "wait_only",
+      "cards_required": 0,
+      "expected_context": {
+        "modifier": {
+          "applied": true,
+          "edition": "POLYCHROME"
+        }
+      }
+    },
+    "target": "p5_edition_polychrome",
+    "raw_fields_used": {
+      "edition_name": "Polychrome",
+      "applies_to": "playing_card;joker",
+      "effect_summary": "Playing: X1.5 Mult when scored | Joker: X1.5 Mult directly after the Joker is reached during scoring | Consumable: N/A",
+      "scoring_impact": "X1.5 Mult when scored | X1.5 Mult directly after the Joker is reached during scoring",
+      "other_impact": "scoring",
+      "constraints": "",
+      "notes": "Editions are permanent and cannot be overwritten"
+    }
+  },
+  {
+    "set_type": "seal",
+    "item_name": "Blue Seal",
+    "item_key": "blue_seal",
+    "template": "seal_apply_noop",
+    "confidence": 0.92,
+    "matched_rules": [
+      "seal:blue_seal->c_trance"
+    ],
+    "params": {
+      "strategy": "apply_consumable_then_wait",
+      "cards_required": 1,
+      "consumable_candidates": [
+        "c_trance"
+      ],
+      "expected_context": {
+        "modifier": {
+          "applied": true,
+          "seal": "BLUE"
+        }
+      }
+    },
+    "target": "p5_seal_blue_seal",
+    "raw_fields_used": {
+      "seal_name": "Blue Seal",
+      "effect_summary": "Creates the Planet card for final played poker hand of round if held in hand (Must have room)",
+      "trigger_or_timing": "end_of_round_if_held",
+      "constraints": "",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "seal",
+    "item_name": "Gold Seal",
+    "item_key": "gold_seal",
+    "template": "seal_apply_noop",
+    "confidence": 0.92,
+    "matched_rules": [
+      "seal:gold_seal->c_talisman"
+    ],
+    "params": {
+      "strategy": "apply_consumable_then_wait",
+      "cards_required": 1,
+      "consumable_candidates": [
+        "c_talisman"
+      ],
+      "expected_context": {
+        "modifier": {
+          "applied": true,
+          "seal": "GOLD"
+        }
+      }
+    },
+    "target": "p5_seal_gold_seal",
+    "raw_fields_used": {
+      "seal_name": "Gold Seal",
+      "effect_summary": "Earn $3 when this card is played and scores",
+      "trigger_or_timing": "on_scored",
+      "constraints": "",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "seal",
+    "item_name": "Purple Seal",
+    "item_key": "purple_seal",
+    "template": "seal_apply_noop",
+    "confidence": 0.92,
+    "matched_rules": [
+      "seal:purple_seal->c_medium"
+    ],
+    "params": {
+      "strategy": "apply_consumable_then_wait",
+      "cards_required": 1,
+      "consumable_candidates": [
+        "c_medium"
+      ],
+      "expected_context": {
+        "modifier": {
+          "applied": true,
+          "seal": "PURPLE"
+        }
+      }
+    },
+    "target": "p5_seal_purple_seal",
+    "raw_fields_used": {
+      "seal_name": "Purple Seal",
+      "effect_summary": "Creates a Tarot card when discarded (Must have room) Can be from discards by the player, or from the automatic discard of The Hook ( Boss The Hook.png) boss blind.",
+      "trigger_or_timing": "on_discard",
+      "constraints": "",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "seal",
+    "item_name": "Red Seal",
+    "item_key": "red_seal",
+    "template": "seal_apply_noop",
+    "confidence": 0.92,
+    "matched_rules": [
+      "seal:red_seal->c_deja_vu"
+    ],
+    "params": {
+      "strategy": "apply_consumable_then_wait",
+      "cards_required": 1,
+      "consumable_candidates": [
+        "c_deja_vu"
+      ],
+      "expected_context": {
+        "modifier": {
+          "applied": true,
+          "seal": "RED"
+        }
+      }
+    },
+    "target": "p5_seal_red_seal",
+    "raw_fields_used": {
+      "seal_name": "Red Seal",
+      "effect_summary": "Retrigger this card 1 time In addition to when being scored in a poker hand, this also includes in-hand effects such as lowest-value card for Raised Fist (Adds {{hl|orange|double}} the rank of {{hl|orange|lowest}} ranked card held in hand to Mult Common Additive Mult On Held Raised Fist.png) , in-hand Kings from Baron (Each {{hl|orange|King}} held in hand gives {{xmult|1.5}} Rare Multiplicative Mult On Held Baron.png) , Steel card multipliers, or money earned from Reserved Parking (Each {{hl|orange|face}} card held in hand has a {{hl|green|1 in 2}} chance to give {{Money|1}} Common Economy On Held Reserved Parking.png) .",
+      "trigger_or_timing": "on_scored_and_on_held_retrigger",
+      "constraints": "",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "seal",
+    "item_name": "Red Seal",
+    "item_key": "red_seal",
+    "template": "seal_apply_noop",
+    "confidence": 0.92,
+    "matched_rules": [
+      "seal:red_seal->c_deja_vu",
+      "synthetic_variant:red_seal_held"
+    ],
+    "params": {
+      "strategy": "apply_consumable_then_wait",
+      "cards_required": 1,
+      "consumable_candidates": [
+        "c_deja_vu"
+      ],
+      "expected_context": {
+        "modifier": {
+          "applied": true,
+          "seal": "RED"
+        }
+      },
+      "variant": "held_retrigger_probe"
+    },
+    "target": "p5_seal_red_seal_held_variant",
+    "raw_fields_used": {
+      "seal_name": "Red Seal",
+      "effect_summary": "Retrigger this card 1 time In addition to when being scored in a poker hand, this also includes in-hand effects such as lowest-value card for Raised Fist (Adds {{hl|orange|double}} the rank of {{hl|orange|lowest}} ranked card held in hand to Mult Common Additive Mult On Held Raised Fist.png) , in-hand Kings from Baron (Each {{hl|orange|King}} held in hand gives {{xmult|1.5}} Rare Multiplicative Mult On Held Baron.png) , Steel card multipliers, or money earned from Reserved Parking (Each {{hl|orange|face}} card held in hand has a {{hl|green|1 in 2}} chance to give {{Money|1}} Common Economy On Held Reserved Parking.png) .",
+      "trigger_or_timing": "on_scored_and_on_held_retrigger",
+      "constraints": "",
+      "notes": ""
+    }
+  },
+  {
+    "set_type": "sticker",
+    "item_name": "Black Sticker",
+    "item_key": "black_sticker",
+    "template": "sticker_observed_noop",
+    "confidence": 0.88,
+    "matched_rules": [
+      "sticker:black_sticker->noop_observed"
+    ],
+    "params": {
+      "strategy": "wait_only",
+      "cards_required": 0,
+      "expected_context": {
+        "sticker": {
+          "name": "BLACK_STICKER"
+        }
+      },
+      "permanence": "record_only"
+    },
+    "target": "p5_sticker_black_sticker",
+    "raw_fields_used": {
+      "sticker_name": "Black Sticker",
+      "applies_to": "joker;deck",
+      "effect_summary": "Used this Joker to win on Black Stake difficulty",
+      "permanence": "record_only",
+      "constraints": "",
+      "notes": "Stake progression record sticker"
+    }
+  },
+  {
+    "set_type": "sticker",
+    "item_name": "Blue Sticker",
+    "item_key": "blue_sticker",
+    "template": "sticker_observed_noop",
+    "confidence": 0.88,
+    "matched_rules": [
+      "sticker:blue_sticker->noop_observed"
+    ],
+    "params": {
+      "strategy": "wait_only",
+      "cards_required": 0,
+      "expected_context": {
+        "sticker": {
+          "name": "BLUE_STICKER"
+        }
+      },
+      "permanence": "record_only"
+    },
+    "target": "p5_sticker_blue_sticker",
+    "raw_fields_used": {
+      "sticker_name": "Blue Sticker",
+      "applies_to": "joker;deck",
+      "effect_summary": "Used this Joker to win on Blue Stake difficulty",
+      "permanence": "record_only",
+      "constraints": "",
+      "notes": "Stake progression record sticker"
+    }
+  },
+  {
+    "set_type": "sticker",
+    "item_name": "Eternal Sticker",
+    "item_key": "eternal_sticker",
+    "template": "sticker_observed_noop",
+    "confidence": 0.88,
+    "matched_rules": [
+      "sticker:eternal_sticker->noop_observed"
+    ],
+    "params": {
+      "strategy": "wait_only",
+      "cards_required": 0,
+      "expected_context": {
+        "sticker": {
+          "name": "ETERNAL_STICKER"
+        }
+      },
+      "permanence": "run_only"
+    },
+    "target": "p5_sticker_eternal_sticker",
+    "raw_fields_used": {
+      "sticker_name": "Eternal Sticker",
+      "applies_to": "joker",
+      "effect_summary": "Cannot be sold or destroyed during the run",
+      "permanence": "run_only",
+      "constraints": "Appears in Black Stake+ runs; cannot coexist with Perishable",
+      "notes": "Legendary Jokers do not naturally appear with Eternal"
+    }
+  },
+  {
+    "set_type": "sticker",
+    "item_name": "Gold Sticker",
+    "item_key": "gold_sticker",
+    "template": "sticker_observed_noop",
+    "confidence": 0.88,
+    "matched_rules": [
+      "sticker:gold_sticker->noop_observed"
+    ],
+    "params": {
+      "strategy": "wait_only",
+      "cards_required": 0,
+      "expected_context": {
+        "sticker": {
+          "name": "GOLD_STICKER"
+        }
+      },
+      "permanence": "record_only"
+    },
+    "target": "p5_sticker_gold_sticker",
+    "raw_fields_used": {
+      "sticker_name": "Gold Sticker",
+      "applies_to": "joker;deck",
+      "effect_summary": "Used this Joker to win on Gold Stake difficulty Note: This sticker is slightly larger than the others",
+      "permanence": "record_only",
+      "constraints": "",
+      "notes": "Stake progression record sticker"
+    }
+  },
+  {
+    "set_type": "sticker",
+    "item_name": "Green Sticker",
+    "item_key": "green_sticker",
+    "template": "sticker_observed_noop",
+    "confidence": 0.88,
+    "matched_rules": [
+      "sticker:green_sticker->noop_observed"
+    ],
+    "params": {
+      "strategy": "wait_only",
+      "cards_required": 0,
+      "expected_context": {
+        "sticker": {
+          "name": "GREEN_STICKER"
+        }
+      },
+      "permanence": "record_only"
+    },
+    "target": "p5_sticker_green_sticker",
+    "raw_fields_used": {
+      "sticker_name": "Green Sticker",
+      "applies_to": "joker;deck",
+      "effect_summary": "Used this Joker to win on Green Stake difficulty",
+      "permanence": "record_only",
+      "constraints": "",
+      "notes": "Stake progression record sticker"
+    }
+  },
+  {
+    "set_type": "sticker",
+    "item_name": "Orange Sticker",
+    "item_key": "orange_sticker",
+    "template": "sticker_observed_noop",
+    "confidence": 0.88,
+    "matched_rules": [
+      "sticker:orange_sticker->noop_observed"
+    ],
+    "params": {
+      "strategy": "wait_only",
+      "cards_required": 0,
+      "expected_context": {
+        "sticker": {
+          "name": "ORANGE_STICKER"
+        }
+      },
+      "permanence": "record_only"
+    },
+    "target": "p5_sticker_orange_sticker",
+    "raw_fields_used": {
+      "sticker_name": "Orange Sticker",
+      "applies_to": "joker;deck",
+      "effect_summary": "Used this Joker to win on Orange Stake difficulty",
+      "permanence": "record_only",
+      "constraints": "",
+      "notes": "Stake progression record sticker"
+    }
+  },
+  {
+    "set_type": "sticker",
+    "item_name": "Perishable Sticker",
+    "item_key": "perishable_sticker",
+    "template": "sticker_observed_noop",
+    "confidence": 0.88,
+    "matched_rules": [
+      "sticker:perishable_sticker->noop_observed"
+    ],
+    "params": {
+      "strategy": "wait_only",
+      "cards_required": 0,
+      "expected_context": {
+        "sticker": {
+          "name": "PERISHABLE_STICKER"
+        }
+      },
+      "permanence": "run_only"
+    },
+    "target": "p5_sticker_perishable_sticker",
+    "raw_fields_used": {
+      "sticker_name": "Perishable Sticker",
+      "applies_to": "joker",
+      "effect_summary": "Joker is debuffed after 5 rounds",
+      "permanence": "run_only",
+      "constraints": "Appears in Orange/Gold Stake runs; cannot coexist with Eternal",
+      "notes": "Legendary Jokers do not naturally appear with Perishable"
+    }
+  },
+  {
+    "set_type": "sticker",
+    "item_name": "Purple Sticker",
+    "item_key": "purple_sticker",
+    "template": "sticker_observed_noop",
+    "confidence": 0.88,
+    "matched_rules": [
+      "sticker:purple_sticker->noop_observed"
+    ],
+    "params": {
+      "strategy": "wait_only",
+      "cards_required": 0,
+      "expected_context": {
+        "sticker": {
+          "name": "PURPLE_STICKER"
+        }
+      },
+      "permanence": "record_only"
+    },
+    "target": "p5_sticker_purple_sticker",
+    "raw_fields_used": {
+      "sticker_name": "Purple Sticker",
+      "applies_to": "joker;deck",
+      "effect_summary": "Used this Joker to win on Purple Stake difficulty",
+      "permanence": "record_only",
+      "constraints": "",
+      "notes": "Stake progression record sticker"
+    }
+  },
+  {
+    "set_type": "sticker",
+    "item_name": "Red Sticker",
+    "item_key": "red_sticker",
+    "template": "sticker_observed_noop",
+    "confidence": 0.88,
+    "matched_rules": [
+      "sticker:red_sticker->noop_observed"
+    ],
+    "params": {
+      "strategy": "wait_only",
+      "cards_required": 0,
+      "expected_context": {
+        "sticker": {
+          "name": "RED_STICKER"
+        }
+      },
+      "permanence": "record_only"
+    },
+    "target": "p5_sticker_red_sticker",
+    "raw_fields_used": {
+      "sticker_name": "Red Sticker",
+      "applies_to": "joker;deck",
+      "effect_summary": "Used this Joker to win on Red Stake difficulty",
+      "permanence": "record_only",
+      "constraints": "",
+      "notes": "Stake progression record sticker"
+    }
+  },
+  {
+    "set_type": "sticker",
+    "item_name": "Rental Sticker",
+    "item_key": "rental_sticker",
+    "template": "sticker_observed_noop",
+    "confidence": 0.88,
+    "matched_rules": [
+      "sticker:rental_sticker->noop_observed"
+    ],
+    "params": {
+      "strategy": "wait_only",
+      "cards_required": 0,
+      "expected_context": {
+        "sticker": {
+          "name": "RENTAL_STICKER"
+        }
+      },
+      "permanence": "run_only"
+    },
+    "target": "p5_sticker_rental_sticker",
+    "raw_fields_used": {
+      "sticker_name": "Rental Sticker",
+      "applies_to": "joker",
+      "effect_summary": "Costs $1 to buy, deducts $3 at end of each round",
+      "permanence": "run_only",
+      "constraints": "Appears in Gold Stake runs; can coexist with Eternal or Perishable",
+      "notes": "Cost deduction happens before round payout"
+    }
+  },
+  {
+    "set_type": "sticker",
+    "item_name": "White Sticker",
+    "item_key": "white_sticker",
+    "template": "sticker_observed_noop",
+    "confidence": 0.88,
+    "matched_rules": [
+      "sticker:white_sticker->noop_observed"
+    ],
+    "params": {
+      "strategy": "wait_only",
+      "cards_required": 0,
+      "expected_context": {
+        "sticker": {
+          "name": "WHITE_STICKER"
+        }
+      },
+      "permanence": "record_only"
+    },
+    "target": "p5_sticker_white_sticker",
+    "raw_fields_used": {
+      "sticker_name": "White Sticker",
+      "applies_to": "joker;deck",
+      "effect_summary": "Used this Joker to win on White Stake difficulty",
+      "permanence": "record_only",
+      "constraints": "",
+      "notes": "Stake progression record sticker"
+    }
+  }
+]
