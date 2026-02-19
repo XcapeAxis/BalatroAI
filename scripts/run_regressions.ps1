@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$BaseUrl = "http://127.0.0.1:12346",
   [string]$OutRoot = "sim/tests/fixtures_runtime",
   [string]$Seed = "AAAAAAA"
@@ -31,15 +31,15 @@ function Start-ServiceProc([string]$Url) {
 
   $love = "D:\SteamLibrary\steamapps\common\Balatro\Balatro.exe"
   $lovely = "D:\SteamLibrary\steamapps\common\Balatro\version.dll"
-  $args = @("balatrobot", "serve", "--headless", "--fast", "--port", "$port")
+  $serveArgs = @("balatrobot", "serve", "--headless", "--fast", "--port", "$port")
   if ((Test-Path $love) -and (Test-Path $lovely)) {
-    $args += @("--love-path", $love, "--lovely-path", $lovely)
+    $serveArgs += @("--love-path", $love, "--lovely-path", $lovely)
   } elseif (Test-Path $love) {
-    $args += @("--balatro-path", $love)
+    $serveArgs += @("--balatro-path", $love)
   }
 
-  Write-Host "[svc] starting: $($uvx.Source) $($args -join ' ')"
-  Start-Process -FilePath $uvx.Source -ArgumentList $args -WorkingDirectory $ProjectRoot -WindowStyle Hidden | Out-Null
+  Write-Host "[svc] starting: $($uvx.Source) $($serveArgs -join ' ')"
+  Start-Process -FilePath $uvx.Source -ArgumentList $serveArgs -WorkingDirectory $ProjectRoot -WindowStyle Hidden | Out-Null
 
   for ($i = 0; $i -lt 45; $i++) {
     if (Test-Health -Url $Url -TimeoutSec 3) { Write-Host "[svc] health ok"; return }
@@ -54,22 +54,22 @@ function Ensure-Service([string]$Url, [bool]$ForceRestart = $false) {
   Start-ServiceProc -Url $Url
 }
 
-function Run-Py([string]$Label, [string[]]$Args) {
-  Write-Host "[$Label] running: python $($Args -join ' ')"
-  $o = & python @Args 2>&1
+function Run-Py([string]$Label, [string[]]$PyArgs) {
+  Write-Host "[$Label] running: python $($PyArgs -join ' ')"
+  $o = & python @PyArgs 2>&1
   $code = $LASTEXITCODE
   if ($o) { $o | ForEach-Object { Write-Host $_ } }
   return @{ Code = $code; Text = ($o -join "`n") }
 }
 
-function Run-WithRecovery([string]$Label, [string[]]$Args, [string]$Url) {
-  $r = Run-Py -Label $Label -Args $Args
+function Run-WithRecovery([string]$Label, [string[]]$PyArgs, [string]$Url) {
+  $r = Run-Py -Label $Label -PyArgs $PyArgs
   if ($r.Code -eq 0) { return }
   $t = [string]$r.Text
   if (($t -match "timeout") -or ($t -match "health check failed") -or ($t -match "connection refused")) {
     Write-Host "[$Label] transport issue, restarting service and retrying"
     Ensure-Service -Url $Url -ForceRestart $true
-    $r2 = Run-Py -Label $Label -Args $Args
+    $r2 = Run-Py -Label $Label -PyArgs $PyArgs
     if ($r2.Code -ne 0) { throw "[$Label] failed after retry" }
     return
   }
@@ -85,8 +85,8 @@ $p1Out = Join-Path $outRootPath "oracle_p1_smoke_v3_regression"
 $p0Args = @("-B", "sim/oracle/batch_build_p0_oracle_fixtures.py", "--base-url", $BaseUrl, "--out-dir", $p0Out, "--max-steps", "160", "--scope", "p0_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p0Out "dumps"))
 $p1Args = @("-B", "sim/oracle/batch_build_p1_smoke.py", "--base-url", $BaseUrl, "--out-dir", $p1Out, "--max-steps", "120", "--scope", "p1_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p1Out "dumps"))
 
-Run-WithRecovery -Label "P0" -Args $p0Args -Url $BaseUrl
-Run-WithRecovery -Label "P1" -Args $p1Args -Url $BaseUrl
+Run-WithRecovery -Label "P0" -PyArgs $p0Args -Url $BaseUrl
+Run-WithRecovery -Label "P1" -PyArgs $p1Args -Url $BaseUrl
 
 $p0ReportPath = Join-Path $p0Out "report_p0.json"
 $p1ReportPath = Join-Path $p1Out "report_p1.json"
@@ -97,3 +97,7 @@ Write-Host ("P0 summary: passed={0}/{1} failed={2} skipped={3}" -f $p0Report.pas
 Write-Host ("P0 report: {0}" -f $p0ReportPath)
 Write-Host ("P1 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4}" -f $p1Report.passed, $p1Report.total, $p1Report.diff_fail, $p1Report.oracle_fail, $p1Report.gen_fail)
 Write-Host ("P1 report: {0}" -f $p1ReportPath)
+
+
+
+
