@@ -1,0 +1,12 @@
+sticker_name,applies_to,effect_summary,permanence,constraints,notes
+Black Sticker,joker;deck,Used this Joker to win on Black Stake difficulty,record_only,,Stake progression record sticker
+Blue Sticker,joker;deck,Used this Joker to win on Blue Stake difficulty,record_only,,Stake progression record sticker
+Eternal Sticker,joker,Cannot be sold or destroyed during the run,run_only,Appears in Black Stake+ runs; cannot coexist with Perishable,Legendary Jokers do not naturally appear with Eternal
+Gold Sticker,joker;deck,Used this Joker to win on Gold Stake difficulty Note: This sticker is slightly larger than the others,record_only,,Stake progression record sticker
+Green Sticker,joker;deck,Used this Joker to win on Green Stake difficulty,record_only,,Stake progression record sticker
+Orange Sticker,joker;deck,Used this Joker to win on Orange Stake difficulty,record_only,,Stake progression record sticker
+Perishable Sticker,joker,Joker is debuffed after 5 rounds,run_only,Appears in Orange/Gold Stake runs; cannot coexist with Eternal,Legendary Jokers do not naturally appear with Perishable
+Purple Sticker,joker;deck,Used this Joker to win on Purple Stake difficulty,record_only,,Stake progression record sticker
+Red Sticker,joker;deck,Used this Joker to win on Red Stake difficulty,record_only,,Stake progression record sticker
+Rental Sticker,joker,"Costs $1 to buy, deducts $3 at end of each round",run_only,Appears in Gold Stake runs; can coexist with Eternal or Perishable,Cost deduction happens before round payout
+White Sticker,joker;deck,Used this Joker to win on White Stake difficulty,record_only,,Stake progression record sticker

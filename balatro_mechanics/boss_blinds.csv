@@ -1,0 +1,29 @@
+boss_name,ante_or_tier_info,restriction_or_rule_change,what_it_blocks_or_forces,strategy_notes_if_explicit_in_wiki,notes
+Amber Acorn,Min Ante 8; Finisher Boss Blind,Flips and shuffles all Joker cards,Disrupts joker usage/order,,Score requirement: 2x base; Reward: $8
+Cerulean Bell,Min Ante 8; Finisher Boss Blind,Forces 1 card to always be selected,,,Score requirement: 2x base; Reward: $8
+Crimson Heart,Min Ante 8; Finisher Boss Blind,One random Joker disabled every hand (changes every hand),Disrupts joker usage/order,,Score requirement: 2x base; Reward: $8
+The Arm,Min Ante 2; Boss Blind,"Decrease level of played poker hand by 1 (hand levels can go as low as Level 1, and are reduced before scoring)",,,Score requirement: 2x base; Reward: $5
+The Club,Min Ante Any; Boss Blind,All Club cards are debuffed,Disables scoring/effects on affected cards,,Score requirement: 2x base; Reward: $5
+The Eye,Min Ante 3; Boss Blind,No repeat hand types this round (every hand played this round must be of a different type and not previously played this round),Forces restricted play patterns,,Score requirement: 2x base; Reward: $5
+The Fish,Min Ante 2; Boss Blind,Cards drawn face down after each hand played,Hides card information,,Score requirement: 2x base; Reward: $5
+The Flint,Min Ante 2; Boss Blind,Base Chips and Mult for played poker hands are halved for the entire round,,,Score requirement: 2x base; Reward: $5
+The Goad,Min Ante Any; Boss Blind,All Spade cards are debuffed,Disables scoring/effects on affected cards,,Score requirement: 2x base; Reward: $5
+The Head,Min Ante Any; Boss Blind,All Heart cards are debuffed,Disables scoring/effects on affected cards,,Score requirement: 2x base; Reward: $5
+The Hook,Min Ante Any; Boss Blind,Discards 2 random cards held in hand after every played hand,Alters draw/hand/discard flow,,Score requirement: 2x base; Reward: $5
+The House,Min Ante 2; Boss Blind,First hand is drawn face down,Hides card information,,Score requirement: 2x base; Reward: $5
+The Manacle,Min Ante Any; Boss Blind,-1 Hand Size,Alters draw/hand/discard flow,,Score requirement: 2x base; Reward: $5
+The Mark,Min Ante 2; Boss Blind,All face cards are drawn face down,Hides card information,,Score requirement: 2x base; Reward: $5
+The Mouth,Min Ante 2; Boss Blind,Only one hand type can be played this round,Forces restricted play patterns,,Score requirement: 2x base; Reward: $5
+The Needle,Min Ante 2; Boss Blind,Play only 1 hand,Forces restricted play patterns,,Score requirement: 1x base; Reward: $5
+The Ox,Min Ante 6; Boss Blind,Playing your most played hand this run sets money to $0,Direct economy penalty,,Score requirement: 2x base; Reward: $5
+The Pillar,Min Ante Any; Boss Blind,Cards played previously this Ante (during Small and Big Blinds) are debuffed,Disables scoring/effects on affected cards,,Score requirement: 2x base; Reward: $5
+The Plant,Min Ante 4; Boss Blind,All face cards are debuffed,Disables scoring/effects on affected cards,,Score requirement: 2x base; Reward: $5
+The Psychic,Min Ante Any; Boss Blind,Must play 5 cards (not all cards need to score),Forces restricted play patterns,,Score requirement: 2x base; Reward: $5
+The Serpent,Min Ante 5; Boss Blind,"After Play or Discard, always draw 3 cards (ignores hand size)",Alters draw/hand/discard flow,,Score requirement: 2x base; Reward: $5
+The Tooth,Min Ante 3; Boss Blind,Lose $1 per card played,Direct economy penalty,,Score requirement: 2x base; Reward: $5
+The Wall,Min Ante 2; Boss Blind,Extra large blind,,,Score requirement: 4x base; Reward: $5
+The Water,Min Ante 2; Boss Blind,Start with 0 discards,Alters draw/hand/discard flow,,Score requirement: 2x base; Reward: $5
+The Wheel,Min Ante 2; Boss Blind,1 in 7 cards get drawn face down during the round,Hides card information,,Score requirement: 2x base; Reward: $5
+The Window,Min Ante Any; Boss Blind,All Diamond cards are debuffed,Disables scoring/effects on affected cards,,Score requirement: 2x base; Reward: $5
+Verdant Leaf,Min Ante 8; Finisher Boss Blind,All cards debuffed until 1 Joker sold,Disables scoring/effects on affected cards,,Score requirement: 2x base; Reward: $8
+Violet Vessel,Min Ante 8; Finisher Boss Blind,Very large blind,,,Score requirement: 6x base; Reward: $8

@@ -1,0 +1,22 @@
+{
+  "generated_at": "2026-02-19T13:26:37.989644+00:00",
+  "source": "D:\\我的\\小丑牌AI\\Balatro_Mechanics_CSV_UPDATED_20260219\\final",
+  "files": [
+    "booster_packs.csv",
+    "boss_blinds.csv",
+    "card_modifiers_editions.csv",
+    "card_modifiers_enhancements.csv",
+    "card_modifiers_seals.csv",
+    "decks.csv",
+    "index_manifest.csv",
+    "jokers.csv",
+    "planet_cards.csv",
+    "poker_hands.csv",
+    "spectral_cards.csv",
+    "stickers.csv",
+    "tags.csv",
+    "tarot_cards.csv",
+    "vouchers.csv"
+  ],
+  "note": "Final curated mechanics CSV copied into balatro_mechanics for stable local use."
+}

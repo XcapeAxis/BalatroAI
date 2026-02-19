@@ -1,0 +1,5 @@
+seal_name,effect_summary,trigger_or_timing,constraints,notes
+Blue Seal,Creates the Planet card for final played poker hand of round if held in hand (Must have room),end_of_round_if_held,,
+Gold Seal,Earn $3 when this card is played and scores,on_scored,,
+Purple Seal,"Creates a Tarot card when discarded (Must have room) Can be from discards by the player, or from the automatic discard of The Hook ( Boss The Hook.png) boss blind.",on_discard,,
+Red Seal,"Retrigger this card 1 time In addition to when being scored in a poker hand, this also includes in-hand effects such as lowest-value card for Raised Fist (Adds {{hl|orange|double}} the rank of {{hl|orange|lowest}} ranked card held in hand to Mult Common Additive Mult On Held Raised Fist.png) , in-hand Kings from Baron (Each {{hl|orange|King}} held in hand gives {{xmult|1.5}} Rare Multiplicative Mult On Held Baron.png) , Steel card multipliers, or money earned from Reserved Parking (Each {{hl|orange|face}} card held in hand has a {{hl|green|1 in 2}} chance to give {{Money|1}} Common Economy On Held Reserved Parking.png) .",on_scored_and_on_held_retrigger,,

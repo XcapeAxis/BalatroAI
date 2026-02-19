@@ -1,0 +1,19 @@
+card_name,effect_summary,primary_impact,constraints_or_costs,synergies_or_notes
+Ankh,"Creates a copy of 1 of your Jokers at random, then destroys the others, leaving you with two identical Jokers. ( Editions are also copied, except Negative)",deck_change,,
+Aura,"Add Foil , Holographic , or Polychrome edition (determined at random) to 1 selected card in hand.",deck_change,,
+Black Hole,Upgrades every poker hand (including secret hands not yet discovered) by one level.,scoring,,
+Cryptid,"Creates 2 exact copies (including Enhancements, Editions and Seals ) of a selected card in your hand.",deck_change,,
+Deja Vu,Adds a Red Seal to 1 selected card.,deck_change,,
+Ectoplasm,"Add Negative to a random Joker , but -1 Hand Size , plus another -1 hand size for each time Ectoplasm has been used this run, e.g. using Ectoplasm 3 times in the same run decreases hand size by a total of 6 (1+2+3)",deck_change; hand_or_discard,,
+Familiar,"Destroy 1 random card in your hand, but add 3 random Enhanced face cards instead.",deck_change,,Cannot be used when hand size is 1
+Grim,"Destroy 1 random card in your hand, but add 2 random Enhanced Aces instead.",deck_change,,Cannot be used when hand size is 1
+Hex,"Adds Polychrome to a random Joker , and destroys the rest.",deck_change,,
+Immolate,"Destroys 5 random cards in hand, but gain $20 .",deck_change; economy,,Cannot be used when hand size is 1
+Incantation,"Destroy 1 random card in your hand, but add 4 random Enhanced numbered cards instead.",deck_change,,Cannot be used when hand size is 1
+Medium,Adds a Purple Seal to 1 selected card.,deck_change,,
+Ouija,"Converts all cards in hand to a single random rank , but -1 Hand Size .",deck_change; hand_or_discard,,Cannot be used when hand size is 1
+Sigil,Converts all cards in hand to a single random suit .,deck_change,,Cannot be used when hand size is 1
+Talisman,Add a Gold Seal to 1 selected card.,deck_change,,
+The Soul,"Creates a Legendary Joker. (Must have room) Artwork: This card is animated, with the gem beating like a heart, or perhaps something inside is trying to break out...",other,Must have room,
+Trance,Adds a Blue Seal to 1 selected card.,deck_change,,
+Wraith,"Creates a random Rare Joker (must have room), but sets money to $0 .",economy,Must have room,

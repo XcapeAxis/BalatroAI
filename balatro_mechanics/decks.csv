@@ -1,0 +1,16 @@
+deck_name,starting_rules_or_modifiers,starting_resources,hand_size_delta,discard_delta,shop_delta,scoring_delta,other_notes
+Abandoned Deck,Start run with no Face Cards in your deck,,,,,,Unlock condition: Win a run with the Green Deck on any difficulty
+Anaglyph Deck,"After defeating each Boss Blind , gain a Double Tag",,,,,,Unlock condition: Win a run with any deck on the Black Stake difficulty or harder
+Black Deck,+1 Joker slot -1 hand every round,,,,,,Unlock condition: Discover at least 100 items from your collection
+Blue Deck,+1 hand every round,,,,,,Unlock condition: Discover at least 20 items from your collection
+Checkered Deck,Start run with 26 Spades and 26 Hearts in deck,,,,,,Unlock condition: Win a run with the Black Deck on any difficulty
+Erratic Deck,All Ranks and Suits in deck are randomized,,,,,,Unlock condition: Win a run with any deck on the Orange Stake difficulty or harder
+Ghost Deck,"Spectral cards may appear in the shop, start with a Hex card","Spectral cards may appear in the shop, start with a Hex card",,,"Spectral cards may appear in the shop, start with a Hex card",,Unlock condition: Win a run with the Yellow Deck on any difficulty
+Green Deck,At end of each Round: $2 per remaining Hand $1 per remaining Discard Earn no Interest,At end of each Round: $2 per remaining Hand $1 per remaining Discard Earn no Interest,,,,,Unlock condition: Discover at least 75 items from your collection
+Magic Deck,Start run with the Crystal Ball voucher and 2 copies of The Fool,Start run with the Crystal Ball voucher and 2 copies of The Fool,,,Start run with the Crystal Ball voucher and 2 copies of The Fool,,Unlock condition: Win a run with the Red Deck on any difficulty
+Nebula Deck,Start run with the Telescope voucher -1 consumable slot,Start run with the Telescope voucher -1 consumable slot,,,Start run with the Telescope voucher -1 consumable slot,,Unlock condition: Win a run with the Blue Deck on any difficulty
+Painted Deck,"+2 hand size, -1 Joker slot",,+2,,,,Unlock condition: Win a run with any deck on the Green Stake difficulty or harder
+Plasma Deck,Balance Chips and Mult when calculating score for played hand X2 base Blind size,,,,,Balance Chips and Mult when calculating score for played hand X2 base Blind size,Unlock condition: Win a run with any deck on the Blue Stake difficulty or harder
+Red Deck,+1 discard every round,,,+1,,,Unlock condition: Unlocked from start
+Yellow Deck,Start with extra $10,Start with extra $10,,,,,Unlock condition: Discover at least 50 items from your collection
+Zodiac Deck,"Start run with Tarot Merchant , Planet Merchant , and Overstock",,,,,,Unlock condition: Win a run with any deck on the Red Stake difficulty or harder

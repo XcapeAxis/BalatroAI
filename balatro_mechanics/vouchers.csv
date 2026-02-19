@@ -1,0 +1,33 @@
+voucher_name,tier_or_upgrade_path,effect_summary,primary_impact,constraints,notes
+Antimatter,Blank -> Antimatter,+1 Joker slot,other,Redeem Blank 10 total times,"The Antimatter Voucher is always displayed in game as if it was a negative edition and applies the same effect as negative Jokers. If all vouchers have been purchased in a run, blank will appear in the shop."
+Blank,Blank -> Antimatter,Does nothing?,other,,"Upgrade unlock condition: Redeem Blank 10 total times; The Antimatter Voucher is always displayed in game as if it was a negative edition and applies the same effect as negative Jokers. If all vouchers have been purchased in a run, blank will appear in the shop."
+Clearance Sale,Clearance Sale -> Liquidation,All cards and packs in shop are 25% off,shop,,Upgrade unlock condition: Redeem at least 10 Voucher cards in one run; Also reduces the sell value of your present jokers Prices are rounded half down
+Crystal Ball,Crystal Ball -> Omen Globe,+1 consumable slot,other,,Upgrade unlock condition: Use a total of 25 Tarot cards from booster packs; Omen Globe has a 20% individual chance to replace the Tarot card with a Spectral card for every card in the Arcana Pack
+Director's Cut,Director's Cut -> Retcon,"Reroll Boss Blind 1 time per Ante, $10 per roll",economy; shop,,Upgrade unlock condition: Discover 25 Blinds
+Glow Up,Hone -> Glow Up,"Foil , Holographic , and Polychrome cards appear 4X more often",other,"Have at least 5 Joker cards with Foil, Holographic, or Polychrome (or Negative) effect",Polychrome on Jokers actually appears 3x more often for Hone and 7x more often for Glow Up
+Grabber,Grabber -> Nacho Tong,Permanently gain +1 hand per round,other,,Upgrade unlock condition: Play a total of 2500 cards
+Hieroglyph,Hieroglyph -> Petroglyph,"-1 Ante, -1 hand each round",other,,Upgrade unlock condition: Reach Ante level 12
+Hone,Hone -> Glow Up,"Foil , Holographic , and Polychrome cards appear 2X more often",other,,"Upgrade unlock condition: Have at least 5 Joker cards with Foil, Holographic, or Polychrome (or Negative) effect; Polychrome on Jokers actually appears 3x more often for Hone and 7x more often for Glow Up"
+Illusion,Magic Trick -> Illusion,"Playing cards in shop may have an Enhancement , Edition , and/or a Seal",deck_change; shop,Buy a total of 20 Playing cards from the shop,"Illusion is currently (v1.0.1o-FULL) bugged, and cards in the shop cannot have seals, only enhancements and/or editions, and is unaffected by Hone/Glow Up."
+Liquidation,Clearance Sale -> Liquidation,All cards and packs in shop are 50% off,shop,Redeem at least 10 Voucher cards in one run,Also reduces the sell value of your present jokers Prices are rounded half down
+Magic Trick,Magic Trick -> Illusion,Playing cards can be purchased from the shop,shop,,"Upgrade unlock condition: Buy a total of 20 Playing cards from the shop; Illusion is currently (v1.0.1o-FULL) bugged, and cards in the shop cannot have seals, only enhancements and/or editions, and is unaffected by Hone/Glow Up."
+Money Tree,Seed Money -> Money Tree,Raise the cap on interest earned in each round to $20,economy,Max out the interest per round earnings for ten consecutive rounds,Does nothing when playing the Green Deck.
+Nacho Tong,Grabber -> Nacho Tong,Permanently gain an additional +1 hand per round,deck_change,Play a total of 2500 cards,
+Observatory,Telescope -> Observatory,Planet cards in your consumable area give X1.5 Mult for their specified poker hand,scoring,Use a total of 25 Planet cards from booster packs,Telescope picks the higher tier hand in case of multiple most played hands
+Omen Globe,Crystal Ball -> Omen Globe,Spectral cards may appear in any of the Arcana Packs,shop,Use a total of 25 Tarot cards from booster packs,Omen Globe has a 20% individual chance to replace the Tarot card with a Spectral card for every card in the Arcana Pack
+Overstock,Overstock -> Overstock Plus,+1 card slot available in shop (to 3 slots),shop,,Upgrade unlock condition: Spend a total of $2500 at the shop; Also immediately restocks any empty card slots in the Shop when purchased
+Overstock Plus,Overstock -> Overstock Plus,+1 card slot available in shop (to 4 slots),shop,Spend a total of $2500 at the shop,Also immediately restocks any empty card slots in the Shop when purchased
+Paint Brush,Paint Brush -> Palette,+1 hand size,hand_or_discard,,Upgrade unlock condition: Reduce your hand size down to 5 cards
+Palette,Paint Brush -> Palette,+1 hand size again,hand_or_discard,Reduce your hand size down to 5 cards,
+Petroglyph,Hieroglyph -> Petroglyph,"-1 Ante again, -1 discard each round",hand_or_discard,Reach Ante level 12,
+Planet Merchant,Planet Merchant -> Planet Tycoon,Planet cards appear 2X more frequently in the shop,shop,,"Upgrade unlock condition: Buy a total of 50 Planet cards from the shop; For details, see The Shop#Vouchers"
+Planet Tycoon,Planet Merchant -> Planet Tycoon,Planet cards appear 4X more frequently in the shop,shop,Buy a total of 50 Planet cards from the shop,"For details, see The Shop#Vouchers"
+Recyclomancy,Wasteful -> Recyclomancy,Permanently gain an additional +1 discard each round,deck_change; hand_or_discard,Discard a total of 2500 cards,
+Reroll Glut,Reroll Surplus -> Reroll Glut,Rerolls cost an additional $2 less,deck_change; economy; shop,Reroll the shop a total of 100 times,
+Reroll Surplus,Reroll Surplus -> Reroll Glut,Rerolls cost $2 less,economy; shop,,Upgrade unlock condition: Reroll the shop a total of 100 times
+Retcon,Director's Cut -> Retcon,"Reroll Boss Blind unlimited times, $10 per roll",economy; shop,Discover 25 Blinds,
+Seed Money,Seed Money -> Money Tree,Raise the cap on interest earned in each round to $10,economy,,Upgrade unlock condition: Max out the interest per round earnings for ten consecutive rounds; Does nothing when playing the Green Deck.
+Tarot Merchant,Tarot Merchant -> Tarot Tycoon,Tarot cards appear 2X more frequently in the shop,shop,,"Upgrade unlock condition: Buy a total of 50 Tarot cards from the shop; For details, see The Shop#Vouchers"
+Tarot Tycoon,Tarot Merchant -> Tarot Tycoon,Tarot cards appear 4X more frequently in the shop,shop,Buy a total of 50 Tarot cards from the shop,"For details, see The Shop#Vouchers"
+Telescope,Telescope -> Observatory,Celestial Packs always contain the Planet card for your most played poker hand,scoring; shop,,Upgrade unlock condition: Use a total of 25 Planet cards from booster packs; Telescope picks the higher tier hand in case of multiple most played hands
+Wasteful,Wasteful -> Recyclomancy,Permanently gain +1 discard each round,hand_or_discard,,Upgrade unlock condition: Discard a total of 2500 cards

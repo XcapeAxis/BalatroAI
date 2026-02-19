@@ -1,0 +1,13 @@
+card_name,effect_summary,primary_impact,constraints_or_costs,synergies_or_notes
+Ceres,+4 Mult and +40 Chips to Flush House,scoring,Secret planet; appears only after associated secret hand is played in current run,Hand base score reference: 14 Mult x 140 Chips; Type: Dwarf Planet
+Earth,+2 Mult and +25 Chips to Full House,scoring,,Hand base score reference: 4 Mult x 40 Chips; Type: Planet
+Eris,+3 Mult and +50 Chips to Flush Five,scoring,Secret planet; appears only after associated secret hand is played in current run,Hand base score reference: 16 Mult x 160 Chips; Type: Dwarf Planet
+Jupiter,+2 Mult and +15 Chips to Flush,scoring,,Hand base score reference: 4 Mult x 35 Chips; Type: Planet
+Mars,+3 Mult and +30 Chips to Four of a Kind,scoring,,Hand base score reference: 7 Mult x 60 Chips; Type: Planet
+Mercury,+1 Mult and +15 Chips to Pair,scoring,,Hand base score reference: 2 Mult x 10 Chips; Type: Planet
+Neptune,+4 Mult and +40 Chips to Straight Flush,scoring,,Hand base score reference: 8 Mult x 100 Chips; Type: Planet
+Planet X,+3 Mult and +35 Chips to Five of a Kind,scoring,Secret planet; appears only after associated secret hand is played in current run,Hand base score reference: 12 Mult x 120 Chips; Type: Planet?
+Pluto,+1 Mult and +10 Chips to High Card,scoring,,Hand base score reference: 1 Mult x 5 Chips; Type: Dwarf Planet
+Saturn,+3 Mult and +30 Chips to Straight,scoring,,Hand base score reference: 4 Mult x 30 Chips; Type: Planet
+Uranus,+1 Mult and +20 Chips to Two Pair,scoring,,Hand base score reference: 2 Mult x 20 Chips; Type: Planet
+Venus,+2 Mult and +20 Chips to Three of a Kind,scoring,,Hand base score reference: 3 Mult x 30 Chips; Type: Planet
