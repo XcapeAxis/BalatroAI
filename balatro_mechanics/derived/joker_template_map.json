@@ -32,16 +32,21 @@
   {
     "joker_name": "Acrobat",
     "joker_key": "j_acrobat",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "final_hand_xmult",
+    "confidence": 0.97,
+    "matched_rules": [
+      "xN mult on final hand"
+    ],
     "raw_fields_used": {
       "effect_summary": "X3 Mult on final hand of round",
       "key_mechanics": "mult_mult",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Play 200 hands"
     },
-    "params": {},
+    "params": {
+      "hands_left": 1,
+      "mult_scale": 3.0
+    },
     "target": "p3_j_acrobat"
   },
   {
@@ -62,16 +67,21 @@
   {
     "joker_name": "Arrowhead",
     "joker_key": "j_arrowhead",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "suit_chips_per_scoring_card",
+    "confidence": 0.98,
+    "matched_rules": [
+      "played cards with <suit> suit give +N chips"
+    ],
     "raw_fields_used": {
       "effect_summary": "Played cards with Spade suit give +50 Chips when scored",
       "key_mechanics": "chips_add",
       "trigger_timing": "on_scored",
       "constraints_or_conditions": "Have at least 30 cards with Spade suit in your deck"
     },
-    "params": {},
+    "params": {
+      "suit": "S",
+      "chips_add_per_card": 50.0
+    },
     "target": "p3_j_arrowhead"
   },
   {
@@ -146,16 +156,24 @@
   {
     "joker_name": "Blackboard",
     "joker_key": "j_blackboard",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "all_held_suits_xmult",
+    "confidence": 0.98,
+    "matched_rules": [
+      "xN if all held cards in S/C"
+    ],
     "raw_fields_used": {
       "effect_summary": "X3 Mult if all cards held in hand are Spades or Clubs",
       "key_mechanics": "mult_mult",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "allowed_suits": [
+        "S",
+        "C"
+      ],
+      "mult_scale": 3.0
+    },
     "target": "p3_j_blackboard"
   },
   {
@@ -445,18 +463,23 @@
   },
   {
     "joker_name": "Clever Joker",
-    "joker_key": "j_clever_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "joker_key": "j_clever",
+    "template": "hand_contains_chips_add",
+    "confidence": 0.97,
+    "matched_rules": [
+      "+N chips if played hand contains <hand_type>"
+    ],
     "raw_fields_used": {
       "effect_summary": "+80 Chips if played hand contains a Two Pair",
       "key_mechanics": "chips_add",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
-    "target": "p3_j_clever_joker"
+    "params": {
+      "hand_type": "TWO_PAIR",
+      "chips_add": 80.0
+    },
+    "target": "p3_j_clever"
   },
   {
     "joker_name": "Cloud 9",
@@ -490,33 +513,43 @@
   },
   {
     "joker_name": "Crafty Joker",
-    "joker_key": "j_crafty_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "joker_key": "j_crafty",
+    "template": "hand_contains_chips_add",
+    "confidence": 0.97,
+    "matched_rules": [
+      "+N chips if played hand contains <hand_type>"
+    ],
     "raw_fields_used": {
       "effect_summary": "+80 Chips if played hand contains a Flush",
       "key_mechanics": "chips_add",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
-    "target": "p3_j_crafty_joker"
+    "params": {
+      "hand_type": "FLUSH",
+      "chips_add": 80.0
+    },
+    "target": "p3_j_crafty"
   },
   {
     "joker_name": "Crazy Joker",
-    "joker_key": "j_crazy_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "joker_key": "j_crazy",
+    "template": "hand_contains_mult_add",
+    "confidence": 0.97,
+    "matched_rules": [
+      "+N mult if played hand contains <hand_type>"
+    ],
     "raw_fields_used": {
       "effect_summary": "+12 Mult if played hand contains a Straight",
       "key_mechanics": "mult_add",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
-    "target": "p3_j_crazy_joker"
+    "params": {
+      "hand_type": "STRAIGHT",
+      "mult_add": 12.0
+    },
+    "target": "p3_j_crazy"
   },
   {
     "joker_name": "Credit Card",
@@ -565,18 +598,23 @@
   },
   {
     "joker_name": "Devious Joker",
-    "joker_key": "j_devious_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "joker_key": "j_devious",
+    "template": "hand_contains_chips_add",
+    "confidence": 0.97,
+    "matched_rules": [
+      "+N chips if played hand contains <hand_type>"
+    ],
     "raw_fields_used": {
       "effect_summary": "+100 Chips if played hand contains a Straight",
       "key_mechanics": "chips_add",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
-    "target": "p3_j_devious_joker"
+    "params": {
+      "hand_type": "STRAIGHT",
+      "chips_add": 100.0
+    },
+    "target": "p3_j_devious"
   },
   {
     "joker_name": "Diet Cola",
@@ -610,18 +648,23 @@
   },
   {
     "joker_name": "Droll Joker",
-    "joker_key": "j_droll_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "joker_key": "j_droll",
+    "template": "hand_contains_mult_add",
+    "confidence": 0.97,
+    "matched_rules": [
+      "+N mult if played hand contains <hand_type>"
+    ],
     "raw_fields_used": {
       "effect_summary": "+10 Mult if played hand contains a Flush",
       "key_mechanics": "mult_add",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
-    "target": "p3_j_droll_joker"
+    "params": {
+      "hand_type": "FLUSH",
+      "mult_add": 10.0
+    },
+    "target": "p3_j_droll"
   },
   {
     "joker_name": "Drunkard",
@@ -761,16 +804,26 @@
   {
     "joker_name": "Flower Pot",
     "joker_key": "j_flower_pot",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "scoring_all_suits_xmult",
+    "confidence": 0.98,
+    "matched_rules": [
+      "xN if scoring hand has D/C/H/S"
+    ],
     "raw_fields_used": {
       "effect_summary": "X3 Mult if poker hand contains a Diamond card, Club card, Heart card, and Spade card",
       "key_mechanics": "mult_mult",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Reach Ante level 8"
     },
-    "params": {},
+    "params": {
+      "required_suits": [
+        "D",
+        "C",
+        "H",
+        "S"
+      ],
+      "mult_scale": 3.0
+    },
     "target": "p3_j_flower_pot"
   },
   {
@@ -950,18 +1003,23 @@
   },
   {
     "joker_name": "Half Joker",
-    "joker_key": "j_half_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "joker_key": "j_half",
+    "template": "hand_size_lte_mult_add",
+    "confidence": 0.97,
+    "matched_rules": [
+      "+N mult if played hand has <=3 cards"
+    ],
     "raw_fields_used": {
       "effect_summary": "+20 Mult if played hand contains 3 or fewer cards",
       "key_mechanics": "mult_add",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
-    "target": "p3_j_half_joker"
+    "params": {
+      "max_cards": 3,
+      "mult_add": 20.0
+    },
+    "target": "p3_j_half"
   },
   {
     "joker_name": "Hallucination",
@@ -1104,18 +1162,23 @@
   },
   {
     "joker_name": "Jolly Joker",
-    "joker_key": "j_jolly_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "joker_key": "j_jolly",
+    "template": "hand_contains_mult_add",
+    "confidence": 0.97,
+    "matched_rules": [
+      "+N mult if played hand contains <hand_type>"
+    ],
     "raw_fields_used": {
       "effect_summary": "+8 Mult if played hand contains a Pair",
       "key_mechanics": "mult_add",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
-    "target": "p3_j_jolly_joker"
+    "params": {
+      "hand_type": "PAIR",
+      "mult_add": 8.0
+    },
+    "target": "p3_j_jolly"
   },
   {
     "joker_name": "Juggler",
@@ -1199,18 +1262,23 @@
   },
   {
     "joker_name": "Mad Joker",
-    "joker_key": "j_mad_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "joker_key": "j_mad",
+    "template": "hand_contains_mult_add",
+    "confidence": 0.97,
+    "matched_rules": [
+      "+N mult if played hand contains <hand_type>"
+    ],
     "raw_fields_used": {
       "effect_summary": "+10 Mult if played hand contains a Two Pair",
       "key_mechanics": "mult_add",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
-    "target": "p3_j_mad_joker"
+    "params": {
+      "hand_type": "TWO_PAIR",
+      "mult_add": 10.0
+    },
+    "target": "p3_j_mad"
   },
   {
     "joker_name": "Madness",
@@ -1350,16 +1418,21 @@
   {
     "joker_name": "Mystic Summit",
     "joker_key": "j_mystic_summit",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "discards_zero_mult_add",
+    "confidence": 0.97,
+    "matched_rules": [
+      "+N mult when discards_left==0"
+    ],
     "raw_fields_used": {
       "effect_summary": "+15 Mult when 0 discards remaining",
       "key_mechanics": "mult_add; discard",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "discards_left": 0,
+      "mult_add": 15.0
+    },
     "target": "p3_j_mystic_summit"
   },
   {
@@ -1498,16 +1571,20 @@
   {
     "joker_name": "Raised Fist",
     "joker_key": "j_raised_fist",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "held_lowest_rank_mult_add",
+    "confidence": 0.97,
+    "matched_rules": [
+      "double lowest held rank to mult"
+    ],
     "raw_fields_used": {
       "effect_summary": "Adds double the rank of lowest ranked card held in hand to Mult",
       "key_mechanics": "mult_add",
       "trigger_timing": "held_in_hand",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "scale": 2.0
+    },
     "target": "p3_j_raised_fist"
   },
   {
@@ -1667,31 +1744,44 @@
   {
     "joker_name": "Scholar",
     "joker_key": "j_scholar",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "rank_set_chips_mult_per_scoring_card",
+    "confidence": 0.98,
+    "matched_rules": [
+      "played aces give +chips and +mult"
+    ],
     "raw_fields_used": {
       "effect_summary": "Played Aces give +20 Chips and +4 Mult when scored",
       "key_mechanics": "chips_add; mult_add",
       "trigger_timing": "on_scored",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "ranks": [
+        "A"
+      ],
+      "chips_add_per_card": 20.0,
+      "mult_add_per_card": 4.0
+    },
     "target": "p3_j_scholar"
   },
   {
     "joker_name": "Seeing Double",
     "joker_key": "j_seeing_double",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "scoring_club_and_other_xmult",
+    "confidence": 0.98,
+    "matched_rules": [
+      "xN if scoring includes club and other suit"
+    ],
     "raw_fields_used": {
       "effect_summary": "X2 Mult if played hand has a scoring Club card and a scoring card of any other suit",
       "key_mechanics": "mult_mult",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Play a hand that contains four 7 of Clubs. Other suits that count as clubs (e.g. wild suits) with rank 7 will also count."
     },
-    "params": {},
+    "params": {
+      "required_suit": "C",
+      "mult_scale": 2.0
+    },
     "target": "p3_j_seeing_double"
   },
   {
@@ -1712,16 +1802,21 @@
   {
     "joker_name": "Shoot the Moon",
     "joker_key": "j_shoot_the_moon",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "held_rank_mult_add",
+    "confidence": 0.98,
+    "matched_rules": [
+      "each queen held in hand gives +N mult"
+    ],
     "raw_fields_used": {
       "effect_summary": "Each Queen held in hand gives +13 Mult",
       "key_mechanics": "mult_add",
       "trigger_timing": "held_in_hand",
       "constraints_or_conditions": "Play every Heart card in your deck in one round."
     },
-    "params": {},
+    "params": {
+      "rank": "Q",
+      "mult_add_per_card": 13.0
+    },
     "target": "p3_j_shoot_the_moon"
   },
   {
@@ -1771,18 +1866,23 @@
   },
   {
     "joker_name": "Sly Joker",
-    "joker_key": "j_sly_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "joker_key": "j_sly",
+    "template": "hand_contains_chips_add",
+    "confidence": 0.97,
+    "matched_rules": [
+      "+N chips if played hand contains <hand_type>"
+    ],
     "raw_fields_used": {
       "effect_summary": "+50 Chips if played hand contains a Pair",
       "key_mechanics": "chips_add",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
-    "target": "p3_j_sly_joker"
+    "params": {
+      "hand_type": "PAIR",
+      "chips_add": 50.0
+    },
+    "target": "p3_j_sly"
   },
   {
     "joker_name": "Smeared Joker",
@@ -1801,18 +1901,22 @@
   },
   {
     "joker_name": "Smiley Face",
-    "joker_key": "j_smiley_face",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "joker_key": "j_smiley",
+    "template": "face_mult_per_scoring_card",
+    "confidence": 0.98,
+    "matched_rules": [
+      "played face cards give +N mult"
+    ],
     "raw_fields_used": {
       "effect_summary": "Played face cards give +5 Mult when scored",
       "key_mechanics": "mult_add",
       "trigger_timing": "on_scored",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
-    "target": "p3_j_smiley_face"
+    "params": {
+      "mult_add_per_card": 5.0
+    },
+    "target": "p3_j_smiley"
   },
   {
     "joker_name": "Sock and Buskin",
@@ -1996,33 +2100,43 @@
   },
   {
     "joker_name": "The Duo",
-    "joker_key": "j_the_duo",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "joker_key": "j_duo",
+    "template": "hand_contains_xmult",
+    "confidence": 0.97,
+    "matched_rules": [
+      "xN mult if played hand contains <hand_type>"
+    ],
     "raw_fields_used": {
       "effect_summary": "X2 Mult if played hand contains a Pair",
       "key_mechanics": "mult_mult",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Win a run without playing a Pair ."
     },
-    "params": {},
-    "target": "p3_j_the_duo"
+    "params": {
+      "hand_type": "PAIR",
+      "mult_scale": 2.0
+    },
+    "target": "p3_j_duo"
   },
   {
     "joker_name": "The Family",
-    "joker_key": "j_the_family",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "joker_key": "j_family",
+    "template": "hand_contains_xmult",
+    "confidence": 0.97,
+    "matched_rules": [
+      "xN mult if played hand contains <hand_type>"
+    ],
     "raw_fields_used": {
       "effect_summary": "X4 Mult if played hand contains a Four of a Kind",
       "key_mechanics": "mult_mult",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Win a run without playing a Four of a Kind ."
     },
-    "params": {},
-    "target": "p3_j_the_family"
+    "params": {
+      "hand_type": "FOUR_OF_A_KIND",
+      "mult_scale": 4.0
+    },
+    "target": "p3_j_family"
   },
   {
     "joker_name": "The Idol",
@@ -2041,48 +2155,63 @@
   },
   {
     "joker_name": "The Order",
-    "joker_key": "j_the_order",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "joker_key": "j_order",
+    "template": "hand_contains_xmult",
+    "confidence": 0.97,
+    "matched_rules": [
+      "xN mult if played hand contains <hand_type>"
+    ],
     "raw_fields_used": {
       "effect_summary": "X3 Mult if played hand contains a Straight",
       "key_mechanics": "mult_mult",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Win a run without playing a Straight ."
     },
-    "params": {},
-    "target": "p3_j_the_order"
+    "params": {
+      "hand_type": "STRAIGHT",
+      "mult_scale": 3.0
+    },
+    "target": "p3_j_order"
   },
   {
     "joker_name": "The Tribe",
-    "joker_key": "j_the_tribe",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "joker_key": "j_tribe",
+    "template": "hand_contains_xmult",
+    "confidence": 0.97,
+    "matched_rules": [
+      "xN mult if played hand contains <hand_type>"
+    ],
     "raw_fields_used": {
       "effect_summary": "X2 Mult if played hand contains a Flush",
       "key_mechanics": "mult_mult",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Win a run without playing a Flush ."
     },
-    "params": {},
-    "target": "p3_j_the_tribe"
+    "params": {
+      "hand_type": "FLUSH",
+      "mult_scale": 2.0
+    },
+    "target": "p3_j_tribe"
   },
   {
     "joker_name": "The Trio",
-    "joker_key": "j_the_trio",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "joker_key": "j_trio",
+    "template": "hand_contains_xmult",
+    "confidence": 0.97,
+    "matched_rules": [
+      "xN mult if played hand contains <hand_type>"
+    ],
     "raw_fields_used": {
       "effect_summary": "X3 Mult if played hand contains a Three of a Kind",
       "key_mechanics": "mult_mult",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Win a run without playing a Three of a Kind ."
     },
-    "params": {},
-    "target": "p3_j_the_trio"
+    "params": {
+      "hand_type": "THREE_OF_A_KIND",
+      "mult_scale": 3.0
+    },
+    "target": "p3_j_trio"
   },
   {
     "joker_name": "Throwback",
@@ -2147,16 +2276,24 @@
   {
     "joker_name": "Triboulet",
     "joker_key": "j_triboulet",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "rank_set_xmult_per_scoring_card",
+    "confidence": 0.98,
+    "matched_rules": [
+      "K/Q each give xN mult"
+    ],
     "raw_fields_used": {
       "effect_summary": "Played Kings and Queens each give X2 Mult when scored",
       "key_mechanics": "mult_mult",
       "trigger_timing": "on_scored",
       "constraints_or_conditions": "Find this Joker from the Soul card."
     },
-    "params": {},
+    "params": {
+      "ranks": [
+        "K",
+        "Q"
+      ],
+      "mult_scale_per_card": 2.0
+    },
     "target": "p3_j_triboulet"
   },
   {
@@ -2222,16 +2359,25 @@
   {
     "joker_name": "Walkie Talkie",
     "joker_key": "j_walkie_talkie",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "rank_set_chips_mult_per_scoring_card",
+    "confidence": 0.98,
+    "matched_rules": [
+      "played 10 or 4 gives +chips and +mult"
+    ],
     "raw_fields_used": {
       "effect_summary": "Each played 10 or 4 gives +10 Chips and +4 Mult when scored",
       "key_mechanics": "chips_add; mult_add",
       "trigger_timing": "on_scored",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "ranks": [
+        "10",
+        "4"
+      ],
+      "chips_add_per_card": 10.0,
+      "mult_add_per_card": 4.0
+    },
     "target": "p3_j_walkie_talkie"
   },
   {
@@ -2251,18 +2397,23 @@
   },
   {
     "joker_name": "Wily Joker",
-    "joker_key": "j_wily_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "joker_key": "j_wily",
+    "template": "hand_contains_chips_add",
+    "confidence": 0.97,
+    "matched_rules": [
+      "+N chips if played hand contains <hand_type>"
+    ],
     "raw_fields_used": {
       "effect_summary": "+100 Chips if played hand contains a Three of a Kind",
       "key_mechanics": "chips_add",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
-    "target": "p3_j_wily_joker"
+    "params": {
+      "hand_type": "THREE_OF_A_KIND",
+      "chips_add": 100.0
+    },
+    "target": "p3_j_wily"
   },
   {
     "joker_name": "Wrathful Joker",
@@ -2301,17 +2452,22 @@
   },
   {
     "joker_name": "Zany Joker",
-    "joker_key": "j_zany_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "joker_key": "j_zany",
+    "template": "hand_contains_mult_add",
+    "confidence": 0.97,
+    "matched_rules": [
+      "+N mult if played hand contains <hand_type>"
+    ],
     "raw_fields_used": {
       "effect_summary": "+12 Mult if played hand contains a Three of a Kind",
       "key_mechanics": "mult_add",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
-    "target": "p3_j_zany_joker"
+    "params": {
+      "hand_type": "THREE_OF_A_KIND",
+      "mult_add": 12.0
+    },
+    "target": "p3_j_zany"
   }
 ]

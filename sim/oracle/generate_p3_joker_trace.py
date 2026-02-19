@@ -139,8 +139,17 @@ def _entry_to_joker_spec(entry: dict[str, Any]) -> dict[str, Any]:
             "suit": str(params.get("suit") or ""),
             "mult_add_per_card": float(params.get("mult_add_per_card") or 0.0),
         }
+    if template == "suit_chips_per_scoring_card":
+        return {
+            "key": key,
+            "kind": "suit_scoring_chips",
+            "suit": str(params.get("suit") or ""),
+            "chips_add_per_card": float(params.get("chips_add_per_card") or 0.0),
+        }
     if template == "face_chips_per_scoring_card":
         return {"key": key, "kind": "face_scoring_chips", "chips_add_per_card": float(params.get("chips_add_per_card") or 0.0)}
+    if template == "face_mult_per_scoring_card":
+        return {"key": key, "kind": "face_scoring_mult", "mult_add_per_card": float(params.get("mult_add_per_card") or 0.0)}
     if template == "odd_chips_per_scoring_card":
         return {"key": key, "kind": "odd_scoring_chips", "chips_add_per_card": float(params.get("chips_add_per_card") or 0.0)}
     if template == "even_mult_per_scoring_card":
@@ -163,19 +172,120 @@ def _entry_to_joker_spec(entry: dict[str, Any]) -> dict[str, Any]:
             "rank": "K",
             "mult_scale_per_card": float(params.get("mult_scale_per_card") or 1.0),
         }
+    if template == "hand_contains_mult_add":
+        return {
+            "key": key,
+            "kind": "hand_type_mult_add",
+            "hand_type": str(params.get("hand_type") or ""),
+            "mult_add": float(params.get("mult_add") or 0.0),
+        }
+    if template == "hand_contains_chips_add":
+        return {
+            "key": key,
+            "kind": "hand_type_chips_add",
+            "hand_type": str(params.get("hand_type") or ""),
+            "chips_add": float(params.get("chips_add") or 0.0),
+        }
+    if template == "hand_contains_xmult":
+        return {
+            "key": key,
+            "kind": "hand_type_xmult",
+            "hand_type": str(params.get("hand_type") or ""),
+            "mult_scale": float(params.get("mult_scale") or 1.0),
+        }
+    if template == "rank_set_chips_mult_per_scoring_card":
+        return {
+            "key": key,
+            "kind": "rank_set_scoring_chips_mult",
+            "ranks": [str(x) for x in (params.get("ranks") or [])],
+            "chips_add_per_card": float(params.get("chips_add_per_card") or 0.0),
+            "mult_add_per_card": float(params.get("mult_add_per_card") or 0.0),
+        }
+    if template == "held_rank_mult_add":
+        return {
+            "key": key,
+            "kind": "held_rank_mult_add",
+            "rank": str(params.get("rank") or ""),
+            "mult_add_per_card": float(params.get("mult_add_per_card") or 0.0),
+        }
+    if template == "held_lowest_rank_mult_add":
+        return {
+            "key": key,
+            "kind": "held_lowest_rank_mult_add",
+            "scale": float(params.get("scale") or 2.0),
+        }
+    if template == "all_held_suits_xmult":
+        return {
+            "key": key,
+            "kind": "all_held_suits_xmult",
+            "allowed_suits": [str(x) for x in (params.get("allowed_suits") or [])],
+            "mult_scale": float(params.get("mult_scale") or 1.0),
+        }
+    if template == "scoring_club_and_other_xmult":
+        return {
+            "key": key,
+            "kind": "scoring_has_suit_and_other_xmult",
+            "required_suit": str(params.get("required_suit") or "C"),
+            "mult_scale": float(params.get("mult_scale") or 1.0),
+        }
+    if template == "scoring_all_suits_xmult":
+        return {
+            "key": key,
+            "kind": "scoring_has_all_suits_xmult",
+            "required_suits": [str(x) for x in (params.get("required_suits") or [])],
+            "mult_scale": float(params.get("mult_scale") or 1.0),
+        }
+    if template == "discards_zero_mult_add":
+        return {
+            "key": key,
+            "kind": "discards_left_eq_mult_add",
+            "discards_left": int(params.get("discards_left") or 0),
+            "mult_add": float(params.get("mult_add") or 0.0),
+        }
+    if template == "final_hand_xmult":
+        return {
+            "key": key,
+            "kind": "hands_left_eq_xmult",
+            "hands_left": int(params.get("hands_left") or 1),
+            "mult_scale": float(params.get("mult_scale") or 1.0),
+        }
+    if template == "hand_size_lte_mult_add":
+        return {
+            "key": key,
+            "kind": "hand_size_lte_mult_add",
+            "max_cards": int(params.get("max_cards") or 3),
+            "mult_add": float(params.get("mult_add") or 0.0),
+        }
+    if template == "rank_set_xmult_per_scoring_card":
+        return {
+            "key": key,
+            "kind": "rank_set_scoring_xmult",
+            "ranks": [str(x) for x in (params.get("ranks") or [])],
+            "mult_scale_per_card": float(params.get("mult_scale_per_card") or 1.0),
+        }
     return {"key": key}
+
 
 
 def _candidate_play_key_sets(template: str, params: dict[str, Any]) -> tuple[list[list[str]], list[str], int | None]:
     hold_keys: list[str] = []
     resource_discards_left: int | None = None
 
+    hand_type_keys = {
+        "PAIR": ["H_A", "D_A"],
+        "TWO_PAIR": ["H_A", "D_A", "S_K", "C_K"],
+        "THREE_OF_A_KIND": ["H_A", "D_A", "S_A"],
+        "STRAIGHT": ["H_5", "D_6", "S_7", "C_8", "H_9"],
+        "FLUSH": ["H_2", "H_5", "H_8", "H_J", "H_K"],
+        "FOUR_OF_A_KIND": ["H_A", "D_A", "S_A", "C_A", "H_2"],
+    }
+
     if template == "flat_mult":
         return [["H_2"], ["D_2"], ["S_2"]], hold_keys, resource_discards_left
-    if template == "suit_mult_per_scoring_card":
+    if template in {"suit_mult_per_scoring_card", "suit_chips_per_scoring_card"}:
         suit = str(params.get("suit") or "H").upper()[:1]
         return [[f"{suit}_A"], [f"{suit}_K"], [f"{suit}_9"]], hold_keys, resource_discards_left
-    if template == "face_chips_per_scoring_card":
+    if template in {"face_chips_per_scoring_card", "face_mult_per_scoring_card"}:
         return [["H_K"], ["S_Q"], ["D_J"]], hold_keys, resource_discards_left
     if template == "odd_chips_per_scoring_card":
         return [["D_9"], ["C_7"], ["S_5"]], hold_keys, resource_discards_left
@@ -191,20 +301,64 @@ def _candidate_play_key_sets(template: str, params: dict[str, Any]) -> tuple[lis
     if template == "baron_held_kings_xmult":
         hold_keys = ["H_K", "S_K"]
         return [["D_2"], ["C_2"], ["H_3"]], hold_keys, resource_discards_left
+
+    if template in {"hand_contains_mult_add", "hand_contains_chips_add", "hand_contains_xmult"}:
+        hand_type = str(params.get("hand_type") or "").upper()
+        return [[x for x in hand_type_keys.get(hand_type, ["H_2"])]], hold_keys, resource_discards_left
+
+    if template == "rank_set_chips_mult_per_scoring_card":
+        key_map = {"A": "A", "10": "T", "4": "4", "K": "K", "Q": "Q", "J": "J"}
+        keys = [f"H_{key_map.get(str(r).upper(), str(r).upper())}" for r in (params.get("ranks") or []) if str(r).upper() in key_map]
+        return [keys or ["H_A"]], hold_keys, resource_discards_left
+
+    if template == "held_rank_mult_add":
+        rank = str(params.get("rank") or "Q").upper()
+        rk = "T" if rank == "10" else rank
+        hold_keys = [f"H_{rk}", f"S_{rk}"]
+        return [["D_2"]], hold_keys, resource_discards_left
+
+    if template == "held_lowest_rank_mult_add":
+        hold_keys = ["H_2", "S_3"]
+        return [["D_K"]], hold_keys, resource_discards_left
+
+    if template == "all_held_suits_xmult":
+        hold_keys = ["S_2", "C_3", "S_4", "C_5"]
+        return [["H_A"]], hold_keys, resource_discards_left
+
+    if template == "scoring_club_and_other_xmult":
+        return [["C_A", "H_K"]], hold_keys, resource_discards_left
+
+    if template == "scoring_all_suits_xmult":
+        return [["D_A", "C_K", "H_Q", "S_J"]], hold_keys, resource_discards_left
+
+    if template == "discards_zero_mult_add":
+        resource_discards_left = 0
+        return [["H_A"]], hold_keys, resource_discards_left
+
+    if template == "final_hand_xmult":
+        return [["H_A"]], hold_keys, resource_discards_left
+
+    if template == "hand_size_lte_mult_add":
+        return [["H_A", "D_A", "S_A"]], hold_keys, resource_discards_left
+
+    if template == "rank_set_xmult_per_scoring_card":
+        return [["H_K", "D_Q"]], hold_keys, resource_discards_left
+
     return [["H_2"]], hold_keys, resource_discards_left
+
 
 
 def _find_fallback_indices(hand_cards: list[dict[str, Any]], template: str, params: dict[str, Any]) -> list[int] | None:
     if not hand_cards:
         return None
 
-    if template == "suit_mult_per_scoring_card":
+    if template in {"suit_mult_per_scoring_card", "suit_chips_per_scoring_card"}:
         suit = str(params.get("suit") or "").upper()[:1]
         for c in hand_cards:
             if str(c.get("suit") or "") == suit:
                 return [int(c.get("idx") or 0)]
 
-    if template in {"face_chips_per_scoring_card", "photograph_first_face_xmult"}:
+    if template in {"face_chips_per_scoring_card", "face_mult_per_scoring_card", "photograph_first_face_xmult"}:
         for c in hand_cards:
             if str(c.get("rank") or "") in {"K", "Q", "J"}:
                 return [int(c.get("idx") or 0)]
@@ -224,12 +378,26 @@ def _find_fallback_indices(hand_cards: list[dict[str, Any]], template: str, para
             if str(c.get("rank") or "") in {"A", "2", "3", "5", "8"}:
                 return [int(c.get("idx") or 0)]
 
-    if template == "baron_held_kings_xmult":
+    if template in {"baron_held_kings_xmult", "held_rank_mult_add"}:
+        rank = str(params.get("rank") or "K").upper()
         for c in hand_cards:
-            if str(c.get("rank") or "") != "K":
+            if str(c.get("rank") or "") != rank:
                 return [int(c.get("idx") or 0)]
 
+    if template in {"hand_contains_mult_add", "hand_contains_chips_add", "hand_contains_xmult"}:
+        target_hand_type = str(params.get("hand_type") or "").upper()
+        if target_hand_type:
+            combo = find_target_combo(hand_cards, target_hand_type)
+            if combo:
+                return combo
+
+    if template == "hand_size_lte_mult_add":
+        n = min(3, len(hand_cards))
+        if n > 0:
+            return list(range(n))
+
     return [int(hand_cards[0].get("idx") or 0)]
+
 
 
 def load_supported_entries(project_root: Path) -> list[dict[str, Any]]:

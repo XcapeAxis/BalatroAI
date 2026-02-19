@@ -19,25 +19,55 @@ from typing import Any
 SUPPORTED_TEMPLATES = [
     "flat_mult",
     "suit_mult_per_scoring_card",
+    "suit_chips_per_scoring_card",
     "face_chips_per_scoring_card",
+    "face_mult_per_scoring_card",
     "odd_chips_per_scoring_card",
     "even_mult_per_scoring_card",
     "fibonacci_mult_per_scoring_card",
     "banner_discards_to_chips",
     "photograph_first_face_xmult",
     "baron_held_kings_xmult",
+    "hand_contains_mult_add",
+    "hand_contains_chips_add",
+    "hand_contains_xmult",
+    "rank_set_chips_mult_per_scoring_card",
+    "held_rank_mult_add",
+    "held_lowest_rank_mult_add",
+    "all_held_suits_xmult",
+    "scoring_club_and_other_xmult",
+    "scoring_all_suits_xmult",
+    "discards_zero_mult_add",
+    "final_hand_xmult",
+    "hand_size_lte_mult_add",
+    "rank_set_xmult_per_scoring_card",
 ]
 
 ALL_TEMPLATE_CATALOG = [
     "flat_mult",
     "suit_mult_per_scoring_card",
+    "suit_chips_per_scoring_card",
     "face_chips_per_scoring_card",
+    "face_mult_per_scoring_card",
     "odd_chips_per_scoring_card",
     "even_mult_per_scoring_card",
     "fibonacci_mult_per_scoring_card",
     "banner_discards_to_chips",
     "photograph_first_face_xmult",
     "baron_held_kings_xmult",
+    "hand_contains_mult_add",
+    "hand_contains_chips_add",
+    "hand_contains_xmult",
+    "rank_set_chips_mult_per_scoring_card",
+    "held_rank_mult_add",
+    "held_lowest_rank_mult_add",
+    "all_held_suits_xmult",
+    "scoring_club_and_other_xmult",
+    "scoring_all_suits_xmult",
+    "discards_zero_mult_add",
+    "final_hand_xmult",
+    "hand_size_lte_mult_add",
+    "rank_set_xmult_per_scoring_card",
     "joker_planet_hand_level_bonus",
     "card_modifier_bonus",
     "stacked_combo",
@@ -49,6 +79,7 @@ JOKER_NAME_TO_KEY = {
     "Lusty Joker": "j_lusty_joker",
     "Wrathful Joker": "j_wrathful_joker",
     "Gluttonous Joker": "j_gluttenous_joker",
+    "Onyx Agate": "j_onyx_agate",
     "Banner": "j_banner",
     "Odd Todd": "j_odd_todd",
     "Even Steven": "j_even_steven",
@@ -56,6 +87,43 @@ JOKER_NAME_TO_KEY = {
     "Scary Face": "j_scary_face",
     "Photograph": "j_photograph",
     "Baron": "j_baron",
+    "Jolly Joker": "j_jolly",
+    "Zany Joker": "j_zany",
+    "Mad Joker": "j_mad",
+    "Crazy Joker": "j_crazy",
+    "Droll Joker": "j_droll",
+    "Sly Joker": "j_sly",
+    "Wily Joker": "j_wily",
+    "Clever Joker": "j_clever",
+    "Devious Joker": "j_devious",
+    "Crafty Joker": "j_crafty",
+    "The Duo": "j_duo",
+    "The Trio": "j_trio",
+    "The Family": "j_family",
+    "The Order": "j_order",
+    "The Tribe": "j_tribe",
+    "Arrowhead": "j_arrowhead",
+    "Smiley Face": "j_smiley",
+    "Scholar": "j_scholar",
+    "Walkie Talkie": "j_walkie_talkie",
+    "Shoot the Moon": "j_shoot_the_moon",
+    "Raised Fist": "j_raised_fist",
+    "Blackboard": "j_blackboard",
+    "Flower Pot": "j_flower_pot",
+    "Seeing Double": "j_seeing_double",
+    "Mystic Summit": "j_mystic_summit",
+    "Acrobat": "j_acrobat",
+    "Half Joker": "j_half",
+    "Triboulet": "j_triboulet",
+}
+
+HAND_TYPE_ALIASES = {
+    "PAIR": "PAIR",
+    "TWO_PAIR": "TWO_PAIR",
+    "THREE_OF_A_KIND": "THREE_OF_A_KIND",
+    "STRAIGHT": "STRAIGHT",
+    "FLUSH": "FLUSH",
+    "FOUR_OF_A_KIND": "FOUR_OF_A_KIND",
 }
 
 
@@ -117,6 +185,35 @@ def _parse_float_from_text(pattern: str, text: str) -> float | None:
         return None
 
 
+def _normalize_hand_type_from_text(text: str) -> str | None:
+    low = str(text or "").strip().lower()
+    if "two pair" in low:
+        return "TWO_PAIR"
+    if "three of a kind" in low:
+        return "THREE_OF_A_KIND"
+    if "four of a kind" in low:
+        return "FOUR_OF_A_KIND"
+    if low.endswith("pair") or " a pair" in low:
+        return "PAIR"
+    if "straight" in low:
+        return "STRAIGHT"
+    if "flush" in low:
+        return "FLUSH"
+    return None
+
+
+def _unsupported_reason(low_effect: str, trigger: str, key_mech: str) -> str:
+    if "chance" in low_effect or "1 in " in low_effect or "random" in low_effect:
+        return "probabilistic_trigger"
+    if "this joker gains" in low_effect or "currently" in low_effect or "resets" in low_effect:
+        return "cross_round_state"
+    if "money" in low_effect or "$" in low_effect or "shop" in low_effect:
+        return "economy_or_shop_related"
+    if trigger in {"on_discard", "on_buy", "on_sell", "unknown"} and key_mech in {"", "unknown"}:
+        return "insufficient_structured_fields"
+    return "no_safe_template_match"
+
+
 def _classify_row(row: dict[str, str]) -> tuple[str | None, float, dict[str, Any], list[str], str | None]:
     name = str(row.get("joker_name") or "").strip()
     effect = str(row.get("effect_summary") or "").strip()
@@ -127,7 +224,7 @@ def _classify_row(row: dict[str, str]) -> tuple[str | None, float, dict[str, Any
     matched_rules: list[str] = []
     params: dict[str, Any] = {}
 
-    # 1) flat_mult
+    # Existing P3 v1 templates
     if name.lower() == "joker":
         value = _parse_float_from_text(r"\+(\d+(?:\.\d+)?)\s*mult\b", effect)
         if value is not None and "for each" not in low:
@@ -135,38 +232,46 @@ def _classify_row(row: dict[str, str]) -> tuple[str | None, float, dict[str, Any
             params["mult_add"] = value
             return "flat_mult", 0.99, params, matched_rules, None
 
-    # 2) suit mult
     m = re.search(r"played cards with\s+(heart|diamond|spade|club)\s+suit\s+give\s*\+(\d+(?:\.\d+)?)\s*mult", low)
     if m:
-        suit_word = m.group(1)
-        suit = {"heart": "H", "diamond": "D", "spade": "S", "club": "C"}[suit_word]
+        suit = {"heart": "H", "diamond": "D", "spade": "S", "club": "C"}[m.group(1)]
         params["suit"] = suit
         params["mult_add_per_card"] = float(m.group(2))
         matched_rules.append("played cards with <suit> suit give +N mult")
         return "suit_mult_per_scoring_card", 0.98, params, matched_rules, None
 
-    # 3) face chips
+    m = re.search(r"played cards with\s+(heart|diamond|spade|club)\s+suit\s+give\s*\+(\d+(?:\.\d+)?)\s*chips", low)
+    if m:
+        suit = {"heart": "H", "diamond": "D", "spade": "S", "club": "C"}[m.group(1)]
+        params["suit"] = suit
+        params["chips_add_per_card"] = float(m.group(2))
+        matched_rules.append("played cards with <suit> suit give +N chips")
+        return "suit_chips_per_scoring_card", 0.98, params, matched_rules, None
+
     m = re.search(r"played face cards\s+give\s*\+(\d+(?:\.\d+)?)\s*chips", low)
     if m:
         params["chips_add_per_card"] = float(m.group(1))
         matched_rules.append("played face cards give +N chips")
         return "face_chips_per_scoring_card", 0.98, params, matched_rules, None
 
-    # 4) odd chips
+    m = re.search(r"played face cards\s+give\s*\+(\d+(?:\.\d+)?)\s*mult", low)
+    if m:
+        params["mult_add_per_card"] = float(m.group(1))
+        matched_rules.append("played face cards give +N mult")
+        return "face_mult_per_scoring_card", 0.98, params, matched_rules, None
+
     m = re.search(r"played cards with odd rank\s+give\s*\+(\d+(?:\.\d+)?)\s*chips", low)
     if m:
         params["chips_add_per_card"] = float(m.group(1))
         matched_rules.append("odd rank give +N chips")
         return "odd_chips_per_scoring_card", 0.98, params, matched_rules, None
 
-    # 5) even mult
     m = re.search(r"played cards with even rank\s+give\s*\+(\d+(?:\.\d+)?)\s*mult", low)
     if m:
         params["mult_add_per_card"] = float(m.group(1))
         matched_rules.append("even rank give +N mult")
         return "even_mult_per_scoring_card", 0.98, params, matched_rules, None
 
-    # 6) fibonacci mult
     if "ace" in low and "2" in low and "3" in low and "5" in low and "8" in low and "mult" in low:
         m = re.search(r"\+(\d+(?:\.\d+)?)\s*mult", low)
         if m:
@@ -175,21 +280,18 @@ def _classify_row(row: dict[str, str]) -> tuple[str | None, float, dict[str, Any
             matched_rules.append("ace/2/3/5/8 gives +N mult")
             return "fibonacci_mult_per_scoring_card", 0.97, params, matched_rules, None
 
-    # 7) banner discards->chips
     m = re.search(r"\+(\d+(?:\.\d+)?)\s*chips\s*for each remaining discard", low)
     if m:
         params["chips_add_per_discard"] = float(m.group(1))
         matched_rules.append("+N chips for each remaining discard")
         return "banner_discards_to_chips", 0.99, params, matched_rules, None
 
-    # 8) photograph first face xmult
     m = re.search(r"first played face card\s+gives\s*x\s*(\d+(?:\.\d+)?)\s*mult", low)
     if m:
         params["mult_scale"] = float(m.group(1))
         matched_rules.append("first played face card gives xN mult")
         return "photograph_first_face_xmult", 0.99, params, matched_rules, None
 
-    # 9) baron held kings xmult
     m = re.search(r"each king held in hand\s+gives\s*x\s*(\d+(?:\.\d+)?)\s*mult", low)
     if m:
         params["rank"] = "K"
@@ -197,16 +299,119 @@ def _classify_row(row: dict[str, str]) -> tuple[str | None, float, dict[str, Any
         matched_rules.append("each king held in hand gives xN mult")
         return "baron_held_kings_xmult", 0.99, params, matched_rules, None
 
-    # Conservative unsupported reasons
-    if "chance" in low or "1 in " in low:
-        return None, 0.0, {}, matched_rules, "probabilistic_trigger"
-    if "end of round" in low or "final hand" in low or "this round" in low:
-        return None, 0.0, {}, matched_rules, "cross_round_state"
-    if "money" in low or "$" in low or "dollar" in low:
-        return None, 0.0, {}, matched_rules, "economy_or_shop_related"
-    if trigger in {"on_discard", "on_buy", "on_sell", "unknown"} and key_mech in {"", "unknown"}:
-        return None, 0.0, {}, matched_rules, "insufficient_structured_fields"
-    return None, 0.0, {}, matched_rules, "no_safe_template_match"
+    # New low-risk deterministic families
+    if "if played hand contains" in low:
+        hand_type = _normalize_hand_type_from_text(low)
+        if hand_type in HAND_TYPE_ALIASES:
+            m_mult = re.search(r"\+(\d+(?:\.\d+)?)\s*mult\s*if\s*played hand contains", low)
+            if m_mult and "this joker gains" not in low:
+                params["hand_type"] = hand_type
+                params["mult_add"] = float(m_mult.group(1))
+                matched_rules.append("+N mult if played hand contains <hand_type>")
+                return "hand_contains_mult_add", 0.97, params, matched_rules, None
+
+            m_chips = re.search(r"\+(\d+(?:\.\d+)?)\s*chips\s*if\s*played hand contains", low)
+            if m_chips and "this joker gains" not in low and "gains +" not in low:
+                params["hand_type"] = hand_type
+                params["chips_add"] = float(m_chips.group(1))
+                matched_rules.append("+N chips if played hand contains <hand_type>")
+                return "hand_contains_chips_add", 0.97, params, matched_rules, None
+
+            m_x = re.search(r"x\s*(\d+(?:\.\d+)?)\s*mult\s*if\s*played hand contains", low)
+            if m_x:
+                params["hand_type"] = hand_type
+                params["mult_scale"] = float(m_x.group(1))
+                matched_rules.append("xN mult if played hand contains <hand_type>")
+                return "hand_contains_xmult", 0.97, params, matched_rules, None
+
+    if "played hand contains 3 or fewer cards" in low:
+        m = re.search(r"\+(\d+(?:\.\d+)?)\s*mult", low)
+        if m:
+            params["max_cards"] = 3
+            params["mult_add"] = float(m.group(1))
+            matched_rules.append("+N mult if played hand has <=3 cards")
+            return "hand_size_lte_mult_add", 0.97, params, matched_rules, None
+
+    if "played aces give" in low and "chips" in low and "mult" in low:
+        m = re.search(r"\+(\d+(?:\.\d+)?)\s*chips\s*and\s*\+(\d+(?:\.\d+)?)\s*mult", low)
+        if m:
+            params["ranks"] = ["A"]
+            params["chips_add_per_card"] = float(m.group(1))
+            params["mult_add_per_card"] = float(m.group(2))
+            matched_rules.append("played aces give +chips and +mult")
+            return "rank_set_chips_mult_per_scoring_card", 0.98, params, matched_rules, None
+
+    if "played 10 or 4 gives" in low and "chips" in low and "mult" in low:
+        m = re.search(r"\+(\d+(?:\.\d+)?)\s*chips\s*and\s*\+(\d+(?:\.\d+)?)\s*mult", low)
+        if m:
+            params["ranks"] = ["10", "4"]
+            params["chips_add_per_card"] = float(m.group(1))
+            params["mult_add_per_card"] = float(m.group(2))
+            matched_rules.append("played 10 or 4 gives +chips and +mult")
+            return "rank_set_chips_mult_per_scoring_card", 0.98, params, matched_rules, None
+
+    if "each queen held in hand gives" in low:
+        m = re.search(r"\+(\d+(?:\.\d+)?)\s*mult", low)
+        if m:
+            params["rank"] = "Q"
+            params["mult_add_per_card"] = float(m.group(1))
+            matched_rules.append("each queen held in hand gives +N mult")
+            return "held_rank_mult_add", 0.98, params, matched_rules, None
+
+    if "adds double the rank of lowest ranked card held in hand to mult" in low:
+        params["scale"] = 2.0
+        matched_rules.append("double lowest held rank to mult")
+        return "held_lowest_rank_mult_add", 0.97, params, matched_rules, None
+
+    if "all cards held in hand are spades or clubs" in low:
+        m = re.search(r"x\s*(\d+(?:\.\d+)?)\s*mult", low)
+        if m:
+            params["allowed_suits"] = ["S", "C"]
+            params["mult_scale"] = float(m.group(1))
+            matched_rules.append("xN if all held cards in S/C")
+            return "all_held_suits_xmult", 0.98, params, matched_rules, None
+
+    if "scoring club card and a scoring card of any other suit" in low:
+        m = re.search(r"x\s*(\d+(?:\.\d+)?)\s*mult", low)
+        if m:
+            params["required_suit"] = "C"
+            params["mult_scale"] = float(m.group(1))
+            matched_rules.append("xN if scoring includes club and other suit")
+            return "scoring_club_and_other_xmult", 0.98, params, matched_rules, None
+
+    if "poker hand contains a diamond card, club card, heart card, and spade card" in low:
+        m = re.search(r"x\s*(\d+(?:\.\d+)?)\s*mult", low)
+        if m:
+            params["required_suits"] = ["D", "C", "H", "S"]
+            params["mult_scale"] = float(m.group(1))
+            matched_rules.append("xN if scoring hand has D/C/H/S")
+            return "scoring_all_suits_xmult", 0.98, params, matched_rules, None
+
+    if "0 discards remaining" in low:
+        m = re.search(r"\+(\d+(?:\.\d+)?)\s*mult", low)
+        if m:
+            params["discards_left"] = 0
+            params["mult_add"] = float(m.group(1))
+            matched_rules.append("+N mult when discards_left==0")
+            return "discards_zero_mult_add", 0.97, params, matched_rules, None
+
+    if "final hand of round" in low:
+        m = re.search(r"x\s*(\d+(?:\.\d+)?)\s*mult", low)
+        if m:
+            params["hands_left"] = 1
+            params["mult_scale"] = float(m.group(1))
+            matched_rules.append("xN mult on final hand")
+            return "final_hand_xmult", 0.97, params, matched_rules, None
+
+    if "played kings and queens each give" in low and "x" in low:
+        m = re.search(r"x\s*(\d+(?:\.\d+)?)\s*mult", low)
+        if m:
+            params["ranks"] = ["K", "Q"]
+            params["mult_scale_per_card"] = float(m.group(1))
+            matched_rules.append("K/Q each give xN mult")
+            return "rank_set_xmult_per_scoring_card", 0.98, params, matched_rules, None
+
+    return None, 0.0, {}, matched_rules, _unsupported_reason(low, trigger, key_mech)
 
 
 def classify_jokers(mechanics_root: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -256,8 +461,15 @@ def classify_jokers(mechanics_root: Path) -> tuple[list[dict[str, Any]], list[di
     return rows, unsupported
 
 
-def write_outputs(project_root: Path, mechanics_root: Path, mapping: list[dict[str, Any]], unsupported: list[dict[str, Any]]) -> dict[str, Any]:
-    derived_dir = mechanics_root / "derived"
+def write_outputs(
+    project_root: Path,
+    mechanics_root: Path,
+    mapping: list[dict[str, Any]],
+    unsupported: list[dict[str, Any]],
+    out_derived: Path | None = None,
+    export_supported_targets: Path | None = None,
+) -> dict[str, Any]:
+    derived_dir = out_derived if out_derived is not None else (mechanics_root / "derived")
     derived_dir.mkdir(parents=True, exist_ok=True)
 
     map_path = derived_dir / "joker_template_map.json"
@@ -266,7 +478,7 @@ def write_outputs(project_root: Path, mechanics_root: Path, mapping: list[dict[s
     unsupported_path.write_text(json.dumps(unsupported, ensure_ascii=False, indent=2), encoding="utf-8")
 
     total = len(mapping)
-    supported = sum(1 for x in mapping if x.get("template"))
+    supported = sum(1 for x in mapping if isinstance(x.get("template"), str) and x.get("template"))
 
     template_counter: Counter[str] = Counter()
     for x in mapping:
@@ -295,6 +507,21 @@ def write_outputs(project_root: Path, mechanics_root: Path, mapping: list[dict[s
     cov_doc.parent.mkdir(parents=True, exist_ok=True)
     cov_doc.write_text("\n".join(md_lines) + "\n", encoding="utf-8")
 
+    supported_targets = [
+        str(x.get("target") or "")
+        for x in mapping
+        if isinstance(x.get("template"), str) and x.get("template") in SUPPORTED_TEMPLATES
+    ]
+    supported_targets = sorted(set([t for t in supported_targets if t]))
+
+    export_path: Path | None = None
+    if export_supported_targets is not None:
+        export_path = export_supported_targets
+        if not export_path.is_absolute():
+            export_path = project_root / export_path
+        export_path.parent.mkdir(parents=True, exist_ok=True)
+        export_path.write_text("\n".join(supported_targets) + "\n", encoding="utf-8")
+
     return {
         "map_path": map_path,
         "unsupported_path": unsupported_path,
@@ -304,13 +531,26 @@ def write_outputs(project_root: Path, mechanics_root: Path, mapping: list[dict[s
         "unsupported": len(unsupported),
         "template_counts": dict(template_counter),
         "unsupported_reasons": dict(unsupported_counter),
+        "supported_targets": supported_targets,
+        "supported_targets_path": export_path,
     }
 
 
-def build_and_write(project_root: Path) -> dict[str, Any]:
+def build_and_write(
+    project_root: Path,
+    out_derived: Path | None = None,
+    export_supported_targets: Path | None = None,
+) -> dict[str, Any]:
     mechanics_root = ensure_balatro_mechanics_root(project_root)
     mapping, unsupported = classify_jokers(mechanics_root)
-    summary = write_outputs(project_root, mechanics_root, mapping, unsupported)
+    summary = write_outputs(
+        project_root=project_root,
+        mechanics_root=mechanics_root,
+        mapping=mapping,
+        unsupported=unsupported,
+        out_derived=out_derived,
+        export_supported_targets=export_supported_targets,
+    )
     summary["mechanics_root"] = mechanics_root
     return summary
 
@@ -318,19 +558,40 @@ def build_and_write(project_root: Path) -> dict[str, Any]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build conservative P3 joker template map and coverage reports.")
     parser.add_argument("--project-root", default=".")
+    parser.add_argument("--out-derived", default=None, help="Output directory for derived map/unsupported JSON")
+    parser.add_argument("--export-supported-targets", default=None, help="Optional path to export supported P3 targets (one per line)")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     project_root = Path(args.project_root).resolve()
-    summary = build_and_write(project_root)
+
+    out_derived: Path | None = None
+    if args.out_derived:
+        out_derived = Path(args.out_derived)
+        if not out_derived.is_absolute():
+            out_derived = project_root / out_derived
+
+    export_supported_targets: Path | None = None
+    if args.export_supported_targets:
+        export_supported_targets = Path(args.export_supported_targets)
+
+    summary = build_and_write(
+        project_root=project_root,
+        out_derived=out_derived,
+        export_supported_targets=export_supported_targets,
+    )
 
     print(f"mechanics_root={summary['mechanics_root']}")
     print(f"total={summary['total']} supported={summary['supported']} unsupported={summary['unsupported']}")
     print(f"map={summary['map_path']}")
     print(f"unsupported={summary['unsupported_path']}")
     print(f"coverage_doc={summary['coverage_doc']}")
+    if summary.get("supported_targets_path"):
+        print(f"supported_targets={summary['supported_targets_path']}")
+    else:
+        print(f"supported_targets_count={len(summary.get('supported_targets') or [])}")
     return 0
 
 

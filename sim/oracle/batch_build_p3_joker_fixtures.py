@@ -43,6 +43,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--scope", choices=SCOPE_CHOICES, default="p3_hand_score_observed_core")
     parser.add_argument("--timeout-sec", type=float, default=8.0)
     parser.add_argument("--targets", default=None, help="Comma-separated target subset")
+    parser.add_argument("--targets-file", default=None, help="Optional text file with one target per line")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--max-retries", type=int, default=2)
@@ -206,6 +207,26 @@ def _print_row_summary(row: dict[str, Any]) -> None:
     print(msg)
 
 
+def _read_targets_file(path_value: str | None, project_root: Path) -> str | None:
+    if not path_value:
+        return None
+    p = Path(path_value)
+    if not p.is_absolute():
+        p = (project_root / p).resolve()
+    if not p.exists():
+        raise ValueError(f"targets-file not found: {p}")
+    targets: list[str] = []
+    seen: set[str] = set()
+    for raw in p.read_text(encoding="utf-8-sig").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line not in seen:
+            seen.add(line)
+            targets.append(line)
+    return ",".join(targets) if targets else None
+
+
 def _resolve_entries(project_root: Path, targets_csv: str | None, limit: int | None) -> list[dict[str, Any]]:
     all_entries = load_supported_entries(project_root)
     by_target = {str(e.get("target") or ""): e for e in all_entries}
@@ -291,10 +312,17 @@ def main() -> int:
     project_root = Path(__file__).resolve().parent.parent.parent
 
     classifier_summary = build_and_write(project_root)
+    if args.targets and args.targets_file:
+        print("ERROR: use either --targets or --targets-file, not both")
+        return 2
+
     try:
+        targets_csv = args.targets
+        if args.targets_file:
+            targets_csv = _read_targets_file(args.targets_file, project_root)
         entries = _resolve_entries(
             project_root=project_root,
-            targets_csv=args.targets,
+            targets_csv=targets_csv,
             limit=(int(args.limit) if int(args.limit) > 0 else None),
         )
     except ValueError as exc:
