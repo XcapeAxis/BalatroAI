@@ -8,6 +8,7 @@ from typing import Any
 
 from sim.core.rank_chips import sum_rank_chips
 from sim.core.score_basic import evaluate_selected_breakdown
+from sim.score.joker_subset import compute_joker_delta
 
 
 def _normalize_text(value: Any) -> str:
@@ -349,6 +350,8 @@ def compute_expected_for_action(pre_state: dict[str, Any], action: dict[str, Any
     modifier_context = expected_context.get("modifier") if isinstance(expected_context.get("modifier"), dict) else None
 
     selected = [hand_cards[i] for i in indices]
+    selected_idx_set = set(indices)
+    held_cards = [hand_cards[i] for i in range(len(hand_cards)) if i not in selected_idx_set]
     score_breakdown = evaluate_selected_breakdown(selected)
     hand_type = _normalize_hand_type(score_breakdown.get("hand_type"))
 
@@ -386,12 +389,39 @@ def compute_expected_for_action(pre_state: dict[str, Any], action: dict[str, Any
 
     mod_chips, mod_mult_add, mod_mult_scale, partial_reasons = _modifier_delta(scoring_cards, modifier_context)
 
-    total_chips_term = float(base_chips) + rank_chips + planet_bonus_chips + mod_chips
-    total_mult_term = float(base_mult) + planet_bonus_mult + mod_mult_add
-    total_score = total_chips_term * total_mult_term * mod_mult_scale
+    joker_chips, joker_mult_add, joker_mult_scale, joker_breakdown, joker_partial_reasons = compute_joker_delta(
+        scoring_cards=scoring_cards,
+        held_cards=held_cards,
+        pre_state=pre_state,
+        action=action,
+        hand_type=hand_type,
+    )
+    partial_reasons.extend(joker_partial_reasons)
+
+    total_chips_term_no_joker = float(base_chips) + rank_chips + planet_bonus_chips + mod_chips
+    total_mult_term_no_joker = float(base_mult) + planet_bonus_mult + mod_mult_add
+    score_without_joker = total_chips_term_no_joker * total_mult_term_no_joker * mod_mult_scale
+
+    total_chips_term = total_chips_term_no_joker + float(joker_chips)
+    total_mult_term = total_mult_term_no_joker + float(joker_mult_add)
+    total_score_raw = total_chips_term * total_mult_term * mod_mult_scale * float(joker_mult_scale)
+    total_score = float(int(total_score_raw))
+    joker_delta_score = total_score - score_without_joker
 
     partial = bool(partial_reasons)
-    source_csvs = [src for src in [poker_src, planet_src, _load_modifier_sources().get("enhancements"), _load_modifier_sources().get("editions"), _load_modifier_sources().get("seals")] if src]
+    _joker_src, joker_src_path = _candidate_csv_path("jokers.csv")
+    source_csvs = [
+        src
+        for src in [
+            poker_src,
+            planet_src,
+            _load_modifier_sources().get("enhancements"),
+            _load_modifier_sources().get("editions"),
+            _load_modifier_sources().get("seals"),
+            joker_src_path,
+        ]
+        if src
+    ]
 
     return {
         "available": True,
@@ -409,7 +439,15 @@ def compute_expected_for_action(pre_state: dict[str, Any], action: dict[str, Any
         "modifier_bonus_chips": float(mod_chips),
         "modifier_bonus_mult_add": float(mod_mult_add),
         "modifier_bonus_mult_scale": float(mod_mult_scale),
+        "joker_bonus_chips": float(joker_chips),
+        "joker_bonus_mult_add": float(joker_mult_add),
+        "joker_bonus_mult_scale": float(joker_mult_scale),
+        "joker_breakdown": joker_breakdown,
         "score_core": float(core_score),
+        "score_joker_delta": float(joker_delta_score),
+        "score_total_expected": float(total_score),
+        "effective_mult": float(total_mult_term * mod_mult_scale * float(joker_mult_scale)),
         "score": float(total_score),
         "source_csv": source_csvs,
     }
+

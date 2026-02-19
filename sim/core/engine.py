@@ -427,7 +427,8 @@ class SimEnv:
                     indices = [int(i) for i in (action.get("indices") or [])]
                     if not indices:
                         raise ValueError("PLAY requires at least one index")
-                    hand_before = copy.deepcopy(self._state["hand"]["cards"])
+                    pre_state_for_expected = copy.deepcopy(self._state)
+                    hand_before = copy.deepcopy((pre_state_for_expected.get("hand") or {}).get("cards") or [])
                     selected = self._pop_cards_by_indices(indices)
                     self._state["played"]["cards"] = selected
                     self._state["discard"]["cards"].extend(selected)
@@ -441,17 +442,26 @@ class SimEnv:
                     expected_context = action.get("expected_context") if isinstance(action.get("expected_context"), dict) else {}
                     planet_context = expected_context.get("planet") if isinstance(expected_context.get("planet"), dict) else {}
                     modifier_context = expected_context.get("modifier") if isinstance(expected_context.get("modifier"), dict) else {}
+                    jokers_context = expected_context.get("jokers") if isinstance(expected_context.get("jokers"), list) else []
                     use_expected = (
                         (planet_context and bool(planet_context.get("applied", True)))
                         or (modifier_context and bool(modifier_context.get("applied", True)))
+                        or bool(jokers_context)
                     )
                     if use_expected:
                         try:
-                            expected = compute_expected_for_action({"hand": {"cards": hand_before}}, action)
+                            expected = compute_expected_for_action(pre_state_for_expected, action)
                             if bool(expected.get("available")):
                                 gain = float(expected.get("score") or gain)
-                                bonus_mult = float(expected.get("planet_bonus_mult") or 0.0) + float(expected.get("modifier_bonus_mult_add") or 0.0)
-                                bonus_scale = float(expected.get("modifier_bonus_mult_scale") or 1.0)
+                                bonus_mult = (
+                                    float(expected.get("planet_bonus_mult") or 0.0)
+                                    + float(expected.get("modifier_bonus_mult_add") or 0.0)
+                                    + float(expected.get("joker_bonus_mult_add") or 0.0)
+                                )
+                                bonus_scale = (
+                                    float(expected.get("modifier_bonus_mult_scale") or 1.0)
+                                    * float(expected.get("joker_bonus_mult_scale") or 1.0)
+                                )
                                 base_mult = float((base_mult + bonus_mult) * bonus_scale)
                         except Exception:
                             pass
