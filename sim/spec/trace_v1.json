@@ -161,6 +161,9 @@
     },
     "state_hash_p2b_hand_score_observed_core": {
       "type": "string"
+    },
+    "state_hash_p4_consumable_observed_core": {
+      "type": "string"
     }
   }
 }

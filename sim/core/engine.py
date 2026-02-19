@@ -55,6 +55,77 @@ class SimEnv:
             "boss": int(base * 2.0),
         }
 
+    def _default_hands(self) -> dict[str, Any]:
+        return {
+            "levels": {
+                "HIGH_CARD": {"level": 1, "chips": 5.0, "mult": 1.0},
+                "PAIR": {"level": 1, "chips": 10.0, "mult": 2.0},
+                "TWO_PAIR": {"level": 1, "chips": 20.0, "mult": 2.0},
+                "THREE_OF_A_KIND": {"level": 1, "chips": 30.0, "mult": 3.0},
+                "STRAIGHT": {"level": 1, "chips": 30.0, "mult": 4.0},
+                "FLUSH": {"level": 1, "chips": 35.0, "mult": 4.0},
+                "FULL_HOUSE": {"level": 1, "chips": 40.0, "mult": 4.0},
+                "FOUR_OF_A_KIND": {"level": 1, "chips": 60.0, "mult": 7.0},
+                "STRAIGHT_FLUSH": {"level": 1, "chips": 100.0, "mult": 8.0},
+                "FIVE_OF_A_KIND": {"level": 1, "chips": 120.0, "mult": 12.0},
+                "FLUSH_HOUSE": {"level": 1, "chips": 140.0, "mult": 14.0},
+                "FLUSH_FIVE": {"level": 1, "chips": 160.0, "mult": 16.0},
+            }
+        }
+
+    def _restore_hands(self, raw_hands: Any) -> dict[str, Any]:
+        default = self._default_hands()
+        if not isinstance(raw_hands, dict):
+            return default
+
+        source = raw_hands.get("levels") if isinstance(raw_hands.get("levels"), dict) else raw_hands
+        levels: dict[str, dict[str, float]] = {}
+        for raw_name, raw_info in source.items():
+            hand_name = str(raw_name or "").strip().upper()
+            if not hand_name:
+                continue
+            if isinstance(raw_info, dict):
+                level = int(raw_info.get("level") or 1)
+                chips = float(raw_info.get("chips") or 0.0)
+                mult = float(raw_info.get("mult") or 1.0)
+            else:
+                try:
+                    level = int(raw_info)
+                except Exception:
+                    level = 1
+                chips = 0.0
+                mult = 1.0
+            levels[hand_name] = {"level": level, "chips": chips, "mult": mult}
+
+        if not levels:
+            return default
+        return {"levels": levels}
+
+    def _restore_consumables(self, raw_consumables: Any) -> dict[str, Any]:
+        if not isinstance(raw_consumables, dict):
+            return {"count": 0, "limit": 2, "highlighted_limit": 1, "cards": []}
+
+        cards_raw = raw_consumables.get("cards")
+        cards = cards_raw if isinstance(cards_raw, list) else []
+        out_cards: list[dict[str, Any]] = []
+        for card in cards:
+            if not isinstance(card, dict):
+                continue
+            out_cards.append(
+                {
+                    "key": str(card.get("key") or "").strip().lower(),
+                    "label": str(card.get("label") or "").strip(),
+                    "set": str(card.get("set") or "").strip().upper(),
+                }
+            )
+
+        return {
+            "count": int(raw_consumables.get("count") or len(out_cards)),
+            "limit": int(raw_consumables.get("limit") or 2),
+            "highlighted_limit": int(raw_consumables.get("highlighted_limit") or 1),
+            "cards": out_cards,
+        }
+
     def _make_blinds(self, ante: int, selected: str, selecting: bool) -> dict[str, dict[str, Any]]:
         scores = self._target_scores(ante)
         out: dict[str, dict[str, Any]] = {}
@@ -96,12 +167,19 @@ class SimEnv:
     @staticmethod
     def _normalize_tags(raw_tags: Any) -> list[str]:
         if isinstance(raw_tags, list):
-            tags = [str(x) for x in raw_tags if str(x)]
+            tags: list[str] = []
+            for item in raw_tags:
+                if isinstance(item, (str, int, float, bool)):
+                    text = str(item).strip()
+                    if text:
+                        tags.append(text)
         elif raw_tags is None:
             tags = []
-        else:
+        elif isinstance(raw_tags, (str, int, float, bool)):
             text = str(raw_tags).strip()
             tags = [text] if text else []
+        else:
+            tags = []
         return sorted(set(tags))
 
     def _canonical_card_to_internal(self, card: dict[str, Any], fallback_uid: str) -> dict[str, Any]:
@@ -272,7 +350,8 @@ class SimEnv:
             "blinds": self._make_blinds(ante_num, selected=blind, selecting=selecting),
             "money": float(economy_info.get("money") or 0.0),
             "jokers": list(canonical_state.get("jokers") or []),
-            "consumables": [],
+            "consumables": self._restore_consumables(canonical_state.get("consumables")),
+            "hands": self._restore_hands(canonical_state.get("hands")),
             "ante_num": ante_num,
             "round_num": int(round_info.get("round_num") or 1),
             "done": bool(flags.get("done") or False),
@@ -313,7 +392,8 @@ class SimEnv:
             "blinds": self._make_blinds(1, selected="small", selecting=True),
             "money": 4,
             "jokers": [],
-            "consumables": [],
+            "consumables": {"count": 0, "limit": 2, "highlighted_limit": 1, "cards": []},
+            "hands": self._default_hands(),
             "ante_num": 1,
             "round_num": 1,
             "done": False,

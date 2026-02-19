@@ -1,4 +1,25 @@
-﻿from typing import Any
+﻿from __future__ import annotations
+
+import re
+from typing import Any
+
+
+HAND_ALIASES = {
+    "FOUR_KIND": "FOUR_OF_A_KIND",
+    "FOUR_OF_KIND": "FOUR_OF_A_KIND",
+    "HIGHCARD": "HIGH_CARD",
+    "THREE_KIND": "THREE_OF_A_KIND",
+    "THREE_OF_KIND": "THREE_OF_A_KIND",
+    "STRAIGHTFLUSH": "STRAIGHT_FLUSH",
+    "FULLHOUSE": "FULL_HOUSE",
+}
+
+
+def _normalize_hand_name(value: Any) -> str:
+    text = str(value or "").strip().upper()
+    text = re.sub(r"[^A-Z0-9]+", "_", text)
+    text = re.sub(r"_+", "_", text).strip("_")
+    return HAND_ALIASES.get(text, text)
 
 
 def _normalize_rank(rank: Any) -> str:
@@ -50,12 +71,19 @@ def _norm_key(card: dict[str, Any], rank: str, suit: str) -> str:
 
 def _norm_tags(raw_tags: Any) -> list[str]:
     if isinstance(raw_tags, list):
-        tags = [str(x) for x in raw_tags if str(x)]
+        tags: list[str] = []
+        for item in raw_tags:
+            if isinstance(item, (str, int, float, bool)):
+                text = str(item).strip()
+                if text:
+                    tags.append(text)
     elif raw_tags is None:
         tags = []
-    else:
+    elif isinstance(raw_tags, (str, int, float, bool)):
         text = str(raw_tags).strip()
         tags = [text] if text else []
+    else:
+        tags = []
     return sorted(set(tags))
 
 
@@ -96,6 +124,62 @@ def _canonicalize_zone_cards(raw_zone: Any, zone_name: str) -> list[dict[str, An
     return out
 
 
+def _canonicalize_hands(raw_hands: Any) -> dict[str, Any]:
+    levels: dict[str, dict[str, float]] = {}
+    if not isinstance(raw_hands, dict):
+        return {"levels": levels}
+
+    source = raw_hands.get("levels") if isinstance(raw_hands.get("levels"), dict) else raw_hands
+
+    for raw_name, raw_info in source.items():
+        hand_name = _normalize_hand_name(raw_name)
+        if not hand_name:
+            continue
+        if isinstance(raw_info, dict):
+            level = int(raw_info.get("level") or 1)
+            chips = float(raw_info.get("chips") or 0.0)
+            mult = float(raw_info.get("mult") or 1.0)
+        else:
+            try:
+                level = int(raw_info)
+            except Exception:
+                level = 1
+            chips = 0.0
+            mult = 1.0
+        levels[hand_name] = {
+            "level": level,
+            "chips": chips,
+            "mult": mult,
+        }
+    return {"levels": levels}
+
+
+def _canonicalize_consumables(raw_consumables: Any) -> dict[str, Any]:
+    if not isinstance(raw_consumables, dict):
+        return {"count": 0, "limit": 0, "highlighted_limit": 0, "cards": []}
+
+    cards_raw = raw_consumables.get("cards")
+    cards = cards_raw if isinstance(cards_raw, list) else []
+    out_cards: list[dict[str, Any]] = []
+    for card in cards:
+        if not isinstance(card, dict):
+            continue
+        out_cards.append(
+            {
+                "key": str(card.get("key") or "").strip().lower(),
+                "label": str(card.get("label") or "").strip(),
+                "set": str(card.get("set") or "").strip().upper(),
+            }
+        )
+
+    return {
+        "count": int(raw_consumables.get("count") or len(out_cards)),
+        "limit": int(raw_consumables.get("limit") or 0),
+        "highlighted_limit": int(raw_consumables.get("highlighted_limit") or 0),
+        "cards": out_cards,
+    }
+
+
 def to_canonical_state(
     raw_state: dict[str, Any],
     *,
@@ -118,6 +202,8 @@ def to_canonical_state(
         "schema_version": "state_v1",
         "phase": str(raw_state.get("state") or "UNKNOWN"),
         "zones": zones,
+        "hands": _canonicalize_hands(raw_state.get("hands")),
+        "consumables": _canonicalize_consumables(raw_state.get("consumables")),
         "round": {
             "hands_left": int(round_info.get("hands_left") or 0),
             "discards_left": int(round_info.get("discards_left") or 0),

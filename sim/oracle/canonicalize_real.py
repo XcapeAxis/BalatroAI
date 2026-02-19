@@ -1,4 +1,25 @@
-﻿from typing import Any
+﻿from __future__ import annotations
+
+import re
+from typing import Any
+
+
+HAND_ALIASES = {
+    "FOUR_KIND": "FOUR_OF_A_KIND",
+    "FOUR_OF_KIND": "FOUR_OF_A_KIND",
+    "HIGHCARD": "HIGH_CARD",
+    "THREE_KIND": "THREE_OF_A_KIND",
+    "THREE_OF_KIND": "THREE_OF_A_KIND",
+    "STRAIGHTFLUSH": "STRAIGHT_FLUSH",
+    "FULLHOUSE": "FULL_HOUSE",
+}
+
+
+def _normalize_hand_name(value: Any) -> str:
+    text = str(value or "").strip().upper()
+    text = re.sub(r"[^A-Z0-9]+", "_", text)
+    text = re.sub(r"_+", "_", text).strip("_")
+    return HAND_ALIASES.get(text, text)
 
 
 def _normalize_rank(rank: Any) -> str:
@@ -32,12 +53,19 @@ def _rank_suit_from_card(card: dict[str, Any]) -> tuple[str, str]:
 
 def _norm_tags(raw_tags: Any) -> list[str]:
     if isinstance(raw_tags, list):
-        tags = [str(x) for x in raw_tags if str(x)]
+        tags: list[str] = []
+        for item in raw_tags:
+            if isinstance(item, (str, int, float, bool)):
+                text = str(item).strip()
+                if text:
+                    tags.append(text)
     elif raw_tags is None:
         tags = []
-    else:
+    elif isinstance(raw_tags, (str, int, float, bool)):
         text = str(raw_tags).strip()
         tags = [text] if text else []
+    else:
+        tags = []
     return sorted(set(tags))
 
 
@@ -104,6 +132,9 @@ def _infer_blind(raw_state: dict[str, Any]) -> tuple[str, float]:
 
 def _extract_jokers(raw_state: dict[str, Any]) -> list[dict[str, Any]]:
     jokers = raw_state.get("jokers") or []
+    if isinstance(jokers, dict):
+        jokers = jokers.get("cards") or []
+
     out: list[dict[str, Any]] = []
     for idx, joker in enumerate(jokers):
         if isinstance(joker, str):
@@ -126,6 +157,56 @@ def _extract_jokers(raw_state: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return out
+
+
+def _extract_consumables(raw_state: dict[str, Any]) -> dict[str, Any]:
+    cons = raw_state.get("consumables")
+    if not isinstance(cons, dict):
+        return {"count": 0, "limit": 0, "highlighted_limit": 0, "cards": []}
+
+    cards = cons.get("cards") if isinstance(cons.get("cards"), list) else []
+    out_cards: list[dict[str, Any]] = []
+    for card in cards:
+        if not isinstance(card, dict):
+            continue
+        out_cards.append(
+            {
+                "key": str(card.get("key") or "").strip().lower(),
+                "label": str(card.get("label") or "").strip(),
+                "set": str(card.get("set") or "").strip().upper(),
+            }
+        )
+
+    return {
+        "count": int(cons.get("count") or len(out_cards)),
+        "limit": int(cons.get("limit") or 0),
+        "highlighted_limit": int(cons.get("highlighted_limit") or 0),
+        "cards": out_cards,
+    }
+
+
+def _extract_hands(raw_state: dict[str, Any]) -> dict[str, Any]:
+    hands = raw_state.get("hands")
+    levels: dict[str, dict[str, float]] = {}
+    if isinstance(hands, dict):
+        for raw_name, raw_info in hands.items():
+            hand_name = _normalize_hand_name(raw_name)
+            if not hand_name:
+                continue
+            if isinstance(raw_info, dict):
+                level = int(raw_info.get("level") or 1)
+                chips = float(raw_info.get("chips") or 0.0)
+                mult = float(raw_info.get("mult") or 1.0)
+            else:
+                level = 1
+                chips = 0.0
+                mult = 1.0
+            levels[hand_name] = {
+                "level": level,
+                "chips": chips,
+                "mult": mult,
+            }
+    return {"levels": levels}
 
 
 def canonicalize_real_state(
@@ -152,6 +233,8 @@ def canonicalize_real_state(
         "schema_version": "state_v1",
         "phase": str(raw_state.get("state") or "UNKNOWN"),
         "zones": zones,
+        "hands": _extract_hands(raw_state),
+        "consumables": _extract_consumables(raw_state),
         "round": {
             "hands_left": int(round_info.get("hands_left") or 0),
             "discards_left": int(round_info.get("discards_left") or 0),
