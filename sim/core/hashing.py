@@ -166,6 +166,28 @@ def _filter_p0_hand_score_core(state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _filter_p0_hand_score_observed_core(state: dict[str, Any]) -> dict[str, Any]:
+    state = to_builtin(state)
+    zones = state.get("zones") or {}
+    round_info = state.get("round") or {}
+    observed = state.get("score_observed") or {}
+    return {
+        "schema_version": state.get("schema_version"),
+        "zones": {
+            "hand": _zone_cards_min_sorted(zones, "hand"),
+            "played": _zone_cards_min_sorted(zones, "played"),
+        },
+        "round": {
+            "hands_left": round_info.get("hands_left", 0),
+            "discards_left": round_info.get("discards_left", 0),
+        },
+        "score_observed": {
+            "total": float(observed.get("total") or 0.0),
+            "delta": float(observed.get("delta") or 0.0),
+        },
+    }
+
+
 def _filter_zones_core(state: dict[str, Any]) -> dict[str, Any]:
     state = to_builtin(state)
     zones = state.get("zones") or {}
@@ -272,6 +294,10 @@ def state_hash_p0_hand_score_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_p0_hand_score_core(state)))
 
 
+def state_hash_p0_hand_score_observed_core(state: dict[str, Any]) -> str:
+    return _sha256_text(canonical_dumps(_filter_p0_hand_score_observed_core(state)))
+
+
 def state_hash_zones_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_zones_core(state)))
 
@@ -298,6 +324,10 @@ def score_core_projection(state: dict[str, Any]) -> dict[str, Any]:
 
 def p0_hand_score_core_projection(state: dict[str, Any]) -> dict[str, Any]:
     return _filter_p0_hand_score_core(state)
+
+
+def p0_hand_score_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
+    return _filter_p0_hand_score_observed_core(state)
 
 
 def zones_core_projection(state: dict[str, Any]) -> dict[str, Any]:

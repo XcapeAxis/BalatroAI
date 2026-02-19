@@ -80,6 +80,9 @@
           "type": "number"
         }
       }
+    },
+    "state_hash_p0_hand_score_observed_core": {
+      "type": "string"
     }
   }
 }

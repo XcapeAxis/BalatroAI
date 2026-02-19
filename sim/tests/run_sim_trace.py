@@ -15,6 +15,7 @@ from sim.core.hashing import (
     state_hash_full,
     state_hash_hand_core,
     state_hash_p0_hand_score_core,
+    state_hash_p0_hand_score_observed_core,
     state_hash_rng_events_core,
     state_hash_score_core,
     state_hash_zones_core,
@@ -111,6 +112,8 @@ def main() -> int:
                 rng_events=events,
             )
             score_observed = compute_score_observed(state, next_state)
+            canonical_with_observed = dict(canonical)
+            canonical_with_observed["score_observed"] = dict(score_observed)
 
             include_snapshot = (
                 step_id == 0
@@ -128,6 +131,7 @@ def main() -> int:
                 "state_hash_hand_core": state_hash_hand_core(canonical),
                 "state_hash_score_core": state_hash_score_core(canonical),
                 "state_hash_p0_hand_score_core": state_hash_p0_hand_score_core(canonical),
+                "state_hash_p0_hand_score_observed_core": state_hash_p0_hand_score_observed_core(canonical_with_observed),
                 "state_hash_zones_core": state_hash_zones_core(canonical),
                 "state_hash_zones_counts_core": state_hash_zones_counts_core(canonical),
                 "state_hash_economy_core": state_hash_economy_core(canonical),

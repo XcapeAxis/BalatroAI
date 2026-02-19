@@ -15,12 +15,14 @@ from sim.core.hashing import (
     economy_core_projection,
     hand_core_projection,
     p0_hand_score_core_projection,
+    p0_hand_score_observed_core_projection,
     rng_events_core_projection,
     score_core_projection,
     state_hash_economy_core,
     state_hash_full,
     state_hash_hand_core,
     state_hash_p0_hand_score_core,
+    state_hash_p0_hand_score_observed_core,
     state_hash_rng_events_core,
     state_hash_score_core,
     state_hash_zones_core,
@@ -28,6 +30,7 @@ from sim.core.hashing import (
     zones_core_projection,
     zones_counts_core_projection,
 )
+from sim.core.score_observed import compute_score_observed
 from sim.core.validate import validate_action, validate_state, validate_trace_line
 from sim.oracle.extract_rng_events import extract_rng_events
 
@@ -35,6 +38,7 @@ SCOPE_TO_HASH_KEY = {
     "hand_core": "state_hash_hand_core",
     "score_core": "state_hash_score_core",
     "p0_hand_score_core": "state_hash_p0_hand_score_core",
+    "p0_hand_score_observed_core": "state_hash_p0_hand_score_observed_core",
     "zones_core": "state_hash_zones_core",
     "zones_counts_core": "state_hash_zones_counts_core",
     "economy_core": "state_hash_economy_core",
@@ -50,7 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--oracle-trace", help="Optional oracle trace jsonl for step-by-step diff.")
     parser.add_argument(
         "--scope",
-        choices=["hand_core", "score_core", "p0_hand_score_core", "zones_core", "zones_counts_core", "economy_core", "rng_events_core", "full"],
+        choices=["hand_core", "score_core", "p0_hand_score_core", "p0_hand_score_observed_core", "zones_core", "zones_counts_core", "economy_core", "rng_events_core", "full"],
         default="hand_core",
     )
     parser.add_argument("--check-start", action="store_true", help="Compare oracle snapshot vs simulator reset(from_snapshot) before replay.")
@@ -163,6 +167,8 @@ def _scope_projection(scope: str, state: dict[str, Any] | None) -> Any:
         return score_core_projection(state)
     if scope == "p0_hand_score_core":
         return p0_hand_score_core_projection(state)
+    if scope == "p0_hand_score_observed_core":
+        return p0_hand_score_observed_core_projection(state)
     if scope == "zones_core":
         return zones_core_projection(state)
     if scope == "zones_counts_core":
@@ -247,6 +253,17 @@ def _write_dump_payload(
             subtree, ok = _get_by_path(projection, first_diff_path)
             payload["first_diff_subtree"] = subtree if ok else "__path_not_found__"
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _line_snapshot_for_projection(line: dict[str, Any]) -> dict[str, Any] | None:
+    snap = line.get("canonical_state_snapshot")
+    if not isinstance(snap, dict):
+        return None
+    score_observed = line.get("score_observed")
+    if isinstance(score_observed, dict):
+        snap = dict(snap)
+        snap["score_observed"] = dict(score_observed)
+    return snap
 
 
 def _dump_step_artifacts(
@@ -392,6 +409,9 @@ def main() -> int:
                 rng_cursor=rng_cursor,
                 rng_events=events,
             )
+            score_observed = compute_score_observed(state, next_state)
+            canonical_with_observed = dict(canonical)
+            canonical_with_observed["score_observed"] = dict(score_observed)
 
             include_snapshot = (
                 step_id == 0
@@ -409,12 +429,14 @@ def main() -> int:
                 "state_hash_hand_core": state_hash_hand_core(canonical),
                 "state_hash_score_core": state_hash_score_core(canonical),
                 "state_hash_p0_hand_score_core": state_hash_p0_hand_score_core(canonical),
+                "state_hash_p0_hand_score_observed_core": state_hash_p0_hand_score_observed_core(canonical_with_observed),
                 "state_hash_zones_core": state_hash_zones_core(canonical),
                 "state_hash_zones_counts_core": state_hash_zones_counts_core(canonical),
                 "state_hash_economy_core": state_hash_economy_core(canonical),
                 "state_hash_rng_events_core": state_hash_rng_events_core(canonical),
                 "reward": float(reward),
                 "done": bool(done),
+                "score_observed": score_observed,
                 "info": {
                     "source": "directed_sim",
                     "engine_info": info,
@@ -453,8 +475,8 @@ def main() -> int:
                     print(f"oracle_hash={oracle_hash}")
                     print(f"sim_hash={sim_hash}")
 
-                    oracle_snap = oracle_line.get("canonical_state_snapshot")
-                    sim_snap = trace_line.get("canonical_state_snapshot")
+                    oracle_snap = _line_snapshot_for_projection(oracle_line)
+                    sim_snap = _line_snapshot_for_projection(trace_line)
                     first_diff_path: str | None = None
 
                     oracle_proj = _scope_projection(args.scope, oracle_snap if isinstance(oracle_snap, dict) else None)
