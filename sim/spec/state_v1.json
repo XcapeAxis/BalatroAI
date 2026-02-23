@@ -113,6 +113,23 @@
         }
       }
     },
+    "rules": {
+      "type": "object",
+      "properties": {
+        "stake": {
+          "type": "string"
+        },
+        "applied_modifiers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "degraded": {
+          "type": "boolean"
+        }
+      }
+    },
     "jokers": {
       "type": "array",
       "items": {

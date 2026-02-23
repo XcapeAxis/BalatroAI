@@ -1,5 +1,8 @@
 import copy
+import json
 import random
+import re
+from pathlib import Path
 from typing import Any
 
 from sim.core.score_basic import evaluate_selected_breakdown
@@ -8,15 +11,96 @@ from sim.score.expected_basic import compute_expected_for_action
 SUITS = ["C", "D", "H", "S"]
 RANKS = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2"]
 BLIND_ORDER = ["small", "big", "boss"]
+STAKE_ORDER = ["white", "red", "green", "black", "blue", "purple", "orange", "gold"]
+_STAKE_RULES_CACHE: dict[str, Any] | None = None
 
 
 class SimEnv:
     def __init__(self, seed: str = "AAAAAAA", max_hand: int = 8):
         self.seed = seed
         self.max_hand = max_hand
+        self._stake_name = "white"
         self._rng = random.Random(seed)
         self._state: dict[str, Any] = {}
         self.reset(seed)
+
+    @staticmethod
+    def _sanitize_stake_name(raw: Any) -> str:
+        text = str(raw or "").strip().lower()
+        return text if text in STAKE_ORDER else "white"
+
+    def _load_stake_rules_payload(self) -> dict[str, Any]:
+        global _STAKE_RULES_CACHE
+        if _STAKE_RULES_CACHE is not None:
+            return dict(_STAKE_RULES_CACHE)
+
+        path = Path(__file__).resolve().parent.parent.parent / "balatro_mechanics" / "derived" / "stakes.json"
+        payload: dict[str, Any] = {"stakes": []}
+        if path.exists():
+            try:
+                raw = json.loads(path.read_text(encoding="utf-8-sig"))
+                if isinstance(raw, dict):
+                    payload = raw
+            except Exception:
+                payload = {"stakes": []}
+        _STAKE_RULES_CACHE = dict(payload)
+        return dict(payload)
+
+    def _stake_entry(self, stake_name: str) -> dict[str, Any] | None:
+        payload = self._load_stake_rules_payload()
+        for item in (payload.get("stakes") or []):
+            if not isinstance(item, dict):
+                continue
+            if self._sanitize_stake_name(item.get("stake_name")) == stake_name:
+                return item
+        return None
+
+    @staticmethod
+    def _parse_first_number(text: str) -> float | None:
+        m = re.search(r"[-+]?\d+(?:\.\d+)?", str(text or ""))
+        if not m:
+            return None
+        try:
+            return float(m.group(0))
+        except Exception:
+            return None
+
+    def _apply_stake_modifiers(self, stake_name: str) -> None:
+        entry = self._stake_entry(stake_name)
+        modifiers = entry.get("modifiers") if isinstance(entry, dict) else []
+        if not isinstance(modifiers, list):
+            modifiers = []
+
+        applied_keys: list[str] = []
+        degraded = bool(not entry or bool(entry.get("missing")))
+
+        for mod in modifiers:
+            if not isinstance(mod, dict):
+                continue
+            field = str(mod.get("field") or "").strip().lower()
+            value_text = str(mod.get("value") or "").strip()
+            if not field:
+                continue
+            applied_keys.append(field)
+            val = self._parse_first_number(value_text)
+            if val is None:
+                continue
+
+            # Conservative application: only simple direct resource deltas.
+            if "money" in field:
+                self._state["money"] = float(self._state.get("money") or 0.0) + float(val)
+            elif "discard" in field and "delta" in field:
+                self._state["round"]["discards_left"] = int(self._state["round"]["discards_left"]) + int(val)
+            elif "hand" in field and "delta" in field:
+                self._state["round"]["hands_left"] = int(self._state["round"]["hands_left"]) + int(val)
+            elif "reroll" in field and "cost" in field:
+                self._state["round"]["reroll_cost"] = max(0, int(self._state["round"]["reroll_cost"]) + int(val))
+
+        self._state["rules"] = {
+            "stake": stake_name,
+            "applied_modifiers": sorted(set(applied_keys)),
+            "degraded": bool(degraded),
+        }
 
     def _mk_card(self, rank: str, suit: str, serial: int) -> dict[str, Any]:
         key_rank = "T" if rank == "10" else rank
@@ -476,6 +560,9 @@ class SimEnv:
         economy_info = canonical_state.get("economy") or {}
         flags = canonical_state.get("flags") or {}
         rng_info = canonical_state.get("rng") or {}
+        rules_info = canonical_state.get("rules") if isinstance(canonical_state.get("rules"), dict) else {}
+        stake_name = self._sanitize_stake_name(rules_info.get("stake") or canonical_state.get("stake"))
+        applied_modifiers = rules_info.get("applied_modifiers") if isinstance(rules_info.get("applied_modifiers"), list) else []
 
         rng_seed = rng_info.get("seed")
         if isinstance(rng_seed, str) and rng_seed:
@@ -529,20 +616,33 @@ class SimEnv:
             "used_vouchers": self._restore_used_vouchers(canonical_state.get("used_vouchers")),
             "hands": self._restore_hands(canonical_state.get("hands")),
             "tags": self._normalize_tags(canonical_state.get("tags")),
+            "rules": {
+                "stake": stake_name,
+                "applied_modifiers": sorted(set(str(x) for x in applied_modifiers if str(x))),
+                "degraded": bool(rules_info.get("degraded") or False),
+            },
             "ante_num": ante_num,
             "round_num": int(round_info.get("round_num") or 1),
             "done": bool(flags.get("done") or False),
             "won": bool(flags.get("won") or False),
             "_rng_events": list(rng_info.get("events") or []),
         }
+        self._stake_name = stake_name
         return copy.deepcopy(self._state)
 
-    def reset(self, seed: str | None = None, from_snapshot: dict[str, Any] | None = None) -> dict[str, Any]:
+    def reset(
+        self,
+        seed: str | None = None,
+        from_snapshot: dict[str, Any] | None = None,
+        stake: str | None = None,
+    ) -> dict[str, Any]:
         if from_snapshot is not None:
             return self.load_snapshot(from_snapshot)
 
         if seed is not None:
             self.seed = seed
+        if stake is not None:
+            self._stake_name = self._sanitize_stake_name(stake)
         self._rng = random.Random(self.seed)
 
         self._state = {
@@ -576,12 +676,14 @@ class SimEnv:
             "used_vouchers": [],
             "hands": self._default_hands(),
             "tags": [],
+            "rules": {"stake": self._stake_name, "applied_modifiers": [], "degraded": False},
             "ante_num": 1,
             "round_num": 1,
             "done": False,
             "won": False,
         }
         self._begin_round(next_round=False)
+        self._apply_stake_modifiers(self._stake_name)
         return copy.deepcopy(self._state)
 
     def get_state(self) -> dict[str, Any]:
@@ -636,7 +738,9 @@ class SimEnv:
 
         if action_type == "START":
             seed = action.get("seed")
-            st = self.reset(seed=seed if isinstance(seed, str) else self.seed)
+            raw_stake = action.get("stake")
+            stake_name = self._sanitize_stake_name(raw_stake) if raw_stake is not None else self._stake_name
+            st = self.reset(seed=seed if isinstance(seed, str) else self.seed, stake=stake_name)
             reward = float((st.get("round") or {}).get("chips") or 0.0) - prev_chips
             return st, reward, bool(st.get("done") or False), info
 

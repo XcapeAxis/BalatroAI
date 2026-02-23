@@ -1,0 +1,923 @@
+{
+  "generated_at": "2026-02-23T22:33:57.912271+00:00",
+  "mech_root": "D:\\我的\\BalatroAI\\balatro_mechanics",
+  "stakes": {
+    "white": {
+      "stake_name": "white",
+      "modifiers": [
+        {
+          "kind": "unknown",
+          "description": "sticker_name:White Sticker | applies_to:joker;deck | effect_summary:Used this Joker to win on White Stake difficulty | permanence:record_only | notes:Stake progression record sticker",
+          "source_csv": "stickers.csv"
+        }
+      ],
+      "source_fields": [
+        "stickers.csv:notes"
+      ],
+      "confidence": "low",
+      "missing": false
+    },
+    "red": {
+      "stake_name": "red",
+      "modifiers": [
+        {
+          "kind": "unknown",
+          "description": "deck_name:Zodiac Deck | starting_rules_or_modifiers:Start run with Tarot Merchant , Planet Merchant , and Overstock | other_notes:Unlock condition: Win a run with any deck on the Red Stake difficulty or harder",
+          "source_csv": "decks.csv"
+        },
+        {
+          "kind": "unknown",
+          "description": "sticker_name:Red Sticker | applies_to:joker;deck | effect_summary:Used this Joker to win on Red Stake difficulty | permanence:record_only | notes:Stake progression record sticker",
+          "source_csv": "stickers.csv"
+        }
+      ],
+      "source_fields": [
+        "decks.csv:other_notes",
+        "stickers.csv:notes"
+      ],
+      "confidence": "low",
+      "missing": false
+    },
+    "green": {
+      "stake_name": "green",
+      "modifiers": [
+        {
+          "kind": "resource",
+          "description": "deck_name:Painted Deck | starting_rules_or_modifiers:+2 hand size, -1 Joker slot | hand_size_delta:+2 | other_notes:Unlock condition: Win a run with any deck on the Green Stake difficulty or harder",
+          "source_csv": "decks.csv"
+        },
+        {
+          "kind": "unknown",
+          "description": "sticker_name:Green Sticker | applies_to:joker;deck | effect_summary:Used this Joker to win on Green Stake difficulty | permanence:record_only | notes:Stake progression record sticker",
+          "source_csv": "stickers.csv"
+        }
+      ],
+      "source_fields": [
+        "decks.csv:other_notes",
+        "stickers.csv:notes"
+      ],
+      "confidence": "med",
+      "missing": false
+    },
+    "black": {
+      "stake_name": "black",
+      "modifiers": [
+        {
+          "kind": "score",
+          "description": "deck_name:Anaglyph Deck | starting_rules_or_modifiers:After defeating each Boss Blind , gain a Double Tag | other_notes:Unlock condition: Win a run with any deck on the Black Stake difficulty or harder",
+          "source_csv": "decks.csv"
+        },
+        {
+          "kind": "unknown",
+          "description": "sticker_name:Black Sticker | applies_to:joker;deck | effect_summary:Used this Joker to win on Black Stake difficulty | permanence:record_only | notes:Stake progression record sticker",
+          "source_csv": "stickers.csv"
+        },
+        {
+          "kind": "unknown",
+          "description": "sticker_name:Eternal Sticker | applies_to:joker | effect_summary:Cannot be sold or destroyed during the run | permanence:run_only | constraints:Appears in Black Stake+ runs; cannot coexist with Perishable | notes:Legendary Jokers do not naturally appear with Eternal",
+          "source_csv": "stickers.csv"
+        }
+      ],
+      "source_fields": [
+        "decks.csv:other_notes",
+        "stickers.csv:notes"
+      ],
+      "confidence": "low",
+      "missing": false
+    },
+    "blue": {
+      "stake_name": "blue",
+      "modifiers": [
+        {
+          "kind": "score",
+          "description": "deck_name:Plasma Deck | starting_rules_or_modifiers:Balance Chips and Mult when calculating score for played hand X2 base Blind size | scoring_delta:Balance Chips and Mult when calculating score for played hand X2 base Blind size | other_notes:Unlock condition: Win a run with any deck on the Blue Stake difficulty or harder",
+          "source_csv": "decks.csv"
+        },
+        {
+          "kind": "unknown",
+          "description": "sticker_name:Blue Sticker | applies_to:joker;deck | effect_summary:Used this Joker to win on Blue Stake difficulty | permanence:record_only | notes:Stake progression record sticker",
+          "source_csv": "stickers.csv"
+        }
+      ],
+      "source_fields": [
+        "decks.csv:other_notes",
+        "stickers.csv:notes"
+      ],
+      "confidence": "med",
+      "missing": false
+    },
+    "purple": {
+      "stake_name": "purple",
+      "modifiers": [
+        {
+          "kind": "unknown",
+          "description": "sticker_name:Purple Sticker | applies_to:joker;deck | effect_summary:Used this Joker to win on Purple Stake difficulty | permanence:record_only | notes:Stake progression record sticker",
+          "source_csv": "stickers.csv"
+        }
+      ],
+      "source_fields": [
+        "stickers.csv:notes"
+      ],
+      "confidence": "low",
+      "missing": false
+    },
+    "orange": {
+      "stake_name": "orange",
+      "modifiers": [
+        {
+          "kind": "unknown",
+          "description": "deck_name:Erratic Deck | starting_rules_or_modifiers:All Ranks and Suits in deck are randomized | other_notes:Unlock condition: Win a run with any deck on the Orange Stake difficulty or harder",
+          "source_csv": "decks.csv"
+        },
+        {
+          "kind": "unknown",
+          "description": "sticker_name:Orange Sticker | applies_to:joker;deck | effect_summary:Used this Joker to win on Orange Stake difficulty | permanence:record_only | notes:Stake progression record sticker",
+          "source_csv": "stickers.csv"
+        }
+      ],
+      "source_fields": [
+        "decks.csv:other_notes",
+        "stickers.csv:notes"
+      ],
+      "confidence": "low",
+      "missing": false
+    },
+    "gold": {
+      "stake_name": "gold",
+      "modifiers": [
+        {
+          "kind": "unknown",
+          "description": "sticker_name:Gold Sticker | applies_to:joker;deck | effect_summary:Used this Joker to win on Gold Stake difficulty Note: This sticker is slightly larger than the others | permanence:record_only | notes:Stake progression record sticker",
+          "source_csv": "stickers.csv"
+        },
+        {
+          "kind": "unknown",
+          "description": "sticker_name:Perishable Sticker | applies_to:joker | effect_summary:Joker is debuffed after 5 rounds | permanence:run_only | constraints:Appears in Orange/Gold Stake runs; cannot coexist with Eternal | notes:Legendary Jokers do not naturally appear with Perishable",
+          "source_csv": "stickers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "sticker_name:Rental Sticker | applies_to:joker | effect_summary:Costs $1 to buy, deducts $3 at end of each round | permanence:run_only | constraints:Appears in Gold Stake runs; can coexist with Eternal or Perishable | notes:Cost deduction happens before round payout",
+          "source_csv": "stickers.csv"
+        }
+      ],
+      "source_fields": [
+        "stickers.csv:notes"
+      ],
+      "confidence": "low",
+      "missing": false
+    },
+    "unknown": {
+      "stake_name": "unknown",
+      "modifiers": [
+        {
+          "kind": "score",
+          "description": "joker_name:8 Ball | rarity:Common | effect_summary:1 in 4 chance for each played 8 to create a Tarot card when scored (Must have room) | trigger_timing:on_scored | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Abstract Joker | rarity:Common | effect_summary:+3 Mult for each Joker card (Currently +0 Mult ) | trigger_timing:unknown | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "resource",
+          "description": "joker_name:Acrobat | rarity:Uncommon | effect_summary:X3 Mult on final hand of round | trigger_timing:unknown | key_mechanics:mult_mult | constraints_or_conditions:Play 200 hands | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Ancient Joker | rarity:Rare | effect_summary:Each played card with [suit] gives X1.5 Mult when scored, suit changes at end of round | trigger_timing:on_scored | key_mechanics:mult_mult | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Arrowhead | rarity:Uncommon | effect_summary:Played cards with Spade suit give +50 Chips when scored | trigger_timing:on_scored | key_mechanics:chips_add | constraints_or_conditions:Have at least 30 cards with Spade suit in your deck | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "shop_meta",
+          "description": "joker_name:Astronomer | rarity:Uncommon | effect_summary:All Planet cards and Celestial Packs in the shop are free | trigger_timing:passive | key_mechanics:shop | constraints_or_conditions:Discover every Planet card | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "resource",
+          "description": "joker_name:Banner | rarity:Common | effect_summary:+30 Chips for each remaining discard | trigger_timing:unknown | key_mechanics:chips_add; discard | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Baron | rarity:Rare | effect_summary:Each King held in hand gives X1.5 Mult | trigger_timing:held_in_hand | key_mechanics:mult_mult | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Baseball Card | rarity:Rare | effect_summary:Uncommon Jokers each give X1.5 Mult | trigger_timing:on_other_jokers | key_mechanics:mult_mult | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Blackboard | rarity:Uncommon | effect_summary:X3 Mult if all cards held in hand are Spades or Clubs | trigger_timing:unknown | key_mechanics:mult_mult | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Bloodstone | rarity:Uncommon | effect_summary:1 in 2 chance for played cards with Heart suit to give X1.5 Mult when scored | trigger_timing:on_scored | key_mechanics:mult_mult | constraints_or_conditions:Have at least 30 cards with Heart suit in your deck | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Blue Joker | rarity:Common | effect_summary:+2 Chips for each remaining card in deck (Currently +104 Chips ) | trigger_timing:unknown | key_mechanics:chips_add; deck_change | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "shop_meta",
+          "description": "joker_name:Blueprint | rarity:Rare | effect_summary:Copies ability of Joker to the right | trigger_timing:unknown | constraints_or_conditions:Win 1 run. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Bootstraps | rarity:Uncommon | effect_summary:+2 Mult for every $5 you have (Currently +0 Mult ) | trigger_timing:unknown | key_mechanics:mult_add; money | constraints_or_conditions:Have at least 2 Polychrome Jokers at the same time. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "resource",
+          "description": "joker_name:Brainstorm | rarity:Rare | effect_summary:Copies the ability of leftmost Joker | trigger_timing:unknown | constraints_or_conditions:Discard a Royal Flush . | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Bull | rarity:Uncommon | effect_summary:+2 Chips for each $1 you have (Currently +0 Chips ) | trigger_timing:unknown | key_mechanics:chips_add; money | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "resource",
+          "description": "joker_name:Burglar | rarity:Uncommon | effect_summary:When Blind is selected, gain +3 Hands and lose all discards | trigger_timing:unknown | key_mechanics:discard | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Burnt Joker | rarity:Rare | effect_summary:Upgrade the level of the first discarded poker hand each round | trigger_timing:on_discard | key_mechanics:discard | constraints_or_conditions:Sell 50 cards. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Business Card | rarity:Common | effect_summary:Played face cards have a 1 in 2 chance to give $2 when scored | trigger_timing:on_scored | key_mechanics:money | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Campfire | rarity:Rare | effect_summary:This Joker gains X0.25 Mult for each card sold , resets when Boss Blind is defeated (Currently X1 Mult ) | trigger_timing:unknown | key_mechanics:mult_mult | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Card Sharp | rarity:Uncommon | effect_summary:X3 Mult if played poker hand has already been played this round | trigger_timing:unknown | key_mechanics:mult_mult | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Cartomancer | rarity:Uncommon | effect_summary:Create a Tarot card when Blind is selected (Must have room) | trigger_timing:unknown | constraints_or_conditions:Discover every Tarot Card. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "resource",
+          "description": "joker_name:Castle | rarity:Uncommon | effect_summary:This Joker gains +3 Chips per discarded [suit] card, suit changes every round (Currently +0 Chips ) | trigger_timing:mixed | key_mechanics:chips_add; discard | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Cavendish | rarity:Common | effect_summary:X3 Mult 1 in 1000 chance this card is destroyed at the end of round | trigger_timing:unknown | key_mechanics:mult_mult; deck_change | constraints_or_conditions:Available from start. (Can only appear in the shop when Gros Michel has destroyed itself in the current run.) | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/P",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Ceremonial Dagger | rarity:Uncommon | effect_summary:When Blind is selected, destroy Joker to the right and permanently add double its sell value to this Mult (Currently +0 Mult ) | trigger_timing:unknown | key_mechanics:mult_add; money; deck_change | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Ren",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "shop_meta",
+          "description": "joker_name:Certificate | rarity:Uncommon | effect_summary:When round begins, add a random playing card with a random seal to your hand | trigger_timing:passive | key_mechanics:deck_change | constraints_or_conditions:Have a Gold playing card with a Gold Seal | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "shop_meta",
+          "description": "joker_name:Chaos the Clown | rarity:Common | effect_summary:1 free Reroll per shop | trigger_timing:passive | key_mechanics:shop | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Clever Joker | rarity:Common | effect_summary:+80 Chips if played hand contains a Two Pair | trigger_timing:unknown | key_mechanics:chips_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Cloud 9 | rarity:Uncommon | effect_summary:Earn $1 for each 9 in your full deck at end of round (Currently $4 ) | trigger_timing:passive | key_mechanics:money; deck_change | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Constellation | rarity:Uncommon | effect_summary:This Joker gains X0.1 Mult every time a Planet card is used (Currently X1 Mult ) | trigger_timing:unknown | key_mechanics:mult_mult | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Crafty Joker | rarity:Common | effect_summary:+80 Chips if played hand contains a Flush | trigger_timing:unknown | key_mechanics:chips_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Crazy Joker | rarity:Common | effect_summary:+12 Mult if played hand contains a Straight | trigger_timing:unknown | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Credit Card | rarity:Common | effect_summary:Go up to -$20 in debt | trigger_timing:passive | key_mechanics:money | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "shop_meta",
+          "description": "joker_name:DNA | rarity:Rare | effect_summary:If first hand of round has only 1 card, add a permanent copy to deck and draw it to hand | trigger_timing:on_played | key_mechanics:deck_change | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Delayed Gratification | rarity:Common | effect_summary:Earn $2 per discard if no discards are used by end of the round | trigger_timing:passive | key_mechanics:money; discard | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Devious Joker | rarity:Common | effect_summary:+100 Chips if played hand contains a Straight | trigger_timing:unknown | key_mechanics:chips_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Diet Cola | rarity:Uncommon | effect_summary:Sell this card to create a free Double Tag | trigger_timing:passive | key_mechanics:money | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Driver's License | rarity:Rare | effect_summary:X3 Mult if you have at least 16 Enhanced cards in your full deck (Currently 0 ) | trigger_timing:unknown | key_mechanics:mult_mult; deck_change | constraints_or_conditions:Enhance 16 cards in your deck | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Droll Joker | rarity:Common | effect_summary:+10 Mult if played hand contains a Flush | trigger_timing:unknown | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "resource",
+          "description": "joker_name:Drunkard | rarity:Common | effect_summary:+1 discard each round | trigger_timing:passive | key_mechanics:discard | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Dusk | rarity:Uncommon | effect_summary:Retrigger all played cards in final hand of the round | trigger_timing:on_scored | key_mechanics:retrigger | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Egg | rarity:Common | effect_summary:Gains $3 of sell value at end of round | trigger_timing:passive | key_mechanics:money | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Erosion | rarity:Uncommon | effect_summary:+4 Mult for each card below [the deck's starting size] in your full deck (Currently +0 Mult ) | trigger_timing:unknown | key_mechanics:mult_add; deck_change | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Even Steven | rarity:Common | effect_summary:Played cards with even rank give +4 Mult when scored (10, 8, 6, 4, 2) | trigger_timing:on_scored | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Faceless Joker | rarity:Common | effect_summary:Earn $5 if 3 or more face cards are discarded at the same time | trigger_timing:on_discard | key_mechanics:money; discard | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Fibonacci | rarity:Uncommon | effect_summary:Each played Ace , 2 , 3 , 5 , or 8 gives +8 Mult when scored | trigger_timing:on_scored | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Flash Card | rarity:Uncommon | effect_summary:This Joker gains +2 Mult per reroll in the shop (Currently +0 Mult ) | trigger_timing:unknown | key_mechanics:mult_add; shop | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Flower Pot | rarity:Uncommon | effect_summary:X3 Mult if poker hand contains a Diamond card, Club card, Heart card, and Spade card | trigger_timing:unknown | key_mechanics:mult_mult | constraints_or_conditions:Reach Ante level 8 | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Fortune Teller | rarity:Common | effect_summary:+1 Mult per Tarot card used this run (Currently +0 ) | trigger_timing:unknown | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "shop_meta",
+          "description": "joker_name:Four Fingers | rarity:Uncommon | effect_summary:All Flushes and Straights can be made with 4 cards | trigger_timing:passive | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Gift Card | rarity:Uncommon | effect_summary:Add $1 of sell value to every Joker and Consumable card at end of round | trigger_timing:passive | key_mechanics:money; deck_change | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Glass Joker | rarity:Uncommon | effect_summary:This Joker gains X0.75 Mult for every Glass Card that is destroyed (Currently X1 Mult ) | trigger_timing:unknown | key_mechanics:mult_mult; deck_change | constraints_or_conditions:Have 5 or more Glass cards in your deck. (Can only appear in the shop when there is a Glass Card in the deck.) | acquisition:shop_or_other | stickers_interaction:",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Gluttonous Joker | rarity:Common | effect_summary:Played cards with Club suit give +3 Mult when scored | trigger_timing:on_scored | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Golden Joker | rarity:Common | effect_summary:Earn $4 at end of round | trigger_timing:passive | key_mechanics:money | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Golden Ticket | rarity:Common | effect_summary:Played Gold cards earn $4 when scored | trigger_timing:on_scored | key_mechanics:money | constraints_or_conditions:Play a 5 card hand that contains only Gold cards. (Can only appear in the shop when there is a Gold Card in the deck.) | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on st",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Greedy Joker | rarity:Common | effect_summary:Played cards with Diamond suit give +3 Mult when scored | trigger_timing:on_scored | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "resource",
+          "description": "joker_name:Green Joker | rarity:Common | effect_summary:+1 Mult per hand played -1 Mult per discard (Currently +0 Mult ) | trigger_timing:mixed | key_mechanics:mult_add; discard | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Gros Michel | rarity:Common | effect_summary:+15 Mult 1 in 6 chance this is destroyed at the end of round. | trigger_timing:unknown | key_mechanics:mult_add; deck_change | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Hack | rarity:Uncommon | effect_summary:Retrigger each played 2 , 3 , 4 , or 5 | trigger_timing:on_scored | key_mechanics:retrigger | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Half Joker | rarity:Common | effect_summary:+20 Mult if played hand contains 3 or fewer cards | trigger_timing:unknown | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "shop_meta",
+          "description": "joker_name:Hallucination | rarity:Common | effect_summary:1 in 2 chance to create a Tarot card when any Booster Pack is opened (Must have room) | trigger_timing:passive | key_mechanics:shop | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Hanging Chad | rarity:Common | effect_summary:Retrigger first played card used in scoring 2 additional times | trigger_timing:on_scored | key_mechanics:retrigger | constraints_or_conditions:Beat a Boss Blind with a High Card hand. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Hiker | rarity:Uncommon | effect_summary:Every played card permanently gains +5 Chips when scored | trigger_timing:on_scored | key_mechanics:chips_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "resource",
+          "description": "joker_name:Hit the Road | rarity:Rare | effect_summary:This Joker gains X0.5 Mult for every Jack discarded this round (Currently X1 Mult ) | trigger_timing:mixed | key_mechanics:mult_mult; discard | constraints_or_conditions:Discard 5 Jacks at the same time. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Hologram | rarity:Uncommon | effect_summary:This Joker gains X0.25 Mult every time a playing card is added to your deck (Currently X1 Mult ) | trigger_timing:unknown | key_mechanics:mult_mult; deck_change | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Ice Cream | rarity:Common | effect_summary:+100 Chips -5 Chips for every hand played | trigger_timing:unknown | key_mechanics:chips_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Invisible Joker | rarity:Rare | effect_summary:After 2 rounds, sell this card to Duplicate a random Joker (Currently 0 /2) (Removes Negative from copy) | trigger_timing:passive | key_mechanics:money; deck_change | constraints_or_conditions:Win a game while never having more than 4 jokers. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depend",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Joker | rarity:Common | effect_summary:+4 Mult | trigger_timing:unknown | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Joker Stencil | rarity:Uncommon | effect_summary:X1 Mult for each empty Joker slot. Joker Stencil included (Currently X1 ) | trigger_timing:unknown | key_mechanics:mult_mult | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Jolly Joker | rarity:Common | effect_summary:+8 Mult if played hand contains a Pair | trigger_timing:unknown | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "resource",
+          "description": "joker_name:Juggler | rarity:Common | effect_summary:+1 hand size | trigger_timing:passive | key_mechanics:hand_size | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "resource",
+          "description": "joker_name:Loyalty Card | rarity:Uncommon | effect_summary:X4 Mult every 6 hands played 5 remaining | trigger_timing:unknown | key_mechanics:mult_mult | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Luchador | rarity:Uncommon | effect_summary:Sell this card to disable the current Boss Blind | trigger_timing:passive | key_mechanics:money | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Lucky Cat | rarity:Uncommon | effect_summary:This Joker gains X0.25 Mult every time a Lucky card successfully triggers (Currently X1 Mult ) | trigger_timing:mixed | key_mechanics:mult_mult | constraints_or_conditions:Available from start. (Can only appear in the shop when there is a Lucky Card in the deck.) | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Peris",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Lusty Joker | rarity:Common | effect_summary:Played cards with Heart suit give +3 Mult when scored | trigger_timing:on_scored | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Mad Joker | rarity:Common | effect_summary:+10 Mult if played hand contains a Two Pair | trigger_timing:unknown | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Madness | rarity:Uncommon | effect_summary:When Small Blind or Big Blind is selected, gain X0.5 Mult and destroy a random Joker (Currently X1 Mult ) | trigger_timing:unknown | key_mechanics:mult_mult; deck_change | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Mail-In Rebate | rarity:Common | effect_summary:Earn $5 for each discarded [rank] , rank changes every round | trigger_timing:on_discard | key_mechanics:money; discard | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Marble Joker | rarity:Uncommon | effect_summary:Adds one Stone card to the deck when Blind is selected | trigger_timing:unknown | key_mechanics:deck_change | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Matador | rarity:Uncommon | effect_summary:Earn $8 if played hand triggers the Boss Blind ability | trigger_timing:unknown | key_mechanics:money | constraints_or_conditions:Defeat a Boss Blind in one hand, without using discards. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "resource",
+          "description": "joker_name:Merry Andy | rarity:Uncommon | effect_summary:+3 discards each round, -1 hand size | trigger_timing:passive | key_mechanics:hand_size; discard | constraints_or_conditions:Win a run in 12 or fewer rounds | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Midas Mask | rarity:Uncommon | effect_summary:All played face cards become Gold cards when scored | trigger_timing:on_played | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "shop_meta",
+          "description": "joker_name:Mime | rarity:Uncommon | effect_summary:Retrigger all card held in hand abilities | trigger_timing:held_in_hand | key_mechanics:retrigger | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Misprint | rarity:Common | effect_summary:+0-23 Mult | trigger_timing:unknown | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Mr. Bones | rarity:Uncommon | effect_summary:Prevents Death if chips scored are at least 25% of required chips self destructs | trigger_timing:passive | key_mechanics:chips_add | constraints_or_conditions:Lose five runs. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "resource",
+          "description": "joker_name:Mystic Summit | rarity:Common | effect_summary:+15 Mult when 0 discards remaining | trigger_timing:unknown | key_mechanics:mult_add; discard | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Obelisk | rarity:Rare | effect_summary:This Joker gains X0.2 Mult per consecutive hand played without playing your most played poker hand (Currently X1 Mult ) | trigger_timing:mixed | key_mechanics:mult_mult | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Odd Todd | rarity:Common | effect_summary:Played cards with odd rank give +31 Chips when scored (A, 9, 7, 5, 3) | trigger_timing:on_scored | key_mechanics:chips_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Onyx Agate | rarity:Uncommon | effect_summary:Played cards with Club suit give +7 Mult when scored | trigger_timing:on_scored | key_mechanics:mult_add | constraints_or_conditions:Have at least 30 cards with Club suit in your deck | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Oops! All 6s | rarity:Uncommon | effect_summary:Doubles all listed probabilities (ex: 1 in 3 -> 2 in 3 ) | trigger_timing:passive | constraints_or_conditions:Earn at least 10,000 Chips in a single hand. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "shop_meta",
+          "description": "joker_name:Pareidolia | rarity:Uncommon | effect_summary:All cards are considered face cards | trigger_timing:passive | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Photograph | rarity:Common | effect_summary:First played face card gives X2 Mult when scored | trigger_timing:on_scored | key_mechanics:mult_mult | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Popcorn | rarity:Common | effect_summary:+20 Mult -4 Mult per round played | trigger_timing:unknown | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Raised Fist | rarity:Common | effect_summary:Adds double the rank of lowest ranked card held in hand to Mult | trigger_timing:held_in_hand | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "resource",
+          "description": "joker_name:Ramen | rarity:Uncommon | effect_summary:X2 Mult , loses X0.01 Mult per card discarded | trigger_timing:mixed | key_mechanics:mult_mult; discard | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Red Card | rarity:Common | effect_summary:This Joker gains +3 Mult when any Booster Pack is skipped (Currently +0 Mult ) | trigger_timing:unknown | key_mechanics:mult_add; shop | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Reserved Parking | rarity:Common | effect_summary:Each face card held in hand has a 1 in 2 chance to give $1 | trigger_timing:held_in_hand | key_mechanics:money | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Ride the Bus | rarity:Common | effect_summary:This Joker gains +1 Mult per consecutive hand played without a scoring face card (Currently +0 Mult ) | trigger_timing:mixed | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Riff-Raff | rarity:Common | effect_summary:When Blind is selected, create 2 Common Jokers (Must have room) | trigger_timing:unknown | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Rocket | rarity:Uncommon | effect_summary:Earn $1 at end of round. Payout increases by $2 when Boss Blind is defeated | trigger_timing:passive | key_mechanics:money | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Rough Gem | rarity:Uncommon | effect_summary:Played cards with Diamond suit earn $1 when scored | trigger_timing:on_scored | key_mechanics:money | constraints_or_conditions:Have at least 30 cards with Diamond suit in your deck | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Runner | rarity:Common | effect_summary:Gains +15 Chips if played hand contains a Straight (Currently +0 Chips ) | trigger_timing:mixed | key_mechanics:chips_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Satellite | rarity:Uncommon | effect_summary:Earn $1 at end of round per unique Planet card used this run | trigger_timing:passive | key_mechanics:money | constraints_or_conditions:Have at least $400 . | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Scary Face | rarity:Common | effect_summary:Played face cards give +30 Chips when scored | trigger_timing:on_scored | key_mechanics:chips_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Scholar | rarity:Common | effect_summary:Played Aces give +20 Chips and +4 Mult when scored | trigger_timing:on_scored | key_mechanics:chips_add; mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Seeing Double | rarity:Uncommon | effect_summary:X2 Mult if played hand has a scoring Club card and a scoring card of any other suit | trigger_timing:unknown | key_mechanics:mult_mult | constraints_or_conditions:Play a hand that contains four 7 of Clubs. Other suits that count as clubs (e.g. wild suits) with rank 7 will also count. | acquisition:shop_or_other | stickers_interaction:Can ",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "resource",
+          "description": "joker_name:Seltzer | rarity:Uncommon | effect_summary:Retrigger all cards played for the next 10 hands | trigger_timing:on_scored | key_mechanics:retrigger | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Shoot the Moon | rarity:Common | effect_summary:Each Queen held in hand gives +13 Mult | trigger_timing:held_in_hand | key_mechanics:mult_add | constraints_or_conditions:Play every Heart card in your deck in one round. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "shop_meta",
+          "description": "joker_name:Shortcut | rarity:Uncommon | effect_summary:Allows Straights to be made with gaps of 1 rank (ex: 10 8 6 5 3 ) | trigger_timing:passive | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Showman | rarity:Uncommon | effect_summary:Joker , Tarot , Planet , and Spectral cards may appear multiple times | trigger_timing:passive | key_mechanics:mult_add | constraints_or_conditions:Reach Ante level 4 | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "shop_meta",
+          "description": "joker_name:Sixth Sense | rarity:Uncommon | effect_summary:If first hand of round is a single 6 , destroy it and create a Spectral card (Must have room) | trigger_timing:passive | key_mechanics:deck_change | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Sly Joker | rarity:Common | effect_summary:+50 Chips if played hand contains a Pair | trigger_timing:unknown | key_mechanics:chips_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "shop_meta",
+          "description": "joker_name:Smeared Joker | rarity:Uncommon | effect_summary:Hearts and Diamonds count as the same suit, Spades and Clubs count as the same suit | trigger_timing:passive | constraints_or_conditions:Have 3 or more Wild Cards in your deck. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Smiley Face | rarity:Common | effect_summary:Played face cards give +5 Mult when scored | trigger_timing:on_scored | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Sock and Buskin | rarity:Uncommon | effect_summary:Retrigger all played face cards | trigger_timing:on_scored | key_mechanics:retrigger | constraints_or_conditions:Play 300 face cards across all runs. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "shop_meta",
+          "description": "joker_name:Space Joker | rarity:Uncommon | effect_summary:1 in 4 chance to upgrade level of played poker hand | trigger_timing:on_played | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Spare Trousers | rarity:Uncommon | effect_summary:This Joker gains +2 Mult if played hand contains a Two Pair (Currently +0 Mult ) | trigger_timing:mixed | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "shop_meta",
+          "description": "joker_name:Splash | rarity:Common | effect_summary:Every played card counts in scoring | trigger_timing:passive | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Square Joker | rarity:Common | effect_summary:This Joker gains +4 Chips if played hand has exactly 4 cards (Currently 0 Chips ) | trigger_timing:mixed | key_mechanics:chips_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Steel Joker | rarity:Uncommon | effect_summary:Gives X0.2 Mult for each Steel Card in your full deck (Currently X1 Mult ) | trigger_timing:unknown | key_mechanics:mult_mult; deck_change | constraints_or_conditions:Available from start. (Can only appear in the shop when there is a Steel Card in the deck.) | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishab",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Stone Joker | rarity:Uncommon | effect_summary:Gives +25 Chips for each Stone Card in your full deck (Currently +0 Chips ) | trigger_timing:unknown | key_mechanics:chips_add; deck_change | constraints_or_conditions:Available from start. (Can only appear in the shop when there is a Stone Card in the deck.) | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perisha",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "resource",
+          "description": "joker_name:Stuntman | rarity:Rare | effect_summary:+250 Chips , -2 hand size | trigger_timing:unknown | key_mechanics:chips_add; hand_size | constraints_or_conditions:Earn at least 100 million (100,000,000) Chips in a single hand. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Supernova | rarity:Common | effect_summary:Adds the number of times poker hand has been played this run to Mult | trigger_timing:unknown | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "shop_meta",
+          "description": "joker_name:Superposition | rarity:Common | effect_summary:Create a Tarot card if poker hand contains an Ace and a Straight (Must have room) | trigger_timing:unknown | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Swashbuckler | rarity:Common | effect_summary:Adds the sell value of all other owned Jokers to Mult (Currently +1 Mult ) | trigger_timing:unknown | key_mechanics:mult_add; money | constraints_or_conditions:Sell a total of 20 Joker cards | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "shop_meta",
+          "description": "joker_name:Séance | rarity:Uncommon | effect_summary:If poker hand is a Straight Flush , create a random Spectral card (Must have room) | trigger_timing:unknown | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:The Duo | rarity:Rare | effect_summary:X2 Mult if played hand contains a Pair | trigger_timing:unknown | key_mechanics:mult_mult | constraints_or_conditions:Win a run without playing a Pair . | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:The Family | rarity:Rare | effect_summary:X4 Mult if played hand contains a Four of a Kind | trigger_timing:unknown | key_mechanics:mult_mult | constraints_or_conditions:Win a run without playing a Four of a Kind . | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:The Idol | rarity:Uncommon | effect_summary:Each played [rank] of [suit] gives X2 Mult when scored Card changes every round | trigger_timing:on_scored | key_mechanics:mult_mult | constraints_or_conditions:In one hand, earn at least 1,000,000 Chips. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:The Order | rarity:Rare | effect_summary:X3 Mult if played hand contains a Straight | trigger_timing:unknown | key_mechanics:mult_mult | constraints_or_conditions:Win a run without playing a Straight . | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:The Tribe | rarity:Rare | effect_summary:X2 Mult if played hand contains a Flush | trigger_timing:unknown | key_mechanics:mult_mult | constraints_or_conditions:Win a run without playing a Flush . | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:The Trio | rarity:Rare | effect_summary:X3 Mult if played hand contains a Three of a Kind | trigger_timing:unknown | key_mechanics:mult_mult | constraints_or_conditions:Win a run without playing a Three of a Kind . | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Throwback | rarity:Uncommon | effect_summary:X0.25 Mult for each Blind skipped this run (Currently X1 Mult ) | trigger_timing:unknown | key_mechanics:mult_mult | constraints_or_conditions:Continue a saved run from the main menu | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:To Do List | rarity:Common | effect_summary:Earn $4 if poker hand is a [Poker Hand] , poker hand changes at end of round | trigger_timing:on_played | key_mechanics:money | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:To the Moon | rarity:Uncommon | effect_summary:Earn an extra $1 of interest for every $5 you have at end of round | trigger_timing:passive | key_mechanics:money | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Trading Card | rarity:Uncommon | effect_summary:If first discard of round has only 1 card, destroy it and earn $3 | trigger_timing:on_discard | key_mechanics:money; discard; deck_change | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "resource",
+          "description": "joker_name:Troubadour | rarity:Uncommon | effect_summary:+2 hand size, -1 hand each round | trigger_timing:passive | key_mechanics:hand_size | constraints_or_conditions:Win 5 consecutive rounds by playing only a single hand in each. (Discards are fine.) | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "resource",
+          "description": "joker_name:Turtle Bean | rarity:Uncommon | effect_summary:+5 hand size, reduces by 1 each round | trigger_timing:passive | key_mechanics:hand_size | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "economy",
+          "description": "joker_name:Vagabond | rarity:Rare | effect_summary:Create a Tarot card if hand is played with $4 or less | trigger_timing:unknown | key_mechanics:money | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Vampire | rarity:Uncommon | effect_summary:This Joker gains X0.1 Mult per scoring Enhanced card played, removes card Enhancement (Currently X1 Mult ) | trigger_timing:mixed | key_mechanics:mult_mult | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Walkie Talkie | rarity:Common | effect_summary:Each played 10 or 4 gives +10 Chips and +4 Mult when scored | trigger_timing:on_scored | key_mechanics:chips_add; mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Wee Joker | rarity:Rare | effect_summary:This Joker gains +8 Chips when each played 2 is scored (Currently +0 Chips ) | trigger_timing:mixed | key_mechanics:chips_add | constraints_or_conditions:Win a run in 18 or fewer rounds. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Wily Joker | rarity:Common | effect_summary:+100 Chips if played hand contains a Three of a Kind | trigger_timing:unknown | key_mechanics:chips_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Wrathful Joker | rarity:Common | effect_summary:Played cards with Spade suit give +3 Mult when scored | trigger_timing:on_scored | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "joker_name:Zany Joker | rarity:Common | effect_summary:+12 Mult if played hand contains a Three of a Kind | trigger_timing:unknown | key_mechanics:mult_add | constraints_or_conditions:Available from start. | acquisition:shop_or_other | stickers_interaction:Can appear with Eternal/Perishable/Rental depending on stake",
+          "source_csv": "jokers.csv"
+        },
+        {
+          "kind": "score",
+          "description": "tag_name:Top-up | how_to_obtain:skip_small_or_skip_big_blind | effect_summary:Create up to 2 Common Jokers (if you have space). | trigger_timing:immediate | notes:Ante availability: 2+; The Jokers created cannot have Stickers , like Eternal/Perishable/Rental, even at higher stakes.",
+          "source_csv": "tags.csv"
+        }
+      ],
+      "source_fields": [
+        "jokers.csv:stacking_rules_or_notes",
+        "tags.csv:notes"
+      ],
+      "confidence": "high",
+      "missing": false
+    }
+  },
+  "summary": {
+    "stakes_total": 8,
+    "stakes_with_missing_rules": 0,
+    "modifier_kind_counts": {
+      "economy": 28,
+      "resource": 18,
+      "score": 88,
+      "shop_meta": 16,
+      "unknown": 12
+    }
+  }
+}

@@ -281,6 +281,28 @@ def _canonicalize_tags(raw_tags: Any) -> list[str]:
     return sorted(set(out))
 
 
+def _canonicalize_rules(raw_rules: Any, raw_state: dict[str, Any]) -> dict[str, Any]:
+    rules = raw_rules if isinstance(raw_rules, dict) else {}
+    raw_mods = rules.get("applied_modifiers")
+    if isinstance(raw_mods, list):
+        applied_modifiers = sorted(set(str(x).strip() for x in raw_mods if str(x).strip()))
+    elif isinstance(raw_mods, (str, int, float, bool)):
+        text = str(raw_mods).strip()
+        applied_modifiers = [text] if text else []
+    else:
+        applied_modifiers = []
+
+    stake = str(rules.get("stake") or raw_state.get("stake") or "white").strip().lower()
+    if not stake:
+        stake = "white"
+
+    return {
+        "stake": stake,
+        "applied_modifiers": applied_modifiers,
+        "degraded": bool(rules.get("degraded") or False),
+    }
+
+
 def to_canonical_state(
     raw_state: dict[str, Any],
     *,
@@ -298,6 +320,7 @@ def to_canonical_state(
 
     round_info = raw_state.get("round") or {}
     score_info = raw_state.get("score") or {}
+    rules_info = _canonicalize_rules(raw_state.get("rules"), raw_state)
 
     canonical = {
         "schema_version": "state_v1",
@@ -329,6 +352,7 @@ def to_canonical_state(
         "economy": {
             "money": float(raw_state.get("money") or 0),
         },
+        "rules": rules_info,
         "jokers": list(raw_state.get("jokers") or []),
         "rng": {
             "mode": rng_mode,

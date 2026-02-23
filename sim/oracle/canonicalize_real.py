@@ -292,6 +292,28 @@ def _extract_tags(raw_state: dict[str, Any]) -> list[str]:
     return sorted(set(out))
 
 
+def _extract_rules(raw_state: dict[str, Any]) -> dict[str, Any]:
+    rules = raw_state.get("rules") if isinstance(raw_state.get("rules"), dict) else {}
+    raw_mods = rules.get("applied_modifiers")
+    if isinstance(raw_mods, list):
+        applied = sorted(set(str(x).strip() for x in raw_mods if str(x).strip()))
+    elif isinstance(raw_mods, (str, int, float, bool)):
+        text = str(raw_mods).strip()
+        applied = [text] if text else []
+    else:
+        applied = []
+
+    stake = str(rules.get("stake") or raw_state.get("stake") or "white").strip().lower()
+    if not stake:
+        stake = "white"
+
+    return {
+        "stake": stake,
+        "applied_modifiers": applied,
+        "degraded": bool(rules.get("degraded") or False),
+    }
+
+
 def _extract_hands(raw_state: dict[str, Any]) -> dict[str, Any]:
     hands = raw_state.get("hands")
     levels: dict[str, dict[str, float]] = {}
@@ -366,6 +388,7 @@ def canonicalize_real_state(
         "economy": {
             "money": float(raw_state.get("money") or 0.0),
         },
+        "rules": _extract_rules(raw_state),
         "jokers": _extract_jokers(raw_state),
         "rng": {
             "mode": "oracle_stream",
