@@ -1,4 +1,4 @@
-if __package__ is None or __package__ == "":
+﻿if __package__ is None or __package__ == "":
     import sys
     from pathlib import Path
 
@@ -8,8 +8,10 @@ import argparse
 import time
 
 from trainer import action_space
+from trainer import action_space_shop
 from trainer.env_client import create_backend
 from trainer.features import extract_features
+from trainer.features_shop import SHOP_CONTEXT_DIM, extract_shop_features
 from trainer.utils import format_action, setup_logger, warn_if_unstable_python
 
 
@@ -23,11 +25,12 @@ def _require_torch():
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Inference assistant for Balatro hand decisions.")
+    parser = argparse.ArgumentParser(description="Inference assistant for Balatro hand+shop decisions.")
     parser.add_argument("--backend", choices=["real", "sim"], default="real")
     parser.add_argument("--base-url", default="http://127.0.0.1:12346")
     parser.add_argument("--model", required=True)
     parser.add_argument("--max-actions", type=int, default=action_space.max_actions())
+    parser.add_argument("--max-shop-actions", type=int, default=action_space_shop.max_actions())
     parser.add_argument("--topk", type=int, default=3)
     parser.add_argument("--poll-interval", type=float, default=0.25)
     parser.add_argument("--timeout-sec", type=float, default=8.0)
@@ -38,8 +41,8 @@ def parse_args():
     return parser.parse_args()
 
 
-def _build_model(nn, max_actions: int):
-    class BCModel(nn.Module):
+def _build_hand_model(nn, max_actions: int):
+    class BCHandModel(nn.Module):
         def __init__(self, max_actions: int):
             super().__init__()
             self.rank_emb = nn.Embedding(16, 16)
@@ -79,13 +82,89 @@ def _build_model(nn, max_actions: int):
             pooled = (card_h * pad.unsqueeze(-1)).sum(dim=1) / pad_sum
             ctx_h = self.ctx_proj(batch["context"])
             fused = __import__("torch").cat([pooled, ctx_h], dim=-1)
-            logits = self.head(fused)
-            return logits
+            return self.head(fused)
 
-    return BCModel(max_actions)
+    return BCHandModel(max_actions)
 
 
-def _state_to_batch(state, torch):
+def _build_multi_model(nn, max_actions: int, max_shop_actions: int):
+    class BCMultiModel(nn.Module):
+        def __init__(self, max_actions: int, max_shop_actions: int):
+            super().__init__()
+            self.rank_emb = nn.Embedding(16, 16)
+            self.suit_emb = nn.Embedding(8, 8)
+            self.card_proj = nn.Sequential(
+                nn.Linear(16 + 8 + 4, 64),
+                nn.ReLU(),
+                nn.Linear(64, 64),
+                nn.ReLU(),
+            )
+            self.ctx_proj = nn.Sequential(
+                nn.Linear(12, 64),
+                nn.ReLU(),
+                nn.Linear(64, 64),
+                nn.ReLU(),
+            )
+            self.hand_head = nn.Sequential(
+                nn.Linear(128, 128),
+                nn.ReLU(),
+                nn.Linear(128, max_actions),
+            )
+            self.shop_proj = nn.Sequential(
+                nn.Linear(SHOP_CONTEXT_DIM, 64),
+                nn.ReLU(),
+                nn.Linear(64, 64),
+                nn.ReLU(),
+            )
+            self.shop_head = nn.Sequential(
+                nn.Linear(64, 64),
+                nn.ReLU(),
+                nn.Linear(64, max_shop_actions),
+            )
+
+        def forward_hand(self, batch):
+            rank = batch["rank"]
+            suit = batch["suit"]
+            chip = batch["chip"].unsqueeze(-1)
+            enh = batch["enh"].unsqueeze(-1)
+            edt = batch["edt"].unsqueeze(-1)
+            seal = batch["seal"].unsqueeze(-1)
+            pad = batch["pad"]
+
+            r = self.rank_emb(rank)
+            s = self.suit_emb(suit)
+            card_x = __import__("torch").cat([r, s, chip, enh, edt, seal], dim=-1)
+            card_h = self.card_proj(card_x)
+            pad_sum = pad.sum(dim=1, keepdim=True).clamp(min=1.0)
+            pooled = (card_h * pad.unsqueeze(-1)).sum(dim=1) / pad_sum
+            ctx_h = self.ctx_proj(batch["context"])
+            fused = __import__("torch").cat([pooled, ctx_h], dim=-1)
+            return self.hand_head(fused)
+
+        def forward_shop(self, batch):
+            h = self.shop_proj(batch["shop_context"])
+            return self.shop_head(h)
+
+        def forward(self, batch):
+            return self.forward_hand(batch)
+
+    return BCMultiModel(max_actions, max_shop_actions)
+
+
+def _load_model(args, torch, nn, device):
+    state_dict = torch.load(args.model, map_location=device)
+    is_multi = any(k.startswith("hand_head.") for k in state_dict.keys())
+    if is_multi:
+        model = _build_multi_model(nn, args.max_actions, args.max_shop_actions).to(device)
+        model.load_state_dict(state_dict, strict=True)
+        return model, True
+
+    model = _build_hand_model(nn, args.max_actions).to(device)
+    model.load_state_dict(state_dict, strict=True)
+    return model, False
+
+
+def _state_to_hand_batch(state, torch):
     f = extract_features(state)
     chip_hint = list(f.get("card_chip_hint") or [0] * action_space.MAX_HAND)
     return {
@@ -98,6 +177,33 @@ def _state_to_batch(state, torch):
         "pad": torch.tensor([f["hand_pad_mask"]], dtype=torch.float32),
         "context": torch.tensor([f["context"]], dtype=torch.float32),
     }
+
+
+def _state_to_shop_batch(state, torch):
+    sf = extract_shop_features(state)
+    return {"shop_context": torch.tensor([sf["shop_context"]], dtype=torch.float32)}
+
+
+def _forward_hand(model, batch, is_multi):
+    if is_multi:
+        return model.forward_hand(batch)
+    return model(batch)
+
+
+def _predict_topk(logits, legal_ids, max_actions, topk, torch, device):
+    legal = [int(a) for a in legal_ids if 0 <= int(a) < max_actions]
+    if not legal:
+        return []
+    legal_mask = torch.zeros((1, max_actions), dtype=torch.float32, device=device)
+    for aid in legal:
+        legal_mask[0, aid] = 1.0
+    masked = torch.where(legal_mask > 0, logits, torch.full_like(logits, -1e9))
+    k = min(max(1, topk), masked.shape[1])
+    top_vals, top_ids = torch.topk(masked, k=k, dim=1)
+    out = []
+    for i in range(k):
+        out.append((int(top_ids[0, i].item()), float(top_vals[0, i].item())))
+    return out
 
 
 def main() -> int:
@@ -116,10 +222,9 @@ def main() -> int:
     else:
         device = torch.device(args.device)
 
-    model = _build_model(nn, args.max_actions).to(device)
-    state_dict = torch.load(args.model, map_location=device)
-    model.load_state_dict(state_dict, strict=True)
+    model, is_multi = _load_model(args, torch, nn, device)
     model.eval()
+    logger.info("Loaded model=%s multi_head=%s", args.model, is_multi)
 
     backend = create_backend(
         args.backend,
@@ -133,7 +238,11 @@ def main() -> int:
         if args.backend == "sim":
             backend.reset(seed=args.seed)
 
-        while True:
+        seen_hand = False
+        seen_shop = False
+        max_loops = 300 if args.once else 10**9
+
+        for _ in range(max_loops):
             try:
                 state = backend.get_state()
             except Exception as exc:
@@ -144,75 +253,108 @@ def main() -> int:
                 continue
 
             phase = str(state.get("state") or "UNKNOWN")
-            if phase != "SELECTING_HAND":
-                logger.info("phase=%s (waiting for SELECTING_HAND)", phase)
-                if args.once and args.backend == "sim":
-                    progressed = False
-                    for _ in range(30):
-                        state, _, _, _ = backend.step({"action_type": "AUTO"})
-                        phase = str(state.get("state") or "UNKNOWN")
-                        if phase == "SELECTING_HAND":
-                            progressed = True
-                            break
-                    if not progressed:
-                        logger.warning("sim --once could not reach SELECTING_HAND within 30 AUTO steps")
-                        return 1
-                elif args.once:
-                    return 0
+
+            if phase == "SELECTING_HAND" and not seen_hand:
+                cards = (state.get("hand") or {}).get("cards") or []
+                hand_size = min(len(cards), action_space.MAX_HAND)
+                if hand_size <= 0:
+                    logger.info("SELECTING_HAND but no cards; waiting")
                 else:
-                    time.sleep(args.poll_interval)
-                    continue
+                    legal_ids = action_space.legal_action_ids(hand_size)
+                    batch = _state_to_hand_batch(state, torch)
+                    batch = {k: v.to(device) for k, v in batch.items()}
+                    with torch.no_grad():
+                        logits = _forward_hand(model, batch, is_multi)
+                    ranked = _predict_topk(logits, legal_ids, args.max_actions, args.topk, torch, device)
 
-            cards = (state.get("hand") or {}).get("cards") or []
-            hand_size = min(len(cards), action_space.MAX_HAND)
-            if hand_size <= 0:
-                logger.info("No hand cards available.")
-                if args.once:
-                    return 0
-                time.sleep(args.poll_interval)
-                continue
+                    logger.info("Hand Top-%d suggestions:", len(ranked))
+                    decoded = []
+                    for rank_idx, (aid, score) in enumerate(ranked, start=1):
+                        atype, mask_int = action_space.decode(hand_size, aid)
+                        idxs = action_space.mask_to_indices(mask_int, hand_size)
+                        decoded.append((aid, atype, idxs, score))
+                        logger.info(
+                            "  #%d action_id=%d score=%.4f action_type=%s indices=%s",
+                            rank_idx,
+                            aid,
+                            score,
+                            atype,
+                            idxs,
+                        )
 
-            legal_ids = action_space.legal_action_ids(hand_size)
-            batch = _state_to_batch(state, torch)
-            batch = {k: v.to(device) for k, v in batch.items()}
+                    if decoded and (args.execute or (args.once and args.backend == "sim")):
+                        _, atype, idxs, _ = decoded[0]
+                        _, _, _, _ = backend.step({"action_type": atype, "indices": idxs})
+                        logger.info("Executed hand top-1: %s", format_action(atype, idxs))
+                    seen_hand = True
 
-            with torch.no_grad():
-                logits = model(batch)
+            elif phase in action_space_shop.SHOP_PHASES and not seen_shop and is_multi:
+                legal_ids = action_space_shop.legal_action_ids(state)
+                batch = _state_to_shop_batch(state, torch)
+                batch = {k: v.to(device) for k, v in batch.items()}
+                with torch.no_grad():
+                    logits = model.forward_shop(batch)
+                ranked = _predict_topk(logits, legal_ids, args.max_shop_actions, args.topk, torch, device)
 
-            legal_mask = torch.zeros((1, args.max_actions), dtype=torch.float32, device=device)
-            for aid in legal_ids:
-                legal_mask[0, aid] = 1.0
-            masked = torch.where(legal_mask > 0, logits, torch.full_like(logits, -1e9))
+                logger.info("Shop Top-%d suggestions:", len(ranked))
+                decoded = []
+                for rank_idx, (aid, score) in enumerate(ranked, start=1):
+                    action = action_space_shop.action_from_id(state, aid)
+                    decoded.append((aid, action, score))
+                    logger.info("  #%d action_id=%d score=%.4f action=%s", rank_idx, aid, score, action)
 
-            k = min(max(1, args.topk), masked.shape[1])
-            top_vals, top_ids = torch.topk(masked, k=k, dim=1)
+                if decoded and (args.execute or (args.once and args.backend == "sim")):
+                    _, action, _ = decoded[0]
+                    _, _, _, _ = backend.step(action)
+                    logger.info("Executed shop top-1: %s", action)
+                seen_shop = True
+            elif args.once and is_multi and seen_hand and not seen_shop:
+                # Once-mode fallback: emit one shop-head decision even if not currently in SHOP phase.
+                legal_ids = action_space_shop.legal_action_ids(state)
+                batch = _state_to_shop_batch(state, torch)
+                batch = {k: v.to(device) for k, v in batch.items()}
+                with torch.no_grad():
+                    logits = model.forward_shop(batch)
+                ranked = _predict_topk(logits, legal_ids, args.max_shop_actions, args.topk, torch, device)
 
-            decoded = []
-            for i in range(k):
-                aid = int(top_ids[0, i].item())
-                score = float(top_vals[0, i].item())
-                atype, mask_int = action_space.decode(hand_size, aid)
-                idxs = action_space.mask_to_indices(mask_int, hand_size)
-                decoded.append((aid, atype, idxs, score))
+                logger.info("Shop Top-%d suggestions (phase=%s fallback):", len(ranked), phase)
+                decoded = []
+                for rank_idx, (aid, score) in enumerate(ranked, start=1):
+                    action = action_space_shop.action_from_id(state, aid)
+                    decoded.append((aid, action, score))
+                    logger.info("  #%d action_id=%d score=%.4f action=%s", rank_idx, aid, score, action)
 
-            logger.info("Top-%d suggestions:", k)
-            for rank, (aid, atype, idxs, score) in enumerate(decoded, start=1):
-                logger.info("  #%d action_id=%d score=%.4f action_type=%s indices=%s", rank, aid, score, atype, idxs)
-
-            if args.execute and decoded:
-                _, atype, idxs, _ = decoded[0]
-                try:
-                    _, _, _, _ = backend.step({"action_type": atype, "indices": idxs})
-                    logger.info("Executed top-1: %s", format_action(atype, idxs))
-                except Exception as exc:
-                    logger.error("Execution failed: %s", exc)
-                    if args.once:
-                        return 1
+                if decoded and (args.execute or (args.once and args.backend == "sim")):
+                    _, action, _ = decoded[0]
+                    _, _, _, _ = backend.step(action)
+                    logger.info("Executed shop top-1 fallback: %s", action)
+                seen_shop = True
 
             if args.once:
-                return 0
+                if seen_hand and (seen_shop or not is_multi):
+                    return 0
+                if args.backend == "sim":
+                    try:
+                        backend.step({"action_type": "AUTO"})
+                    except Exception as exc:
+                        logger.warning("AUTO step failed: %s", exc)
+                        state_now = backend.get_state()
+                        phase_now = str(state_now.get("state") or "UNKNOWN")
+                        if phase_now in {"SELECTING_HAND", "GAME_OVER", "MENU"}:
+                            try:
+                                backend.step({"action_type": "MENU"})
+                                backend.step({"action_type": "START", "seed": args.seed})
+                                continue
+                            except Exception:
+                                return 1
+                        return 1
+                else:
+                    time.sleep(args.poll_interval)
+            else:
+                time.sleep(args.poll_interval)
 
-            time.sleep(args.poll_interval)
+        logger.warning("infer loop exhausted before reaching target phases")
+        return 1
     finally:
         backend.close()
 

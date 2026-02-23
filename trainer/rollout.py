@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from trainer import action_space
+from trainer import action_space_shop
 from trainer.dataset import JsonlWriter
 from trainer.env_client import (
     ConnectionError,
@@ -21,6 +22,8 @@ from trainer.env_client import (
 )
 from trainer.expert_policy import choose_action
 from trainer.features import extract_features
+from trainer.expert_policy_shop import choose_shop_action
+from trainer.features_shop import extract_shop_features
 from trainer.utils import (
     RunStats,
     add_common_launch_args,
@@ -187,6 +190,9 @@ def _run_episode(
             "reward": reward,
             "reward_info": reward_info,
             "features": feat,
+            "shop_legal_action_ids": [],
+            "shop_expert_action_id": None,
+            "shop_features": None,
         }
 
         if include_obs_raw:
@@ -209,6 +215,17 @@ def _run_episode(
                 "action_type": decision.action_type,
                 "indices": indices,
             }
+        elif phase in {"SHOP", "SMODS_BOOSTER_OPENED"}:
+            shop_feat = extract_shop_features(state)
+            shop_legal_ids = action_space_shop.legal_action_ids(state)
+            shop_decision = choose_shop_action(state)
+
+            record["shop_legal_action_ids"] = shop_legal_ids
+            record["shop_expert_action_id"] = int(shop_decision.action_id)
+            record["shop_features"] = shop_feat
+            record["macro_action"] = str((shop_decision.action or {}).get("action_type") or "WAIT")
+
+            action = dict(shop_decision.action)
         else:
             action = _build_macro_action(decision, idle_sleep=idle_sleep)
 

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Iterator
 
 TRAIN_PHASE = "SELECTING_HAND"
+SHOP_TRAIN_PHASES = {"SHOP", "SMODS_BOOSTER_OPENED"}
 SCHEMA_VERSION = "record_v1"
 
 
@@ -39,6 +40,9 @@ def validate_record(record: dict) -> None:
     legal_action_ids = record.get("legal_action_ids")
     expert_action_id = record.get("expert_action_id")
     macro_action = record.get("macro_action")
+    shop_legal_action_ids = record.get("shop_legal_action_ids")
+    shop_expert_action_id = record.get("shop_expert_action_id")
+    shop_features = record.get("shop_features")
 
     if not isinstance(legal_action_ids, list):
         raise ValueError("legal_action_ids must be list")
@@ -48,6 +52,17 @@ def validate_record(record: dict) -> None:
             raise ValueError("SELECTING_HAND record requires hand_size > 0")
         if expert_action_id is None:
             raise ValueError("SELECTING_HAND record requires expert_action_id")
+        if shop_expert_action_id is not None:
+            raise ValueError("SELECTING_HAND record shop_expert_action_id must be null")
+    elif phase in SHOP_TRAIN_PHASES:
+        if macro_action is None:
+            raise ValueError("SHOP phase must include macro_action")
+        if shop_legal_action_ids is not None and not isinstance(shop_legal_action_ids, list):
+            raise ValueError("shop_legal_action_ids must be list when present")
+        if shop_expert_action_id is not None and not isinstance(shop_expert_action_id, int):
+            raise ValueError("shop_expert_action_id must be int or null")
+        if shop_features is not None and not isinstance(shop_features, dict):
+            raise ValueError("shop_features must be dict or null")
     else:
         if expert_action_id is not None and not isinstance(expert_action_id, int):
             raise ValueError("non-hand phase expert_action_id must be int or null")
@@ -108,18 +123,32 @@ def iter_train_samples(path: str | Path) -> Iterator[dict]:
         yield record
 
 
+def iter_shop_samples(path: str | Path) -> Iterator[dict]:
+    for record in read_jsonl(path):
+        phase = str(record.get("phase"))
+        if phase not in SHOP_TRAIN_PHASES:
+            continue
+        if record.get("shop_expert_action_id") is None:
+            continue
+        yield record
+
+
 
 def summarize_dataset(path: str | Path) -> dict:
     total = 0
     hand = 0
+    shop = 0
     for r in read_jsonl(path):
         total += 1
         if str(r.get("phase")) == TRAIN_PHASE:
             hand += 1
+        if str(r.get("phase")) in SHOP_TRAIN_PHASES:
+            shop += 1
     return {
         "schema": SCHEMA_VERSION,
         "total_records": total,
         "hand_records": hand,
+        "shop_records": shop,
     }
 
 if __name__ == "__main__":

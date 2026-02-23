@@ -7,10 +7,13 @@
 import argparse
 
 from trainer import action_space
-from trainer.dataset import iter_train_samples
+from trainer import action_space_shop
+from trainer.dataset import iter_shop_samples, iter_train_samples, read_jsonl
 from trainer.env_client import create_backend
 from trainer.expert_policy import choose_action
+from trainer.expert_policy_shop import choose_shop_action
 from trainer.features import extract_features
+from trainer.features_shop import SHOP_CONTEXT_DIM, extract_shop_features
 from trainer.utils import setup_logger, warn_if_unstable_python
 
 
@@ -31,6 +34,7 @@ def parse_args():
 
     parser.add_argument("--model", required=True, help="Path to model checkpoint (.pt).")
     parser.add_argument("--max-actions", type=int, default=action_space.max_actions())
+    parser.add_argument("--max-shop-actions", type=int, default=action_space_shop.max_actions())
 
     parser.add_argument("--dataset", default=None, help="Dataset jsonl for offline eval.")
 
@@ -44,8 +48,8 @@ def parse_args():
     return parser.parse_args()
 
 
-def _build_model(nn, max_actions: int):
-    class BCModel(nn.Module):
+def _build_hand_model(nn, max_actions: int):
+    class BCHandModel(nn.Module):
         def __init__(self, max_actions: int):
             super().__init__()
             self.rank_emb = nn.Embedding(16, 16)
@@ -85,13 +89,89 @@ def _build_model(nn, max_actions: int):
             pooled = (card_h * pad.unsqueeze(-1)).sum(dim=1) / pad_sum
             ctx_h = self.ctx_proj(batch["context"])
             fused = __import__("torch").cat([pooled, ctx_h], dim=-1)
-            logits = self.head(fused)
-            return logits
+            return self.head(fused)
 
-    return BCModel(max_actions)
+    return BCHandModel(max_actions)
 
 
-def _state_to_batch(state, torch):
+def _build_multi_model(nn, max_actions: int, max_shop_actions: int):
+    class BCMultiModel(nn.Module):
+        def __init__(self, max_actions: int, max_shop_actions: int):
+            super().__init__()
+            self.rank_emb = nn.Embedding(16, 16)
+            self.suit_emb = nn.Embedding(8, 8)
+            self.card_proj = nn.Sequential(
+                nn.Linear(16 + 8 + 4, 64),
+                nn.ReLU(),
+                nn.Linear(64, 64),
+                nn.ReLU(),
+            )
+            self.ctx_proj = nn.Sequential(
+                nn.Linear(12, 64),
+                nn.ReLU(),
+                nn.Linear(64, 64),
+                nn.ReLU(),
+            )
+            self.hand_head = nn.Sequential(
+                nn.Linear(128, 128),
+                nn.ReLU(),
+                nn.Linear(128, max_actions),
+            )
+            self.shop_proj = nn.Sequential(
+                nn.Linear(SHOP_CONTEXT_DIM, 64),
+                nn.ReLU(),
+                nn.Linear(64, 64),
+                nn.ReLU(),
+            )
+            self.shop_head = nn.Sequential(
+                nn.Linear(64, 64),
+                nn.ReLU(),
+                nn.Linear(64, max_shop_actions),
+            )
+
+        def forward_hand(self, batch):
+            rank = batch["rank"]
+            suit = batch["suit"]
+            chip = batch["chip"].unsqueeze(-1)
+            enh = batch["enh"].unsqueeze(-1)
+            edt = batch["edt"].unsqueeze(-1)
+            seal = batch["seal"].unsqueeze(-1)
+            pad = batch["pad"]
+
+            r = self.rank_emb(rank)
+            s = self.suit_emb(suit)
+            card_x = __import__("torch").cat([r, s, chip, enh, edt, seal], dim=-1)
+            card_h = self.card_proj(card_x)
+            pad_sum = pad.sum(dim=1, keepdim=True).clamp(min=1.0)
+            pooled = (card_h * pad.unsqueeze(-1)).sum(dim=1) / pad_sum
+            ctx_h = self.ctx_proj(batch["context"])
+            fused = __import__("torch").cat([pooled, ctx_h], dim=-1)
+            return self.hand_head(fused)
+
+        def forward_shop(self, batch):
+            h = self.shop_proj(batch["shop_context"])
+            return self.shop_head(h)
+
+        def forward(self, batch):
+            return self.forward_hand(batch)
+
+    return BCMultiModel(max_actions, max_shop_actions)
+
+
+def _load_model(args, torch, nn, device):
+    state_dict = torch.load(args.model, map_location=device)
+    is_multi = any(k.startswith("hand_head.") for k in state_dict.keys())
+    if is_multi:
+        model = _build_multi_model(nn, args.max_actions, args.max_shop_actions).to(device)
+        model.load_state_dict(state_dict, strict=True)
+        return model, True
+
+    model = _build_hand_model(nn, args.max_actions).to(device)
+    model.load_state_dict(state_dict, strict=True)
+    return model, False
+
+
+def _state_to_hand_batch(state, torch):
     f = extract_features(state)
     chip_hint = list(f.get("card_chip_hint") or [0] * action_space.MAX_HAND)
     return {
@@ -106,7 +186,7 @@ def _state_to_batch(state, torch):
     }
 
 
-def _record_to_batch(record, torch):
+def _record_to_hand_batch(record, torch):
     f = record["features"]
     chip_hint = list(f.get("card_chip_hint") or [0] * action_space.MAX_HAND)
     return {
@@ -121,83 +201,154 @@ def _record_to_batch(record, torch):
     }
 
 
-def run_offline(args, model, device, torch):
+def _state_to_shop_batch(state, torch):
+    sf = extract_shop_features(state)
+    ctx = list(sf.get("shop_context") or [0.0] * SHOP_CONTEXT_DIM)
+    return {"shop_context": torch.tensor([ctx], dtype=torch.float32)}
+
+
+def _record_to_shop_batch(record, torch):
+    sf = record.get("shop_features") if isinstance(record.get("shop_features"), dict) else {}
+    ctx = list(sf.get("shop_context") or [0.0] * SHOP_CONTEXT_DIM)
+    if len(ctx) != SHOP_CONTEXT_DIM:
+        ctx = (ctx + [0.0] * SHOP_CONTEXT_DIM)[:SHOP_CONTEXT_DIM]
+    return {"shop_context": torch.tensor([ctx], dtype=torch.float32)}
+
+
+def _forward_hand(model, batch, is_multi):
+    if is_multi:
+        return model.forward_hand(batch)
+    return model(batch)
+
+
+def _masked_predict(logits, legal_ids, max_actions, torch, device):
+    valid_legal_ids = [aid for aid in legal_ids if 0 <= int(aid) < max_actions]
+    if not valid_legal_ids:
+        return None
+    legal_mask = torch.zeros((1, max_actions), dtype=torch.float32, device=device)
+    for aid in valid_legal_ids:
+        legal_mask[0, int(aid)] = 1.0
+    masked = torch.where(legal_mask > 0, logits, torch.full_like(logits, -1e9))
+    pred = int(masked.argmax(dim=1).item())
+    top3_k = min(3, max_actions)
+    top3 = torch.topk(masked, k=top3_k, dim=1).indices[0].tolist()
+    return pred, top3, valid_legal_ids
+
+
+def run_offline(args, model, is_multi, device, torch):
     logger = setup_logger("trainer.eval.offline")
     if not args.dataset:
         logger.error("--dataset is required in --offline mode")
         return 2
 
-    total = 0
-    correct1 = 0
-    correct3 = 0
-    illegal_top1_masked_count = 0
-    random_top3_baseline_sum = 0.0
-    invalid_sample_count = 0
+    hand_total = 0
+    hand_correct1 = 0
+    hand_correct3 = 0
+    hand_illegal = 0
+    random_top3_sum = 0.0
+    hand_invalid = 0
+
+    shop_total = 0
+    shop_correct1 = 0
+    shop_illegal = 0
+    shop_invalid = 0
+    shop_action_counts = [0 for _ in range(args.max_shop_actions)]
 
     model.eval()
-    for record in iter_train_samples(args.dataset):
-        legal_ids = list(record["legal_action_ids"])
-        valid_legal_ids = [aid for aid in legal_ids if 0 <= aid < args.max_actions]
-        if not valid_legal_ids:
-            invalid_sample_count += 1
-            continue
 
+    for record in iter_train_samples(args.dataset):
+        legal_ids = list(record.get("legal_action_ids") or [])
         target = int(record["expert_action_id"])
 
-        batch = _record_to_batch(record, torch)
+        batch = _record_to_hand_batch(record, torch)
         batch = {k: v.to(device) for k, v in batch.items()}
-
         with torch.no_grad():
-            logits = model(batch)
+            logits = _forward_hand(model, batch, is_multi)
 
-        legal_mask = torch.zeros((1, args.max_actions), dtype=torch.float32, device=device)
-        for aid in valid_legal_ids:
-            legal_mask[0, aid] = 1.0
+        pred_pack = _masked_predict(logits, legal_ids, args.max_actions, torch, device)
+        if pred_pack is None:
+            hand_invalid += 1
+            continue
 
-        masked = torch.where(legal_mask > 0, logits, torch.full_like(logits, -1e9))
-        pred = int(masked.argmax(dim=1).item())
-        top3_k = min(3, args.max_actions)
-        top3 = torch.topk(masked, k=top3_k, dim=1).indices[0].tolist()
-
-        total += 1
+        pred, top3, valid_legal_ids = pred_pack
+        hand_total += 1
         if pred == target:
-            correct1 += 1
+            hand_correct1 += 1
         if target in top3:
-            correct3 += 1
+            hand_correct3 += 1
         if pred not in valid_legal_ids:
-            illegal_top1_masked_count += 1
+            hand_illegal += 1
+        random_top3_sum += min(3, len(valid_legal_ids)) / len(valid_legal_ids)
 
-        random_k = min(3, len(valid_legal_ids))
-        random_top3_baseline_sum += random_k / len(valid_legal_ids)
+    if is_multi:
+        for record in iter_shop_samples(args.dataset):
+            legal_ids = list(record.get("shop_legal_action_ids") or [])
+            target = int(record.get("shop_expert_action_id"))
 
-    if total == 0:
-        logger.error(
-            "No valid trainable records found in dataset: %s (invalid=%d)",
-            args.dataset,
-            invalid_sample_count,
-        )
+            batch = _record_to_shop_batch(record, torch)
+            batch = {k: v.to(device) for k, v in batch.items()}
+            with torch.no_grad():
+                logits = model.forward_shop(batch)
+
+            pred_pack = _masked_predict(logits, legal_ids, args.max_shop_actions, torch, device)
+            if pred_pack is None:
+                shop_invalid += 1
+                continue
+
+            pred, _, valid_legal_ids = pred_pack
+            shop_total += 1
+            if pred == target:
+                shop_correct1 += 1
+            if pred not in valid_legal_ids:
+                shop_illegal += 1
+            if 0 <= pred < args.max_shop_actions:
+                shop_action_counts[pred] += 1
+
+    rewards = []
+    for rec in read_jsonl(args.dataset):
+        try:
+            rewards.append(float(rec.get("reward") or 0.0))
+        except Exception:
+            pass
+    avg_reward_proxy = (sum(rewards) / len(rewards)) if rewards else 0.0
+
+    if hand_total == 0:
+        logger.error("No valid hand samples in dataset: %s (invalid=%d)", args.dataset, hand_invalid)
         return 2
 
-    top1 = correct1 / total
-    top3 = correct3 / total
-    illegal_rate = illegal_top1_masked_count / total
-    random_top3_baseline = random_top3_baseline_sum / total
-    top3_vs_random_lift = top3 - random_top3_baseline
+    hand_top1 = hand_correct1 / hand_total
+    hand_top3 = hand_correct3 / hand_total
+    hand_illegal_rate = hand_illegal / hand_total
+    random_top3 = random_top3_sum / hand_total
+    hand_top3_lift = hand_top3 - random_top3
+
+    if is_multi and shop_total > 0:
+        shop_top1 = shop_correct1 / shop_total
+        shop_illegal_rate = shop_illegal / shop_total
+    else:
+        shop_top1 = 0.0
+        shop_illegal_rate = 0.0
 
     logger.info(
-        "Offline eval: total=%d top1=%.4f top3=%.4f illegal_rate=%.6f random_top3=%.4f top3_lift=%.4f invalid=%d",
-        total,
-        top1,
-        top3,
-        illegal_rate,
-        random_top3_baseline,
-        top3_vs_random_lift,
-        invalid_sample_count,
+        "Offline eval: hand_total=%d hand_top1=%.4f hand_top3=%.4f hand_illegal=%.6f random_top3=%.4f hand_top3_lift=%.4f hand_invalid=%d shop_total=%d shop_top1=%.4f shop_illegal=%.6f shop_invalid=%d avg_reward_proxy=%.4f shop_action_counts=%s",
+        hand_total,
+        hand_top1,
+        hand_top3,
+        hand_illegal_rate,
+        random_top3,
+        hand_top3_lift,
+        hand_invalid,
+        shop_total,
+        shop_top1,
+        shop_illegal_rate,
+        shop_invalid,
+        avg_reward_proxy,
+        shop_action_counts,
     )
     return 0
 
 
-def run_online(args, model, device, torch):
+def run_online(args, model, is_multi, device, torch):
     logger = setup_logger("trainer.eval.online")
     wins = 0
     episodes_finished = 0
@@ -240,21 +391,38 @@ def run_online(args, model, device, torch):
                         continue
 
                     legal_ids = action_space.legal_action_ids(hand_size)
-                    batch = _state_to_batch(state, torch)
+                    batch = _state_to_hand_batch(state, torch)
                     batch = {k: v.to(device) for k, v in batch.items()}
-
                     with torch.no_grad():
-                        logits = model(batch)
+                        logits = _forward_hand(model, batch, is_multi)
 
-                    legal_mask = torch.zeros((1, args.max_actions), dtype=torch.float32, device=device)
-                    for aid in legal_ids:
-                        legal_mask[0, aid] = 1.0
-                    masked = torch.where(legal_mask > 0, logits, torch.full_like(logits, -1e9))
-                    aid = int(masked.argmax(dim=1).item())
+                    pred_pack = _masked_predict(logits, legal_ids, args.max_actions, torch, device)
+                    if pred_pack is None:
+                        aid = legal_ids[0]
+                    else:
+                        aid = pred_pack[0]
 
                     atype, mask = action_space.decode(hand_size, aid)
                     indices = action_space.mask_to_indices(mask, hand_size)
                     state, _, _, _ = backend.step({"action_type": atype, "indices": indices})
+
+                elif phase in action_space_shop.SHOP_PHASES:
+                    if is_multi:
+                        legal_ids = action_space_shop.legal_action_ids(state)
+                        batch = _state_to_shop_batch(state, torch)
+                        batch = {k: v.to(device) for k, v in batch.items()}
+                        with torch.no_grad():
+                            logits = model.forward_shop(batch)
+                        pred_pack = _masked_predict(logits, legal_ids, args.max_shop_actions, torch, device)
+                        if pred_pack is None:
+                            aid = legal_ids[0] if legal_ids else action_space_shop.encode("WAIT", {})
+                        else:
+                            aid = pred_pack[0]
+                        action = action_space_shop.action_from_id(state, aid)
+                    else:
+                        action = choose_shop_action(state).action
+                    state, _, _, _ = backend.step(action)
+
                 else:
                     decision = choose_action(state, start_seed=f"{args.seed_prefix}-{episode}")
                     macro = str(decision.macro_action or "wait").upper()
@@ -287,6 +455,7 @@ def run_online(args, model, device, torch):
     )
     return 0
 
+
 def main() -> int:
     args = parse_args()
     logger = setup_logger("trainer.eval")
@@ -303,17 +472,13 @@ def main() -> int:
     else:
         device = torch.device(args.device)
 
-    model = _build_model(nn, args.max_actions).to(device)
-    state_dict = torch.load(args.model, map_location=device)
-    model.load_state_dict(state_dict, strict=True)
+    model, is_multi = _load_model(args, torch, nn, device)
+    logger.info("Loaded model=%s multi_head=%s", args.model, is_multi)
 
     if args.offline:
-        return run_offline(args, model, device, torch)
-    return run_online(args, model, device, torch)
+        return run_offline(args, model, is_multi, device, torch)
+    return run_online(args, model, is_multi, device, torch)
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
-
