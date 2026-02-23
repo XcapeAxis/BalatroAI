@@ -170,6 +170,9 @@
     },
     "state_hash_p5_voucher_pack_observed_core": {
       "type": "string"
+    },
+    "state_hash_p7_stateful_observed_core": {
+      "type": "string"
     }
   }
 }

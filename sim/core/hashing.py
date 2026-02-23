@@ -416,6 +416,39 @@ def _extract_joker_ids(state: dict[str, Any]) -> list[str]:
     return sorted(out)
 
 
+
+def _extract_jokers_state_projection(state: dict[str, Any]) -> dict[str, Any]:
+    raw = state.get("jokers")
+    cards: list[dict[str, Any]] = []
+    if isinstance(raw, dict):
+        src = raw.get("cards")
+        if isinstance(src, list):
+            cards = [x for x in src if isinstance(x, dict)]
+    elif isinstance(raw, list):
+        cards = [x for x in raw if isinstance(x, dict)]
+
+    # P7 scope intentionally ignores per-joker opaque counters from oracle internals and
+    # only compares stable, observable inventory-level joker state.
+    entries: list[dict[str, Any]] = []
+    for card in cards:
+        key = str(card.get("joker_id") or card.get("key") or card.get("id") or "").strip().lower()
+        if not key:
+            continue
+        entries.append(
+            {
+                "key": key,
+                "disabled": bool(card.get("disabled") or False),
+            }
+        )
+
+    entries.sort(key=canonical_dumps)
+    return {
+        "count": len(entries),
+        "items": entries,
+    }
+
+
+
 def _filter_p4_consumable_observed_core(state: dict[str, Any]) -> dict[str, Any]:
     state = to_builtin(state)
     zones = state.get("zones") or {}
@@ -502,6 +535,33 @@ def _filter_p5_voucher_pack_observed_core(state: dict[str, Any]) -> dict[str, An
             "delta": float(observed.get("delta") or 0.0),
         },
     }
+
+
+def _filter_p7_stateful_observed_core(state: dict[str, Any]) -> dict[str, Any]:
+    state = to_builtin(state)
+    phase = str(state.get("phase") or "")
+    round_info = state.get("round") or {}
+    observed = state.get("score_observed") or {}
+
+    hands_left = int(round_info.get("hands_left") or 0)
+    discards_left = int(round_info.get("discards_left") or 0)
+
+    joker_projection = _extract_jokers_state_projection(state) if phase == "SELECTING_HAND" else {"count": 0, "items": []}
+
+    return {
+        "schema_version": state.get("schema_version"),
+        "resources": {
+            "can_play": hands_left > 0,
+            "can_discard": discards_left > 0,
+        },
+        "jokers_state_projection": joker_projection,
+        "score_observed": {
+            "total": float(observed.get("total") or 0.0),
+            "delta": float(observed.get("delta") or 0.0),
+        },
+    }
+
+
 
 def _filter_zones_core(state: dict[str, Any]) -> dict[str, Any]:
     state = to_builtin(state)
@@ -642,6 +702,10 @@ def state_hash_p5_voucher_pack_observed_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_p5_voucher_pack_observed_core(state)))
 
 
+def state_hash_p7_stateful_observed_core(state: dict[str, Any]) -> str:
+    return _sha256_text(canonical_dumps(_filter_p7_stateful_observed_core(state)))
+
+
 def state_hash_zones_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_zones_core(state)))
 
@@ -701,6 +765,10 @@ def p5_modifier_observed_core_projection(state: dict[str, Any]) -> dict[str, Any
 
 def p5_voucher_pack_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
     return _filter_p5_voucher_pack_observed_core(state)
+
+
+def p7_stateful_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
+    return _filter_p7_stateful_observed_core(state)
 
 
 def zones_core_projection(state: dict[str, Any]) -> dict[str, Any]:
