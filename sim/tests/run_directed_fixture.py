@@ -24,6 +24,8 @@ from sim.core.hashing import (
     p5_modifier_observed_core_projection,
     p5_voucher_pack_observed_core_projection,
     p7_stateful_observed_core_projection,
+    p8_rng_observed_core_projection,
+    p8_shop_observed_core_projection,
     rng_events_core_projection,
     score_core_projection,
     state_hash_economy_core,
@@ -39,6 +41,8 @@ from sim.core.hashing import (
     state_hash_p5_modifier_observed_core,
     state_hash_p5_voucher_pack_observed_core,
     state_hash_p7_stateful_observed_core,
+    state_hash_p8_rng_observed_core,
+    state_hash_p8_shop_observed_core,
     state_hash_rng_events_core,
     state_hash_score_core,
     state_hash_zones_core,
@@ -63,6 +67,8 @@ SCOPE_TO_HASH_KEY = {
     "p5_modifier_observed_core": "state_hash_p5_modifier_observed_core",
     "p5_voucher_pack_observed_core": "state_hash_p5_voucher_pack_observed_core",
     "p7_stateful_observed_core": "state_hash_p7_stateful_observed_core",
+    "p8_shop_observed_core": "state_hash_p8_shop_observed_core",
+    "p8_rng_observed_core": "state_hash_p8_rng_observed_core",
     "zones_core": "state_hash_zones_core",
     "zones_counts_core": "state_hash_zones_counts_core",
     "economy_core": "state_hash_economy_core",
@@ -78,7 +84,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--oracle-trace", help="Optional oracle trace jsonl for step-by-step diff.")
     parser.add_argument(
         "--scope",
-        choices=["hand_core", "score_core", "p0_hand_score_core", "p0_hand_score_observed_core", "p1_hand_score_observed_core", "p2_hand_score_observed_core", "p2b_hand_score_observed_core", "p3_hand_score_observed_core", "p4_consumable_observed_core", "p5_modifier_observed_core", "p5_voucher_pack_observed_core", "p7_stateful_observed_core", "zones_core", "zones_counts_core", "economy_core", "rng_events_core", "full"],
+        choices=["hand_core", "score_core", "p0_hand_score_core", "p0_hand_score_observed_core", "p1_hand_score_observed_core", "p2_hand_score_observed_core", "p2b_hand_score_observed_core", "p3_hand_score_observed_core", "p4_consumable_observed_core", "p5_modifier_observed_core", "p5_voucher_pack_observed_core", "p7_stateful_observed_core", "p8_shop_observed_core", "p8_rng_observed_core", "zones_core", "zones_counts_core", "economy_core", "rng_events_core", "full"],
         default="hand_core",
     )
     parser.add_argument("--check-start", action="store_true", help="Compare oracle snapshot vs simulator reset(from_snapshot) before replay.")
@@ -209,6 +215,10 @@ def _scope_projection(scope: str, state: dict[str, Any] | None) -> Any:
         return p5_voucher_pack_observed_core_projection(state)
     if scope == "p7_stateful_observed_core":
         return p7_stateful_observed_core_projection(state)
+    if scope == "p8_shop_observed_core":
+        return p8_shop_observed_core_projection(state)
+    if scope == "p8_rng_observed_core":
+        return p8_rng_observed_core_projection(state)
     if scope == "zones_core":
         return zones_core_projection(state)
     if scope == "zones_counts_core":
@@ -454,6 +464,29 @@ def main() -> int:
             input_action = dict(action)
             executed_action = dict(input_action)
             overridden = False
+
+            if oracle_trace:
+                action_index_for_inject = step_id - int(args.trace_offset_sim)
+                oracle_index_for_inject = action_index_for_inject + int(args.trace_offset_oracle)
+                if 0 <= oracle_index_for_inject < len(oracle_trace):
+                    oracle_line_for_inject = oracle_trace[oracle_index_for_inject]
+                    oracle_rng_replay = oracle_line_for_inject.get("rng_replay")
+                    if isinstance(oracle_rng_replay, dict) and not isinstance(executed_action.get("rng_replay"), dict):
+                        executed_action["rng_replay"] = dict(oracle_rng_replay)
+
+                    oracle_snap_for_inject = oracle_line_for_inject.get("canonical_state_snapshot")
+                    if isinstance(oracle_snap_for_inject, dict):
+                        expected_context = dict(executed_action.get("expected_context")) if isinstance(executed_action.get("expected_context"), dict) else {}
+                        expected_context["shop_market"] = {
+                            "shop": oracle_snap_for_inject.get("shop"),
+                            "vouchers": oracle_snap_for_inject.get("vouchers"),
+                            "packs": oracle_snap_for_inject.get("packs"),
+                            "consumables": oracle_snap_for_inject.get("consumables"),
+                            "used_vouchers": oracle_snap_for_inject.get("used_vouchers"),
+                            "economy": oracle_snap_for_inject.get("economy"),
+                        }
+                        executed_action["expected_context"] = expected_context
+
             try:
                 next_state, reward, done, info = env.step(executed_action)
             except Exception as exc:
@@ -482,6 +515,8 @@ def main() -> int:
             score_observed = compute_score_observed(state, next_state)
             canonical_with_observed = dict(canonical)
             canonical_with_observed["score_observed"] = dict(score_observed)
+            if isinstance(executed_action.get("rng_replay"), dict):
+                canonical_with_observed["rng_replay"] = dict(executed_action.get("rng_replay"))
 
             include_snapshot = (
                 step_id == 0
@@ -508,6 +543,8 @@ def main() -> int:
                 "state_hash_p5_modifier_observed_core": state_hash_p5_modifier_observed_core(canonical_with_observed),
                 "state_hash_p5_voucher_pack_observed_core": state_hash_p5_voucher_pack_observed_core(canonical_with_observed),
                 "state_hash_p7_stateful_observed_core": state_hash_p7_stateful_observed_core(canonical_with_observed),
+                "state_hash_p8_shop_observed_core": state_hash_p8_shop_observed_core(canonical_with_observed),
+                "state_hash_p8_rng_observed_core": state_hash_p8_rng_observed_core(canonical_with_observed),
                 "state_hash_zones_core": state_hash_zones_core(canonical),
                 "state_hash_zones_counts_core": state_hash_zones_counts_core(canonical),
                 "state_hash_economy_core": state_hash_economy_core(canonical),
@@ -515,6 +552,7 @@ def main() -> int:
                 "reward": float(reward),
                 "done": bool(done),
                 "score_observed": score_observed,
+                "rng_replay": dict(executed_action.get("rng_replay")) if isinstance(executed_action.get("rng_replay"), dict) else {"enabled": False, "source": "", "outcomes": []},
                 "info": {
                     "source": "directed_sim",
                     "engine_info": info,
@@ -607,3 +645,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

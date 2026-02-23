@@ -1,4 +1,4 @@
-﻿if __package__ is None or __package__ == "":
+if __package__ is None or __package__ == "":
     import sys
     from pathlib import Path
 
@@ -24,6 +24,8 @@ from sim.core.hashing import (
     state_hash_p5_modifier_observed_core,
     state_hash_p5_voucher_pack_observed_core,
     state_hash_p7_stateful_observed_core,
+    state_hash_p8_rng_observed_core,
+    state_hash_p8_shop_observed_core,
     state_hash_rng_events_core,
     state_hash_score_core,
     state_hash_zones_core,
@@ -128,6 +130,18 @@ def apply_action(base_url: str, action: dict[str, Any], timeout_sec: float, wait
         _call_method(base_url, "skip", {}, timeout=timeout_sec)
     elif action_type == "REROLL":
         _call_method(base_url, "reroll", {}, timeout=timeout_sec)
+    elif action_type == "BUY":
+        params = action.get("params") if isinstance(action.get("params"), dict) else {}
+        _call_method(base_url, "buy", params, timeout=timeout_sec)
+    elif action_type == "PACK":
+        params = action.get("params") if isinstance(action.get("params"), dict) else {}
+        _call_method(base_url, "pack", params, timeout=timeout_sec)
+    elif action_type == "SELL":
+        params = action.get("params") if isinstance(action.get("params"), dict) else {}
+        _call_method(base_url, "sell", params, timeout=timeout_sec)
+    elif action_type == "USE":
+        params = action.get("params") if isinstance(action.get("params"), dict) else {}
+        _call_method(base_url, "use", params, timeout=timeout_sec)
     elif action_type == "WAIT":
         time.sleep(max(0.0, float(action.get("sleep") or wait_sleep)))
     else:
@@ -214,8 +228,14 @@ def main() -> int:
                 reward = _round_chips(next_state) - _round_chips(state)
                 score_observed = compute_score_observed(state, next_state)
                 computed_expected = compute_expected_for_action(state, executed_action)
+                rng_replay = {
+                    "enabled": True,
+                    "source": "oracle_events",
+                    "outcomes": list(events),
+                }
                 canonical_with_observed = dict(canonical)
                 canonical_with_observed["score_observed"] = dict(score_observed)
+                canonical_with_observed["rng_replay"] = dict(rng_replay)
                 include_snapshot = (
                     step_id == 0
                     or step_id == len(actions) - 1
@@ -241,6 +261,8 @@ def main() -> int:
                     "state_hash_p5_modifier_observed_core": state_hash_p5_modifier_observed_core(canonical_with_observed),
                     "state_hash_p5_voucher_pack_observed_core": state_hash_p5_voucher_pack_observed_core(canonical_with_observed),
                     "state_hash_p7_stateful_observed_core": state_hash_p7_stateful_observed_core(canonical_with_observed),
+                    "state_hash_p8_shop_observed_core": state_hash_p8_shop_observed_core(canonical_with_observed),
+                    "state_hash_p8_rng_observed_core": state_hash_p8_rng_observed_core(canonical_with_observed),
                     "state_hash_zones_core": state_hash_zones_core(canonical),
                     "state_hash_zones_counts_core": state_hash_zones_counts_core(canonical),
                     "state_hash_economy_core": state_hash_economy_core(canonical),
@@ -248,6 +270,7 @@ def main() -> int:
                     "reward": float(reward),
                     "done": done,
                     "score_observed": score_observed,
+                    "rng_replay": rng_replay,
                     "computed_expected": computed_expected,
                     "info": {
                         "source": "oracle",

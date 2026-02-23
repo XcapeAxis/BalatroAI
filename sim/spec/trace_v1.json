@@ -84,6 +84,20 @@
     "state_hash_p0_hand_score_observed_core": {
       "type": "string"
     },
+    "rng_replay": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "string"
+        },
+        "outcomes": {
+          "type": "array"
+        }
+      }
+    },
     "computed_expected": {
       "type": "object",
       "properties": {
@@ -172,6 +186,12 @@
       "type": "string"
     },
     "state_hash_p7_stateful_observed_core": {
+      "type": "string"
+    },
+    "state_hash_p8_shop_observed_core": {
+      "type": "string"
+    },
+    "state_hash_p8_rng_observed_core": {
       "type": "string"
     }
   }

@@ -371,6 +371,41 @@ def _extract_market_keys(state: dict[str, Any], field: str) -> dict[str, Any]:
     }
 
 
+def _extract_market_items_min(state: dict[str, Any], field: str) -> dict[str, Any]:
+    raw = state.get(field)
+    if not isinstance(raw, dict):
+        return {"count": 0, "items": []}
+
+    cards_raw = raw.get("cards")
+    cards = cards_raw if isinstance(cards_raw, list) else []
+    items: list[dict[str, Any]] = []
+    for idx, card in enumerate(cards):
+        if not isinstance(card, dict):
+            continue
+        cost_obj = card.get("cost")
+        buy_cost = 0.0
+        if isinstance(cost_obj, dict):
+            buy_cost = float(cost_obj.get("buy") or 0.0)
+        else:
+            try:
+                buy_cost = float(cost_obj or 0.0)
+            except Exception:
+                buy_cost = 0.0
+        items.append(
+            {
+                "kind": str(card.get("set") or card.get("kind") or "").strip().upper(),
+                "key": str(card.get("key") or "").strip().lower(),
+                "cost": buy_cost,
+                "slot_index": int(card.get("slot_index") if isinstance(card.get("slot_index"), int) else idx),
+            }
+        )
+    items.sort(key=canonical_dumps)
+    return {
+        "count": int(raw.get("count") or len(items)),
+        "items": items,
+    }
+
+
 def _extract_used_vouchers(state: dict[str, Any]) -> list[str]:
     raw = state.get("used_vouchers")
     out: list[str] = []
@@ -562,6 +597,55 @@ def _filter_p7_stateful_observed_core(state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _filter_p8_shop_observed_core(state: dict[str, Any]) -> dict[str, Any]:
+    state = to_builtin(state)
+    phase = str(state.get("phase") or "")
+    round_info = state.get("round") or {}
+    observed = state.get("score_observed") or {}
+
+    return {
+        "schema_version": state.get("schema_version"),
+        "shop_state_present": bool(state.get("shop") is not None or phase in {"SHOP", "SMODS_BOOSTER_OPENED"}),
+        "shop": _extract_market_items_min(state, "shop"),
+        "vouchers": _extract_market_items_min(state, "vouchers"),
+        "packs": _extract_market_items_min(state, "packs"),
+        "used_vouchers_count": len(_extract_used_vouchers(state)),
+        "resources": {
+            "can_play": int(round_info.get("hands_left") or 0) > 0,
+            "can_discard": int(round_info.get("discards_left") or 0) > 0,
+            "ante": int(round_info.get("ante") or 0),
+            "blind_present": bool(round_info.get("blind")),
+        },
+        "score_observed": {
+            "total": float(observed.get("total") or 0.0),
+            "delta": float(observed.get("delta") or 0.0),
+        },
+    }
+
+
+def _rng_outcome_sig(value: Any) -> str:
+    if isinstance(value, dict):
+        return "dict:" + canonical_dumps(value)
+    if isinstance(value, list):
+        return "list:" + canonical_dumps(value)
+    return f"scalar:{value}"
+
+
+def _filter_p8_rng_observed_core(state: dict[str, Any]) -> dict[str, Any]:
+    state = to_builtin(state)
+    replay = state.get("rng_replay") if isinstance(state.get("rng_replay"), dict) else {}
+    replay_outcomes_raw = replay.get("outcomes") if isinstance(replay.get("outcomes"), list) else []
+    replay_outcomes = [_rng_outcome_sig(x) for x in replay_outcomes_raw]
+
+    return {
+        "schema_version": state.get("schema_version"),
+        "rng_replay": {
+            "enabled": bool(replay.get("enabled") or False),
+            "source": str(replay.get("source") or ""),
+            "outcomes": replay_outcomes,
+        },
+    }
+
 
 def _filter_zones_core(state: dict[str, Any]) -> dict[str, Any]:
     state = to_builtin(state)
@@ -706,6 +790,14 @@ def state_hash_p7_stateful_observed_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_p7_stateful_observed_core(state)))
 
 
+def state_hash_p8_shop_observed_core(state: dict[str, Any]) -> str:
+    return _sha256_text(canonical_dumps(_filter_p8_shop_observed_core(state)))
+
+
+def state_hash_p8_rng_observed_core(state: dict[str, Any]) -> str:
+    return _sha256_text(canonical_dumps(_filter_p8_rng_observed_core(state)))
+
+
 def state_hash_zones_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_zones_core(state)))
 
@@ -771,6 +863,14 @@ def p7_stateful_observed_core_projection(state: dict[str, Any]) -> dict[str, Any
     return _filter_p7_stateful_observed_core(state)
 
 
+def p8_shop_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
+    return _filter_p8_shop_observed_core(state)
+
+
+def p8_rng_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
+    return _filter_p8_rng_observed_core(state)
+
+
 def zones_core_projection(state: dict[str, Any]) -> dict[str, Any]:
     return _filter_zones_core(state)
 
@@ -785,5 +885,6 @@ def economy_core_projection(state: dict[str, Any]) -> dict[str, Any]:
 
 def rng_events_core_projection(state: dict[str, Any]) -> dict[str, Any]:
     return _filter_rng_events_core(state)
+
 
 

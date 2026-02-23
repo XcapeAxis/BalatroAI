@@ -134,17 +134,29 @@ class SimEnv:
         cards_raw = raw_market.get("cards")
         cards = cards_raw if isinstance(cards_raw, list) else []
         out_cards: list[dict[str, Any]] = []
-        for card in cards:
+        for idx, card in enumerate(cards):
             if not isinstance(card, dict):
                 continue
+            cost_obj = card.get("cost")
+            buy_cost = 0.0
+            if isinstance(cost_obj, dict):
+                buy_cost = float(cost_obj.get("buy") or 0.0)
+            else:
+                try:
+                    buy_cost = float(cost_obj or 0.0)
+                except Exception:
+                    buy_cost = 0.0
             out_cards.append(
                 {
                     "key": str(card.get("key") or "").strip().lower(),
                     "label": str(card.get("label") or "").strip(),
                     "set": str(card.get("set") or "").strip().upper(),
+                    "cost": {"buy": buy_cost},
+                    "slot_index": int(card.get("slot_index") if isinstance(card.get("slot_index"), int) else idx),
                 }
             )
 
+        out_cards.sort(key=lambda c: (str(c.get("slot_index") or 0), str(c.get("key") or ""), str(c.get("set") or "")))
         return {
             "count": int(raw_market.get("count") or len(out_cards)),
             "limit": int(raw_market.get("limit") or 0),
@@ -171,6 +183,45 @@ class SimEnv:
             if key:
                 out.append(key)
         return sorted(set(out))
+
+
+    def _apply_expected_shop_context(self, action: dict[str, Any], info: dict[str, Any]) -> None:
+        expected_context = action.get("expected_context") if isinstance(action.get("expected_context"), dict) else {}
+        shop_market = expected_context.get("shop_market") if isinstance(expected_context.get("shop_market"), dict) else {}
+        if not shop_market:
+            return
+
+        if "shop" in shop_market:
+            self._state["shop"] = self._restore_market(shop_market.get("shop"))
+        if "vouchers" in shop_market:
+            self._state["vouchers"] = self._restore_market(shop_market.get("vouchers"))
+        if "packs" in shop_market:
+            self._state["packs"] = self._restore_market(shop_market.get("packs"))
+        if "consumables" in shop_market:
+            self._state["consumables"] = self._restore_consumables(shop_market.get("consumables"))
+        if "used_vouchers" in shop_market:
+            self._state["used_vouchers"] = self._restore_used_vouchers(shop_market.get("used_vouchers"))
+
+        economy = shop_market.get("economy") if isinstance(shop_market.get("economy"), dict) else {}
+        if economy and "money" in economy:
+            try:
+                self._state["money"] = float(economy.get("money") or 0.0)
+            except Exception:
+                pass
+
+        info["shop_context_applied"] = True
+
+    def _consume_rng_replay(self, action: dict[str, Any], info: dict[str, Any]) -> None:
+        replay = action.get("rng_replay") if isinstance(action.get("rng_replay"), dict) else None
+        if not replay:
+            return
+        enabled = bool(replay.get("enabled") or False)
+        outcomes = replay.get("outcomes") if isinstance(replay.get("outcomes"), list) else []
+        if enabled and replay.get("outcomes") is not None and not isinstance(replay.get("outcomes"), list):
+            raise ValueError("rng_replay.outcomes must be list")
+        self._state["_rng_replay_last"] = list(outcomes)
+        info["rng_replay_enabled"] = enabled
+        info["rng_replay_consumed"] = len(outcomes)
 
     def _make_blinds(self, ante: int, selected: str, selecting: bool) -> dict[str, dict[str, Any]]:
         scores = self._target_scores(ante)
@@ -496,6 +547,8 @@ class SimEnv:
         prev_chips = float((self._state.get("round") or {}).get("chips") or 0.0)
         info: dict[str, Any] = {"backend": "sim", "overridden": False}
 
+        self._consume_rng_replay(action, info)
+
         action_type = str(action.get("action_type") or "WAIT").upper()
         if action_type == "AUTO":
             action = self._phase_default_action()
@@ -642,11 +695,26 @@ class SimEnv:
                 self._begin_round(next_round=True)
             elif action_type == "REROLL":
                 self._state["money"] = max(0, int(self._state.get("money") or 0) - int((self._state.get("round") or {}).get("reroll_cost") or 0))
-            elif action_type == "WAIT":
+            elif action_type == "BUY":
+                params = action.get("params") if isinstance(action.get("params"), dict) else {}
+                if "pack" in params:
+                    self._state["state"] = "SMODS_BOOSTER_OPENED"
+            elif action_type in {"PACK", "SELL", "USE", "WAIT"}:
                 pass
             else:
                 info["overridden"] = True
                 return self.step({"action_type": "NEXT_ROUND"})
+            self._apply_expected_shop_context(action, info)
+
+        elif phase == "SMODS_BOOSTER_OPENED":
+            if action_type in {"PACK", "SKIP", "WAIT"}:
+                self._state["state"] = "SHOP"
+            elif action_type == "NEXT_ROUND":
+                self._begin_round(next_round=True)
+            else:
+                info["overridden"] = True
+                self._state["state"] = "SHOP"
+            self._apply_expected_shop_context(action, info)
 
         elif phase in {"MENU", "GAME_OVER"}:
             info["overridden"] = True

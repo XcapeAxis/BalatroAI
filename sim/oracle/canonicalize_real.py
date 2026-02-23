@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import re
 from typing import Any
@@ -191,17 +191,29 @@ def _extract_market_cards(raw: Any) -> dict[str, Any]:
 
     cards = raw.get("cards") if isinstance(raw.get("cards"), list) else []
     out_cards: list[dict[str, Any]] = []
-    for card in cards:
+    for idx, card in enumerate(cards):
         if not isinstance(card, dict):
             continue
+        cost_obj = card.get("cost")
+        buy_cost = 0.0
+        if isinstance(cost_obj, dict):
+            buy_cost = float(cost_obj.get("buy") or 0.0)
+        else:
+            try:
+                buy_cost = float(cost_obj or 0.0)
+            except Exception:
+                buy_cost = 0.0
         out_cards.append(
             {
                 "key": str(card.get("key") or "").strip().lower(),
                 "label": str(card.get("label") or "").strip(),
                 "set": str(card.get("set") or "").strip().upper(),
+                "cost": {"buy": buy_cost},
+                "slot_index": int(card.get("slot_index") if isinstance(card.get("slot_index"), int) else idx),
             }
         )
 
+    out_cards.sort(key=lambda c: (str(c.get("slot_index") or 0), str(c.get("key") or ""), str(c.get("set") or "")))
     return {
         "count": int(raw.get("count") or len(out_cards)),
         "limit": int(raw.get("limit") or 0),

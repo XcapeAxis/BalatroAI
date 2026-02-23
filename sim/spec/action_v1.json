@@ -1,4 +1,4 @@
-﻿{
+{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "sim/spec/action_v1.json",
   "title": "Action v1",
@@ -9,7 +9,7 @@
     "phase": {"type": "string"},
     "action_type": {
       "type": "string",
-      "enum": ["PLAY", "DISCARD", "SELECT", "CASH_OUT", "NEXT_ROUND", "START", "WAIT", "MENU", "SKIP", "REROLL"]
+      "enum": ["PLAY", "DISCARD", "SELECT", "CASH_OUT", "NEXT_ROUND", "START", "WAIT", "MENU", "SKIP", "REROLL", "BUY", "PACK", "SELL", "USE"]
     },
     "indices": {
       "type": "array",
