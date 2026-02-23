@@ -27,6 +27,7 @@ from sim.core.hashing import (
     state_hash_p8_rng_observed_core,
     state_hash_p8_shop_observed_core,
     state_hash_p9_episode_observed_core,
+    state_hash_p10_long_episode_observed_core,
     state_hash_rng_events_core,
     state_hash_score_core,
     state_hash_zones_core,
@@ -130,8 +131,16 @@ def apply_action(base_url: str, action: dict[str, Any], timeout_sec: float, wait
         _call_method(base_url, "next_round", {}, timeout=timeout_sec)
     elif action_type == "START":
         start_seed = str(action.get("seed") or seed)
-        params = {"deck": "RED", "stake": "WHITE", "seed": start_seed}
-        _call_method(base_url, "start", params, timeout=timeout_sec)
+        stake_name = str(action.get("stake") or "WHITE").strip().upper()
+        if not stake_name:
+            stake_name = "WHITE"
+        params = {"deck": "RED", "stake": stake_name, "seed": start_seed}
+        try:
+            _call_method(base_url, "start", params, timeout=timeout_sec)
+        except RPCError:
+            # Some CLI/service variants only allow start from MENU/GAME_OVER.
+            _call_method(base_url, "menu", {}, timeout=timeout_sec)
+            _call_method(base_url, "start", params, timeout=timeout_sec)
     elif action_type == "MENU":
         _call_method(base_url, "menu", {}, timeout=timeout_sec)
     elif action_type == "SKIP":
@@ -191,6 +200,7 @@ def main() -> int:
         state = get_state(args.base_url, timeout=args.timeout_sec)
 
     rng_cursor = 0
+    current_stake = str((state.get("rules") or {}).get("stake") or state.get("stake") or "white").strip().lower() or "white"
 
     with out_path.open("w", encoding="utf-8-sig", newline="\n") as fp:
         for step_id, action in enumerate(actions):
@@ -235,6 +245,12 @@ def main() -> int:
                 done = bool((canonical.get("flags") or {}).get("done") or False)
                 reward = _round_chips(next_state) - _round_chips(state)
                 score_observed = compute_score_observed(state, next_state)
+                if str(executed_action.get("action_type") or "").upper() == "START":
+                    score_observed = {
+                        "total": 0.0,
+                        "delta": 0.0,
+                        "source": "start_reset",
+                    }
                 computed_expected = compute_expected_for_action(state, executed_action)
                 rng_replay = {
                     "enabled": True,
@@ -244,6 +260,14 @@ def main() -> int:
                 canonical_with_observed = dict(canonical)
                 canonical_with_observed["score_observed"] = dict(score_observed)
                 canonical_with_observed["rng_replay"] = dict(rng_replay)
+                rules = canonical_with_observed.get("rules") if isinstance(canonical_with_observed.get("rules"), dict) else {}
+                if str(executed_action.get("action_type") or "").upper() == "START":
+                    current_stake = str(executed_action.get("stake") or current_stake or "white").strip().lower() or "white"
+                canonical_with_observed["rules"] = {
+                    "stake": current_stake,
+                    "applied_modifiers": list(rules.get("applied_modifiers") or []),
+                    "degraded": bool(rules.get("degraded") or False),
+                }
                 include_snapshot = (
                     step_id == 0
                     or step_id == len(actions) - 1
@@ -272,6 +296,7 @@ def main() -> int:
                     "state_hash_p8_shop_observed_core": state_hash_p8_shop_observed_core(canonical_with_observed),
                     "state_hash_p8_rng_observed_core": state_hash_p8_rng_observed_core(canonical_with_observed),
                     "state_hash_p9_episode_observed_core": state_hash_p9_episode_observed_core(canonical_with_observed),
+                    "state_hash_p10_long_episode_observed_core": state_hash_p10_long_episode_observed_core(canonical_with_observed),
                     "state_hash_zones_core": state_hash_zones_core(canonical),
                     "state_hash_zones_counts_core": state_hash_zones_counts_core(canonical),
                     "state_hash_economy_core": state_hash_economy_core(canonical),

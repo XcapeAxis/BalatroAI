@@ -754,6 +754,40 @@ def _filter_p9_episode_observed_core(state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _filter_p10_long_episode_observed_core(state: dict[str, Any]) -> dict[str, Any]:
+    state = to_builtin(state)
+    round_info = state.get("round") if isinstance(state.get("round"), dict) else {}
+    observed = state.get("score_observed") if isinstance(state.get("score_observed"), dict) else {}
+    replay = state.get("rng_replay") if isinstance(state.get("rng_replay"), dict) else {}
+    replay_outcomes_raw = replay.get("outcomes") if isinstance(replay.get("outcomes"), list) else []
+    replay_outcomes = [_rng_outcome_sig(x) for x in replay_outcomes_raw]
+    rules = state.get("rules") if isinstance(state.get("rules"), dict) else {}
+
+    market_shop = _extract_market_items_min(state, "shop")
+    market_vouchers = _extract_market_items_min(state, "vouchers")
+    market_packs = _extract_market_items_min(state, "packs")
+    consumables_keys = _extract_market_keys(state, "consumables")
+
+    return {
+        "schema_version": state.get("schema_version"),
+        "stake": {
+            "name": str(rules.get("stake") or "white").strip().lower(),
+            "applied_modifiers_count": len(rules.get("applied_modifiers") or []),
+        },
+        "shop_pack": {
+            "shop": market_shop,
+            "vouchers": market_vouchers,
+            "packs": market_packs,
+            "pack_choices": _extract_pack_choices_min(state),
+        },
+        "rng_replay": {
+            "enabled": bool(replay.get("enabled") or False),
+            "source": str(replay.get("source") or ""),
+            "outcomes": replay_outcomes,
+        },
+    }
+
+
 def _filter_zones_core(state: dict[str, Any]) -> dict[str, Any]:
     state = to_builtin(state)
     zones = state.get("zones") or {}
@@ -909,6 +943,10 @@ def state_hash_p9_episode_observed_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_p9_episode_observed_core(state)))
 
 
+def state_hash_p10_long_episode_observed_core(state: dict[str, Any]) -> str:
+    return _sha256_text(canonical_dumps(_filter_p10_long_episode_observed_core(state)))
+
+
 def state_hash_zones_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_zones_core(state)))
 
@@ -984,6 +1022,10 @@ def p8_rng_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
 
 def p9_episode_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
     return _filter_p9_episode_observed_core(state)
+
+
+def p10_long_episode_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
+    return _filter_p10_long_episode_observed_core(state)
 
 
 def zones_core_projection(state: dict[str, Any]) -> dict[str, Any]:

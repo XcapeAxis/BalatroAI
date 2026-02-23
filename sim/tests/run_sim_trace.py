@@ -27,6 +27,7 @@ from sim.core.hashing import (
     state_hash_p8_rng_observed_core,
     state_hash_p8_shop_observed_core,
     state_hash_p9_episode_observed_core,
+    state_hash_p10_long_episode_observed_core,
     state_hash_rng_events_core,
     state_hash_score_core,
     state_hash_zones_core,
@@ -131,6 +132,12 @@ def main() -> int:
                 rng_events=events,
             )
             score_observed = compute_score_observed(state, next_state)
+            if str(action.get("action_type") or "").upper() == "START":
+                score_observed = {
+                    "total": 0.0,
+                    "delta": 0.0,
+                    "source": "start_reset",
+                }
             computed_expected = compute_expected_for_action(state, executed_action)
             rng_replay = dict(executed_action.get("rng_replay")) if isinstance(executed_action.get("rng_replay"), dict) else {"enabled": False, "source": "", "outcomes": []}
             canonical_with_observed = dict(canonical)
@@ -165,6 +172,7 @@ def main() -> int:
                 "state_hash_p8_shop_observed_core": state_hash_p8_shop_observed_core(canonical_with_observed),
                 "state_hash_p8_rng_observed_core": state_hash_p8_rng_observed_core(canonical_with_observed),
                 "state_hash_p9_episode_observed_core": state_hash_p9_episode_observed_core(canonical_with_observed),
+                "state_hash_p10_long_episode_observed_core": state_hash_p10_long_episode_observed_core(canonical_with_observed),
                 "state_hash_zones_core": state_hash_zones_core(canonical),
                 "state_hash_zones_counts_core": state_hash_zones_counts_core(canonical),
                 "state_hash_economy_core": state_hash_economy_core(canonical),

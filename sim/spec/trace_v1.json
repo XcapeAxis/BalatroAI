@@ -196,6 +196,9 @@
     },
     "state_hash_p9_episode_observed_core": {
       "type": "string"
+    },
+    "state_hash_p10_long_episode_observed_core": {
+      "type": "string"
     }
   }
 }
