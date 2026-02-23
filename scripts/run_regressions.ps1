@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$BaseUrl = "http://127.0.0.1:12346",
   [string]$OutRoot = "sim/tests/fixtures_runtime",
   [string]$Seed = "AAAAAAA",
@@ -6,9 +6,9 @@ param(
   [switch]$RunP3,
   [switch]$RunP4,
   [switch]$RunP5,
-  [switch]$RunP7
+  [switch]$RunP7,
+  [switch]$GitSync
 )
-
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -215,3 +215,17 @@ elseif ($RunP2b) {
   Write-Host ("P2b report: {0}" -f $p2bReportPath)
   Write-Host ("P2b analyzer: {0}" -f (Join-Path $p2bOut "score_mismatch_table_p2b.md"))
 }
+
+if ($GitSync) {
+  $gitSyncScript = Join-Path $ProjectRoot "scripts/git_sync.ps1"
+  if (-not (Test-Path $gitSyncScript)) {
+    throw "[GitSync] missing script: $gitSyncScript"
+  }
+  Write-Host "[GitSync] running dry-run sync preview"
+  & powershell -ExecutionPolicy Bypass -File $gitSyncScript -DryRun:$true
+  if ($LASTEXITCODE -ne 0) {
+    throw "[GitSync] dry-run failed"
+  }
+  Write-Host "[GitSync] dry-run complete. To execute push/delete: powershell -ExecutionPolicy Bypass -File scripts/git_sync.ps1 -DryRun:`$false"
+}
+
