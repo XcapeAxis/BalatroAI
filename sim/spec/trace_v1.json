@@ -193,6 +193,9 @@
     },
     "state_hash_p8_rng_observed_core": {
       "type": "string"
+    },
+    "state_hash_p9_episode_observed_core": {
+      "type": "string"
     }
   }
 }

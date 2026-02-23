@@ -211,6 +211,77 @@ class SimEnv:
 
         info["shop_context_applied"] = True
 
+    def _apply_rng_market_items(self, field: str, items: list[dict[str, Any]]) -> None:
+        market_cards: list[dict[str, Any]] = []
+        for idx, item in enumerate(items):
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("key") or "").strip().lower()
+            kind = str(item.get("kind") or item.get("set") or "").strip().upper()
+            slot = int(item.get("slot") if isinstance(item.get("slot"), int) else item.get("slot_index") if isinstance(item.get("slot_index"), int) else idx)
+            try:
+                cost = float(item.get("cost") or 0.0)
+            except Exception:
+                cost = 0.0
+            market_cards.append(
+                {
+                    "key": key,
+                    "set": kind,
+                    "label": key.upper(),
+                    "cost": {"buy": cost},
+                    "slot_index": slot,
+                }
+            )
+        market_cards.sort(key=lambda c: (int(c.get("slot_index") or 0), str(c.get("key") or ""), str(c.get("set") or "")))
+        self._state[field] = {
+            "count": len(market_cards),
+            "limit": max(len(market_cards), int((self._state.get(field) or {}).get("limit") or 0)),
+            "highlighted_limit": int((self._state.get(field) or {}).get("highlighted_limit") or 0),
+            "cards": market_cards,
+        }
+
+    def _apply_rng_replay_outcomes(self, outcomes: list[Any], info: dict[str, Any]) -> None:
+        applied = 0
+        for outcome in outcomes:
+            if not isinstance(outcome, dict):
+                continue
+            typ = str(outcome.get("type") or "").strip().lower()
+            if typ == "shop_offers":
+                items = outcome.get("items") if isinstance(outcome.get("items"), list) else []
+                self._apply_rng_market_items("shop", items)
+                applied += 1
+            elif typ == "voucher_offers":
+                items = outcome.get("items") if isinstance(outcome.get("items"), list) else []
+                self._apply_rng_market_items("vouchers", items)
+                applied += 1
+            elif typ == "pack_offers":
+                items = outcome.get("items") if isinstance(outcome.get("items"), list) else []
+                self._apply_rng_market_items("packs", items)
+                applied += 1
+            elif typ == "pack_choices":
+                raw_choices = outcome.get("choices") if isinstance(outcome.get("choices"), list) else []
+                choices: list[dict[str, Any]] = []
+                for idx, key in enumerate(raw_choices):
+                    key_text = str(key or "").strip().lower()
+                    if not key_text:
+                        continue
+                    choices.append({"key": key_text, "slot_index": idx})
+                self._state["pack_choices"] = choices
+                applied += 1
+            elif typ == "blind_signal":
+                signal = outcome.get("signal") if isinstance(outcome.get("signal"), dict) else {}
+                blind = str(signal.get("selected") or signal.get("blind") or "").strip().lower()
+                if blind in BLIND_ORDER:
+                    self._state["round"]["blind"] = blind
+                applied += 1
+            elif typ == "tags_signal":
+                tags = outcome.get("tags") if isinstance(outcome.get("tags"), list) else []
+                self._state["tags"] = [str(x).strip().lower() for x in tags if str(x).strip()]
+                applied += 1
+
+        if applied:
+            info["rng_replay_applied"] = applied
+
     def _consume_rng_replay(self, action: dict[str, Any], info: dict[str, Any]) -> None:
         replay = action.get("rng_replay") if isinstance(action.get("rng_replay"), dict) else None
         if not replay:
@@ -219,9 +290,13 @@ class SimEnv:
         outcomes = replay.get("outcomes") if isinstance(replay.get("outcomes"), list) else []
         if enabled and replay.get("outcomes") is not None and not isinstance(replay.get("outcomes"), list):
             raise ValueError("rng_replay.outcomes must be list")
+        if enabled and len(outcomes) == 0:
+            raise ValueError("rng_replay enabled but outcomes are empty")
         self._state["_rng_replay_last"] = list(outcomes)
         info["rng_replay_enabled"] = enabled
         info["rng_replay_consumed"] = len(outcomes)
+        if enabled:
+            self._apply_rng_replay_outcomes(outcomes, info)
 
     def _make_blinds(self, ante: int, selected: str, selecting: bool) -> dict[str, dict[str, Any]]:
         scores = self._target_scores(ante)
@@ -453,6 +528,7 @@ class SimEnv:
             "packs": self._restore_market(canonical_state.get("packs")),
             "used_vouchers": self._restore_used_vouchers(canonical_state.get("used_vouchers")),
             "hands": self._restore_hands(canonical_state.get("hands")),
+            "tags": self._normalize_tags(canonical_state.get("tags")),
             "ante_num": ante_num,
             "round_num": int(round_info.get("round_num") or 1),
             "done": bool(flags.get("done") or False),
@@ -499,6 +575,7 @@ class SimEnv:
             "packs": {"count": 0, "limit": 0, "highlighted_limit": 0, "cards": []},
             "used_vouchers": [],
             "hands": self._default_hands(),
+            "tags": [],
             "ante_num": 1,
             "round_num": 1,
             "done": False,

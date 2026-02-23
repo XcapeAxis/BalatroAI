@@ -3,6 +3,8 @@
 import re
 from typing import Any
 
+from sim.core.serde import canonical_dumps
+
 
 HAND_ALIASES = {
     "FOUR_KIND": "FOUR_OF_A_KIND",
@@ -239,6 +241,46 @@ def _canonicalize_used_vouchers(raw_used: Any) -> list[str]:
     return sorted(set(out))
 
 
+def _canonicalize_pack_choices(raw_value: Any) -> list[dict[str, Any]]:
+    cards: list[Any]
+    if isinstance(raw_value, list):
+        cards = raw_value
+    elif isinstance(raw_value, dict) and isinstance(raw_value.get("cards"), list):
+        cards = raw_value.get("cards")
+    else:
+        cards = []
+
+    out: list[dict[str, Any]] = []
+    for idx, card in enumerate(cards):
+        if isinstance(card, dict):
+            key = str(card.get("key") or "").strip().lower()
+        else:
+            key = str(card or "").strip().lower()
+        if not key:
+            continue
+        out.append({"key": key, "slot_index": idx})
+    out.sort(key=canonical_dumps)
+    return out
+
+
+def _canonicalize_tags(raw_tags: Any) -> list[str]:
+    if isinstance(raw_tags, list):
+        values = raw_tags
+    elif raw_tags is None:
+        values = []
+    else:
+        values = [raw_tags]
+    out: list[str] = []
+    for item in values:
+        if isinstance(item, dict):
+            key = str(item.get("key") or item.get("id") or item.get("name") or "").strip().lower()
+        else:
+            key = str(item).strip().lower()
+        if key:
+            out.append(key)
+    return sorted(set(out))
+
+
 def to_canonical_state(
     raw_state: dict[str, Any],
     *,
@@ -267,6 +309,8 @@ def to_canonical_state(
         "vouchers": _canonicalize_market_cards(raw_state.get("vouchers")),
         "packs": _canonicalize_market_cards(raw_state.get("packs")),
         "used_vouchers": _canonicalize_used_vouchers(raw_state.get("used_vouchers")),
+        "pack_choices": _canonicalize_pack_choices(raw_state.get("pack_choices") or raw_state.get("pack")),
+        "tags": _canonicalize_tags(raw_state.get("tags")),
         "round": {
             "hands_left": int(round_info.get("hands_left") or 0),
             "discards_left": int(round_info.get("discards_left") or 0),

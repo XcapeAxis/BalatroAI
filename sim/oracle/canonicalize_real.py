@@ -244,6 +244,54 @@ def _extract_used_vouchers(raw_state: dict[str, Any]) -> list[str]:
     return sorted(set(out))
 
 
+def _extract_pack_choices(raw_state: dict[str, Any]) -> list[dict[str, Any]]:
+    candidates = [
+        raw_state.get("pack_choices"),
+        raw_state.get("pack"),
+        raw_state.get("booster"),
+        raw_state.get("booster_pack"),
+    ]
+    out: list[dict[str, Any]] = []
+    idx = 0
+    for raw in candidates:
+        if isinstance(raw, list):
+            cards = raw
+        elif isinstance(raw, dict):
+            cards = raw.get("cards") if isinstance(raw.get("cards"), list) else []
+        else:
+            cards = []
+        for card in cards:
+            if isinstance(card, dict):
+                key = str(card.get("key") or "").strip().lower()
+            else:
+                key = str(card or "").strip().lower()
+            if not key:
+                continue
+            out.append({"key": key, "slot_index": idx})
+            idx += 1
+    out.sort(key=lambda x: (int(x.get("slot_index") or 0), str(x.get("key") or "")))
+    return out
+
+
+def _extract_tags(raw_state: dict[str, Any]) -> list[str]:
+    raw = raw_state.get("tags")
+    if isinstance(raw, list):
+        items = raw
+    elif raw is None:
+        items = []
+    else:
+        items = [raw]
+    out: list[str] = []
+    for item in items:
+        if isinstance(item, dict):
+            key = str(item.get("key") or item.get("id") or item.get("name") or "").strip().lower()
+        else:
+            key = str(item).strip().lower()
+        if key:
+            out.append(key)
+    return sorted(set(out))
+
+
 def _extract_hands(raw_state: dict[str, Any]) -> dict[str, Any]:
     hands = raw_state.get("hands")
     levels: dict[str, dict[str, float]] = {}
@@ -298,6 +346,8 @@ def canonicalize_real_state(
         "vouchers": _extract_market_cards(raw_state.get("vouchers")),
         "packs": _extract_market_cards(raw_state.get("packs")),
         "used_vouchers": _extract_used_vouchers(raw_state),
+        "pack_choices": _extract_pack_choices(raw_state),
+        "tags": _extract_tags(raw_state),
         "round": {
             "hands_left": int(round_info.get("hands_left") or 0),
             "discards_left": int(round_info.get("discards_left") or 0),

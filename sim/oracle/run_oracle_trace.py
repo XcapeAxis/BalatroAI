@@ -26,6 +26,7 @@ from sim.core.hashing import (
     state_hash_p7_stateful_observed_core,
     state_hash_p8_rng_observed_core,
     state_hash_p8_shop_observed_core,
+    state_hash_p9_episode_observed_core,
     state_hash_rng_events_core,
     state_hash_score_core,
     state_hash_zones_core,
@@ -78,6 +79,13 @@ def phase_default_action(state: dict[str, Any], seed: str) -> dict[str, Any]:
         return {"schema_version": "action_v1", "phase": phase, "action_type": "SELECT", "index": 0}
     if phase == "SELECTING_HAND":
         hand = (state.get("hand") or {}).get("cards") or []
+        round_info = state.get("round") or {}
+        hands_left = int(round_info.get("hands_left") or 0)
+        discards_left = int(round_info.get("discards_left") or 0)
+        if hands_left <= 0 and discards_left > 0 and hand:
+            return {"schema_version": "action_v1", "phase": phase, "action_type": "DISCARD", "indices": [0]}
+        if hands_left <= 0 and discards_left <= 0:
+            return {"schema_version": "action_v1", "phase": phase, "action_type": "WAIT"}
         if hand:
             return {"schema_version": "action_v1", "phase": phase, "action_type": "PLAY", "indices": [0]}
         return {"schema_version": "action_v1", "phase": phase, "action_type": "WAIT"}
@@ -263,6 +271,7 @@ def main() -> int:
                     "state_hash_p7_stateful_observed_core": state_hash_p7_stateful_observed_core(canonical_with_observed),
                     "state_hash_p8_shop_observed_core": state_hash_p8_shop_observed_core(canonical_with_observed),
                     "state_hash_p8_rng_observed_core": state_hash_p8_rng_observed_core(canonical_with_observed),
+                    "state_hash_p9_episode_observed_core": state_hash_p9_episode_observed_core(canonical_with_observed),
                     "state_hash_zones_core": state_hash_zones_core(canonical),
                     "state_hash_zones_counts_core": state_hash_zones_counts_core(canonical),
                     "state_hash_economy_core": state_hash_economy_core(canonical),

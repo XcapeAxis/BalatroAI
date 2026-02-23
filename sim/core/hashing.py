@@ -647,6 +647,113 @@ def _filter_p8_rng_observed_core(state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _extract_pack_choices_min(state: dict[str, Any]) -> list[str]:
+    candidates = [
+        state.get("pack_choices"),
+        state.get("pack"),
+        state.get("booster"),
+        state.get("booster_pack"),
+    ]
+    out: list[str] = []
+    for candidate in candidates:
+        cards: list[Any] = []
+        if isinstance(candidate, list):
+            cards = candidate
+        elif isinstance(candidate, dict):
+            raw_cards = candidate.get("cards")
+            if isinstance(raw_cards, list):
+                cards = raw_cards
+        for card in cards:
+            if isinstance(card, dict):
+                key = str(card.get("key") or "").strip().lower()
+                if key:
+                    out.append(key)
+            elif isinstance(card, (str, int, float, bool)):
+                text = str(card).strip().lower()
+                if text:
+                    out.append(text)
+    return sorted(set(out))
+
+
+def _extract_tags_min(state: dict[str, Any]) -> list[str]:
+    candidates = [
+        state.get("tags"),
+        state.get("applied_tags"),
+        state.get("active_tags"),
+    ]
+    out: list[str] = []
+    for raw in candidates:
+        if isinstance(raw, list):
+            items = raw
+        elif isinstance(raw, dict):
+            items = list(raw.values())
+        elif raw is None:
+            items = []
+        else:
+            items = [raw]
+        for item in items:
+            if isinstance(item, dict):
+                key = str(item.get("key") or item.get("id") or item.get("name") or "").strip().lower()
+                if key:
+                    out.append(key)
+            elif isinstance(item, (str, int, float, bool)):
+                text = str(item).strip().lower()
+                if text:
+                    out.append(text)
+    return sorted(set(out))
+
+
+def _extract_blind_signals(state: dict[str, Any]) -> dict[str, Any]:
+    round_info = state.get("round") or {}
+    blind = str(round_info.get("blind") or "").strip().lower()
+    boss_key = str(
+        state.get("boss_blind")
+        or state.get("boss_blind_id")
+        or (round_info.get("boss_blind") if isinstance(round_info, dict) else "")
+        or ""
+    ).strip().lower()
+
+    return {
+        "blind": blind,
+        "boss_blind": boss_key,
+        "is_boss_blind": bool(blind == "boss" or boss_key),
+    }
+
+
+def _filter_p9_episode_observed_core(state: dict[str, Any]) -> dict[str, Any]:
+    state = to_builtin(state)
+    zones = state.get("zones") or {}
+    round_info = state.get("round") or {}
+    observed = state.get("score_observed") or {}
+    replay = state.get("rng_replay") if isinstance(state.get("rng_replay"), dict) else {}
+    replay_outcomes_raw = replay.get("outcomes") if isinstance(replay.get("outcomes"), list) else []
+    replay_outcomes = [_rng_outcome_sig(x) for x in replay_outcomes_raw]
+
+    hand_cards = _zone_cards(zones, "hand")
+
+    delta = float(observed.get("delta") or 0.0)
+    delta_sign = 1 if delta > 1e-9 else (-1 if delta < -1e-9 else 0)
+
+    return {
+        "schema_version": state.get("schema_version"),
+        "shop_offers": {
+            "shop": _extract_market_items_min(state, "shop"),
+            "vouchers": _extract_market_items_min(state, "vouchers"),
+            "packs": _extract_market_items_min(state, "packs"),
+        },
+        "pack_choices": _extract_pack_choices_min(state),
+        "blind_tag_signals": {
+            "blind": _extract_blind_signals(state),
+            "tags": _extract_tags_min(state),
+        },
+        "rng_replay": {
+            "enabled": bool(replay.get("enabled") or False),
+            "source": str(replay.get("source") or ""),
+            "outcomes": replay_outcomes,
+        },
+    }
+
+
 def _filter_zones_core(state: dict[str, Any]) -> dict[str, Any]:
     state = to_builtin(state)
     zones = state.get("zones") or {}
@@ -798,6 +905,10 @@ def state_hash_p8_rng_observed_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_p8_rng_observed_core(state)))
 
 
+def state_hash_p9_episode_observed_core(state: dict[str, Any]) -> str:
+    return _sha256_text(canonical_dumps(_filter_p9_episode_observed_core(state)))
+
+
 def state_hash_zones_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_zones_core(state)))
 
@@ -869,6 +980,10 @@ def p8_shop_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
 
 def p8_rng_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
     return _filter_p8_rng_observed_core(state)
+
+
+def p9_episode_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
+    return _filter_p9_episode_observed_core(state)
 
 
 def zones_core_projection(state: dict[str, Any]) -> dict[str, Any]:
