@@ -1,0 +1,356 @@
+{
+  "metadata": {
+    "generated_at": "2026-02-23T21:02:38.819430+00:00",
+    "total": 24,
+    "supported": 23,
+    "unsupported": 1,
+    "supported_min_required": 8
+  },
+  "items": [
+    {
+      "tag_name": "Boss",
+      "tag_key": "boss",
+      "template": "tag_boss_reroll",
+      "confidence": 0.8,
+      "matched_rules": [
+        "kw:boss_reroll"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Re-rolls the next Boss Blind .",
+        "trigger_timing": "immediate",
+        "notes": "Ante availability: 1; If the Director's Cut has been redeemed, using the Boss tag to re-roll the next Boss Blind will also use up the one Re-Roll option."
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Buffoon",
+      "tag_key": "buffoon",
+      "template": "tag_free_pack",
+      "confidence": 0.78,
+      "matched_rules": [
+        "kw:free_pack"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Immediately open a free Mega Buffoon Pack .",
+        "trigger_timing": "immediate",
+        "notes": "Ante availability: 2+"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Charm",
+      "tag_key": "charm",
+      "template": "tag_free_pack",
+      "confidence": 0.78,
+      "matched_rules": [
+        "kw:free_pack"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Immediately open a free Mega Arcana Pack .",
+        "trigger_timing": "immediate",
+        "notes": "Ante availability: 1"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Coupon",
+      "tag_key": "coupon",
+      "template": "tag_free_pack",
+      "confidence": 0.78,
+      "matched_rules": [
+        "kw:free_pack"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "In the next shop, initial Jokers , Consumables Cards and Booster Packs are free ($0).",
+        "trigger_timing": "next_shop",
+        "notes": "Ante availability: 1; Other parts of the shop (such as Vouchers and Items generated after rerolls) keep their usual costs."
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "D6",
+      "tag_key": "d6",
+      "template": "tag_shop_event",
+      "confidence": 0.76,
+      "matched_rules": [
+        "kw:shop_event"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "In the next Shop , Rerolls start at $0 .",
+        "trigger_timing": "next_shop",
+        "notes": "Ante availability: 1; The price will go up $1 per Reroll as normal."
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Double",
+      "tag_key": "double",
+      "template": "tag_reward_event",
+      "confidence": 0.72,
+      "matched_rules": [
+        "kw:reward_event"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Gives a copy of the next Tag selected (excluding Double Tags).",
+        "trigger_timing": "immediate",
+        "notes": "Ante availability: 1; Can be stacked on one Tag earned, each adding one additional copy of (instead of doubling) that Tag."
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Economy",
+      "tag_key": "economy",
+      "template": "tag_reward_event",
+      "confidence": 0.72,
+      "matched_rules": [
+        "kw:reward_event"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Doubles your money (adds a maximum of $40 ) .",
+        "trigger_timing": "immediate",
+        "notes": "Ante availability: 1; If your balance is negative your money is not doubled, instead giving you $0 and essentially wasting the tag."
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Ethereal",
+      "tag_key": "ethereal",
+      "template": "tag_free_pack",
+      "confidence": 0.78,
+      "matched_rules": [
+        "kw:free_pack"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Immediately open a free Spectral Pack .",
+        "trigger_timing": "immediate",
+        "notes": "Ante availability: 2+; It is the only one among Pack-related Tags that does not give a Mega pack. Other effects of opening Booster Packs (like Red Card and Hallucination ) can be activated as normal."
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Foil",
+      "tag_key": "foil",
+      "template": "tag_shop_event",
+      "confidence": 0.76,
+      "matched_rules": [
+        "kw:shop_event"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "The next base edition Joker you find in a Shop becomes Foil ( +50 Chips ) and free.",
+        "trigger_timing": "immediate",
+        "notes": "Ante availability: 1"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Garbage",
+      "tag_key": "garbage",
+      "template": "tag_reward_event",
+      "confidence": 0.72,
+      "matched_rules": [
+        "kw:reward_event"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Gain $1 for each unused discard this run.",
+        "trigger_timing": "immediate_scaling_from_run_state",
+        "notes": "Ante availability: 2+"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Handy",
+      "tag_key": "handy",
+      "template": "tag_reward_event",
+      "confidence": 0.72,
+      "matched_rules": [
+        "kw:reward_event"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Gain $1 for each hand played this run.",
+        "trigger_timing": "immediate_scaling_from_run_state",
+        "notes": "Ante availability: 2+"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Holographic",
+      "tag_key": "holographic",
+      "template": "tag_shop_event",
+      "confidence": 0.76,
+      "matched_rules": [
+        "kw:shop_event"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "The next base edition Joker you find in a Shop becomes Holographic ( +10 Mult ) and free.",
+        "trigger_timing": "immediate",
+        "notes": "Ante availability: 1"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Investment",
+      "tag_key": "investment",
+      "template": "tag_reward_event",
+      "confidence": 0.72,
+      "matched_rules": [
+        "kw:reward_event"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Gain $25 after defeating the next Boss Blind .",
+        "trigger_timing": "next_blind_resolution",
+        "notes": "Ante availability: 1; Can be stacked on one Boss Blind, each adding additional $25 bonus."
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Juggle",
+      "tag_key": "juggle",
+      "template": "tag_event_observed",
+      "confidence": 0.7,
+      "matched_rules": [
+        "fallback:tag_event_observed"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "+3 Hand Size for the next round only.",
+        "trigger_timing": "immediate",
+        "notes": "Ante availability: 1; Can be stacked multiple times on the same round, each adding an additional +3 Hand size."
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Meteor",
+      "tag_key": "meteor",
+      "template": "tag_free_pack",
+      "confidence": 0.78,
+      "matched_rules": [
+        "kw:free_pack"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Immediately open a free Mega Celestial Pack .",
+        "trigger_timing": "immediate",
+        "notes": "Ante availability: 2+"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Negative",
+      "tag_key": "negative",
+      "template": "tag_shop_event",
+      "confidence": 0.76,
+      "matched_rules": [
+        "kw:shop_event"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "The next base edition Joker you find in a Shop becomes Negative (+1 joker slot) and free.",
+        "trigger_timing": "immediate",
+        "notes": "Ante availability: 2+; If there are no base edition Jokers in the next shop, these tags will instead be stored. Works with Uncommon and Rare Tag if the generated Joker doesn't have an Edition naturally. Can be stacked on one shop until there are no base edition Jokers."
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Polychrome",
+      "tag_key": "polychrome",
+      "template": "tag_shop_event",
+      "confidence": 0.76,
+      "matched_rules": [
+        "kw:shop_event"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "The next base edition Joker you find in a Shop becomes Polychrome ( X1.5 Mult ) and free.",
+        "trigger_timing": "immediate",
+        "notes": "Ante availability: 1"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Rare",
+      "tag_key": "rare",
+      "template": "tag_shop_event",
+      "confidence": 0.76,
+      "matched_rules": [
+        "kw:shop_event"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "The next shop will have a free Rare Joker .",
+        "trigger_timing": "next_shop",
+        "notes": "Ante availability: 1"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Speed",
+      "tag_key": "speed",
+      "template": "tag_reward_event",
+      "confidence": 0.72,
+      "matched_rules": [
+        "kw:reward_event"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Gives $5 for each Blind you've skipped this run.",
+        "trigger_timing": "immediate_scaling_from_run_state",
+        "notes": "Ante availability: 1; Guaranteed to give at least $5 , as it includes the Blind skipped to gain this tag."
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Standard",
+      "tag_key": "standard",
+      "template": "tag_free_pack",
+      "confidence": 0.78,
+      "matched_rules": [
+        "kw:free_pack"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Immediately open a free Mega Standard Pack .",
+        "trigger_timing": "immediate",
+        "notes": "Ante availability: 2+; Other effects of opening Booster Packs (like Red Card and Hallucination ) can be activated as normal."
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Top-up",
+      "tag_key": "top_up",
+      "template": "tag_event_observed",
+      "confidence": 0.7,
+      "matched_rules": [
+        "fallback:tag_event_observed"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Create up to 2 Common Jokers (if you have space).",
+        "trigger_timing": "immediate",
+        "notes": "Ante availability: 2+; The Jokers created cannot have Stickers , like Eternal/Perishable/Rental, even at higher stakes."
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Uncommon",
+      "tag_key": "uncommon",
+      "template": "tag_shop_event",
+      "confidence": 0.76,
+      "matched_rules": [
+        "kw:shop_event"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "The next shop will have a free Uncommon Joker .",
+        "trigger_timing": "next_shop",
+        "notes": "Ante availability: 1; The Joker is extra generated, and guaranteed to appear in next shop, which is not affected by Vouchers that relatively lower the weight of Jokers in Shop (see The Shop#Vouchers ), or certain Challenges that Jokers' spawn rate is set to 0. Can be stacked with Edition Tags, generating a free Joker with Editions ."
+      },
+      "unsupported_reason": null
+    },
+    {
+      "tag_name": "Voucher",
+      "tag_key": "voucher",
+      "template": "tag_shop_event",
+      "confidence": 0.76,
+      "matched_rules": [
+        "kw:shop_event"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Adds a Voucher to the next Shop.",
+        "trigger_timing": "next_shop",
+        "notes": "Ante availability: 1; Can be stacked on one shop until all available vouchers appear (excluding bought vouchers and upgrades of unbought vouchers). Added vouchers do not carry over to later shops in the ante."
+      },
+      "unsupported_reason": null
+    }
+  ]
+}

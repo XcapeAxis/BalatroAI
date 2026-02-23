@@ -1,0 +1,6 @@
+p9_episode_01_amber_acorn_boss
+p9_episode_02_cerulean_bell_buffoon
+p9_episode_03_the_arm_charm
+p9_episode_04_the_club_coupon
+p9_episode_05_the_eye_d6
+p9_episode_06_the_fish_double

@@ -1,0 +1,23 @@
+{
+  "metadata": {
+    "generated_at": "2026-02-23T21:02:38.819432+00:00",
+    "total": 24,
+    "supported": 23,
+    "unsupported": 1
+  },
+  "items": [
+    {
+      "tag_name": "Orbital",
+      "tag_key": "orbital",
+      "template": null,
+      "confidence": 0.0,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "effect_summary": "Upgrades a specified random Poker Hand by three levels.",
+        "trigger_timing": "immediate",
+        "notes": "Ante availability: 2+; The hand can be a secret hand if it has already been played in this run."
+      },
+      "unsupported_reason": "probabilistic_or_unstable"
+    }
+  ]
+}

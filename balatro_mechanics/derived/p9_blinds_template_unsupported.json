@@ -1,0 +1,52 @@
+{
+  "metadata": {
+    "generated_at": "2026-02-23T21:02:38.819427+00:00",
+    "total": 28,
+    "supported": 25,
+    "unsupported": 3
+  },
+  "items": [
+    {
+      "boss_name": "Crimson Heart",
+      "boss_key": "crimson_heart",
+      "template": null,
+      "confidence": 0.0,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 8; Finisher Boss Blind",
+        "restriction_or_rule_change": "One random Joker disabled every hand (changes every hand)",
+        "what_it_blocks_or_forces": "Disrupts joker usage/order",
+        "notes": "Score requirement: 2x base; Reward: $8"
+      },
+      "unsupported_reason": "probabilistic_or_unstable"
+    },
+    {
+      "boss_name": "The Hook",
+      "boss_key": "the_hook",
+      "template": null,
+      "confidence": 0.0,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante Any; Boss Blind",
+        "restriction_or_rule_change": "Discards 2 random cards held in hand after every played hand",
+        "what_it_blocks_or_forces": "Alters draw/hand/discard flow",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": "probabilistic_or_unstable"
+    },
+    {
+      "boss_name": "The Wheel",
+      "boss_key": "the_wheel",
+      "template": null,
+      "confidence": 0.0,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 2; Boss Blind",
+        "restriction_or_rule_change": "1 in 7 cards get drawn face down during the round",
+        "what_it_blocks_or_forces": "Hides card information",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": "probabilistic_or_unstable"
+    }
+  ]
+}

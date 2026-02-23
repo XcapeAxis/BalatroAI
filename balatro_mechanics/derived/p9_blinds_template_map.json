@@ -1,0 +1,411 @@
+{
+  "metadata": {
+    "generated_at": "2026-02-23T21:02:38.819413+00:00",
+    "total": 28,
+    "supported": 25,
+    "unsupported": 3,
+    "supported_min_required": 8
+  },
+  "items": [
+    {
+      "boss_name": "Amber Acorn",
+      "boss_key": "amber_acorn",
+      "template": "boss_rule_observed",
+      "confidence": 0.7,
+      "matched_rules": [
+        "fallback:boss_rule_observed"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 8; Finisher Boss Blind",
+        "restriction_or_rule_change": "Flips and shuffles all Joker cards",
+        "what_it_blocks_or_forces": "Disrupts joker usage/order",
+        "notes": "Score requirement: 2x base; Reward: $8"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "Cerulean Bell",
+      "boss_key": "cerulean_bell",
+      "template": "boss_forced_selection",
+      "confidence": 0.76,
+      "matched_rules": [
+        "kw:forced_selection"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 8; Finisher Boss Blind",
+        "restriction_or_rule_change": "Forces 1 card to always be selected",
+        "what_it_blocks_or_forces": "",
+        "notes": "Score requirement: 2x base; Reward: $8"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Arm",
+      "boss_key": "the_arm",
+      "template": "boss_limit_hands",
+      "confidence": 0.78,
+      "matched_rules": [
+        "kw:hand_limit"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 2; Boss Blind",
+        "restriction_or_rule_change": "Decrease level of played poker hand by 1 (hand levels can go as low as Level 1, and are reduced before scoring)",
+        "what_it_blocks_or_forces": "",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Club",
+      "boss_key": "the_club",
+      "template": "boss_card_rule",
+      "confidence": 0.74,
+      "matched_rules": [
+        "kw:card_rule"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante Any; Boss Blind",
+        "restriction_or_rule_change": "All Club cards are debuffed",
+        "what_it_blocks_or_forces": "Disables scoring/effects on affected cards",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Eye",
+      "boss_key": "the_eye",
+      "template": "boss_rule_observed",
+      "confidence": 0.7,
+      "matched_rules": [
+        "fallback:boss_rule_observed"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 3; Boss Blind",
+        "restriction_or_rule_change": "No repeat hand types this round (every hand played this round must be of a different type and not previously played this round)",
+        "what_it_blocks_or_forces": "Forces restricted play patterns",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Fish",
+      "boss_key": "the_fish",
+      "template": "boss_card_rule",
+      "confidence": 0.74,
+      "matched_rules": [
+        "kw:card_rule"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 2; Boss Blind",
+        "restriction_or_rule_change": "Cards drawn face down after each hand played",
+        "what_it_blocks_or_forces": "Hides card information",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Flint",
+      "boss_key": "the_flint",
+      "template": "boss_rule_observed",
+      "confidence": 0.7,
+      "matched_rules": [
+        "fallback:boss_rule_observed"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 2; Boss Blind",
+        "restriction_or_rule_change": "Base Chips and Mult for played poker hands are halved for the entire round",
+        "what_it_blocks_or_forces": "",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Goad",
+      "boss_key": "the_goad",
+      "template": "boss_card_rule",
+      "confidence": 0.74,
+      "matched_rules": [
+        "kw:card_rule"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante Any; Boss Blind",
+        "restriction_or_rule_change": "All Spade cards are debuffed",
+        "what_it_blocks_or_forces": "Disables scoring/effects on affected cards",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Head",
+      "boss_key": "the_head",
+      "template": "boss_card_rule",
+      "confidence": 0.74,
+      "matched_rules": [
+        "kw:card_rule"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante Any; Boss Blind",
+        "restriction_or_rule_change": "All Heart cards are debuffed",
+        "what_it_blocks_or_forces": "Disables scoring/effects on affected cards",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The House",
+      "boss_key": "the_house",
+      "template": "boss_card_rule",
+      "confidence": 0.74,
+      "matched_rules": [
+        "kw:card_rule"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 2; Boss Blind",
+        "restriction_or_rule_change": "First hand is drawn face down",
+        "what_it_blocks_or_forces": "Hides card information",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Manacle",
+      "boss_key": "the_manacle",
+      "template": "boss_limit_discards",
+      "confidence": 0.78,
+      "matched_rules": [
+        "kw:discard"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante Any; Boss Blind",
+        "restriction_or_rule_change": "-1 Hand Size",
+        "what_it_blocks_or_forces": "Alters draw/hand/discard flow",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Mark",
+      "boss_key": "the_mark",
+      "template": "boss_card_rule",
+      "confidence": 0.74,
+      "matched_rules": [
+        "kw:card_rule"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 2; Boss Blind",
+        "restriction_or_rule_change": "All face cards are drawn face down",
+        "what_it_blocks_or_forces": "Hides card information",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Mouth",
+      "boss_key": "the_mouth",
+      "template": "boss_rule_observed",
+      "confidence": 0.7,
+      "matched_rules": [
+        "fallback:boss_rule_observed"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 2; Boss Blind",
+        "restriction_or_rule_change": "Only one hand type can be played this round",
+        "what_it_blocks_or_forces": "Forces restricted play patterns",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Needle",
+      "boss_key": "the_needle",
+      "template": "boss_rule_observed",
+      "confidence": 0.7,
+      "matched_rules": [
+        "fallback:boss_rule_observed"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 2; Boss Blind",
+        "restriction_or_rule_change": "Play only 1 hand",
+        "what_it_blocks_or_forces": "Forces restricted play patterns",
+        "notes": "Score requirement: 1x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Ox",
+      "boss_key": "the_ox",
+      "template": "boss_rule_observed",
+      "confidence": 0.7,
+      "matched_rules": [
+        "fallback:boss_rule_observed"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 6; Boss Blind",
+        "restriction_or_rule_change": "Playing your most played hand this run sets money to $0",
+        "what_it_blocks_or_forces": "Direct economy penalty",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Pillar",
+      "boss_key": "the_pillar",
+      "template": "boss_card_rule",
+      "confidence": 0.74,
+      "matched_rules": [
+        "kw:card_rule"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante Any; Boss Blind",
+        "restriction_or_rule_change": "Cards played previously this Ante (during Small and Big Blinds) are debuffed",
+        "what_it_blocks_or_forces": "Disables scoring/effects on affected cards",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Plant",
+      "boss_key": "the_plant",
+      "template": "boss_card_rule",
+      "confidence": 0.74,
+      "matched_rules": [
+        "kw:card_rule"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 4; Boss Blind",
+        "restriction_or_rule_change": "All face cards are debuffed",
+        "what_it_blocks_or_forces": "Disables scoring/effects on affected cards",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Psychic",
+      "boss_key": "the_psychic",
+      "template": "boss_rule_observed",
+      "confidence": 0.7,
+      "matched_rules": [
+        "fallback:boss_rule_observed"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante Any; Boss Blind",
+        "restriction_or_rule_change": "Must play 5 cards (not all cards need to score)",
+        "what_it_blocks_or_forces": "Forces restricted play patterns",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Serpent",
+      "boss_key": "the_serpent",
+      "template": "boss_limit_discards",
+      "confidence": 0.78,
+      "matched_rules": [
+        "kw:discard"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 5; Boss Blind",
+        "restriction_or_rule_change": "After Play or Discard, always draw 3 cards (ignores hand size)",
+        "what_it_blocks_or_forces": "Alters draw/hand/discard flow",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Tooth",
+      "boss_key": "the_tooth",
+      "template": "boss_rule_observed",
+      "confidence": 0.7,
+      "matched_rules": [
+        "fallback:boss_rule_observed"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 3; Boss Blind",
+        "restriction_or_rule_change": "Lose $1 per card played",
+        "what_it_blocks_or_forces": "Direct economy penalty",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Wall",
+      "boss_key": "the_wall",
+      "template": "boss_rule_observed",
+      "confidence": 0.7,
+      "matched_rules": [
+        "fallback:boss_rule_observed"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 2; Boss Blind",
+        "restriction_or_rule_change": "Extra large blind",
+        "what_it_blocks_or_forces": "",
+        "notes": "Score requirement: 4x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Water",
+      "boss_key": "the_water",
+      "template": "boss_limit_discards",
+      "confidence": 0.78,
+      "matched_rules": [
+        "kw:discard"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 2; Boss Blind",
+        "restriction_or_rule_change": "Start with 0 discards",
+        "what_it_blocks_or_forces": "Alters draw/hand/discard flow",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "The Window",
+      "boss_key": "the_window",
+      "template": "boss_card_rule",
+      "confidence": 0.74,
+      "matched_rules": [
+        "kw:card_rule"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante Any; Boss Blind",
+        "restriction_or_rule_change": "All Diamond cards are debuffed",
+        "what_it_blocks_or_forces": "Disables scoring/effects on affected cards",
+        "notes": "Score requirement: 2x base; Reward: $5"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "Verdant Leaf",
+      "boss_key": "verdant_leaf",
+      "template": "boss_card_rule",
+      "confidence": 0.74,
+      "matched_rules": [
+        "kw:card_rule"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 8; Finisher Boss Blind",
+        "restriction_or_rule_change": "All cards debuffed until 1 Joker sold",
+        "what_it_blocks_or_forces": "Disables scoring/effects on affected cards",
+        "notes": "Score requirement: 2x base; Reward: $8"
+      },
+      "unsupported_reason": null
+    },
+    {
+      "boss_name": "Violet Vessel",
+      "boss_key": "violet_vessel",
+      "template": "boss_rule_observed",
+      "confidence": 0.7,
+      "matched_rules": [
+        "fallback:boss_rule_observed"
+      ],
+      "raw_fields_used": {
+        "ante_or_tier_info": "Min Ante 8; Finisher Boss Blind",
+        "restriction_or_rule_change": "Very large blind",
+        "what_it_blocks_or_forces": "",
+        "notes": "Score requirement: 6x base; Reward: $8"
+      },
+      "unsupported_reason": null
+    }
+  ]
+}
