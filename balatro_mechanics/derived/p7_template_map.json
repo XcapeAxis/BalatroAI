@@ -1,0 +1,490 @@
+{
+  "metadata": {
+    "generated_at": "2026-02-23T17:24:34.814602+00:00",
+    "source_unsupported": "D:\\我的\\BalatroAI\\balatro_mechanics\\derived\\joker_template_unsupported.json",
+    "source_clusters": "D:\\我的\\BalatroAI\\balatro_mechanics\\derived\\p6_p3_unsupported_clusters.json",
+    "total_unsupported_input": 27
+  },
+  "items": [
+    {
+      "joker_name": "Ancient Joker",
+      "joker_key": "j_ancient_joker",
+      "template": "end_round_payout_or_multiplier",
+      "confidence": 0.74,
+      "matched_rules": [
+        "keyword:round_transition"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Each played card with [suit] gives X1.5 Mult when scored, suit changes at end of round",
+        "trigger_timing": "on_scored",
+        "key_mechanics": "mult_mult",
+        "reason": "no_safe_template_match",
+        "cluster_id": "p6_cluster_003"
+      },
+      "params": {
+        "strategy": "stateful_two_step_cycle",
+        "family": "end_round_payout_or_multiplier",
+        "requires_multi_action": true,
+        "state_schema": {
+          "counter": "int",
+          "armed": "bool",
+          "last_round": "int"
+        },
+        "initial_state": {
+          "counter": 0,
+          "armed": false,
+          "last_round": 0
+        }
+      },
+      "target": "p7_j_ancient_joker"
+    },
+    {
+      "joker_name": "Burnt Joker",
+      "joker_key": "j_burnt_joker",
+      "template": "accumulate_per_discard_then_apply",
+      "confidence": 0.74,
+      "matched_rules": [
+        "keyword:discard_counter"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Upgrade the level of the first discarded poker hand each round",
+        "trigger_timing": "on_discard",
+        "key_mechanics": "discard",
+        "reason": "no_safe_template_match",
+        "cluster_id": "p6_cluster_008"
+      },
+      "params": {
+        "strategy": "stateful_two_step_cycle",
+        "family": "accumulate_per_discard_then_apply",
+        "requires_multi_action": true,
+        "state_schema": {
+          "counter": "int",
+          "armed": "bool",
+          "last_round": "int"
+        },
+        "initial_state": {
+          "counter": 0,
+          "armed": false,
+          "last_round": 0
+        }
+      },
+      "target": "p7_j_burnt_joker"
+    },
+    {
+      "joker_name": "Ice Cream",
+      "joker_key": "j_ice_cream",
+      "template": "accumulate_per_hand_then_apply",
+      "confidence": 0.74,
+      "matched_rules": [
+        "keyword:hands_played_or_remaining"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "+100 Chips -5 Chips for every hand played",
+        "trigger_timing": "unknown",
+        "key_mechanics": "chips_add",
+        "reason": "no_safe_template_match",
+        "cluster_id": "p6_cluster_001"
+      },
+      "params": {
+        "strategy": "stateful_two_step_cycle",
+        "family": "accumulate_per_hand_then_apply",
+        "requires_multi_action": true,
+        "state_schema": {
+          "counter": "int",
+          "armed": "bool",
+          "last_round": "int"
+        },
+        "initial_state": {
+          "counter": 0,
+          "armed": false,
+          "last_round": 0
+        }
+      },
+      "target": "p7_j_ice_cream"
+    },
+    {
+      "joker_name": "Loyalty Card",
+      "joker_key": "j_loyalty_card",
+      "template": "accumulate_per_hand_then_apply",
+      "confidence": 0.74,
+      "matched_rules": [
+        "keyword:hands_played_or_remaining"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "X4 Mult every 6 hands played 5 remaining",
+        "trigger_timing": "unknown",
+        "key_mechanics": "mult_mult",
+        "reason": "no_safe_template_match",
+        "cluster_id": "p6_cluster_004"
+      },
+      "params": {
+        "strategy": "stateful_two_step_cycle",
+        "family": "accumulate_per_hand_then_apply",
+        "requires_multi_action": true,
+        "state_schema": {
+          "counter": "int",
+          "armed": "bool",
+          "last_round": "int"
+        },
+        "initial_state": {
+          "counter": 0,
+          "armed": false,
+          "last_round": 0
+        }
+      },
+      "target": "p7_j_loyalty_card"
+    },
+    {
+      "joker_name": "Marble Joker",
+      "joker_key": "j_marble_joker",
+      "template": "end_round_payout_or_multiplier",
+      "confidence": 0.74,
+      "matched_rules": [
+        "keyword:round_transition"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Adds one Stone card to the deck when Blind is selected",
+        "trigger_timing": "unknown",
+        "key_mechanics": "deck_change",
+        "reason": "no_safe_template_match",
+        "cluster_id": "p6_cluster_002"
+      },
+      "params": {
+        "strategy": "stateful_two_step_cycle",
+        "family": "end_round_payout_or_multiplier",
+        "requires_multi_action": true,
+        "state_schema": {
+          "counter": "int",
+          "armed": "bool",
+          "last_round": "int"
+        },
+        "initial_state": {
+          "counter": 0,
+          "armed": false,
+          "last_round": 0
+        }
+      },
+      "target": "p7_j_marble_joker"
+    },
+    {
+      "joker_name": "Merry Andy",
+      "joker_key": "j_merry_andy",
+      "template": "accumulate_per_discard_then_apply",
+      "confidence": 0.74,
+      "matched_rules": [
+        "keyword:discard_counter"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "+3 discards each round, -1 hand size",
+        "trigger_timing": "passive",
+        "key_mechanics": "hand_size; discard",
+        "reason": "no_safe_template_match",
+        "cluster_id": "p6_cluster_006"
+      },
+      "params": {
+        "strategy": "stateful_two_step_cycle",
+        "family": "accumulate_per_discard_then_apply",
+        "requires_multi_action": true,
+        "state_schema": {
+          "counter": "int",
+          "armed": "bool",
+          "last_round": "int"
+        },
+        "initial_state": {
+          "counter": 0,
+          "armed": false,
+          "last_round": 0
+        }
+      },
+      "target": "p7_j_merry_andy"
+    },
+    {
+      "joker_name": "Popcorn",
+      "joker_key": "j_popcorn",
+      "template": "end_round_payout_or_multiplier",
+      "confidence": 0.74,
+      "matched_rules": [
+        "keyword:round_transition"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "+20 Mult -4 Mult per round played",
+        "trigger_timing": "unknown",
+        "key_mechanics": "mult_add",
+        "reason": "no_safe_template_match",
+        "cluster_id": "p6_cluster_001"
+      },
+      "params": {
+        "strategy": "stateful_two_step_cycle",
+        "family": "end_round_payout_or_multiplier",
+        "requires_multi_action": true,
+        "state_schema": {
+          "counter": "int",
+          "armed": "bool",
+          "last_round": "int"
+        },
+        "initial_state": {
+          "counter": 0,
+          "armed": false,
+          "last_round": 0
+        }
+      },
+      "target": "p7_j_popcorn"
+    },
+    {
+      "joker_name": "Ramen",
+      "joker_key": "j_ramen",
+      "template": "accumulate_per_discard_then_apply",
+      "confidence": 0.74,
+      "matched_rules": [
+        "keyword:discard_counter"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "X2 Mult , loses X0.01 Mult per card discarded",
+        "trigger_timing": "mixed",
+        "key_mechanics": "mult_mult; discard",
+        "reason": "no_safe_template_match",
+        "cluster_id": "p6_cluster_013"
+      },
+      "params": {
+        "strategy": "stateful_two_step_cycle",
+        "family": "accumulate_per_discard_then_apply",
+        "requires_multi_action": true,
+        "state_schema": {
+          "counter": "int",
+          "armed": "bool",
+          "last_round": "int"
+        },
+        "initial_state": {
+          "counter": 0,
+          "armed": false,
+          "last_round": 0
+        }
+      },
+      "target": "p7_j_ramen"
+    },
+    {
+      "joker_name": "Seltzer",
+      "joker_key": "j_seltzer",
+      "template": "accumulate_per_hand_then_apply",
+      "confidence": 0.74,
+      "matched_rules": [
+        "override:j_seltzer:accumulate_per_hand_then_apply"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Retrigger all cards played for the next 10 hands",
+        "trigger_timing": "on_scored",
+        "key_mechanics": "retrigger",
+        "reason": "no_safe_template_match",
+        "cluster_id": "p6_cluster_005"
+      },
+      "params": {
+        "strategy": "stateful_two_step_cycle",
+        "family": "accumulate_per_hand_then_apply",
+        "requires_multi_action": true,
+        "state_schema": {
+          "counter": "int",
+          "armed": "bool",
+          "last_round": "int"
+        },
+        "initial_state": {
+          "counter": 0,
+          "armed": false,
+          "last_round": 0
+        }
+      },
+      "target": "p7_j_seltzer"
+    },
+    {
+      "joker_name": "Supernova",
+      "joker_key": "j_supernova",
+      "template": "accumulate_per_hand_then_apply",
+      "confidence": 0.74,
+      "matched_rules": [
+        "override:j_supernova:accumulate_per_hand_then_apply"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Adds the number of times poker hand has been played this run to Mult",
+        "trigger_timing": "unknown",
+        "key_mechanics": "mult_add",
+        "reason": "no_safe_template_match",
+        "cluster_id": "p6_cluster_016"
+      },
+      "params": {
+        "strategy": "stateful_two_step_cycle",
+        "family": "accumulate_per_hand_then_apply",
+        "requires_multi_action": true,
+        "state_schema": {
+          "counter": "int",
+          "armed": "bool",
+          "last_round": "int"
+        },
+        "initial_state": {
+          "counter": 0,
+          "armed": false,
+          "last_round": 0
+        }
+      },
+      "target": "p7_j_supernova"
+    },
+    {
+      "joker_name": "The Idol",
+      "joker_key": "j_the_idol",
+      "template": "end_round_payout_or_multiplier",
+      "confidence": 0.74,
+      "matched_rules": [
+        "override:j_the_idol:end_round_payout_or_multiplier"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Each played [rank] of [suit] gives X2 Mult when scored Card changes every round",
+        "trigger_timing": "on_scored",
+        "key_mechanics": "mult_mult",
+        "reason": "no_safe_template_match",
+        "cluster_id": "p6_cluster_003"
+      },
+      "params": {
+        "strategy": "stateful_two_step_cycle",
+        "family": "end_round_payout_or_multiplier",
+        "requires_multi_action": true,
+        "state_schema": {
+          "counter": "int",
+          "armed": "bool",
+          "last_round": "int"
+        },
+        "initial_state": {
+          "counter": 0,
+          "armed": false,
+          "last_round": 0
+        }
+      },
+      "target": "p7_j_the_idol"
+    },
+    {
+      "joker_name": "Troubadour",
+      "joker_key": "j_troubadour",
+      "template": "end_round_payout_or_multiplier",
+      "confidence": 0.74,
+      "matched_rules": [
+        "override:j_troubadour:end_round_payout_or_multiplier"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "+2 hand size, -1 hand each round",
+        "trigger_timing": "passive",
+        "key_mechanics": "hand_size",
+        "reason": "no_safe_template_match",
+        "cluster_id": "p6_cluster_006"
+      },
+      "params": {
+        "strategy": "stateful_two_step_cycle",
+        "family": "end_round_payout_or_multiplier",
+        "requires_multi_action": true,
+        "state_schema": {
+          "counter": "int",
+          "armed": "bool",
+          "last_round": "int"
+        },
+        "initial_state": {
+          "counter": 0,
+          "armed": false,
+          "last_round": 0
+        }
+      },
+      "target": "p7_j_troubadour"
+    },
+    {
+      "joker_name": "Turtle Bean",
+      "joker_key": "j_turtle_bean",
+      "template": "end_round_payout_or_multiplier",
+      "confidence": 0.74,
+      "matched_rules": [
+        "override:j_turtle_bean:end_round_payout_or_multiplier"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "+5 hand size, reduces by 1 each round",
+        "trigger_timing": "passive",
+        "key_mechanics": "hand_size",
+        "reason": "no_safe_template_match",
+        "cluster_id": "p6_cluster_007"
+      },
+      "params": {
+        "strategy": "stateful_two_step_cycle",
+        "family": "end_round_payout_or_multiplier",
+        "requires_multi_action": true,
+        "state_schema": {
+          "counter": "int",
+          "armed": "bool",
+          "last_round": "int"
+        },
+        "initial_state": {
+          "counter": 0,
+          "armed": false,
+          "last_round": 0
+        }
+      },
+      "target": "p7_j_turtle_bean"
+    },
+    {
+      "joker_name": "DNA",
+      "joker_key": "j_dna",
+      "template": "streak_or_consecutive_hand_rule",
+      "confidence": 0.74,
+      "matched_rules": [
+        "override:j_dna:streak_or_consecutive_hand_rule"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "If first hand of round has only 1 card, add a permanent copy to deck and draw it to hand",
+        "trigger_timing": "on_played",
+        "key_mechanics": "deck_change",
+        "reason": "no_safe_template_match",
+        "cluster_id": "p6_cluster_010"
+      },
+      "params": {
+        "strategy": "stateful_two_step_cycle",
+        "family": "streak_or_consecutive_hand_rule",
+        "requires_multi_action": true,
+        "state_schema": {
+          "counter": "int",
+          "armed": "bool",
+          "last_round": "int"
+        },
+        "initial_state": {
+          "counter": 0,
+          "armed": false,
+          "last_round": 0
+        }
+      },
+      "target": "p7_j_dna"
+    },
+    {
+      "joker_name": "Riff-Raff",
+      "joker_key": "j_riff_raff",
+      "template": "end_round_payout_or_multiplier",
+      "confidence": 0.74,
+      "matched_rules": [
+        "keyword:round_transition"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "When Blind is selected, create 2 Common Jokers (Must have room)",
+        "trigger_timing": "unknown",
+        "key_mechanics": "",
+        "reason": "insufficient_structured_fields",
+        "cluster_id": "p6_cluster_002"
+      },
+      "params": {
+        "strategy": "stateful_two_step_cycle",
+        "family": "end_round_payout_or_multiplier",
+        "requires_multi_action": true,
+        "state_schema": {
+          "counter": "int",
+          "armed": "bool",
+          "last_round": "int"
+        },
+        "initial_state": {
+          "counter": 0,
+          "armed": false,
+          "last_round": 0
+        }
+      },
+      "target": "p7_j_riff_raff"
+    }
+  ]
+}

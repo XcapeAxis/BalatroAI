@@ -1,0 +1,15 @@
+p7_j_ancient_joker
+p7_j_burnt_joker
+p7_j_dna
+p7_j_ice_cream
+p7_j_loyalty_card
+p7_j_marble_joker
+p7_j_merry_andy
+p7_j_popcorn
+p7_j_ramen
+p7_j_riff_raff
+p7_j_seltzer
+p7_j_supernova
+p7_j_the_idol
+p7_j_troubadour
+p7_j_turtle_bean

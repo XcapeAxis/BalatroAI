@@ -1,0 +1,98 @@
+[
+  {
+    "joker_name": "Baseball Card",
+    "joker_key": "j_baseball_card",
+    "target": "p7_j_baseball_card",
+    "reason": "not_stateful_deterministic",
+    "source_reason": "no_safe_template_match",
+    "effect_summary": "Uncommon Jokers each give X1.5 Mult"
+  },
+  {
+    "joker_name": "Diet Cola",
+    "joker_key": "j_diet_cola",
+    "target": "p7_j_diet_cola",
+    "reason": "not_stateful_deterministic",
+    "source_reason": "no_safe_template_match",
+    "effect_summary": "Sell this card to create a free Double Tag"
+  },
+  {
+    "joker_name": "Hack",
+    "joker_key": "j_hack",
+    "target": "p7_j_hack",
+    "reason": "not_stateful_deterministic",
+    "source_reason": "no_safe_template_match",
+    "effect_summary": "Retrigger each played 2 , 3 , 4 , or 5"
+  },
+  {
+    "joker_name": "Hanging Chad",
+    "joker_key": "j_hanging_chad",
+    "target": "p7_j_hanging_chad",
+    "reason": "not_stateful_deterministic",
+    "source_reason": "no_safe_template_match",
+    "effect_summary": "Retrigger first played card used in scoring 2 additional times"
+  },
+  {
+    "joker_name": "Misprint",
+    "joker_key": "j_misprint",
+    "target": "p7_j_misprint",
+    "reason": "not_stateful_deterministic",
+    "source_reason": "no_safe_template_match",
+    "effect_summary": "+0-23 Mult"
+  },
+  {
+    "joker_name": "Mr. Bones",
+    "joker_key": "j_mr_bones",
+    "target": "p7_j_mr_bones",
+    "reason": "not_stateful_deterministic",
+    "source_reason": "no_safe_template_match",
+    "effect_summary": "Prevents Death if chips scored are at least 25% of required chips self destructs"
+  },
+  {
+    "joker_name": "Showman",
+    "joker_key": "j_showman",
+    "target": "p7_j_showman",
+    "reason": "not_stateful_deterministic",
+    "source_reason": "no_safe_template_match",
+    "effect_summary": "Joker , Tarot , Planet , and Spectral cards may appear multiple times"
+  },
+  {
+    "joker_name": "Sixth Sense",
+    "joker_key": "j_sixth_sense",
+    "target": "p7_j_sixth_sense",
+    "reason": "not_stateful_deterministic",
+    "source_reason": "no_safe_template_match",
+    "effect_summary": "If first hand of round is a single 6 , destroy it and create a Spectral card (Must have room)"
+  },
+  {
+    "joker_name": "Smeared Joker",
+    "joker_key": "j_smeared_joker",
+    "target": "p7_j_smeared_joker",
+    "reason": "not_stateful_deterministic",
+    "source_reason": "no_safe_template_match",
+    "effect_summary": "Hearts and Diamonds count as the same suit, Spades and Clubs count as the same suit"
+  },
+  {
+    "joker_name": "Splash",
+    "joker_key": "j_splash",
+    "target": "p7_j_splash",
+    "reason": "not_stateful_deterministic",
+    "source_reason": "no_safe_template_match",
+    "effect_summary": "Every played card counts in scoring"
+  },
+  {
+    "joker_name": "Stuntman",
+    "joker_key": "j_stuntman",
+    "target": "p7_j_stuntman",
+    "reason": "not_stateful_deterministic",
+    "source_reason": "no_safe_template_match",
+    "effect_summary": "+250 Chips , -2 hand size"
+  },
+  {
+    "joker_name": "Superposition",
+    "joker_key": "j_superposition",
+    "target": "p7_j_superposition",
+    "reason": "not_stateful_deterministic",
+    "source_reason": "insufficient_structured_fields",
+    "effect_summary": "Create a Tarot card if poker hand contains an Ace and a Straight (Must have room)"
+  }
+]
