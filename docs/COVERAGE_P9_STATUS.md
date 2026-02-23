@@ -31,3 +31,6 @@
 
 ## Failing Status Counts
 - none
+
+## Training Smoke Artifact
+- latest sim-only dual-stage smoke summary: `docs/artifacts/p9/20260224-045635/train_summary.txt`
