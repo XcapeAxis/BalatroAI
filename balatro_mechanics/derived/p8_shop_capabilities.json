@@ -1,0 +1,148 @@
+{
+  "timestamp": "2026-02-23T19:00:35.611327Z",
+  "base_url": "http://127.0.0.1:12346",
+  "seed": "AAAAAAA",
+  "health": true,
+  "rpc_methods": {
+    "start": {
+      "ok": false,
+      "note": "RPC start error: Method 'start' requires one of these states: MENU, GAME_OVER"
+    },
+    "next_round": {
+      "ok": true,
+      "value": {
+        "params": {}
+      },
+      "note": null
+    },
+    "skip": {
+      "ok": true,
+      "value": {
+        "params": {}
+      },
+      "note": null
+    },
+    "select": {
+      "ok": true,
+      "value": {
+        "params": {
+          "index": 0
+        }
+      },
+      "note": null
+    },
+    "play": {
+      "ok": true,
+      "value": {
+        "params": {
+          "cards": [
+            0
+          ]
+        }
+      },
+      "note": null
+    },
+    "discard": {
+      "ok": true,
+      "value": {
+        "params": {
+          "cards": [
+            0
+          ]
+        }
+      },
+      "note": null
+    },
+    "reroll": {
+      "ok": false,
+      "note": "RPC reroll error: Method 'reroll' requires one of these states: SHOP"
+    },
+    "buy": {
+      "ok": false,
+      "note": "RPC buy error: Method 'buy' requires one of these states: SHOP"
+    },
+    "pack": {
+      "ok": false,
+      "note": "RPC pack error: Method 'pack' requires one of these states: SMODS_BOOSTER_OPENED"
+    },
+    "sell": {
+      "ok": false,
+      "note": "RPC sell error: No jokers available to sell"
+    },
+    "add": {
+      "ok": true,
+      "value": {
+        "params": {
+          "key": "j_joker"
+        }
+      },
+      "note": null
+    },
+    "set": {
+      "ok": true,
+      "value": {
+        "params": {
+          "money": 10
+        }
+      },
+      "note": null
+    },
+    "use": {
+      "ok": false,
+      "note": "RPC use error: Consumable index out of range: 0"
+    }
+  },
+  "shop_sequences": {
+    "enter_shop": {
+      "ok": true,
+      "value": {
+        "phase": "SHOP"
+      },
+      "note": null
+    },
+    "reroll": {
+      "ok": true,
+      "value": {
+        "phase": "SHOP"
+      },
+      "note": null
+    },
+    "buy_voucher": {
+      "ok": false,
+      "note": "RPC buy error: [SMODS balatrobot \"src/lua/endpoints/buy.lua\"]:182: attempt to index field 'buy_button' (a nil value)"
+    },
+    "buy_pack": {
+      "ok": false,
+      "note": "RPC add error: Cannot add pack, shop booster slots are full"
+    },
+    "open_pack": {
+      "ok": false,
+      "note": "RPC add error: Cannot add pack, shop booster slots are full"
+    },
+    "buy_card": {
+      "ok": true,
+      "value": {
+        "phase": "SHOP"
+      },
+      "note": null
+    },
+    "sell_joker": {
+      "ok": true,
+      "value": {
+        "phase": "SHOP"
+      },
+      "note": null
+    },
+    "recommended_strategy": {
+      "voucher": "shop_buy",
+      "pack": "shop_buy",
+      "shop_actions": [
+        "reroll",
+        "buy(voucher)",
+        "buy(pack)+pack",
+        "buy(card)",
+        "sell(joker)"
+      ]
+    }
+  }
+}
