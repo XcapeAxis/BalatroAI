@@ -1,15 +1,15 @@
 # P3 Joker Fixture Coverage Status
 
-- Generated at: `2026-02-19T17:52:58.351765+00:00`
+- Generated at: `2026-02-23T16:19:30.930778+00:00`
 - Base URL: `http://127.0.0.1:12346`
 - Scope: `p3_hand_score_observed_core`
 - Classifier total jokers: **150**
-- Classifier supported templates: **58**
-- Classifier unsupported: **92**
+- Classifier supported templates: **123**
+- Classifier unsupported: **27**
 
 ## Batch Result
-- total: **58**
-- pass: **58**
+- total: **123**
+- pass: **123**
 - diff_fail: **0**
 - oracle_fail: **0**
 - gen_fail: **0**
@@ -32,7 +32,7 @@
 - `hand_size_lte_mult_add`: 1
 - `held_lowest_rank_mult_add`: 1
 - `held_rank_mult_add`: 1
-- `observed_noop`: 17
+- `observed_noop`: 82
 - `odd_chips_per_scoring_card`: 1
 - `photograph_first_face_xmult`: 1
 - `rank_set_chips_mult_per_scoring_card`: 2
