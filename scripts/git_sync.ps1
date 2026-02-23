@@ -9,7 +9,12 @@
   [string]$DryRun = "true",
   [switch]$Force = $false,
   [switch]$ForceLocalCleanup = $false,
-  [string[]]$ProtectBranches = @("main", "master", "dev", "develop", "release/*", "hotfix/*")
+  [string[]]$ProtectBranches = @("main", "master", "dev", "develop", "release/*", "hotfix/*"),
+  [int]$RetryCount = 4,
+  [int]$RetryDelaySeconds = 3,
+  [int]$BackoffFactor = 2,
+  [switch]$SkipCleanupOnFetchFail = $true,
+  [int]$ExitCodeOnRemoteFail = 2
 )
 
 Set-StrictMode -Version Latest
@@ -21,7 +26,6 @@ function ConvertTo-BoolFlag {
     [object]$Value,
     [bool]$Default = $false
   )
-
   if ($null -eq $Value) { return $Default }
   if ($Value -is [bool]) { return [bool]$Value }
 
@@ -53,18 +57,19 @@ function Test-BranchExistsRemote([string]$RemoteName, [string]$BranchName) {
 
 function Test-ProtectedBranch([string]$BranchName, [string[]]$Patterns) {
   foreach ($p in $Patterns) {
-    if ($BranchName -like $p) {
-      return $true
-    }
+    if ($BranchName -like $p) { return $true }
   }
   return $false
 }
 
-function Invoke-GitExec {
+function Invoke-GitWithRetry {
   param(
     [string]$Name,
     [string]$Command,
-    [bool]$ShouldExecute
+    [bool]$ShouldExecute,
+    [int]$RetryCountValue,
+    [int]$RetryDelaySecondsValue,
+    [int]$BackoffFactorValue
   )
 
   $entry = [ordered]@{
@@ -72,23 +77,52 @@ function Invoke-GitExec {
     command = $Command
     executed = $ShouldExecute
     success = $false
+    attempts = 0
     output = @()
+    errors = @()
   }
 
   if (-not $ShouldExecute) {
     $entry.success = $true
     $entry.output = @("dry-run")
+    $entry.attempts = 0
     return [pscustomobject]$entry
   }
 
-  try {
-    $out = & cmd /c $Command 2>&1
-    $entry.output = @($out | ForEach-Object { [string]$_ })
-    $entry.success = ($LASTEXITCODE -eq 0)
-  } catch {
-    $entry.output = @([string]$_.Exception.Message)
-    $entry.success = $false
+  $maxAttempts = [Math]::Max(1, $RetryCountValue)
+  $delay = [Math]::Max(1, $RetryDelaySecondsValue)
+  $backoff = [Math]::Max(1, $BackoffFactorValue)
+
+  for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+    $entry.attempts = $attempt
+    try {
+      $out = & cmd /c $Command 2>&1
+      $outputLines = @($out | ForEach-Object { [string]$_ })
+      $entry.output = $outputLines
+      if ($LASTEXITCODE -eq 0) {
+        $entry.success = $true
+        break
+      }
+      $msg = ($outputLines -join " ").Trim()
+      $entry.errors += [ordered]@{
+        attempt = $attempt
+        code = [int]$LASTEXITCODE
+        message = $msg
+      }
+    } catch {
+      $entry.errors += [ordered]@{
+        attempt = $attempt
+        code = -1
+        message = [string]$_.Exception.Message
+      }
+    }
+
+    if ($attempt -lt $maxAttempts) {
+      Start-Sleep -Seconds $delay
+      $delay = $delay * $backoff
+    }
   }
+
   return [pscustomobject]$entry
 }
 
@@ -140,6 +174,9 @@ $planned = [ordered]@{
   delete_merged = @()
 }
 $executed = New-Object System.Collections.Generic.List[object]
+$remoteErrors = New-Object System.Collections.Generic.List[object]
+$remoteHealthy = $true
+$branchCleanupSkippedReason = $null
 
 $localCleanupExecutionAllowed = $true
 if (-not $hasRemote -and -not $dryRunEnabled -and -not $ForceLocalCleanup) {
@@ -237,52 +274,130 @@ Write-Host ("planned delete merged: " + (($planned.delete_merged -join ", ") -re
 if ($PushCurrentBranch) { Write-Host ("planned push branch: " + $currentBranch) }
 if ($PushTags) { Write-Host "planned push tags: true" }
 
-if ($PruneRemote -and $hasRemote) {
-  $executed.Add((Invoke-GitExec -Name "fetch_prune" -Command ("git fetch " + $Remote + " --prune --tags") -ShouldExecute (-not $dryRunEnabled)))
+$fetchSucceeded = $true
+if (-not $hasRemote) {
+  $remoteHealthy = $false
+  $fetchSucceeded = $false
+  $remoteErrors.Add([ordered]@{
+    op = "fetch"
+    code = -1
+    message = "remote missing: $Remote"
+    attempt = 0
+  })
+} elseif ($PruneRemote) {
+  $fetchResult = Invoke-GitWithRetry -Name "fetch_prune" -Command ("git fetch " + $Remote + " --prune --tags") -ShouldExecute (-not $dryRunEnabled) -RetryCountValue $RetryCount -RetryDelaySecondsValue $RetryDelaySeconds -BackoffFactorValue $BackoffFactor
+  $executed.Add($fetchResult)
+  $fetchSucceeded = [bool]$fetchResult.success
+  if (-not $fetchSucceeded) {
+    $remoteHealthy = $false
+    foreach ($err in ($fetchResult.errors | ForEach-Object { $_ })) {
+      $remoteErrors.Add([ordered]@{
+        op = "fetch"
+        code = $err.code
+        message = $err.message
+        attempt = $err.attempt
+      })
+    }
+  }
+}
+
+if (-not $fetchSucceeded -and $SkipCleanupOnFetchFail) {
+  $branchCleanupSkippedReason = "fetch_failed_skip_cleanup"
 }
 
 if (-not $baseExistsLocal -and $baseExistsRemote) {
-  $executed.Add((Invoke-GitExec -Name "ensure_base_branch" -Command ("git branch --track " + $chosenBase + " " + $Remote + "/" + $chosenBase) -ShouldExecute (-not $dryRunEnabled)))
+  $ensureResult = Invoke-GitWithRetry -Name "ensure_base_branch" -Command ("git branch --track " + $chosenBase + " " + $Remote + "/" + $chosenBase) -ShouldExecute (-not $dryRunEnabled) -RetryCountValue 1 -RetryDelaySecondsValue 1 -BackoffFactorValue 1
+  $executed.Add($ensureResult)
 }
 
 if ($hasRemote) {
-  if (-not $dryRunEnabled -and $pullCanExecute) {
+  if (-not $dryRunEnabled -and $pullCanExecute -and $fetchSucceeded) {
     if ($currentBranch -ne $chosenBase) {
-      $executed.Add((Invoke-GitExec -Name "checkout_base" -Command ("git checkout " + $chosenBase) -ShouldExecute $true))
+      $executed.Add((Invoke-GitWithRetry -Name "checkout_base" -Command ("git checkout " + $chosenBase) -ShouldExecute $true -RetryCountValue 1 -RetryDelaySecondsValue 1 -BackoffFactorValue 1))
     }
-    $executed.Add((Invoke-GitExec -Name "pull_base_ff_only" -Command ("git pull --ff-only " + $Remote + " " + $chosenBase) -ShouldExecute $true))
+    $pullResult = Invoke-GitWithRetry -Name "pull_base_ff_only" -Command ("git pull --ff-only " + $Remote + " " + $chosenBase) -ShouldExecute $true -RetryCountValue $RetryCount -RetryDelaySecondsValue $RetryDelaySeconds -BackoffFactorValue $BackoffFactor
+    $executed.Add($pullResult)
+    if (-not $pullResult.success) {
+      $remoteHealthy = $false
+      foreach ($err in ($pullResult.errors | ForEach-Object { $_ })) {
+        $remoteErrors.Add([ordered]@{
+          op = "pull"
+          code = $err.code
+          message = $err.message
+          attempt = $err.attempt
+        })
+      }
+    }
     if ($currentBranch -ne $chosenBase) {
-      $executed.Add((Invoke-GitExec -Name "checkout_restore_current" -Command ("git checkout " + $currentBranch) -ShouldExecute $true))
+      $executed.Add((Invoke-GitWithRetry -Name "checkout_restore_current" -Command ("git checkout " + $currentBranch) -ShouldExecute $true -RetryCountValue 1 -RetryDelaySecondsValue 1 -BackoffFactorValue 1))
     }
   } elseif ($dryRunEnabled) {
-    $executed.Add((Invoke-GitExec -Name "pull_base_ff_only" -Command ("git pull --ff-only " + $Remote + " " + $chosenBase) -ShouldExecute $false))
-  } elseif (-not $pullCanExecute) {
+    $executed.Add((Invoke-GitWithRetry -Name "pull_base_ff_only" -Command ("git pull --ff-only " + $Remote + " " + $chosenBase) -ShouldExecute $false -RetryCountValue 1 -RetryDelaySecondsValue 1 -BackoffFactorValue 1))
+  } elseif (-not $pullCanExecute -or -not $fetchSucceeded) {
     $executed.Add([pscustomobject]@{
       name = "pull_base_ff_only"
       command = "git pull --ff-only $Remote $chosenBase"
       executed = $false
       success = $false
-      output = @("skipped: " + $pullReason)
+      attempts = 0
+      output = @("skipped: " + ($(if (-not $fetchSucceeded) { "fetch failed" } else { $pullReason })))
+      errors = @()
     })
   }
 }
 
 if ($PushCurrentBranch -and $hasRemote) {
-  $executed.Add((Invoke-GitExec -Name "push_current_branch" -Command ("git push -u " + $Remote + " " + $currentBranch) -ShouldExecute (-not $dryRunEnabled)))
+  $canPush = (-not $dryRunEnabled) -and $fetchSucceeded
+  $pushBranchResult = Invoke-GitWithRetry -Name "push_current_branch" -Command ("git push -u " + $Remote + " " + $currentBranch) -ShouldExecute $canPush -RetryCountValue $RetryCount -RetryDelaySecondsValue $RetryDelaySeconds -BackoffFactorValue $BackoffFactor
+  $executed.Add($pushBranchResult)
+  if ($canPush -and -not $pushBranchResult.success) {
+    $remoteHealthy = $false
+    foreach ($err in ($pushBranchResult.errors | ForEach-Object { $_ })) {
+      $remoteErrors.Add([ordered]@{
+        op = "push_branch"
+        code = $err.code
+        message = $err.message
+        attempt = $err.attempt
+      })
+    }
+  }
 }
+
 if ($PushTags -and $hasRemote) {
-  $executed.Add((Invoke-GitExec -Name "push_tags" -Command ("git push " + $Remote + " --tags") -ShouldExecute (-not $dryRunEnabled)))
+  $canPushTags = (-not $dryRunEnabled) -and $fetchSucceeded
+  $pushTagsResult = Invoke-GitWithRetry -Name "push_tags" -Command ("git push " + $Remote + " --tags") -ShouldExecute $canPushTags -RetryCountValue $RetryCount -RetryDelaySecondsValue $RetryDelaySeconds -BackoffFactorValue $BackoffFactor
+  $executed.Add($pushTagsResult)
+  if ($canPushTags -and -not $pushTagsResult.success) {
+    $remoteHealthy = $false
+    foreach ($err in ($pushTagsResult.errors | ForEach-Object { $_ })) {
+      $remoteErrors.Add([ordered]@{
+        op = "push_tags"
+        code = $err.code
+        message = $err.message
+        attempt = $err.attempt
+      })
+    }
+  }
 }
 
 $deleteCmd = if ($Force) { "-D" } else { "-d" }
+$branchCleanupAllowed = $true
+if ($branchCleanupSkippedReason) {
+  $branchCleanupAllowed = $false
+}
+
 foreach ($bn in $planned.delete_gone) {
-  $canExec = ((-not $dryRunEnabled) -and $localCleanupExecutionAllowed)
-  $executed.Add((Invoke-GitExec -Name ("delete_gone:" + $bn) -Command ("git branch " + $deleteCmd + " " + $bn) -ShouldExecute $canExec))
+  $canExec = ((-not $dryRunEnabled) -and $localCleanupExecutionAllowed -and $branchCleanupAllowed)
+  $executed.Add((Invoke-GitWithRetry -Name ("delete_gone:" + $bn) -Command ("git branch " + $deleteCmd + " " + $bn) -ShouldExecute $canExec -RetryCountValue 1 -RetryDelaySecondsValue 1 -BackoffFactorValue 1))
 }
 foreach ($bn in $planned.delete_merged) {
   if ($planned.delete_gone -contains $bn) { continue }
-  $canExec = ((-not $dryRunEnabled) -and $localCleanupExecutionAllowed)
-  $executed.Add((Invoke-GitExec -Name ("delete_merged:" + $bn) -Command ("git branch " + $deleteCmd + " " + $bn) -ShouldExecute $canExec))
+  $canExec = ((-not $dryRunEnabled) -and $localCleanupExecutionAllowed -and $branchCleanupAllowed)
+  $executed.Add((Invoke-GitWithRetry -Name ("delete_merged:" + $bn) -Command ("git branch " + $deleteCmd + " " + $bn) -ShouldExecute $canExec -RetryCountValue 1 -RetryDelaySecondsValue 1 -BackoffFactorValue 1))
+}
+
+if (-not $localCleanupExecutionAllowed -and -not $branchCleanupSkippedReason) {
+  $branchCleanupSkippedReason = "local_cleanup_blocked_without_force"
 }
 
 $okCount = @($executed | Where-Object { $_.success }).Count
@@ -290,6 +405,7 @@ $failCount = @($executed | Where-Object { -not $_.success }).Count
 
 $summary = [ordered]@{
   remote_exists = $hasRemote
+  remote_health = $(if ($hasRemote -and $remoteHealthy) { "ok" } elseif ($hasRemote) { "failed" } else { "missing" })
   dry_run = $dryRunEnabled
   force_delete = [bool]$Force
   local_cleanup_execution_allowed = $localCleanupExecutionAllowed
@@ -298,6 +414,7 @@ $summary = [ordered]@{
   executed_actions = @($executed | Where-Object { $_.executed }).Count
   ok = $okCount
   failed = $failCount
+  branch_cleanup_skipped_reason = $branchCleanupSkippedReason
 }
 
 $report = [ordered]@{
@@ -315,6 +432,11 @@ $report = [ordered]@{
     force = [bool]$Force
     force_local_cleanup = [bool]$ForceLocalCleanup
     protect_branches = $protectSet
+    retry_count = $RetryCount
+    retry_delay_seconds = $RetryDelaySeconds
+    backoff_factor = $BackoffFactor
+    skip_cleanup_on_fetch_fail = [bool]$SkipCleanupOnFetchFail
+    exit_code_on_remote_fail = $ExitCodeOnRemoteFail
   }
   pre_state = [ordered]@{
     status_short = $statusShort
@@ -324,12 +446,21 @@ $report = [ordered]@{
   }
   planned_actions = $planned
   executed_actions = $executed
+  remote_health = $summary.remote_health
+  remote_errors = $remoteErrors
+  branch_cleanup_skipped_reason = $branchCleanupSkippedReason
   result_summary = $summary
 }
 
-$report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $reportPath -Encoding UTF8
+$report | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $reportPath -Encoding UTF8
 Write-Host ("report: " + $reportPath)
+if ($branchCleanupSkippedReason) {
+  Write-Host ("branch cleanup skipped: " + $branchCleanupSkippedReason)
+}
 if ($failCount -gt 0) {
   Write-Host ("completed with failures: " + $failCount)
 }
 
+if (-not $dryRunEnabled -and $summary.remote_health -ne "ok") {
+  exit $ExitCodeOnRemoteFail
+}
