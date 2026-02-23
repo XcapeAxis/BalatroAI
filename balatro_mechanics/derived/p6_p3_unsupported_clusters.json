@@ -1,0 +1,775 @@
+{
+  "generated_at": "2026-02-23T16:07:27.144614+00:00",
+  "source_unsupported": "D:\\我的\\BalatroAI\\balatro_mechanics\\derived\\joker_template_unsupported.json",
+  "total_unsupported": 27,
+  "cluster_count": 16,
+  "clusters": [
+    {
+      "cluster_id": "p6_cluster_001",
+      "size": 4,
+      "dominant_timing": "unknown",
+      "timing_distribution": {
+        "unknown": 4
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 4
+      },
+      "statefulness_distribution": {},
+      "numeric_pattern_distribution": {
+        "plus_chips": 2,
+        "plus_mult": 1
+      },
+      "top_keywords": [
+        "chips",
+        "mult",
+        "hand",
+        "add",
+        "100",
+        "available",
+        "start",
+        "size",
+        "000",
+        "every",
+        "23",
+        "20",
+        "round",
+        "250",
+        "earn",
+        "least"
+      ],
+      "representatives": [
+        "Ice Cream",
+        "Misprint",
+        "Popcorn",
+        "Stuntman"
+      ],
+      "member_keys": [
+        "j_ice_cream",
+        "j_misprint",
+        "j_popcorn",
+        "j_stuntman"
+      ],
+      "member_names": [
+        "Ice Cream",
+        "Misprint",
+        "Popcorn",
+        "Stuntman"
+      ],
+      "template_candidate": "flat_or_conditional_mult_add",
+      "difficulty": "med",
+      "required_signals": [
+        "score_observed.delta",
+        "round.hands_left",
+        "round.discards_left",
+        "timing:unknown"
+      ]
+    },
+    {
+      "cluster_id": "p6_cluster_002",
+      "size": 4,
+      "dominant_timing": "unknown",
+      "timing_distribution": {
+        "unknown": 3,
+        "passive": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 2,
+        "insufficient_structured_fields": 2
+      },
+      "statefulness_distribution": {
+        "depends_on_consumable": 1
+      },
+      "numeric_pattern_distribution": {
+        "per_rank": 1
+      },
+      "top_keywords": [
+        "available",
+        "start",
+        "deck",
+        "create",
+        "must",
+        "have",
+        "room",
+        "blind",
+        "selected",
+        "change",
+        "hand",
+        "adds",
+        "one",
+        "stone",
+        "common",
+        "jokers"
+      ],
+      "representatives": [
+        "Marble Joker",
+        "Riff-Raff",
+        "Sixth Sense",
+        "Superposition"
+      ],
+      "member_keys": [
+        "j_marble_joker",
+        "j_riff_raff",
+        "j_sixth_sense",
+        "j_superposition"
+      ],
+      "member_names": [
+        "Marble Joker",
+        "Riff-Raff",
+        "Sixth Sense",
+        "Superposition"
+      ],
+      "template_candidate": "metadata_required_template",
+      "difficulty": "high",
+      "required_signals": [
+        "score_observed.delta",
+        "round.hands_left",
+        "round.discards_left",
+        "timing:unknown",
+        "zones.played[min_card_fields]",
+        "consumables.cards"
+      ]
+    },
+    {
+      "cluster_id": "p6_cluster_003",
+      "size": 2,
+      "dominant_timing": "on_score",
+      "timing_distribution": {
+        "on_score": 2
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 2
+      },
+      "statefulness_distribution": {},
+      "numeric_pattern_distribution": {
+        "per_suit": 2,
+        "xmult": 2,
+        "per_rank": 1
+      },
+      "top_keywords": [
+        "mult",
+        "suit",
+        "changes",
+        "round",
+        "000",
+        "x1",
+        "end",
+        "available",
+        "start",
+        "rank",
+        "x2",
+        "every",
+        "one",
+        "hand",
+        "earn",
+        "least"
+      ],
+      "representatives": [
+        "Ancient Joker",
+        "The Idol"
+      ],
+      "member_keys": [
+        "j_ancient_joker",
+        "j_the_idol"
+      ],
+      "member_names": [
+        "Ancient Joker",
+        "The Idol"
+      ],
+      "template_candidate": "conditional_xmult",
+      "difficulty": "med",
+      "required_signals": [
+        "score_observed.delta",
+        "round.hands_left",
+        "round.discards_left",
+        "timing:on_score",
+        "zones.played[min_card_fields]"
+      ]
+    },
+    {
+      "cluster_id": "p6_cluster_004",
+      "size": 2,
+      "dominant_timing": "unknown",
+      "timing_distribution": {
+        "unknown": 2
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 2
+      },
+      "statefulness_distribution": {
+        "depends_on_joker_count": 1
+      },
+      "numeric_pattern_distribution": {
+        "xmult": 2
+      },
+      "top_keywords": [
+        "mult",
+        "available",
+        "start",
+        "uncommon",
+        "jokers",
+        "x1",
+        "x4",
+        "every",
+        "hands",
+        "remaining"
+      ],
+      "representatives": [
+        "Baseball Card",
+        "Loyalty Card"
+      ],
+      "member_keys": [
+        "j_baseball_card",
+        "j_loyalty_card"
+      ],
+      "member_names": [
+        "Baseball Card",
+        "Loyalty Card"
+      ],
+      "template_candidate": "conditional_xmult",
+      "difficulty": "med",
+      "required_signals": [
+        "score_observed.delta",
+        "round.hands_left",
+        "round.discards_left",
+        "timing:unknown",
+        "jokers.count"
+      ]
+    },
+    {
+      "cluster_id": "p6_cluster_005",
+      "size": 2,
+      "dominant_timing": "on_score",
+      "timing_distribution": {
+        "on_score": 2
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 2
+      },
+      "statefulness_distribution": {},
+      "numeric_pattern_distribution": {},
+      "top_keywords": [
+        "retrigger",
+        "available",
+        "start",
+        "all",
+        "next",
+        "10",
+        "hands"
+      ],
+      "representatives": [
+        "Hack",
+        "Seltzer"
+      ],
+      "member_keys": [
+        "j_hack",
+        "j_seltzer"
+      ],
+      "member_names": [
+        "Hack",
+        "Seltzer"
+      ],
+      "template_candidate": "complex_or_unknown_template",
+      "difficulty": "high",
+      "required_signals": [
+        "score_observed.delta",
+        "round.hands_left",
+        "round.discards_left",
+        "timing:on_score"
+      ]
+    },
+    {
+      "cluster_id": "p6_cluster_006",
+      "size": 2,
+      "dominant_timing": "passive",
+      "timing_distribution": {
+        "passive": 2
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 2
+      },
+      "statefulness_distribution": {},
+      "numeric_pattern_distribution": {},
+      "top_keywords": [
+        "hand",
+        "size",
+        "discards",
+        "round",
+        "win",
+        "rounds",
+        "discard",
+        "run",
+        "12",
+        "fewer",
+        "consecutive",
+        "playing",
+        "only",
+        "single",
+        "are",
+        "fine"
+      ],
+      "representatives": [
+        "Merry Andy",
+        "Troubadour"
+      ],
+      "member_keys": [
+        "j_merry_andy",
+        "j_troubadour"
+      ],
+      "member_names": [
+        "Merry Andy",
+        "Troubadour"
+      ],
+      "template_candidate": "complex_or_unknown_template",
+      "difficulty": "high",
+      "required_signals": [
+        "score_observed.delta",
+        "round.hands_left",
+        "round.discards_left",
+        "timing:passive"
+      ]
+    },
+    {
+      "cluster_id": "p6_cluster_007",
+      "size": 2,
+      "dominant_timing": "passive",
+      "timing_distribution": {
+        "passive": 2
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 2
+      },
+      "statefulness_distribution": {},
+      "numeric_pattern_distribution": {},
+      "top_keywords": [
+        "available",
+        "start",
+        "hand",
+        "size",
+        "every",
+        "counts",
+        "reduces",
+        "round"
+      ],
+      "representatives": [
+        "Splash",
+        "Turtle Bean"
+      ],
+      "member_keys": [
+        "j_splash",
+        "j_turtle_bean"
+      ],
+      "member_names": [
+        "Splash",
+        "Turtle Bean"
+      ],
+      "template_candidate": "complex_or_unknown_template",
+      "difficulty": "high",
+      "required_signals": [
+        "score_observed.delta",
+        "round.hands_left",
+        "round.discards_left",
+        "timing:passive"
+      ]
+    },
+    {
+      "cluster_id": "p6_cluster_008",
+      "size": 1,
+      "dominant_timing": "on_discard",
+      "timing_distribution": {
+        "on_discard": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "statefulness_distribution": {},
+      "numeric_pattern_distribution": {},
+      "top_keywords": [
+        "upgrade",
+        "level",
+        "first",
+        "discarded",
+        "poker",
+        "hand",
+        "round",
+        "discard",
+        "sell",
+        "50"
+      ],
+      "representatives": [
+        "Burnt Joker"
+      ],
+      "member_keys": [
+        "j_burnt_joker"
+      ],
+      "member_names": [
+        "Burnt Joker"
+      ],
+      "template_candidate": "complex_or_unknown_template",
+      "difficulty": "high",
+      "required_signals": [
+        "score_observed.delta",
+        "round.hands_left",
+        "round.discards_left",
+        "timing:on_discard"
+      ]
+    },
+    {
+      "cluster_id": "p6_cluster_009",
+      "size": 1,
+      "dominant_timing": "passive",
+      "timing_distribution": {
+        "passive": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "statefulness_distribution": {
+        "depends_on_money": 1
+      },
+      "numeric_pattern_distribution": {},
+      "top_keywords": [
+        "sell",
+        "this",
+        "create",
+        "free",
+        "double",
+        "tag",
+        "money",
+        "available",
+        "start"
+      ],
+      "representatives": [
+        "Diet Cola"
+      ],
+      "member_keys": [
+        "j_diet_cola"
+      ],
+      "member_names": [
+        "Diet Cola"
+      ],
+      "template_candidate": "shop_or_economy_passive",
+      "difficulty": "high",
+      "required_signals": [
+        "score_observed.delta",
+        "round.hands_left",
+        "round.discards_left",
+        "timing:passive",
+        "economy.money"
+      ]
+    },
+    {
+      "cluster_id": "p6_cluster_010",
+      "size": 1,
+      "dominant_timing": "on_score",
+      "timing_distribution": {
+        "on_score": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "statefulness_distribution": {},
+      "numeric_pattern_distribution": {},
+      "top_keywords": [
+        "hand",
+        "deck",
+        "first",
+        "round",
+        "only",
+        "add",
+        "permanent",
+        "copy",
+        "draw",
+        "change",
+        "available",
+        "start"
+      ],
+      "representatives": [
+        "DNA"
+      ],
+      "member_keys": [
+        "j_dna"
+      ],
+      "member_names": [
+        "DNA"
+      ],
+      "template_candidate": "complex_or_unknown_template",
+      "difficulty": "high",
+      "required_signals": [
+        "score_observed.delta",
+        "round.hands_left",
+        "round.discards_left",
+        "timing:on_score"
+      ]
+    },
+    {
+      "cluster_id": "p6_cluster_011",
+      "size": 1,
+      "dominant_timing": "on_score",
+      "timing_distribution": {
+        "on_score": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "statefulness_distribution": {},
+      "numeric_pattern_distribution": {
+        "first_scoring_card": 1
+      },
+      "top_keywords": [
+        "retrigger",
+        "first",
+        "used",
+        "additional",
+        "times",
+        "beat",
+        "boss",
+        "blind",
+        "high",
+        "hand"
+      ],
+      "representatives": [
+        "Hanging Chad"
+      ],
+      "member_keys": [
+        "j_hanging_chad"
+      ],
+      "member_names": [
+        "Hanging Chad"
+      ],
+      "template_candidate": "complex_or_unknown_template",
+      "difficulty": "high",
+      "required_signals": [
+        "score_observed.delta",
+        "round.hands_left",
+        "round.discards_left",
+        "timing:on_score",
+        "zones.played[min_card_fields]"
+      ]
+    },
+    {
+      "cluster_id": "p6_cluster_012",
+      "size": 1,
+      "dominant_timing": "passive",
+      "timing_distribution": {
+        "passive": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "statefulness_distribution": {},
+      "numeric_pattern_distribution": {},
+      "top_keywords": [
+        "chips",
+        "prevents",
+        "death",
+        "are",
+        "least",
+        "25",
+        "required",
+        "self",
+        "destructs",
+        "add",
+        "lose",
+        "five",
+        "runs"
+      ],
+      "representatives": [
+        "Mr. Bones"
+      ],
+      "member_keys": [
+        "j_mr_bones"
+      ],
+      "member_names": [
+        "Mr. Bones"
+      ],
+      "template_candidate": "complex_or_unknown_template",
+      "difficulty": "high",
+      "required_signals": [
+        "score_observed.delta",
+        "round.hands_left",
+        "round.discards_left",
+        "timing:passive"
+      ]
+    },
+    {
+      "cluster_id": "p6_cluster_013",
+      "size": 1,
+      "dominant_timing": "unknown",
+      "timing_distribution": {
+        "unknown": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "statefulness_distribution": {},
+      "numeric_pattern_distribution": {
+        "per_card": 1,
+        "xmult": 1
+      },
+      "top_keywords": [
+        "mult",
+        "x2",
+        "loses",
+        "x0",
+        "01",
+        "discarded",
+        "discard",
+        "available",
+        "start"
+      ],
+      "representatives": [
+        "Ramen"
+      ],
+      "member_keys": [
+        "j_ramen"
+      ],
+      "member_names": [
+        "Ramen"
+      ],
+      "template_candidate": "conditional_xmult",
+      "difficulty": "med",
+      "required_signals": [
+        "score_observed.delta",
+        "round.hands_left",
+        "round.discards_left",
+        "timing:unknown",
+        "zones.played[min_card_fields]"
+      ]
+    },
+    {
+      "cluster_id": "p6_cluster_014",
+      "size": 1,
+      "dominant_timing": "passive",
+      "timing_distribution": {
+        "passive": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "statefulness_distribution": {},
+      "numeric_pattern_distribution": {},
+      "top_keywords": [
+        "tarot",
+        "planet",
+        "spectral",
+        "may",
+        "appear",
+        "multiple",
+        "times",
+        "mult",
+        "add",
+        "reach",
+        "ante",
+        "level"
+      ],
+      "representatives": [
+        "Showman"
+      ],
+      "member_keys": [
+        "j_showman"
+      ],
+      "member_names": [
+        "Showman"
+      ],
+      "template_candidate": "complex_or_unknown_template",
+      "difficulty": "high",
+      "required_signals": [
+        "score_observed.delta",
+        "round.hands_left",
+        "round.discards_left",
+        "timing:passive"
+      ]
+    },
+    {
+      "cluster_id": "p6_cluster_015",
+      "size": 1,
+      "dominant_timing": "passive",
+      "timing_distribution": {
+        "passive": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "statefulness_distribution": {},
+      "numeric_pattern_distribution": {
+        "per_suit": 1
+      },
+      "top_keywords": [
+        "count",
+        "as",
+        "same",
+        "suit",
+        "hearts",
+        "diamonds",
+        "spades",
+        "clubs",
+        "have",
+        "more",
+        "wild",
+        "deck"
+      ],
+      "representatives": [
+        "Smeared Joker"
+      ],
+      "member_keys": [
+        "j_smeared_joker"
+      ],
+      "member_names": [
+        "Smeared Joker"
+      ],
+      "template_candidate": "complex_or_unknown_template",
+      "difficulty": "high",
+      "required_signals": [
+        "score_observed.delta",
+        "round.hands_left",
+        "round.discards_left",
+        "timing:passive",
+        "zones.played[min_card_fields]"
+      ]
+    },
+    {
+      "cluster_id": "p6_cluster_016",
+      "size": 1,
+      "dominant_timing": "unknown",
+      "timing_distribution": {
+        "unknown": 1
+      },
+      "reason_distribution": {
+        "no_safe_template_match": 1
+      },
+      "statefulness_distribution": {},
+      "numeric_pattern_distribution": {},
+      "top_keywords": [
+        "mult",
+        "adds",
+        "number",
+        "times",
+        "poker",
+        "hand",
+        "been",
+        "this",
+        "run",
+        "add",
+        "available",
+        "start"
+      ],
+      "representatives": [
+        "Supernova"
+      ],
+      "member_keys": [
+        "j_supernova"
+      ],
+      "member_names": [
+        "Supernova"
+      ],
+      "template_candidate": "complex_or_unknown_template",
+      "difficulty": "high",
+      "required_signals": [
+        "score_observed.delta",
+        "round.hands_left",
+        "round.discards_left",
+        "timing:unknown"
+      ]
+    }
+  ]
+}
