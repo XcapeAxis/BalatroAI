@@ -9,6 +9,7 @@ param(
   [switch]$RunP7,
   [switch]$RunP8,
   [switch]$RunP9,
+  [switch]$RunP10,
   [switch]$GitSync
 )
 Set-StrictMode -Version Latest
@@ -135,6 +136,7 @@ $p7Out = Join-Path $outRootPath "oracle_p7_stateful_v1_regression"
 $p8ShopOut = Join-Path $outRootPath "oracle_p8_shop_v1_regression"
 $p8RngOut = Join-Path $outRootPath "oracle_p8_rng_v1_regression"
 $p9Out = Join-Path $outRootPath "oracle_p9_episode_v1_regression"
+$p10Out = Join-Path $outRootPath "oracle_p10_long_v1_regression"
 
 $p0Args = @("-B", "sim/oracle/batch_build_p0_oracle_fixtures.py", "--base-url", $BaseUrl, "--out-dir", $p0Out, "--max-steps", "160", "--scope", "p0_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p0Out "dumps"))
 $p1Args = @("-B", "sim/oracle/batch_build_p1_smoke.py", "--base-url", $BaseUrl, "--out-dir", $p1Out, "--max-steps", "120", "--scope", "p1_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p1Out "dumps"))
@@ -148,6 +150,8 @@ $p8ShopArgs = @("-B", "sim/oracle/batch_build_p8_shop_fixtures.py", "--base-url"
 $p8RngArgs = @("-B", "sim/oracle/batch_build_p8_rng_fixtures.py", "--base-url", $BaseUrl, "--out-dir", $p8RngOut, "--max-steps", "260", "--scope", "p8_rng_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p8RngOut "dumps"))
 $p9ClassifyArgs = @("-B", "sim/oracle/p9_blind_tag_classifier.py", "--out-derived", "balatro_mechanics/derived")
 $p9Args = @("-B", "sim/oracle/batch_build_p9_episode_fixtures.py", "--base-url", $BaseUrl, "--targets-file", "balatro_mechanics/derived/p9_supported_targets.txt", "--out-dir", $p9Out, "--max-steps", "800", "--scope", "p9_episode_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p9Out "dumps"))
+$p10StakeExtractArgs = @("-B", "sim/oracle/extract_stake_rules.py", "--mech-root", "balatro_mechanics", "--out-derived", "balatro_mechanics/derived")
+$p10Args = @("-B", "sim/oracle/batch_build_p10_long_episode_fixtures.py", "--base-url", $BaseUrl, "--out-dir", $p10Out, "--max-steps", "1200", "--scope", "p10_long_episode_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p10Out "dumps"))
 
 Run-WithRecovery -Label "P0" -PyArgs $p0Args -Url $BaseUrl
 Run-WithRecovery -Label "P1" -PyArgs $p1Args -Url $BaseUrl
@@ -162,7 +166,7 @@ Write-Host ("P0 report: {0}" -f $p0ReportPath)
 Write-Host ("P1 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4}" -f $p1Report.passed, $p1Report.total, $p1Report.diff_fail, $p1Report.oracle_fail, $p1Report.gen_fail)
 Write-Host ("P1 report: {0}" -f $p1ReportPath)
 
-if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9) {
+if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10) {
   Run-WithRecovery -Label "P2" -PyArgs $p2Args -Url $BaseUrl
   Run-WithRecovery -Label "P2b" -PyArgs $p2bArgs -Url $BaseUrl
   Run-WithRecovery -Label "P3" -PyArgs $p3Args -Url $BaseUrl
@@ -183,7 +187,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9) {
   Write-Host ("P3 report: {0}" -f $p3ReportPath)
   Persist-ArtifactSet -Prefix "P3" -ReportPath $p3ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P3_JOKERS.md", "docs/COVERAGE_P3_STATUS.md")
 
-  if ($RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9) {
+  if ($RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10) {
     Run-WithRecovery -Label "P4" -PyArgs $p4Args -Url $BaseUrl
     $p4ReportPath = Join-Path $p4Out "report_p4.json"
     $p4Report = Get-Content $p4ReportPath -Raw | ConvertFrom-Json
@@ -191,7 +195,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9) {
     Write-Host ("P4 report: {0}" -f $p4ReportPath)
     Persist-ArtifactSet -Prefix "P4" -ReportPath $p4ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P4_CONSUMABLES.md", "docs/COVERAGE_P4_STATUS.md")
 
-    if ($RunP5 -or $RunP7 -or $RunP8 -or $RunP9) {
+    if ($RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10) {
       Run-WithRecovery -Label "P5" -PyArgs $p5Args -Url $BaseUrl
       $p5ReportPath = Join-Path $p5Out "report_p5.json"
       $p5Report = Get-Content $p5ReportPath -Raw | ConvertFrom-Json
@@ -199,7 +203,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9) {
       Write-Host ("P5 report: {0}" -f $p5ReportPath)
       Persist-ArtifactSet -Prefix "P5" -ReportPath $p5ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P5_VOUCHERS_PACKS.md", "docs/COVERAGE_P5_STATUS.md")
 
-      if ($RunP7 -or $RunP8 -or $RunP9) {
+      if ($RunP7 -or $RunP8 -or $RunP9 -or $RunP10) {
         Run-WithRecovery -Label "P7" -PyArgs $p7Args -Url $BaseUrl
         $p7ReportPath = Join-Path $p7Out "report_p7.json"
         $p7Report = Get-Content $p7ReportPath -Raw | ConvertFrom-Json
@@ -225,7 +229,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9) {
           Write-Host ("[P7-artifacts] " + $destMd)
         }
 
-        if ($RunP8 -or $RunP9) {
+        if ($RunP8 -or $RunP9 -or $RunP10) {
           Run-WithRecovery -Label "P8-shop" -PyArgs $p8ShopArgs -Url $BaseUrl
           $p8ShopReportPath = Join-Path $p8ShopOut "report_p8.json"
           $p8ShopReport = Get-Content $p8ShopReportPath -Raw | ConvertFrom-Json
@@ -272,7 +276,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9) {
             Write-Host ("[P8-rng-artifacts] " + $destMd)
           }
 
-          if ($RunP9) {
+          if ($RunP9 -or $RunP10) {
             Run-Py -Label "P9-classifier" -PyArgs $p9ClassifyArgs | Out-Null
             Run-WithRecovery -Label "P9" -PyArgs $p9Args -Url $BaseUrl
             $p9ReportPath = Join-Path $p9Out "report_p9.json"
@@ -295,6 +299,32 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9) {
               $destMd = Join-Path $p9ArtifactDir ("episode_mismatch_table_p9_" + $stamp + ".md")
               Copy-Item -LiteralPath $p9Md -Destination $destMd -Force
               Write-Host ("[P9-artifacts] " + $destMd)
+            }
+
+            if ($RunP10) {
+              $null = Run-Py -Label "P10-stake-extract" -PyArgs $p10StakeExtractArgs
+              Run-WithRecovery -Label "P10" -PyArgs $p10Args -Url $BaseUrl
+              $p10ReportPath = Join-Path $p10Out "report_p10.json"
+              $p10Report = Get-Content $p10ReportPath -Raw | ConvertFrom-Json
+              Write-Host ("P10 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4} skipped={5}" -f $p10Report.passed, $p10Report.total, $p10Report.diff_fail, $p10Report.oracle_fail, $p10Report.gen_fail, $p10Report.skipped)
+              Write-Host ("P10 report: {0}" -f $p10ReportPath)
+              Persist-ArtifactSet -Prefix "p10" -ReportPath $p10ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P10_STATUS.md", "docs/COVERAGE_P10_EPISODES.md")
+              $p10AnalyzeArgs = @("-B", "sim/oracle/analyze_p10_long_episode_mismatch.py", "--fixtures-dir", $p10Out)
+              $null = Run-Py -Label "P10-analyzer" -PyArgs $p10AnalyzeArgs
+              $p10Csv = Join-Path $p10Out "episode_mismatch_table_p10.csv"
+              $p10Md = Join-Path $p10Out "episode_mismatch_table_p10.md"
+              $p10ArtifactDir = Join-Path $ProjectRoot "docs/artifacts/p10"
+              if (-not (Test-Path $p10ArtifactDir)) { New-Item -ItemType Directory -Path $p10ArtifactDir -Force | Out-Null }
+              if (Test-Path $p10Csv) {
+                $destCsv = Join-Path $p10ArtifactDir ("episode_mismatch_table_p10_" + $stamp + ".csv")
+                Copy-Item -LiteralPath $p10Csv -Destination $destCsv -Force
+                Write-Host ("[P10-artifacts] " + $destCsv)
+              }
+              if (Test-Path $p10Md) {
+                $destMd = Join-Path $p10ArtifactDir ("episode_mismatch_table_p10_" + $stamp + ".md")
+                Copy-Item -LiteralPath $p10Md -Destination $destMd -Force
+                Write-Host ("[P10-artifacts] " + $destMd)
+              }
             }
           }
         }

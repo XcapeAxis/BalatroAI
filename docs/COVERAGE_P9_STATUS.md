@@ -1,6 +1,6 @@
 # P9 Episode Coverage Status
 
-- Generated at: `2026-02-23T21:03:08.138474+00:00`
+- Generated at: `2026-02-23T22:33:57.549221+00:00`
 - Base URL: `http://127.0.0.1:12346`
 - Scope: `p9_episode_observed_core`
 
@@ -31,6 +31,3 @@
 
 ## Failing Status Counts
 - none
-
-## Training Smoke Artifact
-- latest sim-only dual-stage smoke summary: `docs/artifacts/p9/20260224-045635/train_summary.txt`
