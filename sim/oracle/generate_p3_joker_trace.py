@@ -282,6 +282,9 @@ def _candidate_play_key_sets(template: str, params: dict[str, Any]) -> tuple[lis
 
     if template == "flat_mult":
         return [["H_2"], ["D_2"], ["S_2"]], hold_keys, resource_discards_left
+    if template == "observed_noop":
+        resource_discards_left = 1
+        return [["H_2"], ["D_2"], ["S_2"]], hold_keys, resource_discards_left
     if template in {"suit_mult_per_scoring_card", "suit_chips_per_scoring_card"}:
         suit = str(params.get("suit") or "H").upper()[:1]
         return [[f"{suit}_A"], [f"{suit}_K"], [f"{suit}_9"]], hold_keys, resource_discards_left
@@ -525,10 +528,16 @@ def generate_one_trace(
                 raise RuntimeError(f"resource_setup_failed:{note}")
             builder.state = get_state(base_url, timeout=timeout_sec)
 
+        add_joker_ok = True
+        add_joker_error: str | None = None
         try:
             _call_method(base_url, "add", {"key": str(entry.get("joker_key") or "")}, timeout=timeout_sec)
         except Exception as exc:
-            raise RuntimeError(f"add_joker_failed:{exc}")
+            if template == "observed_noop":
+                add_joker_ok = False
+                add_joker_error = str(exc)
+            else:
+                raise RuntimeError(f"add_joker_failed:{exc}")
 
         found_indices: list[int] | None = None
         chosen_keys: list[str] | None = None
@@ -556,13 +565,24 @@ def generate_one_trace(
 
         builder.start_snapshot_override = json.loads(json.dumps(builder.state, ensure_ascii=False))
         _save_state_if_possible(builder.base_url, builder.start_state_save_path, builder.timeout_sec)
-        builder.step("PLAY", indices=found_indices)
 
-        expected_ctx = {
-            "jokers": [joker_spec],
-            "p3_template": template,
-        }
-        _attach_expected_context(builder, expected_ctx)
+        action_used = "PLAY"
+        if template == "observed_noop":
+            try:
+                builder.step("DISCARD", indices=[int(found_indices[0])])
+                action_used = "DISCARD"
+            except Exception:
+                builder.step("PLAY", indices=[int(found_indices[0])])
+                action_used = "PLAY_FALLBACK"
+        else:
+            builder.step("PLAY", indices=found_indices)
+
+        if action_used.startswith("PLAY"):
+            expected_ctx = {
+                "jokers": [joker_spec],
+                "p3_template": template,
+            }
+            _attach_expected_context(builder, expected_ctx)
 
         success = True
         hit_info = {
@@ -570,6 +590,9 @@ def generate_one_trace(
             "joker_key": entry.get("joker_key"),
             "play_indices": found_indices,
             "play_keys": chosen_keys,
+            "action_used": action_used,
+            "add_joker_ok": bool(add_joker_ok),
+            "add_joker_error": add_joker_error,
             "observed_delta": float(((builder.state.get("round") or {}).get("chips") or 0.0)),
         }
         failure_reason = None

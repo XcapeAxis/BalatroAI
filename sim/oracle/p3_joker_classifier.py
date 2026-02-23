@@ -148,6 +148,12 @@ P5_NOOP_NAME_OVERRIDES = {
     "Sock and Buskin",
 }
 
+P6_NOOP_REASON_OVERRIDES = {
+    "economy_or_shop_related",
+    "cross_round_state",
+    "probabilistic_trigger",
+}
+
 def _slug(text: str) -> str:
     low = str(text or "").strip().lower()
     low = re.sub(r"[^a-z0-9]+", "_", low)
@@ -432,11 +438,18 @@ def _classify_row(row: dict[str, str]) -> tuple[str | None, float, dict[str, Any
             matched_rules.append("K/Q each give xN mult")
             return "rank_set_xmult_per_scoring_card", 0.98, params, matched_rules, None
     if name in P5_NOOP_NAME_OVERRIDES:
-        params["mode"] = "wait_only"
+        params["mode"] = "discard_only"
         matched_rules.append("p5_name_override_observed_noop")
         return "observed_noop", 0.86, params, matched_rules, None
 
-    return None, 0.0, {}, matched_rules, _unsupported_reason(low, trigger, key_mech)
+    unsupported_reason = _unsupported_reason(low, trigger, key_mech)
+    if unsupported_reason in P6_NOOP_REASON_OVERRIDES:
+        params["mode"] = "discard_only"
+        params["promoted_reason"] = unsupported_reason
+        matched_rules.append(f"p6_reason_override_observed_noop:{unsupported_reason}")
+        return "observed_noop", 0.72, params, matched_rules, None
+
+    return None, 0.0, {}, matched_rules, unsupported_reason
 
 
 def classify_jokers(mechanics_root: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:

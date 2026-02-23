@@ -2,31 +2,41 @@
   {
     "joker_name": "8 Ball",
     "joker_key": "j_8_ball",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:probabilistic_trigger"
+    ],
     "raw_fields_used": {
       "effect_summary": "1 in 4 chance for each played 8 to create a Tarot card when scored (Must have room)",
       "key_mechanics": "",
       "trigger_timing": "on_scored",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "probabilistic_trigger"
+    },
     "target": "p3_j_8_ball"
   },
   {
     "joker_name": "Abstract Joker",
     "joker_key": "j_abstract_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "+3 Mult for each Joker card (Currently +0 Mult )",
       "key_mechanics": "mult_add",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_abstract_joker"
   },
   {
@@ -87,16 +97,21 @@
   {
     "joker_name": "Astronomer",
     "joker_key": "j_astronomer",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:economy_or_shop_related"
+    ],
     "raw_fields_used": {
       "effect_summary": "All Planet cards and Celestial Packs in the shop are free",
       "key_mechanics": "shop",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Discover every Planet card"
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "economy_or_shop_related"
+    },
     "target": "p3_j_astronomer"
   },
   {
@@ -179,31 +194,41 @@
   {
     "joker_name": "Bloodstone",
     "joker_key": "j_bloodstone",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:probabilistic_trigger"
+    ],
     "raw_fields_used": {
       "effect_summary": "1 in 2 chance for played cards with Heart suit to give X1.5 Mult when scored",
       "key_mechanics": "mult_mult",
       "trigger_timing": "on_scored",
       "constraints_or_conditions": "Have at least 30 cards with Heart suit in your deck"
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "probabilistic_trigger"
+    },
     "target": "p3_j_bloodstone"
   },
   {
     "joker_name": "Blue Joker",
     "joker_key": "j_blue_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "+2 Chips for each remaining card in deck (Currently +104 Chips )",
       "key_mechanics": "chips_add; deck_change",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_blue_joker"
   },
   {
@@ -221,23 +246,28 @@
       "constraints_or_conditions": "Win 1 run."
     },
     "params": {
-      "mode": "wait_only"
+      "mode": "discard_only"
     },
     "target": "p3_j_blueprint"
   },
   {
     "joker_name": "Bootstraps",
     "joker_key": "j_bootstraps",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "+2 Mult for every $5 you have (Currently +0 Mult )",
       "key_mechanics": "mult_add; money",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Have at least 2 Polychrome Jokers at the same time."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_bootstraps"
   },
   {
@@ -255,23 +285,28 @@
       "constraints_or_conditions": "Discard a Royal Flush ."
     },
     "params": {
-      "mode": "wait_only"
+      "mode": "discard_only"
     },
     "target": "p3_j_brainstorm"
   },
   {
     "joker_name": "Bull",
     "joker_key": "j_bull",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "+2 Chips for each $1 you have (Currently +0 Chips )",
       "key_mechanics": "chips_add; money",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_bull"
   },
   {
@@ -289,7 +324,7 @@
       "constraints_or_conditions": "Available from start."
     },
     "params": {
-      "mode": "wait_only"
+      "mode": "discard_only"
     },
     "target": "p3_j_burglar"
   },
@@ -311,46 +346,61 @@
   {
     "joker_name": "Business Card",
     "joker_key": "j_business_card",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:probabilistic_trigger"
+    ],
     "raw_fields_used": {
       "effect_summary": "Played face cards have a 1 in 2 chance to give $2 when scored",
       "key_mechanics": "money",
       "trigger_timing": "on_scored",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "probabilistic_trigger"
+    },
     "target": "p3_j_business_card"
   },
   {
     "joker_name": "Campfire",
     "joker_key": "j_campfire",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "This Joker gains X0.25 Mult for each card sold , resets when Boss Blind is defeated (Currently X1 Mult )",
       "key_mechanics": "mult_mult",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_campfire"
   },
   {
     "joker_name": "Canio",
     "joker_key": "j_canio",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "This Joker gains X1 Mult when a face card is destroyed (Currently X1 Mult )",
       "key_mechanics": "mult_mult; deck_change",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Find this Joker from the Soul card."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_canio"
   },
   {
@@ -368,7 +418,7 @@
       "constraints_or_conditions": "Available from start."
     },
     "params": {
-      "mode": "wait_only"
+      "mode": "discard_only"
     },
     "target": "p3_j_card_sharp"
   },
@@ -387,83 +437,108 @@
       "constraints_or_conditions": "Discover every Tarot Card."
     },
     "params": {
-      "mode": "wait_only"
+      "mode": "discard_only"
     },
     "target": "p3_j_cartomancer"
   },
   {
     "joker_name": "Castle",
     "joker_key": "j_castle",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "This Joker gains +3 Chips per discarded [suit] card, suit changes every round (Currently +0 Chips )",
       "key_mechanics": "chips_add; discard",
       "trigger_timing": "mixed",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_castle"
   },
   {
     "joker_name": "Cavendish",
     "joker_key": "j_cavendish",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:probabilistic_trigger"
+    ],
     "raw_fields_used": {
       "effect_summary": "X3 Mult 1 in 1000 chance this card is destroyed at the end of round",
       "key_mechanics": "mult_mult; deck_change",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start. (Can only appear in the shop when Gros Michel has destroyed itself in the current run.)"
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "probabilistic_trigger"
+    },
     "target": "p3_j_cavendish"
   },
   {
     "joker_name": "Ceremonial Dagger",
     "joker_key": "j_ceremonial_dagger",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "When Blind is selected, destroy Joker to the right and permanently add double its sell value to this Mult (Currently +0 Mult )",
       "key_mechanics": "mult_add; money; deck_change",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_ceremonial_dagger"
   },
   {
     "joker_name": "Certificate",
     "joker_key": "j_certificate",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:probabilistic_trigger"
+    ],
     "raw_fields_used": {
       "effect_summary": "When round begins, add a random playing card with a random seal to your hand",
       "key_mechanics": "deck_change",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Have a Gold playing card with a Gold Seal"
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "probabilistic_trigger"
+    },
     "target": "p3_j_certificate"
   },
   {
     "joker_name": "Chaos the Clown",
     "joker_key": "j_chaos_the_clown",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:economy_or_shop_related"
+    ],
     "raw_fields_used": {
       "effect_summary": "1 free Reroll per shop",
       "key_mechanics": "shop",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "economy_or_shop_related"
+    },
     "target": "p3_j_chaos_the_clown"
   },
   {
@@ -481,7 +556,7 @@
       "constraints_or_conditions": "Find this Joker from the Soul card."
     },
     "params": {
-      "mode": "wait_only"
+      "mode": "discard_only"
     },
     "target": "p3_j_chicot"
   },
@@ -508,31 +583,41 @@
   {
     "joker_name": "Cloud 9",
     "joker_key": "j_cloud_9",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "Earn $1 for each 9 in your full deck at end of round (Currently $4 )",
       "key_mechanics": "money; deck_change",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_cloud_9"
   },
   {
     "joker_name": "Constellation",
     "joker_key": "j_constellation",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "This Joker gains X0.1 Mult every time a Planet card is used (Currently X1 Mult )",
       "key_mechanics": "mult_mult",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_constellation"
   },
   {
@@ -578,16 +663,21 @@
   {
     "joker_name": "Credit Card",
     "joker_key": "j_credit_card",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:economy_or_shop_related"
+    ],
     "raw_fields_used": {
       "effect_summary": "Go up to -$20 in debt",
       "key_mechanics": "money",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "economy_or_shop_related"
+    },
     "target": "p3_j_credit_card"
   },
   {
@@ -608,16 +698,21 @@
   {
     "joker_name": "Delayed Gratification",
     "joker_key": "j_delayed_gratification",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:economy_or_shop_related"
+    ],
     "raw_fields_used": {
       "effect_summary": "Earn $2 per discard if no discards are used by end of the round",
       "key_mechanics": "money; discard",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "economy_or_shop_related"
+    },
     "target": "p3_j_delayed_gratification"
   },
   {
@@ -658,16 +753,21 @@
   {
     "joker_name": "Driver's License",
     "joker_key": "j_driver_s_license",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "X3 Mult if you have at least 16 Enhanced cards in your full deck (Currently 0 )",
       "key_mechanics": "mult_mult; deck_change",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Enhance 16 cards in your deck"
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_driver_s_license"
   },
   {
@@ -705,7 +805,7 @@
       "constraints_or_conditions": "Available from start."
     },
     "params": {
-      "mode": "wait_only"
+      "mode": "discard_only"
     },
     "target": "p3_j_drunkard"
   },
@@ -724,38 +824,48 @@
       "constraints_or_conditions": "Available from start."
     },
     "params": {
-      "mode": "wait_only"
+      "mode": "discard_only"
     },
     "target": "p3_j_dusk"
   },
   {
     "joker_name": "Egg",
     "joker_key": "j_egg",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:economy_or_shop_related"
+    ],
     "raw_fields_used": {
       "effect_summary": "Gains $3 of sell value at end of round",
       "key_mechanics": "money",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "economy_or_shop_related"
+    },
     "target": "p3_j_egg"
   },
   {
     "joker_name": "Erosion",
     "joker_key": "j_erosion",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "+4 Mult for each card below [the deck's starting size] in your full deck (Currently +0 Mult )",
       "key_mechanics": "mult_add; deck_change",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_erosion"
   },
   {
@@ -780,16 +890,21 @@
   {
     "joker_name": "Faceless Joker",
     "joker_key": "j_faceless_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:economy_or_shop_related"
+    ],
     "raw_fields_used": {
       "effect_summary": "Earn $5 if 3 or more face cards are discarded at the same time",
       "key_mechanics": "money; discard",
       "trigger_timing": "on_discard",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "economy_or_shop_related"
+    },
     "target": "p3_j_faceless_joker"
   },
   {
@@ -821,16 +936,21 @@
   {
     "joker_name": "Flash Card",
     "joker_key": "j_flash_card",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "This Joker gains +2 Mult per reroll in the shop (Currently +0 Mult )",
       "key_mechanics": "mult_add; shop",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_flash_card"
   },
   {
@@ -861,16 +981,21 @@
   {
     "joker_name": "Fortune Teller",
     "joker_key": "j_fortune_teller",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "+1 Mult per Tarot card used this run (Currently +0 )",
       "key_mechanics": "mult_add",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_fortune_teller"
   },
   {
@@ -888,38 +1013,48 @@
       "constraints_or_conditions": "Available from start."
     },
     "params": {
-      "mode": "wait_only"
+      "mode": "discard_only"
     },
     "target": "p3_j_four_fingers"
   },
   {
     "joker_name": "Gift Card",
     "joker_key": "j_gift_card",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:economy_or_shop_related"
+    ],
     "raw_fields_used": {
       "effect_summary": "Add $1 of sell value to every Joker and Consumable card at end of round",
       "key_mechanics": "money; deck_change",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "economy_or_shop_related"
+    },
     "target": "p3_j_gift_card"
   },
   {
     "joker_name": "Glass Joker",
     "joker_key": "j_glass_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "This Joker gains X0.75 Mult for every Glass Card that is destroyed (Currently X1 Mult )",
       "key_mechanics": "mult_mult; deck_change",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Have 5 or more Glass cards in your deck. (Can only appear in the shop when there is a Glass Card in the deck.)"
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_glass_joker"
   },
   {
@@ -945,31 +1080,41 @@
   {
     "joker_name": "Golden Joker",
     "joker_key": "j_golden_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:economy_or_shop_related"
+    ],
     "raw_fields_used": {
       "effect_summary": "Earn $4 at end of round",
       "key_mechanics": "money",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "economy_or_shop_related"
+    },
     "target": "p3_j_golden_joker"
   },
   {
     "joker_name": "Golden Ticket",
     "joker_key": "j_golden_ticket",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:economy_or_shop_related"
+    ],
     "raw_fields_used": {
       "effect_summary": "Played Gold cards earn $4 when scored",
       "key_mechanics": "money",
       "trigger_timing": "on_scored",
       "constraints_or_conditions": "Play a 5 card hand that contains only Gold cards. (Can only appear in the shop when there is a Gold Card in the deck.)"
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "economy_or_shop_related"
+    },
     "target": "p3_j_golden_ticket"
   },
   {
@@ -995,31 +1140,41 @@
   {
     "joker_name": "Green Joker",
     "joker_key": "j_green_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "+1 Mult per hand played -1 Mult per discard (Currently +0 Mult )",
       "key_mechanics": "mult_add; discard",
       "trigger_timing": "mixed",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_green_joker"
   },
   {
     "joker_name": "Gros Michel",
     "joker_key": "j_gros_michel",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:probabilistic_trigger"
+    ],
     "raw_fields_used": {
       "effect_summary": "+15 Mult 1 in 6 chance this is destroyed at the end of round.",
       "key_mechanics": "mult_add; deck_change",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "probabilistic_trigger"
+    },
     "target": "p3_j_gros_michel"
   },
   {
@@ -1060,16 +1215,21 @@
   {
     "joker_name": "Hallucination",
     "joker_key": "j_hallucination",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:probabilistic_trigger"
+    ],
     "raw_fields_used": {
       "effect_summary": "1 in 2 chance to create a Tarot card when any Booster Pack is opened (Must have room)",
       "key_mechanics": "shop",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "probabilistic_trigger"
+    },
     "target": "p3_j_hallucination"
   },
   {
@@ -1102,38 +1262,48 @@
       "constraints_or_conditions": "Available from start."
     },
     "params": {
-      "mode": "wait_only"
+      "mode": "discard_only"
     },
     "target": "p3_j_hiker"
   },
   {
     "joker_name": "Hit the Road",
     "joker_key": "j_hit_the_road",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "This Joker gains X0.5 Mult for every Jack discarded this round (Currently X1 Mult )",
       "key_mechanics": "mult_mult; discard",
       "trigger_timing": "mixed",
       "constraints_or_conditions": "Discard 5 Jacks at the same time."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_hit_the_road"
   },
   {
     "joker_name": "Hologram",
     "joker_key": "j_hologram",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "This Joker gains X0.25 Mult every time a playing card is added to your deck (Currently X1 Mult )",
       "key_mechanics": "mult_mult; deck_change",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_hologram"
   },
   {
@@ -1154,16 +1324,21 @@
   {
     "joker_name": "Invisible Joker",
     "joker_key": "j_invisible_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:probabilistic_trigger"
+    ],
     "raw_fields_used": {
       "effect_summary": "After 2 rounds, sell this card to Duplicate a random Joker (Currently 0 /2) (Removes Negative from copy)",
       "key_mechanics": "money; deck_change",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Win a game while never having more than 4 jokers."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "probabilistic_trigger"
+    },
     "target": "p3_j_invisible_joker"
   },
   {
@@ -1188,16 +1363,21 @@
   {
     "joker_name": "Joker Stencil",
     "joker_key": "j_joker_stencil",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "X1 Mult for each empty Joker slot. Joker Stencil included (Currently X1 )",
       "key_mechanics": "mult_mult",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_joker_stencil"
   },
   {
@@ -1235,7 +1415,7 @@
       "constraints_or_conditions": "Available from start."
     },
     "params": {
-      "mode": "wait_only"
+      "mode": "discard_only"
     },
     "target": "p3_j_juggler"
   },
@@ -1269,23 +1449,28 @@
       "constraints_or_conditions": "Available from start."
     },
     "params": {
-      "mode": "wait_only"
+      "mode": "discard_only"
     },
     "target": "p3_j_luchador"
   },
   {
     "joker_name": "Lucky Cat",
     "joker_key": "j_lucky_cat",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "This Joker gains X0.25 Mult every time a Lucky card successfully triggers (Currently X1 Mult )",
       "key_mechanics": "mult_mult",
       "trigger_timing": "mixed",
       "constraints_or_conditions": "Available from start. (Can only appear in the shop when there is a Lucky Card in the deck.)"
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_lucky_cat"
   },
   {
@@ -1331,31 +1516,41 @@
   {
     "joker_name": "Madness",
     "joker_key": "j_madness",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:probabilistic_trigger"
+    ],
     "raw_fields_used": {
       "effect_summary": "When Small Blind or Big Blind is selected, gain X0.5 Mult and destroy a random Joker (Currently X1 Mult )",
       "key_mechanics": "mult_mult; deck_change",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "probabilistic_trigger"
+    },
     "target": "p3_j_madness"
   },
   {
     "joker_name": "Mail-In Rebate",
     "joker_key": "j_mail_in_rebate",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:economy_or_shop_related"
+    ],
     "raw_fields_used": {
       "effect_summary": "Earn $5 for each discarded [rank] , rank changes every round",
       "key_mechanics": "money; discard",
       "trigger_timing": "on_discard",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "economy_or_shop_related"
+    },
     "target": "p3_j_mail_in_rebate"
   },
   {
@@ -1376,16 +1571,21 @@
   {
     "joker_name": "Matador",
     "joker_key": "j_matador",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:economy_or_shop_related"
+    ],
     "raw_fields_used": {
       "effect_summary": "Earn $8 if played hand triggers the Boss Blind ability",
       "key_mechanics": "money",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Defeat a Boss Blind in one hand, without using discards."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "economy_or_shop_related"
+    },
     "target": "p3_j_matador"
   },
   {
@@ -1418,7 +1618,7 @@
       "constraints_or_conditions": "Available from start."
     },
     "params": {
-      "mode": "wait_only"
+      "mode": "discard_only"
     },
     "target": "p3_j_midas_mask"
   },
@@ -1437,7 +1637,7 @@
       "constraints_or_conditions": "Available from start."
     },
     "params": {
-      "mode": "wait_only"
+      "mode": "discard_only"
     },
     "target": "p3_j_mime"
   },
@@ -1494,16 +1694,21 @@
   {
     "joker_name": "Obelisk",
     "joker_key": "j_obelisk",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "This Joker gains X0.2 Mult per consecutive hand played without playing your most played poker hand (Currently X1 Mult )",
       "key_mechanics": "mult_mult",
       "trigger_timing": "mixed",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_obelisk"
   },
   {
@@ -1548,16 +1753,21 @@
   {
     "joker_name": "Oops! All 6s",
     "joker_key": "j_oops_all_6s",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:probabilistic_trigger"
+    ],
     "raw_fields_used": {
       "effect_summary": "Doubles all listed probabilities (ex: 1 in 3 -> 2 in 3 )",
       "key_mechanics": "",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Earn at least 10,000 Chips in a single hand."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "probabilistic_trigger"
+    },
     "target": "p3_j_oops_all_6s"
   },
   {
@@ -1575,23 +1785,28 @@
       "constraints_or_conditions": "Available from start."
     },
     "params": {
-      "mode": "wait_only"
+      "mode": "discard_only"
     },
     "target": "p3_j_pareidolia"
   },
   {
     "joker_name": "Perkeo",
     "joker_key": "j_perkeo",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:probabilistic_trigger"
+    ],
     "raw_fields_used": {
       "effect_summary": "Creates a Negative copy of 1 random consumable card in your possession at the end of the shop",
       "key_mechanics": "shop; deck_change",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Find this Joker from the Soul card."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "probabilistic_trigger"
+    },
     "target": "p3_j_perkeo"
   },
   {
@@ -1665,46 +1880,61 @@
   {
     "joker_name": "Red Card",
     "joker_key": "j_red_card",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "This Joker gains +3 Mult when any Booster Pack is skipped (Currently +0 Mult )",
       "key_mechanics": "mult_add; shop",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_red_card"
   },
   {
     "joker_name": "Reserved Parking",
     "joker_key": "j_reserved_parking",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:probabilistic_trigger"
+    ],
     "raw_fields_used": {
       "effect_summary": "Each face card held in hand has a 1 in 2 chance to give $1",
       "key_mechanics": "money",
       "trigger_timing": "held_in_hand",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "probabilistic_trigger"
+    },
     "target": "p3_j_reserved_parking"
   },
   {
     "joker_name": "Ride the Bus",
     "joker_key": "j_ride_the_bus",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "This Joker gains +1 Mult per consecutive hand played without a scoring face card (Currently +0 Mult )",
       "key_mechanics": "mult_add",
       "trigger_timing": "mixed",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_ride_the_bus"
   },
   {
@@ -1725,61 +1955,81 @@
   {
     "joker_name": "Rocket",
     "joker_key": "j_rocket",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:economy_or_shop_related"
+    ],
     "raw_fields_used": {
       "effect_summary": "Earn $1 at end of round. Payout increases by $2 when Boss Blind is defeated",
       "key_mechanics": "money",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "economy_or_shop_related"
+    },
     "target": "p3_j_rocket"
   },
   {
     "joker_name": "Rough Gem",
     "joker_key": "j_rough_gem",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:economy_or_shop_related"
+    ],
     "raw_fields_used": {
       "effect_summary": "Played cards with Diamond suit earn $1 when scored",
       "key_mechanics": "money",
       "trigger_timing": "on_scored",
       "constraints_or_conditions": "Have at least 30 cards with Diamond suit in your deck"
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "economy_or_shop_related"
+    },
     "target": "p3_j_rough_gem"
   },
   {
     "joker_name": "Runner",
     "joker_key": "j_runner",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "Gains +15 Chips if played hand contains a Straight (Currently +0 Chips )",
       "key_mechanics": "chips_add",
       "trigger_timing": "mixed",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_runner"
   },
   {
     "joker_name": "Satellite",
     "joker_key": "j_satellite",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:economy_or_shop_related"
+    ],
     "raw_fields_used": {
       "effect_summary": "Earn $1 at end of round per unique Planet card used this run",
       "key_mechanics": "money",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Have at least $400 ."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "economy_or_shop_related"
+    },
     "target": "p3_j_satellite"
   },
   {
@@ -1894,7 +2144,7 @@
       "constraints_or_conditions": "Available from start."
     },
     "params": {
-      "mode": "wait_only"
+      "mode": "discard_only"
     },
     "target": "p3_j_shortcut"
   },
@@ -1997,38 +2247,48 @@
       "constraints_or_conditions": "Play 300 face cards across all runs."
     },
     "params": {
-      "mode": "wait_only"
+      "mode": "discard_only"
     },
     "target": "p3_j_sock_and_buskin"
   },
   {
     "joker_name": "Space Joker",
     "joker_key": "j_space_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:probabilistic_trigger"
+    ],
     "raw_fields_used": {
       "effect_summary": "1 in 4 chance to upgrade level of played poker hand",
       "key_mechanics": "",
       "trigger_timing": "on_played",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "probabilistic_trigger"
+    },
     "target": "p3_j_space_joker"
   },
   {
     "joker_name": "Spare Trousers",
     "joker_key": "j_spare_trousers",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "This Joker gains +2 Mult if played hand contains a Two Pair (Currently +0 Mult )",
       "key_mechanics": "mult_add",
       "trigger_timing": "mixed",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_spare_trousers"
   },
   {
@@ -2049,46 +2309,61 @@
   {
     "joker_name": "Square Joker",
     "joker_key": "j_square_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "This Joker gains +4 Chips if played hand has exactly 4 cards (Currently 0 Chips )",
       "key_mechanics": "chips_add",
       "trigger_timing": "mixed",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_square_joker"
   },
   {
     "joker_name": "Steel Joker",
     "joker_key": "j_steel_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "Gives X0.2 Mult for each Steel Card in your full deck (Currently X1 Mult )",
       "key_mechanics": "mult_mult; deck_change",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start. (Can only appear in the shop when there is a Steel Card in the deck.)"
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_steel_joker"
   },
   {
     "joker_name": "Stone Joker",
     "joker_key": "j_stone_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "Gives +25 Chips for each Stone Card in your full deck (Currently +0 Chips )",
       "key_mechanics": "chips_add; deck_change",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start. (Can only appear in the shop when there is a Stone Card in the deck.)"
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_stone_joker"
   },
   {
@@ -2139,31 +2414,41 @@
   {
     "joker_name": "Swashbuckler",
     "joker_key": "j_swashbuckler",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "Adds the sell value of all other owned Jokers to Mult (Currently +1 Mult )",
       "key_mechanics": "mult_add; money",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Sell a total of 20 Joker cards"
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_swashbuckler"
   },
   {
     "joker_name": "Séance",
     "joker_key": "j_s_ance",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:probabilistic_trigger"
+    ],
     "raw_fields_used": {
       "effect_summary": "If poker hand is a Straight Flush , create a random Spectral card (Must have room)",
       "key_mechanics": "",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "probabilistic_trigger"
+    },
     "target": "p3_j_s_ance"
   },
   {
@@ -2284,61 +2569,81 @@
   {
     "joker_name": "Throwback",
     "joker_key": "j_throwback",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "X0.25 Mult for each Blind skipped this run (Currently X1 Mult )",
       "key_mechanics": "mult_mult",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Continue a saved run from the main menu"
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_throwback"
   },
   {
     "joker_name": "To Do List",
     "joker_key": "j_to_do_list",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:economy_or_shop_related"
+    ],
     "raw_fields_used": {
       "effect_summary": "Earn $4 if poker hand is a [Poker Hand] , poker hand changes at end of round",
       "key_mechanics": "money",
       "trigger_timing": "on_played",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "economy_or_shop_related"
+    },
     "target": "p3_j_to_do_list"
   },
   {
     "joker_name": "To the Moon",
     "joker_key": "j_to_the_moon",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:economy_or_shop_related"
+    ],
     "raw_fields_used": {
       "effect_summary": "Earn an extra $1 of interest for every $5 you have at end of round",
       "key_mechanics": "money",
       "trigger_timing": "passive",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "economy_or_shop_related"
+    },
     "target": "p3_j_to_the_moon"
   },
   {
     "joker_name": "Trading Card",
     "joker_key": "j_trading_card",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:economy_or_shop_related"
+    ],
     "raw_fields_used": {
       "effect_summary": "If first discard of round has only 1 card, destroy it and earn $3",
       "key_mechanics": "money; discard; deck_change",
       "trigger_timing": "on_discard",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "economy_or_shop_related"
+    },
     "target": "p3_j_trading_card"
   },
   {
@@ -2397,31 +2702,41 @@
   {
     "joker_name": "Vagabond",
     "joker_key": "j_vagabond",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:economy_or_shop_related"
+    ],
     "raw_fields_used": {
       "effect_summary": "Create a Tarot card if hand is played with $4 or less",
       "key_mechanics": "money",
       "trigger_timing": "unknown",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "economy_or_shop_related"
+    },
     "target": "p3_j_vagabond"
   },
   {
     "joker_name": "Vampire",
     "joker_key": "j_vampire",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "This Joker gains X0.1 Mult per scoring Enhanced card played, removes card Enhancement (Currently X1 Mult )",
       "key_mechanics": "mult_mult",
       "trigger_timing": "mixed",
       "constraints_or_conditions": "Available from start."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_vampire"
   },
   {
@@ -2451,16 +2766,21 @@
   {
     "joker_name": "Wee Joker",
     "joker_key": "j_wee_joker",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "This Joker gains +8 Chips when each played 2 is scored (Currently +0 Chips )",
       "key_mechanics": "chips_add",
       "trigger_timing": "mixed",
       "constraints_or_conditions": "Win a run in 18 or fewer rounds."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_wee_joker"
   },
   {
@@ -2506,16 +2826,21 @@
   {
     "joker_name": "Yorick",
     "joker_key": "j_yorick",
-    "template": null,
-    "confidence": 0.0,
-    "matched_rules": [],
+    "template": "observed_noop",
+    "confidence": 0.72,
+    "matched_rules": [
+      "p6_reason_override_observed_noop:cross_round_state"
+    ],
     "raw_fields_used": {
       "effect_summary": "This Joker gains X1 Mult every 23 [23] cards discarded (Currently X1 Mult )",
       "key_mechanics": "mult_mult; discard",
       "trigger_timing": "mixed",
       "constraints_or_conditions": "Find this Joker from the Soul card."
     },
-    "params": {},
+    "params": {
+      "mode": "discard_only",
+      "promoted_reason": "cross_round_state"
+    },
     "target": "p3_j_yorick"
   },
   {

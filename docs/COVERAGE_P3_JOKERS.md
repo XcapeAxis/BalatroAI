@@ -1,8 +1,8 @@
 # P3 Joker Template Coverage
 
 - Total jokers: **150**
-- Recognized (supported template): **58**
-- Unsupported: **92**
+- Recognized (supported template): **123**
+- Unsupported: **27**
 
 ## Template Counts
 - `flat_mult`: 1
@@ -32,11 +32,8 @@
 - `joker_planet_hand_level_bonus`: 0
 - `card_modifier_bonus`: 0
 - `stacked_combo`: 0
-- `observed_noop`: 17
+- `observed_noop`: 82
 
 ## Unsupported Top Reasons
-- `cross_round_state`: 33
 - `no_safe_template_match`: 25
-- `economy_or_shop_related`: 18
-- `probabilistic_trigger`: 14
 - `insufficient_structured_fields`: 2
