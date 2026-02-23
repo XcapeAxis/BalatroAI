@@ -1,4 +1,4 @@
-﻿param(
+param(
   [string]$BaseUrl = "http://127.0.0.1:12346",
   [string]$OutRoot = "sim/tests/fixtures_runtime",
   [string]$Seed = "AAAAAAA",
@@ -7,6 +7,7 @@
   [switch]$RunP4,
   [switch]$RunP5,
   [switch]$RunP7,
+  [switch]$RunP8,
   [switch]$GitSync
 )
 Set-StrictMode -Version Latest
@@ -28,6 +29,17 @@ function Stop-ServiceProc {
   }
 }
 
+function Clear-LovelyDump {
+  $dumpDir = "C:\Users\Administrator\AppData\Roaming\Balatro\Mods\lovely\dump"
+  if (-not (Test-Path $dumpDir)) { return }
+  try {
+    Remove-Item -LiteralPath $dumpDir -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Host "[svc] removed lovely dump dir: $dumpDir"
+  } catch {
+    Write-Host "[svc] warning: failed to clear lovely dump: $($_.Exception.Message)"
+  }
+}
+
 function Start-ServiceProc([string]$Url) {
   $u = [System.Uri]$Url
   $port = if ($u.IsDefaultPort) { 12346 } else { $u.Port }
@@ -43,6 +55,9 @@ function Start-ServiceProc([string]$Url) {
     $serveArgs += @("--balatro-path", $love)
   }
 
+  Stop-ServiceProc
+  Start-Sleep -Seconds 1
+  Clear-LovelyDump
   Write-Host "[svc] starting: $($uvx.Source) $($serveArgs -join ' ')"
   Start-Process -FilePath $uvx.Source -ArgumentList $serveArgs -WorkingDirectory $ProjectRoot -WindowStyle Hidden | Out-Null
 
@@ -54,7 +69,7 @@ function Start-ServiceProc([string]$Url) {
 }
 
 function Ensure-Service([string]$Url, [bool]$ForceRestart = $false) {
-  if ($ForceRestart) { Stop-ServiceProc; Start-Sleep -Seconds 2 }
+  if ($ForceRestart) { Stop-ServiceProc; Start-Sleep -Seconds 2; Clear-LovelyDump }
   if (Test-Health -Url $Url) { Write-Host "[svc] health ok at $Url"; return }
   Start-ServiceProc -Url $Url
 }
@@ -86,7 +101,8 @@ function Persist-ArtifactSet([string]$Prefix, [string]$ReportPath, [string]$Proj
   if (-not (Test-Path $artifactDir)) { New-Item -ItemType Directory -Path $artifactDir -Force | Out-Null }
   $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
-  $reportDest = Join-Path $artifactDir ("report_" + $Prefix.ToLower() + "_" + $stamp + ".json")
+  $prefixSlug = ($Prefix.ToLower() -replace "[\\/]", "_")
+  $reportDest = Join-Path $artifactDir ("report_" + $prefixSlug + "_" + $stamp + ".json")
   if (Test-Path $ReportPath) {
     Copy-Item -LiteralPath $ReportPath -Destination $reportDest -Force
     Write-Host ("[" + $Prefix + "-artifacts] " + $reportDest)
@@ -115,6 +131,8 @@ $p3Out = Join-Path $outRootPath "oracle_p3_jokers_v1_regression"
 $p4Out = Join-Path $outRootPath "oracle_p4_consumables_v1_regression"
 $p5Out = Join-Path $outRootPath "oracle_p5_voucher_pack_v1_regression"
 $p7Out = Join-Path $outRootPath "oracle_p7_stateful_v1_regression"
+$p8ShopOut = Join-Path $outRootPath "oracle_p8_shop_v1_regression"
+$p8RngOut = Join-Path $outRootPath "oracle_p8_rng_v1_regression"
 
 $p0Args = @("-B", "sim/oracle/batch_build_p0_oracle_fixtures.py", "--base-url", $BaseUrl, "--out-dir", $p0Out, "--max-steps", "160", "--scope", "p0_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p0Out "dumps"))
 $p1Args = @("-B", "sim/oracle/batch_build_p1_smoke.py", "--base-url", $BaseUrl, "--out-dir", $p1Out, "--max-steps", "120", "--scope", "p1_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p1Out "dumps"))
@@ -124,6 +142,8 @@ $p3Args = @("-B", "sim/oracle/batch_build_p3_joker_fixtures.py", "--base-url", $
 $p4Args = @("-B", "sim/oracle/batch_build_p4_consumable_fixtures.py", "--base-url", $BaseUrl, "--targets-file", "balatro_mechanics/derived/p4_supported_targets.txt", "--out-dir", $p4Out, "--max-steps", "220", "--scope", "p4_consumable_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p4Out "dumps"))
 $p5Args = @("-B", "sim/oracle/batch_build_p5_voucher_pack_fixtures.py", "--base-url", $BaseUrl, "--targets-file", "balatro_mechanics/derived/p5_supported_targets.txt", "--out-dir", $p5Out, "--max-steps", "260", "--scope", "p5_voucher_pack_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p5Out "dumps"))
 $p7Args = @("-B", "sim/oracle/batch_build_p7_stateful_joker_fixtures.py", "--base-url", $BaseUrl, "--targets-file", "balatro_mechanics/derived/p7_supported_targets.txt", "--out-dir", $p7Out, "--max-steps", "260", "--scope", "p7_stateful_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p7Out "dumps"))
+$p8ShopArgs = @("-B", "sim/oracle/batch_build_p8_shop_fixtures.py", "--base-url", $BaseUrl, "--out-dir", $p8ShopOut, "--max-steps", "300", "--scope", "p8_shop_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p8ShopOut "dumps"))
+$p8RngArgs = @("-B", "sim/oracle/batch_build_p8_rng_fixtures.py", "--base-url", $BaseUrl, "--out-dir", $p8RngOut, "--max-steps", "260", "--scope", "p8_rng_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p8RngOut "dumps"))
 
 Run-WithRecovery -Label "P0" -PyArgs $p0Args -Url $BaseUrl
 Run-WithRecovery -Label "P1" -PyArgs $p1Args -Url $BaseUrl
@@ -138,7 +158,7 @@ Write-Host ("P0 report: {0}" -f $p0ReportPath)
 Write-Host ("P1 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4}" -f $p1Report.passed, $p1Report.total, $p1Report.diff_fail, $p1Report.oracle_fail, $p1Report.gen_fail)
 Write-Host ("P1 report: {0}" -f $p1ReportPath)
 
-if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7) {
+if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8) {
   Run-WithRecovery -Label "P2" -PyArgs $p2Args -Url $BaseUrl
   Run-WithRecovery -Label "P2b" -PyArgs $p2bArgs -Url $BaseUrl
   Run-WithRecovery -Label "P3" -PyArgs $p3Args -Url $BaseUrl
@@ -159,7 +179,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7) {
   Write-Host ("P3 report: {0}" -f $p3ReportPath)
   Persist-ArtifactSet -Prefix "P3" -ReportPath $p3ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P3_JOKERS.md", "docs/COVERAGE_P3_STATUS.md")
 
-  if ($RunP4 -or $RunP5 -or $RunP7) {
+  if ($RunP4 -or $RunP5 -or $RunP7 -or $RunP8) {
     Run-WithRecovery -Label "P4" -PyArgs $p4Args -Url $BaseUrl
     $p4ReportPath = Join-Path $p4Out "report_p4.json"
     $p4Report = Get-Content $p4ReportPath -Raw | ConvertFrom-Json
@@ -167,7 +187,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7) {
     Write-Host ("P4 report: {0}" -f $p4ReportPath)
     Persist-ArtifactSet -Prefix "P4" -ReportPath $p4ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P4_CONSUMABLES.md", "docs/COVERAGE_P4_STATUS.md")
 
-    if ($RunP5 -or $RunP7) {
+    if ($RunP5 -or $RunP7 -or $RunP8) {
       Run-WithRecovery -Label "P5" -PyArgs $p5Args -Url $BaseUrl
       $p5ReportPath = Join-Path $p5Out "report_p5.json"
       $p5Report = Get-Content $p5ReportPath -Raw | ConvertFrom-Json
@@ -175,7 +195,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7) {
       Write-Host ("P5 report: {0}" -f $p5ReportPath)
       Persist-ArtifactSet -Prefix "P5" -ReportPath $p5ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P5_VOUCHERS_PACKS.md", "docs/COVERAGE_P5_STATUS.md")
 
-      if ($RunP7) {
+      if ($RunP7 -or $RunP8) {
         Run-WithRecovery -Label "P7" -PyArgs $p7Args -Url $BaseUrl
         $p7ReportPath = Join-Path $p7Out "report_p7.json"
         $p7Report = Get-Content $p7ReportPath -Raw | ConvertFrom-Json
@@ -199,6 +219,54 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7) {
           $destMd = Join-Path $p7ArtifactDir ("stateful_mismatch_table_p7_" + $stamp + ".md")
           Copy-Item -LiteralPath $p7Md -Destination $destMd -Force
           Write-Host ("[P7-artifacts] " + $destMd)
+        }
+
+        if ($RunP8) {
+          Run-WithRecovery -Label "P8-shop" -PyArgs $p8ShopArgs -Url $BaseUrl
+          $p8ShopReportPath = Join-Path $p8ShopOut "report_p8.json"
+          $p8ShopReport = Get-Content $p8ShopReportPath -Raw | ConvertFrom-Json
+          Write-Host ("P8 shop summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4} skipped={5}" -f $p8ShopReport.passed, $p8ShopReport.total, $p8ShopReport.diff_fail, $p8ShopReport.oracle_fail, $p8ShopReport.gen_fail, $p8ShopReport.skipped)
+          Write-Host ("P8 shop report: {0}" -f $p8ShopReportPath)
+          Persist-ArtifactSet -Prefix "p8/shop" -ReportPath $p8ShopReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P8_STATUS.md", "docs/COVERAGE_P8_SHOP.md")
+          $p8ShopAnalyzeArgs = @("-B", "sim/oracle/analyze_p8_shop_mismatch.py", "--fixtures-dir", $p8ShopOut)
+          $null = Run-Py -Label "P8-shop-analyzer" -PyArgs $p8ShopAnalyzeArgs
+          $p8ShopCsv = Join-Path $p8ShopOut "shop_mismatch_table_p8.csv"
+          $p8ShopMd = Join-Path $p8ShopOut "shop_mismatch_table_p8.md"
+          $p8ShopArtifactDir = Join-Path $ProjectRoot "docs/artifacts/p8/shop"
+          if (-not (Test-Path $p8ShopArtifactDir)) { New-Item -ItemType Directory -Path $p8ShopArtifactDir -Force | Out-Null }
+          if (Test-Path $p8ShopCsv) {
+            $destCsv = Join-Path $p8ShopArtifactDir ("shop_mismatch_table_p8_" + $stamp + ".csv")
+            Copy-Item -LiteralPath $p8ShopCsv -Destination $destCsv -Force
+            Write-Host ("[P8-shop-artifacts] " + $destCsv)
+          }
+          if (Test-Path $p8ShopMd) {
+            $destMd = Join-Path $p8ShopArtifactDir ("shop_mismatch_table_p8_" + $stamp + ".md")
+            Copy-Item -LiteralPath $p8ShopMd -Destination $destMd -Force
+            Write-Host ("[P8-shop-artifacts] " + $destMd)
+          }
+
+          Run-WithRecovery -Label "P8-rng" -PyArgs $p8RngArgs -Url $BaseUrl
+          $p8RngReportPath = Join-Path $p8RngOut "report_p8_rng.json"
+          $p8RngReport = Get-Content $p8RngReportPath -Raw | ConvertFrom-Json
+          Write-Host ("P8 rng summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4} skipped={5}" -f $p8RngReport.passed, $p8RngReport.total, $p8RngReport.diff_fail, $p8RngReport.oracle_fail, $p8RngReport.gen_fail, $p8RngReport.skipped)
+          Write-Host ("P8 rng report: {0}" -f $p8RngReportPath)
+          Persist-ArtifactSet -Prefix "p8/rng" -ReportPath $p8RngReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P8_STATUS.md", "docs/COVERAGE_P8_RNG.md")
+          $p8RngAnalyzeArgs = @("-B", "sim/oracle/analyze_p8_rng_mismatch.py", "--fixtures-dir", $p8RngOut)
+          $null = Run-Py -Label "P8-rng-analyzer" -PyArgs $p8RngAnalyzeArgs
+          $p8RngCsv = Join-Path $p8RngOut "rng_mismatch_table_p8.csv"
+          $p8RngMd = Join-Path $p8RngOut "rng_mismatch_table_p8.md"
+          $p8RngArtifactDir = Join-Path $ProjectRoot "docs/artifacts/p8/rng"
+          if (-not (Test-Path $p8RngArtifactDir)) { New-Item -ItemType Directory -Path $p8RngArtifactDir -Force | Out-Null }
+          if (Test-Path $p8RngCsv) {
+            $destCsv = Join-Path $p8RngArtifactDir ("rng_mismatch_table_p8_" + $stamp + ".csv")
+            Copy-Item -LiteralPath $p8RngCsv -Destination $destCsv -Force
+            Write-Host ("[P8-rng-artifacts] " + $destCsv)
+          }
+          if (Test-Path $p8RngMd) {
+            $destMd = Join-Path $p8RngArtifactDir ("rng_mismatch_table_p8_" + $stamp + ".md")
+            Copy-Item -LiteralPath $p8RngMd -Destination $destMd -Force
+            Write-Host ("[P8-rng-artifacts] " + $destMd)
+          }
         }
       }
     }

@@ -1,6 +1,6 @@
 # P7 Stateful Joker Coverage
 
-- Generated at: `2026-02-23T17:24:34.814602+00:00`
+- Generated at: `2026-02-23T19:32:51.046708+00:00`
 - Input unsupported: **27**
 - Supported stateful jokers: **15**
 - Unsupported after P7 classifier: **12**
