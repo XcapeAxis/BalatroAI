@@ -92,7 +92,7 @@ function Run-WithRecovery([string]$Label, [string[]]$PyArgs, [string]$Url) {
   $r = Run-Py -Label $Label -PyArgs $PyArgs
   if ($r.Code -eq 0) { return }
   $t = [string]$r.Text
-  if (($t -match "timeout") -or ($t -match "health check failed") -or ($t -match "connection refused")) {
+  if (($t -match "timeout") -or ($t -match "health check failed") -or ($t -match "connection refused") -or ($t -match "base_url unhealthy")) {
     Write-Host "[$Label] transport issue, restarting service and retrying"
     Ensure-Service -Url $Url -ForceRestart $true
     $r2 = Run-Py -Label $Label -PyArgs $PyArgs
