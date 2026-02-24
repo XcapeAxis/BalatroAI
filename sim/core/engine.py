@@ -362,6 +362,49 @@ class SimEnv:
                 tags = outcome.get("tags") if isinstance(outcome.get("tags"), list) else []
                 self._state["tags"] = [str(x).strip().lower() for x in tags if str(x).strip()]
                 applied += 1
+            elif typ in {"money_change", "econ_delta"}:
+                raw_delta = outcome.get("delta") if "delta" in outcome else outcome.get("value")
+                try:
+                    delta = float(raw_delta or 0.0)
+                except Exception:
+                    raise ValueError(f"invalid {typ} outcome delta/value: {raw_delta}")
+                self._state["money"] = float(self._state.get("money") or 0.0) + delta
+                applied += 1
+            elif typ == "prob_trigger":
+                key = str(outcome.get("key") or "").strip().lower()
+                value = bool(outcome.get("value"))
+                trig = self._state.get("_prob_triggers") if isinstance(self._state.get("_prob_triggers"), dict) else {}
+                trig[key] = value
+                self._state["_prob_triggers"] = trig
+                applied += 1
+            elif typ == "shop_roll":
+                raw = outcome.get("value")
+                offers = raw if isinstance(raw, list) else []
+                cards: list[dict[str, Any]] = []
+                for idx, key in enumerate(offers):
+                    key_s = str(key or "").strip().lower()
+                    if not key_s:
+                        continue
+                    cards.append(
+                        {
+                            "key": key_s,
+                            "set": "JOKER",
+                            "label": key_s.upper(),
+                            "cost": {"buy": 0.0},
+                            "slot_index": idx,
+                        }
+                    )
+                if cards:
+                    self._state["shop"] = {
+                        "count": len(cards),
+                        "limit": max(len(cards), int((self._state.get("shop") or {}).get("limit") or 0)),
+                        "highlighted_limit": int((self._state.get("shop") or {}).get("highlighted_limit") or 0),
+                        "cards": cards,
+                    }
+                applied += 1
+            elif typ in {"phase_transition", "hand_cards"}:
+                # Observable oracle tokens used for replay determinism diagnostics.
+                applied += 1
 
         if applied:
             info["rng_replay_applied"] = applied

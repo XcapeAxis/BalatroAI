@@ -344,6 +344,38 @@ class RealBackend:
             _call_method(self.base_url, "reroll", {}, timeout=self.timeout_sec)
             after = self.get_state()
 
+        elif action_type == "BUY":
+            params = action.get("params") if isinstance(action.get("params"), dict) else {}
+            if not params:
+                for key in ("card", "pack", "voucher"):
+                    if key in action:
+                        params[key] = action[key]
+            _call_method(self.base_url, "buy", params, timeout=self.timeout_sec)
+            after = self.get_state()
+
+        elif action_type == "SELL":
+            params = action.get("params") if isinstance(action.get("params"), dict) else {}
+            if not params and "joker" in action:
+                params["joker"] = action["joker"]
+            _call_method(self.base_url, "sell", params, timeout=self.timeout_sec)
+            after = self.get_state()
+
+        elif action_type == "PACK":
+            params = action.get("params") if isinstance(action.get("params"), dict) else {}
+            if not params:
+                for key in ("card", "skip"):
+                    if key in action:
+                        params[key] = action[key]
+            _call_method(self.base_url, "pack", params, timeout=self.timeout_sec)
+            after = self.get_state()
+
+        elif action_type == "USE":
+            params = action.get("params") if isinstance(action.get("params"), dict) else {}
+            if not params and "consumable" in action:
+                params["consumable"] = action["consumable"]
+            _call_method(self.base_url, "use", params, timeout=self.timeout_sec)
+            after = self.get_state()
+
         elif action_type == "WAIT":
             time.sleep(max(0.0, float(action.get("sleep") or 0.05)))
             after = self.get_state()

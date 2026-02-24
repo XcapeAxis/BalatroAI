@@ -28,6 +28,7 @@ from sim.core.hashing import (
     state_hash_p8_shop_observed_core,
     state_hash_p9_episode_observed_core,
     state_hash_p10_long_episode_observed_core,
+    state_hash_p11_prob_econ_observed_core,
     state_hash_rng_events_core,
     state_hash_score_core,
     state_hash_zones_core,
@@ -36,7 +37,7 @@ from sim.core.hashing import (
 from sim.core.score_observed import compute_score_observed
 from sim.core.validate import validate_action, validate_trace_line
 from sim.oracle.canonicalize_real import canonicalize_real_state
-from sim.oracle.extract_rng_events import extract_rng_events
+from sim.oracle.extract_rng_outcomes import extract_rng_outcomes
 from sim.score.expected_basic import compute_expected_for_action
 from trainer.env_client import ConnectionError, RPCError, _call_method, get_state, health
 
@@ -233,7 +234,12 @@ def main() -> int:
                         seed=args.seed,
                     )
 
-                events = extract_rng_events(state, next_state)
+                events = extract_rng_outcomes(
+                    state,
+                    next_state,
+                    action=executed_action,
+                    step_id=step_id,
+                )
                 rng_cursor += len(events)
                 canonical = canonicalize_real_state(
                     next_state,
@@ -297,6 +303,7 @@ def main() -> int:
                     "state_hash_p8_rng_observed_core": state_hash_p8_rng_observed_core(canonical_with_observed),
                     "state_hash_p9_episode_observed_core": state_hash_p9_episode_observed_core(canonical_with_observed),
                     "state_hash_p10_long_episode_observed_core": state_hash_p10_long_episode_observed_core(canonical_with_observed),
+                    "state_hash_p11_prob_econ_observed_core": state_hash_p11_prob_econ_observed_core(canonical_with_observed),
                     "state_hash_zones_core": state_hash_zones_core(canonical),
                     "state_hash_zones_counts_core": state_hash_zones_counts_core(canonical),
                     "state_hash_economy_core": state_hash_economy_core(canonical),

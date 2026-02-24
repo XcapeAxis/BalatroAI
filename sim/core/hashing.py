@@ -788,6 +788,91 @@ def _filter_p10_long_episode_observed_core(state: dict[str, Any]) -> dict[str, A
     }
 
 
+def _extract_p11_outcomes(replay_outcomes_raw: list[Any]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in replay_outcomes_raw:
+        if not isinstance(item, dict):
+            continue
+        typ = str(item.get("type") or "").strip().lower()
+        if not typ:
+            continue
+
+        rec: dict[str, Any] = {"type": typ}
+        if "key" in item:
+            rec["key"] = str(item.get("key") or "").strip().lower()
+        elif "joker_key" in item:
+            rec["key"] = str(item.get("joker_key") or "").strip().lower()
+        elif "item_key" in item:
+            rec["key"] = str(item.get("item_key") or "").strip().lower()
+
+        if typ in {"shop_offers", "voucher_offers", "pack_offers"}:
+            raw_items = item.get("items") if isinstance(item.get("items"), list) else []
+            items: list[dict[str, Any]] = []
+            for idx, raw in enumerate(raw_items):
+                if not isinstance(raw, dict):
+                    continue
+                cost = raw.get("cost")
+                try:
+                    cost_f = float(cost or 0.0)
+                except Exception:
+                    cost_f = 0.0
+                slot = raw.get("slot")
+                if not isinstance(slot, int):
+                    slot = raw.get("slot_index")
+                if not isinstance(slot, int):
+                    slot = idx
+                items.append(
+                    {
+                        "kind": str(raw.get("kind") or raw.get("set") or "").strip().upper(),
+                        "key": str(raw.get("key") or "").strip().lower(),
+                        "cost": cost_f,
+                        "slot_index": int(slot),
+                    }
+                )
+            items.sort(key=canonical_dumps)
+            rec["items"] = items
+        elif typ in {"pack_choices"}:
+            raw_choices = item.get("choices") if isinstance(item.get("choices"), list) else []
+            rec["choices"] = sorted(str(x).strip().lower() for x in raw_choices if str(x).strip())
+        elif typ in {"money_change", "econ_delta"}:
+            try:
+                rec["delta"] = float(item.get("delta") or item.get("value") or 0.0)
+            except Exception:
+                rec["delta"] = 0.0
+        elif typ in {"prob_trigger", "shop_roll"}:
+            rec["scope"] = str(item.get("scope") or "").strip().lower()
+            if "value" in item:
+                rec["value"] = item.get("value")
+            elif "triggered" in item:
+                rec["value"] = bool(item.get("triggered"))
+        else:
+            rec["sig"] = _rng_outcome_sig(item)
+
+        out.append(rec)
+
+    out.sort(key=canonical_dumps)
+    return out
+
+
+def _filter_p11_prob_econ_observed_core(state: dict[str, Any]) -> dict[str, Any]:
+    state = to_builtin(state)
+    replay = state.get("rng_replay") if isinstance(state.get("rng_replay"), dict) else {}
+    replay_outcomes_raw = replay.get("outcomes") if isinstance(replay.get("outcomes"), list) else []
+
+    return {
+        "schema_version": state.get("schema_version"),
+        "jokers": {
+            "count": len(_extract_joker_ids(state)),
+            "keys": _extract_joker_ids(state),
+        },
+        "rng_replay": {
+            "enabled": bool(replay.get("enabled") or False),
+            "source": str(replay.get("source") or ""),
+            "outcomes": _extract_p11_outcomes(replay_outcomes_raw),
+        },
+    }
+
+
 def _filter_zones_core(state: dict[str, Any]) -> dict[str, Any]:
     state = to_builtin(state)
     zones = state.get("zones") or {}
@@ -947,6 +1032,10 @@ def state_hash_p10_long_episode_observed_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_p10_long_episode_observed_core(state)))
 
 
+def state_hash_p11_prob_econ_observed_core(state: dict[str, Any]) -> str:
+    return _sha256_text(canonical_dumps(_filter_p11_prob_econ_observed_core(state)))
+
+
 def state_hash_zones_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_zones_core(state)))
 
@@ -1026,6 +1115,10 @@ def p9_episode_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]
 
 def p10_long_episode_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
     return _filter_p10_long_episode_observed_core(state)
+
+
+def p11_prob_econ_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
+    return _filter_p11_prob_econ_observed_core(state)
 
 
 def zones_core_projection(state: dict[str, Any]) -> dict[str, Any]:

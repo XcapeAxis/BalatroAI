@@ -1,0 +1,621 @@
+{
+  "metadata": {
+    "generated_at": "2026-02-24T13:40:49.425343+00:00",
+    "source_pick": "D:\\我的\\BalatroAI\\balatro_mechanics\\derived\\p11_pick_payload.json",
+    "source_map": "D:\\我的\\BalatroAI\\balatro_mechanics\\derived\\joker_template_map.json"
+  },
+  "items": [
+    {
+      "target": "p11_prob_j_hack",
+      "joker_key": "j_hack",
+      "joker_name": "Hack",
+      "template": "prob_trigger_observed",
+      "confidence": 0.76,
+      "matched_rules": [
+        "\\bretrigger\\b"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Retrigger each played 2 , 3 , 4 , or 5",
+        "trigger_timing": "on_scored",
+        "key_mechanics": "retrigger",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "prob",
+        "mode": "prob",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_hack",
+            "mode": "prob",
+            "kind": "prob_joker",
+            "tags": [
+              "prob"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_prob_j_hanging_chad",
+      "joker_key": "j_hanging_chad",
+      "joker_name": "Hanging Chad",
+      "template": "prob_trigger_observed",
+      "confidence": 0.76,
+      "matched_rules": [
+        "\\bretrigger\\b"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Retrigger first played card used in scoring 2 additional times",
+        "trigger_timing": "on_scored",
+        "key_mechanics": "retrigger",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "prob",
+        "mode": "prob",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_hanging_chad",
+            "mode": "prob",
+            "kind": "prob_joker",
+            "tags": [
+              "prob"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_prob_j_seltzer",
+      "joker_key": "j_seltzer",
+      "joker_name": "Seltzer",
+      "template": "prob_trigger_observed",
+      "confidence": 0.76,
+      "matched_rules": [
+        "\\bretrigger\\b"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Retrigger all cards played for the next 10 hands",
+        "trigger_timing": "on_scored",
+        "key_mechanics": "retrigger",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "prob",
+        "mode": "prob",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_seltzer",
+            "mode": "prob",
+            "kind": "prob_joker",
+            "tags": [
+              "prob"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_prob_j_ancient_joker",
+      "joker_key": "j_ancient_joker",
+      "joker_name": "Ancient Joker",
+      "template": "prob_trigger_observed",
+      "confidence": 0.76,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "effect_summary": "Each played card with [suit] gives X1.5 Mult when scored, suit changes at end of round",
+        "trigger_timing": "on_scored",
+        "key_mechanics": "mult_mult",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "prob",
+        "mode": "prob",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_ancient_joker",
+            "mode": "prob",
+            "kind": "prob_joker",
+            "tags": [
+              "prob"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_prob_j_baseball_card",
+      "joker_key": "j_baseball_card",
+      "joker_name": "Baseball Card",
+      "template": "prob_trigger_observed",
+      "confidence": 0.76,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "effect_summary": "Uncommon Jokers each give X1.5 Mult",
+        "trigger_timing": "on_other_jokers",
+        "key_mechanics": "mult_mult",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "prob",
+        "mode": "prob",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_baseball_card",
+            "mode": "prob",
+            "kind": "prob_joker",
+            "tags": [
+              "prob"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_prob_j_burnt_joker",
+      "joker_key": "j_burnt_joker",
+      "joker_name": "Burnt Joker",
+      "template": "prob_trigger_observed",
+      "confidence": 0.76,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "effect_summary": "Upgrade the level of the first discarded poker hand each round",
+        "trigger_timing": "on_discard",
+        "key_mechanics": "discard",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "prob",
+        "mode": "prob",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_burnt_joker",
+            "mode": "prob",
+            "kind": "prob_joker",
+            "tags": [
+              "prob"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_prob_j_diet_cola",
+      "joker_key": "j_diet_cola",
+      "joker_name": "Diet Cola",
+      "template": "prob_trigger_observed",
+      "confidence": 0.76,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "effect_summary": "Sell this card to create a free Double Tag",
+        "trigger_timing": "passive",
+        "key_mechanics": "money",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "prob",
+        "mode": "prob",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_diet_cola",
+            "mode": "prob",
+            "kind": "prob_joker",
+            "tags": [
+              "prob"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_prob_j_dna",
+      "joker_key": "j_dna",
+      "joker_name": "DNA",
+      "template": "prob_trigger_observed",
+      "confidence": 0.76,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "effect_summary": "If first hand of round has only 1 card, add a permanent copy to deck and draw it to hand",
+        "trigger_timing": "on_played",
+        "key_mechanics": "deck_change",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "prob",
+        "mode": "prob",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_dna",
+            "mode": "prob",
+            "kind": "prob_joker",
+            "tags": [
+              "prob"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_prob_j_ice_cream",
+      "joker_key": "j_ice_cream",
+      "joker_name": "Ice Cream",
+      "template": "prob_trigger_observed",
+      "confidence": 0.76,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "effect_summary": "+100 Chips -5 Chips for every hand played",
+        "trigger_timing": "unknown",
+        "key_mechanics": "chips_add",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "prob",
+        "mode": "prob",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_ice_cream",
+            "mode": "prob",
+            "kind": "prob_joker",
+            "tags": [
+              "prob"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_prob_j_loyalty_card",
+      "joker_key": "j_loyalty_card",
+      "joker_name": "Loyalty Card",
+      "template": "prob_trigger_observed",
+      "confidence": 0.76,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "effect_summary": "X4 Mult every 6 hands played 5 remaining",
+        "trigger_timing": "unknown",
+        "key_mechanics": "mult_mult",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "prob",
+        "mode": "prob",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_loyalty_card",
+            "mode": "prob",
+            "kind": "prob_joker",
+            "tags": [
+              "prob"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_econ_j_diet_cola",
+      "joker_key": "j_diet_cola",
+      "joker_name": "Diet Cola",
+      "template": "econ_shop_observed",
+      "confidence": 0.76,
+      "matched_rules": [
+        "\\bmoney\\b",
+        "\\bsell\\b",
+        "\\bfree\\b"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Sell this card to create a free Double Tag",
+        "trigger_timing": "passive",
+        "key_mechanics": "money",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "econ",
+        "mode": "econ",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_diet_cola",
+            "mode": "econ",
+            "kind": "econ_joker",
+            "tags": [
+              "econ"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_econ_j_burnt_joker",
+      "joker_key": "j_burnt_joker",
+      "joker_name": "Burnt Joker",
+      "template": "econ_shop_observed",
+      "confidence": 0.76,
+      "matched_rules": [
+        "\\bsell\\b"
+      ],
+      "raw_fields_used": {
+        "effect_summary": "Upgrade the level of the first discarded poker hand each round",
+        "trigger_timing": "on_discard",
+        "key_mechanics": "discard",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "econ",
+        "mode": "econ",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_burnt_joker",
+            "mode": "econ",
+            "kind": "econ_joker",
+            "tags": [
+              "econ"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_econ_j_ancient_joker",
+      "joker_key": "j_ancient_joker",
+      "joker_name": "Ancient Joker",
+      "template": "econ_shop_observed",
+      "confidence": 0.76,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "effect_summary": "Each played card with [suit] gives X1.5 Mult when scored, suit changes at end of round",
+        "trigger_timing": "on_scored",
+        "key_mechanics": "mult_mult",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "econ",
+        "mode": "econ",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_ancient_joker",
+            "mode": "econ",
+            "kind": "econ_joker",
+            "tags": [
+              "econ"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_econ_j_baseball_card",
+      "joker_key": "j_baseball_card",
+      "joker_name": "Baseball Card",
+      "template": "econ_shop_observed",
+      "confidence": 0.76,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "effect_summary": "Uncommon Jokers each give X1.5 Mult",
+        "trigger_timing": "on_other_jokers",
+        "key_mechanics": "mult_mult",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "econ",
+        "mode": "econ",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_baseball_card",
+            "mode": "econ",
+            "kind": "econ_joker",
+            "tags": [
+              "econ"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_econ_j_dna",
+      "joker_key": "j_dna",
+      "joker_name": "DNA",
+      "template": "econ_shop_observed",
+      "confidence": 0.76,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "effect_summary": "If first hand of round has only 1 card, add a permanent copy to deck and draw it to hand",
+        "trigger_timing": "on_played",
+        "key_mechanics": "deck_change",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "econ",
+        "mode": "econ",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_dna",
+            "mode": "econ",
+            "kind": "econ_joker",
+            "tags": [
+              "econ"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_econ_j_hack",
+      "joker_key": "j_hack",
+      "joker_name": "Hack",
+      "template": "econ_shop_observed",
+      "confidence": 0.76,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "effect_summary": "Retrigger each played 2 , 3 , 4 , or 5",
+        "trigger_timing": "on_scored",
+        "key_mechanics": "retrigger",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "econ",
+        "mode": "econ",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_hack",
+            "mode": "econ",
+            "kind": "econ_joker",
+            "tags": [
+              "econ"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_econ_j_hanging_chad",
+      "joker_key": "j_hanging_chad",
+      "joker_name": "Hanging Chad",
+      "template": "econ_shop_observed",
+      "confidence": 0.76,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "effect_summary": "Retrigger first played card used in scoring 2 additional times",
+        "trigger_timing": "on_scored",
+        "key_mechanics": "retrigger",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "econ",
+        "mode": "econ",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_hanging_chad",
+            "mode": "econ",
+            "kind": "econ_joker",
+            "tags": [
+              "econ"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_econ_j_ice_cream",
+      "joker_key": "j_ice_cream",
+      "joker_name": "Ice Cream",
+      "template": "econ_shop_observed",
+      "confidence": 0.76,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "effect_summary": "+100 Chips -5 Chips for every hand played",
+        "trigger_timing": "unknown",
+        "key_mechanics": "chips_add",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "econ",
+        "mode": "econ",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_ice_cream",
+            "mode": "econ",
+            "kind": "econ_joker",
+            "tags": [
+              "econ"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_econ_j_loyalty_card",
+      "joker_key": "j_loyalty_card",
+      "joker_name": "Loyalty Card",
+      "template": "econ_shop_observed",
+      "confidence": 0.76,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "effect_summary": "X4 Mult every 6 hands played 5 remaining",
+        "trigger_timing": "unknown",
+        "key_mechanics": "mult_mult",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "econ",
+        "mode": "econ",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_loyalty_card",
+            "mode": "econ",
+            "kind": "econ_joker",
+            "tags": [
+              "econ"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "target": "p11_econ_j_marble_joker",
+      "joker_key": "j_marble_joker",
+      "joker_name": "Marble Joker",
+      "template": "econ_shop_observed",
+      "confidence": 0.76,
+      "matched_rules": [],
+      "raw_fields_used": {
+        "effect_summary": "Adds one Stone card to the deck when Blind is selected",
+        "trigger_timing": "unknown",
+        "key_mechanics": "deck_change",
+        "source_reason": ""
+      },
+      "params": {
+        "category": "econ",
+        "mode": "econ",
+        "strategy": "p11_prob_econ_multistep",
+        "min_actions": 6,
+        "jokers": [
+          {
+            "key": "j_marble_joker",
+            "mode": "econ",
+            "kind": "econ_joker",
+            "tags": [
+              "econ"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

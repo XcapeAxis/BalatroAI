@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$BaseUrl = "http://127.0.0.1:12346",
   [string]$OutRoot = "sim/tests/fixtures_runtime",
   [string]$Seed = "AAAAAAA",
@@ -10,6 +10,8 @@ param(
   [switch]$RunP8,
   [switch]$RunP9,
   [switch]$RunP10,
+  [switch]$RunP11,
+  [switch]$RunP12,
   [switch]$GitSync
 )
 Set-StrictMode -Version Latest
@@ -121,6 +123,21 @@ function Persist-ArtifactSet([string]$Prefix, [string]$ReportPath, [string]$Proj
   }
 }
 
+function Find-LatestModel([string]$ProjectRootPath) {
+  $runs = Join-Path $ProjectRootPath "trainer_runs"
+  if (-not (Test-Path $runs)) { return $null }
+
+  $best = Get-ChildItem -Path $runs -Filter "best.pt" -Recurse -File -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+  if ($best) { return $best.FullName }
+
+  $last = Get-ChildItem -Path $runs -Filter "last.pt" -Recurse -File -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+  if ($last) { return $last.FullName }
+
+  return $null
+}
+
 Ensure-Service -Url $BaseUrl
 if (-not (Test-Path $OutRoot)) { New-Item -ItemType Directory -Path $OutRoot -Force | Out-Null }
 $outRootPath = (Resolve-Path $OutRoot).Path
@@ -137,6 +154,7 @@ $p8ShopOut = Join-Path $outRootPath "oracle_p8_shop_v1_regression"
 $p8RngOut = Join-Path $outRootPath "oracle_p8_rng_v1_regression"
 $p9Out = Join-Path $outRootPath "oracle_p9_episode_v1_regression"
 $p10Out = Join-Path $outRootPath "oracle_p10_long_v1_regression"
+$p11Out = Join-Path $outRootPath "oracle_p11_prob_econ_v1_regression"
 
 $p0Args = @("-B", "sim/oracle/batch_build_p0_oracle_fixtures.py", "--base-url", $BaseUrl, "--out-dir", $p0Out, "--max-steps", "160", "--scope", "p0_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p0Out "dumps"))
 $p1Args = @("-B", "sim/oracle/batch_build_p1_smoke.py", "--base-url", $BaseUrl, "--out-dir", $p1Out, "--max-steps", "120", "--scope", "p1_hand_score_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p1Out "dumps"))
@@ -152,6 +170,8 @@ $p9ClassifyArgs = @("-B", "sim/oracle/p9_blind_tag_classifier.py", "--out-derive
 $p9Args = @("-B", "sim/oracle/batch_build_p9_episode_fixtures.py", "--base-url", $BaseUrl, "--targets-file", "balatro_mechanics/derived/p9_supported_targets.txt", "--out-dir", $p9Out, "--max-steps", "800", "--scope", "p9_episode_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p9Out "dumps"))
 $p10StakeExtractArgs = @("-B", "sim/oracle/extract_stake_rules.py", "--mech-root", "balatro_mechanics", "--out-derived", "balatro_mechanics/derived")
 $p10Args = @("-B", "sim/oracle/batch_build_p10_long_episode_fixtures.py", "--base-url", $BaseUrl, "--out-dir", $p10Out, "--max-steps", "1200", "--scope", "p10_long_episode_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p10Out "dumps"))
+$p11PickArgs = @("-B", "sim/oracle/p11_pick_prob_econ_targets.py", "--out-derived", "balatro_mechanics/derived", "--out-docs", "docs")
+$p11Args = @("-B", "sim/oracle/batch_build_p11_prob_econ_fixtures.py", "--base-url", $BaseUrl, "--targets-file", "balatro_mechanics/derived/p11_supported_targets.txt", "--out-dir", $p11Out, "--max-steps", "500", "--scope", "p11_prob_econ_observed_core", "--seed", $Seed, "--dump-on-diff", (Join-Path $p11Out "dumps"))
 
 Run-WithRecovery -Label "P0" -PyArgs $p0Args -Url $BaseUrl
 Run-WithRecovery -Label "P1" -PyArgs $p1Args -Url $BaseUrl
@@ -166,7 +186,7 @@ Write-Host ("P0 report: {0}" -f $p0ReportPath)
 Write-Host ("P1 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4}" -f $p1Report.passed, $p1Report.total, $p1Report.diff_fail, $p1Report.oracle_fail, $p1Report.gen_fail)
 Write-Host ("P1 report: {0}" -f $p1ReportPath)
 
-if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10) {
+if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -or $RunP11 -or $RunP12) {
   Run-WithRecovery -Label "P2" -PyArgs $p2Args -Url $BaseUrl
   Run-WithRecovery -Label "P2b" -PyArgs $p2bArgs -Url $BaseUrl
   Run-WithRecovery -Label "P3" -PyArgs $p3Args -Url $BaseUrl
@@ -187,7 +207,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10) {
   Write-Host ("P3 report: {0}" -f $p3ReportPath)
   Persist-ArtifactSet -Prefix "P3" -ReportPath $p3ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P3_JOKERS.md", "docs/COVERAGE_P3_STATUS.md")
 
-  if ($RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10) {
+  if ($RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -or $RunP11 -or $RunP12) {
     Run-WithRecovery -Label "P4" -PyArgs $p4Args -Url $BaseUrl
     $p4ReportPath = Join-Path $p4Out "report_p4.json"
     $p4Report = Get-Content $p4ReportPath -Raw | ConvertFrom-Json
@@ -195,7 +215,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10) {
     Write-Host ("P4 report: {0}" -f $p4ReportPath)
     Persist-ArtifactSet -Prefix "P4" -ReportPath $p4ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P4_CONSUMABLES.md", "docs/COVERAGE_P4_STATUS.md")
 
-    if ($RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10) {
+    if ($RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -or $RunP11 -or $RunP12) {
       Run-WithRecovery -Label "P5" -PyArgs $p5Args -Url $BaseUrl
       $p5ReportPath = Join-Path $p5Out "report_p5.json"
       $p5Report = Get-Content $p5ReportPath -Raw | ConvertFrom-Json
@@ -203,7 +223,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10) {
       Write-Host ("P5 report: {0}" -f $p5ReportPath)
       Persist-ArtifactSet -Prefix "P5" -ReportPath $p5ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P5_VOUCHERS_PACKS.md", "docs/COVERAGE_P5_STATUS.md")
 
-      if ($RunP7 -or $RunP8 -or $RunP9 -or $RunP10) {
+      if ($RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -or $RunP11 -or $RunP12) {
         Run-WithRecovery -Label "P7" -PyArgs $p7Args -Url $BaseUrl
         $p7ReportPath = Join-Path $p7Out "report_p7.json"
         $p7Report = Get-Content $p7ReportPath -Raw | ConvertFrom-Json
@@ -229,7 +249,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10) {
           Write-Host ("[P7-artifacts] " + $destMd)
         }
 
-        if ($RunP8 -or $RunP9 -or $RunP10) {
+        if ($RunP8 -or $RunP9 -or $RunP10 -or $RunP11 -or $RunP12) {
           Run-WithRecovery -Label "P8-shop" -PyArgs $p8ShopArgs -Url $BaseUrl
           $p8ShopReportPath = Join-Path $p8ShopOut "report_p8.json"
           $p8ShopReport = Get-Content $p8ShopReportPath -Raw | ConvertFrom-Json
@@ -276,7 +296,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10) {
             Write-Host ("[P8-rng-artifacts] " + $destMd)
           }
 
-          if ($RunP9 -or $RunP10) {
+          if ($RunP9 -or $RunP10 -or $RunP11 -or $RunP12) {
             Run-Py -Label "P9-classifier" -PyArgs $p9ClassifyArgs | Out-Null
             Run-WithRecovery -Label "P9" -PyArgs $p9Args -Url $BaseUrl
             $p9ReportPath = Join-Path $p9Out "report_p9.json"
@@ -301,7 +321,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10) {
               Write-Host ("[P9-artifacts] " + $destMd)
             }
 
-            if ($RunP10) {
+            if ($RunP10 -or $RunP11 -or $RunP12) {
               $null = Run-Py -Label "P10-stake-extract" -PyArgs $p10StakeExtractArgs
               Run-WithRecovery -Label "P10" -PyArgs $p10Args -Url $BaseUrl
               $p10ReportPath = Join-Path $p10Out "report_p10.json"
@@ -324,6 +344,82 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10) {
                 $destMd = Join-Path $p10ArtifactDir ("episode_mismatch_table_p10_" + $stamp + ".md")
                 Copy-Item -LiteralPath $p10Md -Destination $destMd -Force
                 Write-Host ("[P10-artifacts] " + $destMd)
+              }
+
+              if ($RunP11 -or $RunP12) {
+                $null = Run-Py -Label "P11-pick" -PyArgs $p11PickArgs
+                Run-WithRecovery -Label "P11" -PyArgs $p11Args -Url $BaseUrl
+                $p11ReportPath = Join-Path $p11Out "report_p11.json"
+                $p11Report = Get-Content $p11ReportPath -Raw | ConvertFrom-Json
+                Write-Host ("P11 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4} skipped={5}" -f $p11Report.passed, $p11Report.total, $p11Report.diff_fail, $p11Report.oracle_fail, $p11Report.gen_fail, $p11Report.skipped)
+                Write-Host ("P11 report: {0}" -f $p11ReportPath)
+                Persist-ArtifactSet -Prefix "p11" -ReportPath $p11ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P11_STATUS.md", "docs/COVERAGE_P11_PROB_ECON.md", "docs/COVERAGE_P11_PICK.md")
+                $p11AnalyzeArgs = @("-B", "sim/oracle/analyze_p11_mismatch.py", "--fixtures-dir", $p11Out)
+                $null = Run-Py -Label "P11-analyzer" -PyArgs $p11AnalyzeArgs
+                $p11Csv = Join-Path $p11Out "mismatch_table_p11.csv"
+                $p11Md = Join-Path $p11Out "mismatch_table_p11.md"
+                $p11ArtifactDir = Join-Path $ProjectRoot "docs/artifacts/p11"
+                if (-not (Test-Path $p11ArtifactDir)) { New-Item -ItemType Directory -Path $p11ArtifactDir -Force | Out-Null }
+                if (Test-Path $p11Csv) {
+                  $destCsv = Join-Path $p11ArtifactDir ("mismatch_table_p11_" + $stamp + ".csv")
+                  Copy-Item -LiteralPath $p11Csv -Destination $destCsv -Force
+                  Write-Host ("[P11-artifacts] " + $destCsv)
+                }
+                if (Test-Path $p11Md) {
+                  $destMd = Join-Path $p11ArtifactDir ("mismatch_table_p11_" + $stamp + ".md")
+                  Copy-Item -LiteralPath $p11Md -Destination $destMd -Force
+                  Write-Host ("[P11-artifacts] " + $destMd)
+                }
+
+                if ($RunP12) {
+                  $p12Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+                  $p12ArtifactDir = Join-Path $ProjectRoot ("docs/artifacts/p12/" + $p12Stamp)
+                  if (-not (Test-Path $p12ArtifactDir)) { New-Item -ItemType Directory -Path $p12ArtifactDir -Force | Out-Null }
+
+                  if (-not (Test-Health -Url $BaseUrl -TimeoutSec 3)) {
+                    $skipPayload = @{
+                      timestamp = $p12Stamp
+                      status = "SKIPPED"
+                      reason = "real unavailable"
+                      base_url = $BaseUrl
+                    }
+                    $skipPath = Join-Path $p12ArtifactDir "p12_skip.json"
+                    ($skipPayload | ConvertTo-Json -Depth 8) | Out-File -LiteralPath $skipPath -Encoding UTF8
+                    Write-Host ("P12=SKIPPED(real unavailable) artifact=" + $skipPath)
+                  } else {
+                    $p12RealOut = Join-Path $p12ArtifactDir ("real_smoke_" + $p12Stamp + ".json")
+                    $p12InferOut = Join-Path $p12ArtifactDir ("infer_real_" + $p12Stamp + ".txt")
+                    $p12DriftOut = Join-Path $p12ArtifactDir ("drift_" + $p12Stamp + ".json")
+                    $p12SummaryPath = Join-Path $p12ArtifactDir "report_p12.json"
+
+                    $modelPath = Find-LatestModel -ProjectRootPath $ProjectRoot
+
+                    $p12ObsArgs = @("-B", "trainer/real_observer.py", "--base-url", $BaseUrl, "--once", "--out", $p12RealOut)
+                    $p12ObsResult = Run-Py -Label "P12-observer" -PyArgs $p12ObsArgs
+                    if ($p12ObsResult.Code -ne 0) { throw "[P12] real observer failed" }
+
+                    $p12InferArgs = @("-B", "trainer/infer_assistant_real.py", "--base-url", $BaseUrl, "--once", "--topk", "3", "--out", $p12InferOut)
+                    if ($modelPath) { $p12InferArgs += @("--model", $modelPath) }
+                    $p12InferResult = Run-Py -Label "P12-infer" -PyArgs $p12InferArgs
+                    if ($p12InferResult.Code -ne 0) { throw "[P12] infer assistant real failed" }
+
+                    $p12DriftArgs = @("-B", "trainer/sim_real_drift.py", "--base-url", $BaseUrl, "--samples", "10", "--interval", "0.2", "--with-sim", "--out", $p12DriftOut)
+                    $p12DriftResult = Run-Py -Label "P12-drift" -PyArgs $p12DriftArgs
+                    if ($p12DriftResult.Code -ne 0) { throw "[P12] sim_real_drift failed" }
+
+                    $summary = @{
+                      timestamp = $p12Stamp
+                      status = "PASS"
+                      base_url = $BaseUrl
+                      model = $(if ($modelPath) { $modelPath } else { "" })
+                      real_smoke = $p12RealOut
+                      infer_output = $p12InferOut
+                      drift_output = $p12DriftOut
+                    }
+                    ($summary | ConvertTo-Json -Depth 8) | Out-File -LiteralPath $p12SummaryPath -Encoding UTF8
+                    Write-Host ("P12 summary: PASS artifact=" + $p12SummaryPath)
+                  }
+                }
               }
             }
           }
@@ -356,4 +452,5 @@ if ($GitSync) {
   }
   Write-Host "[GitSync] dry-run complete. To execute push/delete: powershell -ExecutionPolicy Bypass -File scripts/git_sync.ps1 -DryRun:`$false"
 }
+
 
