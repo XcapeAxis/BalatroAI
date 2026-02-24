@@ -29,6 +29,7 @@ from sim.core.hashing import (
     p9_episode_observed_core_projection,
     p10_long_episode_observed_core_projection,
     p11_prob_econ_observed_core_projection,
+    p14_real_action_observed_core_projection,
     rng_events_core_projection,
     score_core_projection,
     state_hash_economy_core,
@@ -49,6 +50,7 @@ from sim.core.hashing import (
     state_hash_p9_episode_observed_core,
     state_hash_p10_long_episode_observed_core,
     state_hash_p11_prob_econ_observed_core,
+    state_hash_p14_real_action_observed_core,
     state_hash_rng_events_core,
     state_hash_score_core,
     state_hash_zones_core,
@@ -78,6 +80,7 @@ SCOPE_TO_HASH_KEY = {
     "p9_episode_observed_core": "state_hash_p9_episode_observed_core",
     "p10_long_episode_observed_core": "state_hash_p10_long_episode_observed_core",
     "p11_prob_econ_observed_core": "state_hash_p11_prob_econ_observed_core",
+    "p14_real_action_observed_core": "state_hash_p14_real_action_observed_core",
     "zones_core": "state_hash_zones_core",
     "zones_counts_core": "state_hash_zones_counts_core",
     "economy_core": "state_hash_economy_core",
@@ -93,7 +96,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--oracle-trace", help="Optional oracle trace jsonl for step-by-step diff.")
     parser.add_argument(
         "--scope",
-        choices=["hand_core", "score_core", "p0_hand_score_core", "p0_hand_score_observed_core", "p1_hand_score_observed_core", "p2_hand_score_observed_core", "p2b_hand_score_observed_core", "p3_hand_score_observed_core", "p4_consumable_observed_core", "p5_modifier_observed_core", "p5_voucher_pack_observed_core", "p7_stateful_observed_core", "p8_shop_observed_core", "p8_rng_observed_core", "p9_episode_observed_core", "p10_long_episode_observed_core", "p11_prob_econ_observed_core", "zones_core", "zones_counts_core", "economy_core", "rng_events_core", "full"],
+        choices=["hand_core", "score_core", "p0_hand_score_core", "p0_hand_score_observed_core", "p1_hand_score_observed_core", "p2_hand_score_observed_core", "p2b_hand_score_observed_core", "p3_hand_score_observed_core", "p4_consumable_observed_core", "p5_modifier_observed_core", "p5_voucher_pack_observed_core", "p7_stateful_observed_core", "p8_shop_observed_core", "p8_rng_observed_core", "p9_episode_observed_core", "p10_long_episode_observed_core", "p11_prob_econ_observed_core", "p14_real_action_observed_core", "zones_core", "zones_counts_core", "economy_core", "rng_events_core", "full"],
         default="hand_core",
     )
     parser.add_argument("--check-start", action="store_true", help="Compare oracle snapshot vs simulator reset(from_snapshot) before replay.")
@@ -234,6 +237,8 @@ def _scope_projection(scope: str, state: dict[str, Any] | None) -> Any:
         return p10_long_episode_observed_core_projection(state)
     if scope == "p11_prob_econ_observed_core":
         return p11_prob_econ_observed_core_projection(state)
+    if scope == "p14_real_action_observed_core":
+        return p14_real_action_observed_core_projection(state)
     if scope == "zones_core":
         return zones_core_projection(state)
     if scope == "zones_counts_core":
@@ -580,6 +585,7 @@ def main() -> int:
                 "state_hash_p9_episode_observed_core": state_hash_p9_episode_observed_core(canonical_with_observed),
                 "state_hash_p10_long_episode_observed_core": state_hash_p10_long_episode_observed_core(canonical_with_observed),
                 "state_hash_p11_prob_econ_observed_core": state_hash_p11_prob_econ_observed_core(canonical_with_observed),
+                "state_hash_p14_real_action_observed_core": state_hash_p14_real_action_observed_core(canonical_with_observed),
                 "state_hash_zones_core": state_hash_zones_core(canonical),
                 "state_hash_zones_counts_core": state_hash_zones_counts_core(canonical),
                 "state_hash_economy_core": state_hash_economy_core(canonical),

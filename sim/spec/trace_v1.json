@@ -202,6 +202,9 @@
     },
     "state_hash_p11_prob_econ_observed_core": {
       "type": "string"
+    },
+    "state_hash_p14_real_action_observed_core": {
+      "type": "string"
     }
   }
 }

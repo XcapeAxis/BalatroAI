@@ -873,6 +873,58 @@ def _filter_p11_prob_econ_observed_core(state: dict[str, Any]) -> dict[str, Any]
     }
 
 
+def _filter_p14_real_action_observed_core(state: dict[str, Any]) -> dict[str, Any]:
+    state = to_builtin(state)
+    round_info = state.get("round") if isinstance(state.get("round"), dict) else {}
+    observed = state.get("score_observed") if isinstance(state.get("score_observed"), dict) else {}
+    replay = state.get("rng_replay") if isinstance(state.get("rng_replay"), dict) else {}
+    replay_outcomes_raw = replay.get("outcomes") if isinstance(replay.get("outcomes"), list) else []
+    zones = state.get("zones") if isinstance(state.get("zones"), dict) else {}
+    consumables_raw = state.get("consumables") if isinstance(state.get("consumables"), dict) else {}
+
+    hand_cards = _zone_cards_min_sorted(zones, "hand")
+    hand_keys = sorted(str(c.get("key") or "").strip().lower() for c in hand_cards if str(c.get("key") or "").strip())
+    consumable_cards = consumables_raw.get("cards") if isinstance(consumables_raw.get("cards"), list) else []
+    consumable_keys = sorted(
+        str(c.get("key") or "").strip().lower()
+        for c in consumable_cards
+        if isinstance(c, dict) and str(c.get("key") or "").strip()
+    )
+
+    return {
+        "schema_version": state.get("schema_version"),
+        "phase_present": bool(state.get("phase") is not None),
+        "resources": {
+            "hands_left": int(round_info.get("hands_left") or 0),
+            "discards_left": int(round_info.get("discards_left") or 0),
+            "ante": int(round_info.get("ante") or 0),
+            "round_num": int(round_info.get("round_num") or 0),
+            "blind": str(round_info.get("blind") or "").strip().lower(),
+        },
+        "hand": {
+            "count": len(hand_keys),
+        },
+        "shop": _extract_market_items_min(state, "shop"),
+        "consumables": {
+            "count": len(consumable_keys),
+            "keys": consumable_keys,
+        },
+        "jokers": {
+            "count": len(_extract_joker_ids(state)),
+            "keys": _extract_joker_ids(state),
+        },
+        "score_observed": {
+            "total": float(observed.get("total") or 0.0),
+            "delta": float(observed.get("delta") or 0.0),
+        },
+        "rng_replay": {
+            "enabled": bool(replay.get("enabled") or False),
+            "source": str(replay.get("source") or ""),
+            "outcomes": _extract_p11_outcomes(replay_outcomes_raw),
+        },
+    }
+
+
 def _filter_zones_core(state: dict[str, Any]) -> dict[str, Any]:
     state = to_builtin(state)
     zones = state.get("zones") or {}
@@ -1036,6 +1088,10 @@ def state_hash_p11_prob_econ_observed_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_p11_prob_econ_observed_core(state)))
 
 
+def state_hash_p14_real_action_observed_core(state: dict[str, Any]) -> str:
+    return _sha256_text(canonical_dumps(_filter_p14_real_action_observed_core(state)))
+
+
 def state_hash_zones_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_zones_core(state)))
 
@@ -1119,6 +1175,10 @@ def p10_long_episode_observed_core_projection(state: dict[str, Any]) -> dict[str
 
 def p11_prob_econ_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
     return _filter_p11_prob_econ_observed_core(state)
+
+
+def p14_real_action_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
+    return _filter_p14_real_action_observed_core(state)
 
 
 def zones_core_projection(state: dict[str, Any]) -> dict[str, Any]:
