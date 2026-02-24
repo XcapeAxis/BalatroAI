@@ -1,6 +1,6 @@
 # P7 Stateful Joker Fixture Coverage Status
 
-- Generated at: `2026-02-24T13:39:11.907406+00:00`
+- Generated at: `2026-02-24T14:35:53.137649+00:00`
 - Base URL: `http://127.0.0.1:12346`
 - Scope: `p7_stateful_observed_core`
 - Classifier supported templates: **15**
