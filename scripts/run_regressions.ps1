@@ -13,6 +13,7 @@
   [switch]$RunP11,
   [switch]$RunP12,
   [switch]$RunP13,
+  [switch]$RunP14,
   [switch]$GitSync
 )
 Set-StrictMode -Version Latest
@@ -187,7 +188,7 @@ Write-Host ("P0 report: {0}" -f $p0ReportPath)
 Write-Host ("P1 summary: pass={0}/{1} diff_fail={2} oracle_fail={3} gen_fail={4}" -f $p1Report.passed, $p1Report.total, $p1Report.diff_fail, $p1Report.oracle_fail, $p1Report.gen_fail)
 Write-Host ("P1 report: {0}" -f $p1ReportPath)
 
-if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -or $RunP11 -or $RunP12 -or $RunP13) {
+if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -or $RunP11 -or $RunP12 -or $RunP13 -or $RunP14) {
   Run-WithRecovery -Label "P2" -PyArgs $p2Args -Url $BaseUrl
   Run-WithRecovery -Label "P2b" -PyArgs $p2bArgs -Url $BaseUrl
   Run-WithRecovery -Label "P3" -PyArgs $p3Args -Url $BaseUrl
@@ -208,7 +209,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -o
   Write-Host ("P3 report: {0}" -f $p3ReportPath)
   Persist-ArtifactSet -Prefix "P3" -ReportPath $p3ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P3_JOKERS.md", "docs/COVERAGE_P3_STATUS.md")
 
-  if ($RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -or $RunP11 -or $RunP12 -or $RunP13) {
+  if ($RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -or $RunP11 -or $RunP12 -or $RunP13 -or $RunP14) {
     Run-WithRecovery -Label "P4" -PyArgs $p4Args -Url $BaseUrl
     $p4ReportPath = Join-Path $p4Out "report_p4.json"
     $p4Report = Get-Content $p4ReportPath -Raw | ConvertFrom-Json
@@ -216,7 +217,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -o
     Write-Host ("P4 report: {0}" -f $p4ReportPath)
     Persist-ArtifactSet -Prefix "P4" -ReportPath $p4ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P4_CONSUMABLES.md", "docs/COVERAGE_P4_STATUS.md")
 
-    if ($RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -or $RunP11 -or $RunP12 -or $RunP13) {
+    if ($RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -or $RunP11 -or $RunP12 -or $RunP13 -or $RunP14) {
       Run-WithRecovery -Label "P5" -PyArgs $p5Args -Url $BaseUrl
       $p5ReportPath = Join-Path $p5Out "report_p5.json"
       $p5Report = Get-Content $p5ReportPath -Raw | ConvertFrom-Json
@@ -224,7 +225,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -o
       Write-Host ("P5 report: {0}" -f $p5ReportPath)
       Persist-ArtifactSet -Prefix "P5" -ReportPath $p5ReportPath -ProjectRootPath $ProjectRoot -ExtraDocs @("docs/COVERAGE_P5_VOUCHERS_PACKS.md", "docs/COVERAGE_P5_STATUS.md")
 
-      if ($RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -or $RunP11 -or $RunP12 -or $RunP13) {
+      if ($RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -or $RunP11 -or $RunP12 -or $RunP13 -or $RunP14) {
         Run-WithRecovery -Label "P7" -PyArgs $p7Args -Url $BaseUrl
         $p7ReportPath = Join-Path $p7Out "report_p7.json"
         $p7Report = Get-Content $p7ReportPath -Raw | ConvertFrom-Json
@@ -250,7 +251,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -o
           Write-Host ("[P7-artifacts] " + $destMd)
         }
 
-        if ($RunP8 -or $RunP9 -or $RunP10 -or $RunP11 -or $RunP12 -or $RunP13) {
+        if ($RunP8 -or $RunP9 -or $RunP10 -or $RunP11 -or $RunP12 -or $RunP13 -or $RunP14) {
           Run-WithRecovery -Label "P8-shop" -PyArgs $p8ShopArgs -Url $BaseUrl
           $p8ShopReportPath = Join-Path $p8ShopOut "report_p8.json"
           $p8ShopReport = Get-Content $p8ShopReportPath -Raw | ConvertFrom-Json
@@ -297,7 +298,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -o
             Write-Host ("[P8-rng-artifacts] " + $destMd)
           }
 
-          if ($RunP9 -or $RunP10 -or $RunP11 -or $RunP12 -or $RunP13) {
+          if ($RunP9 -or $RunP10 -or $RunP11 -or $RunP12 -or $RunP13 -or $RunP14) {
             Run-Py -Label "P9-classifier" -PyArgs $p9ClassifyArgs | Out-Null
             Run-WithRecovery -Label "P9" -PyArgs $p9Args -Url $BaseUrl
             $p9ReportPath = Join-Path $p9Out "report_p9.json"
@@ -322,7 +323,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -o
               Write-Host ("[P9-artifacts] " + $destMd)
             }
 
-            if ($RunP10 -or $RunP11 -or $RunP12 -or $RunP13) {
+            if ($RunP10 -or $RunP11 -or $RunP12 -or $RunP13 -or $RunP14) {
               $null = Run-Py -Label "P10-stake-extract" -PyArgs $p10StakeExtractArgs
               Run-WithRecovery -Label "P10" -PyArgs $p10Args -Url $BaseUrl
               $p10ReportPath = Join-Path $p10Out "report_p10.json"
@@ -347,7 +348,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -o
                 Write-Host ("[P10-artifacts] " + $destMd)
               }
 
-              if ($RunP11 -or $RunP12 -or $RunP13) {
+              if ($RunP11 -or $RunP12 -or $RunP13 -or $RunP14) {
                 $null = Run-Py -Label "P11-pick" -PyArgs $p11PickArgs
                 Run-WithRecovery -Label "P11" -PyArgs $p11Args -Url $BaseUrl
                 $p11ReportPath = Join-Path $p11Out "report_p11.json"
@@ -372,7 +373,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -o
                   Write-Host ("[P11-artifacts] " + $destMd)
                 }
 
-                if ($RunP12 -or $RunP13) {
+                if ($RunP12 -or $RunP13 -or $RunP14) {
                   $p12Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
                   $p12ArtifactDir = Join-Path $ProjectRoot ("docs/artifacts/p12/" + $p12Stamp)
                   if (-not (Test-Path $p12ArtifactDir)) { New-Item -ItemType Directory -Path $p12ArtifactDir -Force | Out-Null }
@@ -421,7 +422,7 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -o
                     Write-Host ("P12 summary: PASS artifact=" + $p12SummaryPath)
                   }
 
-                  if ($RunP13) {
+                  if ($RunP13 -or $RunP14) {
                     $p13Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
                     $p13ArtifactDir = Join-Path $ProjectRoot ("docs/artifacts/p13/" + $p13Stamp)
                     if (-not (Test-Path $p13ArtifactDir)) { New-Item -ItemType Directory -Path $p13ArtifactDir -Force | Out-Null }
@@ -477,6 +478,90 @@ if ($RunP3 -or $RunP4 -or $RunP5 -or $RunP7 -or $RunP8 -or $RunP9 -or $RunP10 -o
                       ($p13Summary | ConvertTo-Json -Depth 8) | Out-File -LiteralPath $p13ReportPath -Encoding UTF8
                       Write-Host ("P13 summary: PASS artifact=" + $p13ReportPath)
                     }
+
+                    if ($RunP14) {
+                      $p14Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+                      $p14ArtifactDir = Join-Path $ProjectRoot ("docs/artifacts/p14/" + $p14Stamp)
+                      if (-not (Test-Path $p14ArtifactDir)) { New-Item -ItemType Directory -Path $p14ArtifactDir -Force | Out-Null }
+
+                      $p14ReportPath = Join-Path $p14ArtifactDir "report_p14.json"
+                      if (-not (Test-Health -Url $BaseUrl -TimeoutSec 3)) {
+                        $p14Skip = @{
+                          timestamp = $p14Stamp
+                          status = "SKIPPED"
+                          reason = "real unavailable"
+                          base_url = $BaseUrl
+                        }
+                        ($p14Skip | ConvertTo-Json -Depth 8) | Out-File -LiteralPath $p14ReportPath -Encoding UTF8
+                        Write-Host ("P14=SKIPPED(real unavailable) artifact=" + $p14ReportPath)
+                      } else {
+                        $modelPath = Find-LatestModel -ProjectRootPath $ProjectRoot
+                        $p14SessionDir = Join-Path $p14ArtifactDir "sessions"
+                        $p14SessionPath = Join-Path $p14SessionDir "session_exec.jsonl"
+                        $p14FixtureDir = Join-Path $p14ArtifactDir "fixtures"
+                        $p14ReplayPath = Join-Path $p14ArtifactDir "replay_report.json"
+                        $p14DumpDir = Join-Path $p14ArtifactDir "dumps"
+                        $p14DaggerDatasetPath = Join-Path $ProjectRoot "trainer_data/p14_gate_dagger_dataset.jsonl"
+                        $p14DaggerSummaryPath = Join-Path $p14ArtifactDir "dagger_summary.json"
+
+                        $p14TokenArgs = @("-B", "trainer/record_real_session.py", "--print-arm-token", "--out", (Join-Path $p14SessionDir "_token_probe.jsonl"))
+                        $p14TokenResult = Run-Py -Label "P14-token" -PyArgs $p14TokenArgs
+                        if ($p14TokenResult.Code -ne 0) { throw "[P14] token generation failed" }
+                        $tokenLine = ($p14TokenResult.Text -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -match "^[A-Za-z0-9_-]{16,}$" } | Select-Object -Last 1)
+                        if (-not $tokenLine) { throw "[P14] could not parse arm token" }
+
+                        $p14RecordArgs = @("-B", "trainer/record_real_session.py", "--base-url", $BaseUrl, "--steps", "20", "--interval", "0.5", "--topk", "3", "--execute", "--arm-token", $tokenLine, "--confirm", "I_UNDERSTAND", "--max-actions", "4", "--rate-limit-sec", "1.5", "--include-raw", "--out", $p14SessionPath)
+                        if ($modelPath) { $p14RecordArgs += @("--model", $modelPath) }
+                        $p14RecordResult = Run-Py -Label "P14-record-exec" -PyArgs $p14RecordArgs
+                        if ($p14RecordResult.Code -ne 0) { throw "[P14] controlled execution record failed" }
+
+                        $p14TraceArgs = @("-B", "trainer/real_trace_to_fixture.py", "--in", $p14SessionPath, "--out-dir", $p14FixtureDir)
+                        $p14TraceResult = Run-Py -Label "P14-trace-to-fixture" -PyArgs $p14TraceArgs
+                        if ($p14TraceResult.Code -ne 0) { throw "[P14] real_trace_to_fixture failed" }
+
+                        $p14ManifestPath = Join-Path $p14FixtureDir "manifest.json"
+                        $p14Manifest = if (Test-Path $p14ManifestPath) { Get-Content $p14ManifestPath -Raw | ConvertFrom-Json } else { $null }
+                        $p14ActionsCount = if ($p14Manifest -and $p14Manifest.actions_count -ne $null) { [int]$p14Manifest.actions_count } else { 0 }
+
+                        $p14Status = "PASS"
+                        $p14Reason = ""
+
+                        if ($p14ActionsCount -lt 1) {
+                          $p14Status = "SKIPPED"
+                          $p14Reason = "no_executed_actions_recorded"
+                        } else {
+                          $p14ReplayArgs = @("-B", "sim/tests/run_real_action_replay_fixture.py", "--fixture-dir", $p14FixtureDir, "--scope", "p14_real_action_observed_core", "--out", $p14ReplayPath, "--dump-on-diff", $p14DumpDir)
+                          $p14ReplayResult = Run-Py -Label "P14-replay" -PyArgs $p14ReplayArgs
+                          if ($p14ReplayResult.Code -ne 0) {
+                            $p14Status = "SKIPPED"
+                            $p14Reason = "replay_mismatch_or_unstable_real"
+                          }
+                        }
+
+                        $p14DaggerArgs = @("-B", "trainer/dagger_collect.py", "--session", $p14SessionPath, "--backend", "sim", "--out", $p14DaggerDatasetPath, "--hand-samples", "80", "--shop-samples", "30", "--time-budget-ms", "20", "--allow-sim-augment", "--summary-out", $p14DaggerSummaryPath)
+                        $p14DaggerResult = Run-Py -Label "P14-dagger-collect" -PyArgs $p14DaggerArgs
+                        if ($p14DaggerResult.Code -ne 0) {
+                          $p14Status = "SKIPPED"
+                          if (-not $p14Reason) { $p14Reason = "dagger_collect_failed" }
+                        }
+
+                        $p14Summary = @{
+                          timestamp = $p14Stamp
+                          status = $p14Status
+                          reason = $p14Reason
+                          base_url = $BaseUrl
+                          model = $(if ($modelPath) { $modelPath } else { "" })
+                          session = $p14SessionPath
+                          fixture_dir = $p14FixtureDir
+                          replay_report = $p14ReplayPath
+                          dagger_dataset = $p14DaggerDatasetPath
+                          dagger_summary = $p14DaggerSummaryPath
+                          actions_count = $p14ActionsCount
+                        }
+                        ($p14Summary | ConvertTo-Json -Depth 8) | Out-File -LiteralPath $p14ReportPath -Encoding UTF8
+                        Write-Host ("P14 summary: " + $p14Status + " artifact=" + $p14ReportPath)
+                      }
+                    }
                   }
                 }
               }
@@ -511,6 +596,7 @@ if ($GitSync) {
   }
   Write-Host "[GitSync] dry-run complete. To execute push/delete: powershell -ExecutionPolicy Bypass -File scripts/git_sync.ps1 -DryRun:`$false"
 }
+
 
 
 

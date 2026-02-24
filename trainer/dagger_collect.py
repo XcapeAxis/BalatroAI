@@ -37,8 +37,12 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def _state_from_row(row: dict[str, Any]) -> dict[str, Any] | None:
+    if isinstance(row.get("gamestate_raw_before"), dict):
+        return row["gamestate_raw_before"]
     if isinstance(row.get("gamestate_raw"), dict):
         return row["gamestate_raw"]
+    if isinstance(row.get("gamestate_raw_after"), dict):
+        return row["gamestate_raw_after"]
     obs = row.get("gamestate_min")
     if not isinstance(obs, dict):
         return None
