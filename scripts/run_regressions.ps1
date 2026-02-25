@@ -15,6 +15,9 @@
   [switch]$RunP13,
   [switch]$RunP14,
   [switch]$RunP15,
+  [switch]$RunP16,
+  [switch]$RunPerfGateV2,
+  [switch]$RunP17,
   [switch]$GitSync
 )
 Set-StrictMode -Version Latest
@@ -24,6 +27,10 @@ Set-Location $ProjectRoot
 
 # P15 gate builds on top of P14.
 if ($RunP15) { $RunP14 = $true }
+# P16 gate builds on top of P15.
+if ($RunP16) { $RunP15 = $true }
+# P17 builds on top of P16.
+if ($RunP17 -or $RunPerfGateV2) { $RunP16 = $true }
 
 function Test-Health([string]$Url, [int]$TimeoutSec = 5) {
   try {
@@ -605,6 +612,62 @@ if ($RunP15) {
   & powershell -ExecutionPolicy Bypass -File $p15SmokeScript -BaseUrl $BaseUrl -Seed $Seed
   if ($LASTEXITCODE -ne 0) {
     throw "[P15] smoke gate failed"
+  }
+}
+
+if ($RunP16) {
+  Write-Host "[P16] running continuous dagger smoke loop"
+  $p16Args = @(
+    "-B",
+    "trainer/p16_loop.py",
+    "--mode", "smoke",
+    "--base-url", $BaseUrl,
+    "--seed", $Seed,
+    "--resume"
+  )
+  Run-PyStrict -Label "P16-loop" -PyArgs $p16Args | Out-Null
+
+  $p16Root = Join-Path $ProjectRoot "docs/artifacts/p16"
+  if (Test-Path $p16Root) {
+    $latest = Get-ChildItem -Path $p16Root -Directory -ErrorAction SilentlyContinue |
+      Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($latest) {
+      $report = Join-Path $latest.FullName "report_p16.json"
+      $gateSummary = [ordered]@{
+        timestamp = (Get-Date).ToString("o")
+        status = "PASS"
+        artifact_dir = $latest.FullName
+        report = $(if (Test-Path $report) { $report } else { "" })
+      }
+      ($gateSummary | ConvertTo-Json -Depth 8) | Out-File -LiteralPath (Join-Path $latest.FullName "gate_summary.json") -Encoding UTF8
+      Write-Host ("[P16] PASS artifact=" + $latest.FullName)
+    } else {
+      Write-Host "[P16] warning: no artifact directory found under docs/artifacts/p16"
+    }
+  } else {
+    Write-Host "[P16] warning: docs/artifacts/p16 not found"
+  }
+}
+
+if ($RunP17 -or $RunPerfGateV2) {
+  $p17SmokeScript = Join-Path $ProjectRoot "scripts/run_p17_smoke.ps1"
+  if (-not (Test-Path $p17SmokeScript)) {
+    throw "[P17] missing script: $p17SmokeScript"
+  }
+  Write-Host "[P17] running champion-challenger smoke gate"
+  $p17Args = @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $p17SmokeScript,
+    "-BaseUrl", $BaseUrl,
+    "-Seed", $Seed
+  )
+  if ($RunPerfGateV2) {
+    $p17Args += "-RunPerfGateOnly"
+    $p17Args += "-FailOnPerfGate"
+  }
+  & powershell @p17Args
+  if ($LASTEXITCODE -ne 0) {
+    throw "[P17] smoke gate failed"
   }
 }
 
