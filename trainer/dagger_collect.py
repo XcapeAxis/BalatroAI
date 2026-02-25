@@ -8,6 +8,7 @@ if __package__ is None or __package__ == "":
 
 import argparse
 import json
+import random
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -229,7 +230,8 @@ def _macro_progress_action(state: dict[str, Any], seed: str) -> dict[str, Any]:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Collect DAgger dataset from real shadow session + sim teacher.")
-    parser.add_argument("--session", required=True, help="session jsonl produced by record_real_session.py")
+    parser.add_argument("--session", default="", help="session jsonl produced by record_real_session.py")
+    parser.add_argument("--from-failure-buckets", default="", help="Optional failure bucket json for prioritized sampling.")
     parser.add_argument("--backend", choices=["sim"], default="sim")
     parser.add_argument("--out", required=True)
     parser.add_argument("--hand-samples", type=int, default=500)
@@ -251,6 +253,8 @@ def _parse_args() -> argparse.Namespace:
         help="Disable sim augmentation when real samples are insufficient.",
     )
     parser.set_defaults(allow_sim_augment=True)
+    parser.add_argument("--failure-weight", type=float, default=0.7)
+    parser.add_argument("--uniform-weight", type=float, default=0.3)
     parser.add_argument("--summary-out", default="")
     return parser.parse_args()
 
@@ -260,7 +264,33 @@ def main() -> int:
     logger = setup_logger("trainer.dagger_collect")
     warn_if_unstable_python(logger)
 
-    rows = _read_jsonl(Path(args.session))
+    rows: list[dict[str, Any]] = []
+    if str(args.session).strip():
+        rows = _read_jsonl(Path(args.session))
+
+    failure_bucket_payload: dict[str, Any] = {}
+    if str(args.from_failure_buckets).strip():
+        try:
+            failure_bucket_payload = json.loads(Path(args.from_failure_buckets).read_text(encoding="utf-8"))
+        except Exception:
+            failure_bucket_payload = {}
+
+    if rows and failure_bucket_payload:
+        target_reasons = set()
+        counts = failure_bucket_payload.get("counts")
+        if isinstance(counts, dict):
+            target_reasons = {str(k).lower() for k, v in counts.items() if int(v or 0) > 0 and str(k).lower() not in {"win"}}
+        weighted: list[tuple[float, dict[str, Any]]] = []
+        rng = random.Random(20260225)
+        fw = float(args.failure_weight)
+        uw = float(args.uniform_weight)
+        for row in rows:
+            reason = str(row.get("failure_reason") or "").lower()
+            is_target = any(t in reason for t in target_reasons) if target_reasons else False
+            base = fw if is_target else uw
+            weighted.append((base + rng.random() * 1e-6, row))
+        weighted.sort(key=lambda x: x[0], reverse=True)
+        rows = [r for _, r in weighted]
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -465,6 +495,8 @@ def main() -> int:
         "invalid_rows": int(stats["invalid_rows"]),
         "reconstruct_failure_rate": float(stats["invalid_rows"] / max(1, len(rows))),
         "top_failure_reasons": failure_reasons.most_common(10),
+        "failure_bucket_source": str(Path(args.from_failure_buckets)) if str(args.from_failure_buckets).strip() else None,
+        "sampling_weights": {"failure_weight": float(args.failure_weight), "uniform_weight": float(args.uniform_weight)},
         "out": str(out_path),
     }
 
