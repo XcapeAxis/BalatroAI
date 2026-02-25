@@ -36,8 +36,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--episodes", type=int, default=30)
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--seed-prefix", default="AAAAAAA")
-    parser.add_argument("--policy", choices=["heuristic", "bc", "search"], default="heuristic")
-    parser.add_argument("--model", default=None, help="Required when --policy bc.")
+    parser.add_argument("--policy", choices=["heuristic", "bc", "search", "pv"], default="heuristic")
+    parser.add_argument("--model", default=None, help="Required when --policy bc/pv.")
+    parser.add_argument("--search-budget-ms", type=float, default=20.0)
+    parser.add_argument("--seeds-file", default=None, help="Optional seeds file, one seed per line.")
+    parser.add_argument("--save-episode-logs", default=None, help="Optional output jsonl for episode-level logs.")
     parser.add_argument("--max-steps-per-episode", type=int, default=600)
     parser.add_argument("--target-ante", type=int, default=8)
     parser.add_argument("--out", required=True, help="Output JSON summary path.")
@@ -202,8 +205,17 @@ def _load_model(args, logger):
     else:
         device = torch.device(args.device)
     if not args.model:
-        raise RuntimeError("--model is required for policy=bc")
+        raise RuntimeError("--model is required for policy=bc/pv")
     state_dict = torch.load(args.model, map_location=device)
+    if args.policy == "pv":
+        from trainer.models.policy_value import PolicyValueModel
+
+        model = PolicyValueModel(args.max_actions, args.max_shop_actions).to(device)
+        model.load_state_dict(state_dict, strict=True)
+        model.eval()
+        logger.info("Loaded PV model=%s", args.model)
+        return torch, device, model, True, "pv"
+
     is_multi = any(str(k).startswith("hand_head.") for k in state_dict.keys())
     if is_multi:
         model = _build_multi_model(nn, args.max_actions, args.max_shop_actions).to(device)
@@ -212,7 +224,7 @@ def _load_model(args, logger):
     model.load_state_dict(state_dict, strict=True)
     model.eval()
     logger.info("Loaded BC model=%s multi_head=%s", args.model, is_multi)
-    return torch, device, model, is_multi
+    return torch, device, model, is_multi, "bc"
 
 
 def _phase_macro_action(state: dict, seed: str) -> dict:
@@ -223,7 +235,7 @@ def _phase_macro_action(state: dict, seed: str) -> dict:
     return action
 
 
-def _pick_hand_action(state: dict, args, torch, device, model, is_multi, episode_seed: str) -> tuple[dict, str]:
+def _pick_hand_action(state: dict, args, torch, device, model, is_multi, model_kind: str, episode_seed: str) -> tuple[dict, str]:
     hand = (state.get("hand") or {}).get("cards") or []
     hand_size = min(len(hand), action_space.MAX_HAND)
     if hand_size <= 0:
@@ -237,15 +249,23 @@ def _pick_hand_action(state: dict, args, torch, device, model, is_multi, episode
         return {"action_type": "WAIT", "sleep": 0.01}, "heuristic_fallback_wait"
 
     if args.policy == "search":
-        d = choose_search_action(state, max_branch=80, max_depth=2, time_budget_ms=20.0, seed=episode_seed)
+        d = choose_search_action(
+            state,
+            max_branch=80,
+            max_depth=2,
+            time_budget_ms=float(args.search_budget_ms),
+            seed=episode_seed,
+        )
         return {"action_type": d.action_type, "indices": d.indices}, "search"
 
-    # bc policy
+    # bc / pv policy
     legal_ids = action_space.legal_action_ids(hand_size)
     batch = _state_to_hand_batch(state, torch)
     batch = {k: v.to(device) for k, v in batch.items()}
     with torch.no_grad():
-        if is_multi:
+        if model_kind == "pv":
+            logits, _ = model.forward_hand(batch)
+        elif is_multi:
             logits = model.forward_hand(batch)
         else:
             logits = model(batch)
@@ -256,8 +276,8 @@ def _pick_hand_action(state: dict, args, torch, device, model, is_multi, episode
     return {"action_type": atype, "indices": action_space.mask_to_indices(mask_int, hand_size)}, "bc"
 
 
-def _pick_shop_action(state: dict, args, torch, device, model, is_multi) -> tuple[dict, str]:
-    if args.policy in {"heuristic", "search"} or (args.policy == "bc" and not is_multi):
+def _pick_shop_action(state: dict, args, torch, device, model, is_multi, model_kind: str) -> tuple[dict, str]:
+    if args.policy in {"heuristic", "search"} or ((args.policy in {"bc", "pv"}) and not is_multi):
         d = choose_shop_action(state)
         return dict(d.action), "heuristic_shop"
 
@@ -265,7 +285,10 @@ def _pick_shop_action(state: dict, args, torch, device, model, is_multi) -> tupl
     batch = _state_to_shop_batch(state, torch)
     batch = {k: v.to(device) for k, v in batch.items()}
     with torch.no_grad():
-        logits = model.forward_shop(batch)
+        if model_kind == "pv":
+            logits, _ = model.forward_shop(batch)
+        else:
+            logits = model.forward_shop(batch)
     pred = _masked_argmax(logits, legal_ids, args.max_shop_actions, torch, device)
     if pred is None:
         return {"action_type": "WAIT", "sleep": 0.01}, "bc_shop_no_legal_wait"
@@ -302,11 +325,12 @@ def main() -> int:
     device = None
     model = None
     is_multi = False
-    if args.policy == "bc":
+    model_kind = "heuristic"
+    if args.policy in {"bc", "pv"}:
         try:
-            torch, device, model, is_multi = _load_model(args, logger)
+            torch, device, model, is_multi, model_kind = _load_model(args, logger)
         except Exception as exc:
-            logger.error("Failed to load BC model: %s", exc)
+            logger.error("Failed to load model: %s", exc)
             return 2
 
     backend = create_backend("sim", seed=args.seed_prefix, timeout_sec=8.0, logger=logger)
@@ -319,9 +343,19 @@ def main() -> int:
     actions_list: list[int] = []
     degraded = False
     failure_counter: Counter[str] = Counter()
+    episode_logs: list[dict] = []
+
+    seeds: list[str] = []
+    if args.seeds_file:
+        try:
+            seeds = [line.strip() for line in Path(args.seeds_file).read_text(encoding="utf-8").splitlines() if line.strip()]
+        except Exception:
+            seeds = []
+    if not seeds:
+        seeds = [f"{args.seed_prefix}-{args.seed}-{ep}" for ep in range(args.episodes)]
 
     for ep in range(args.episodes):
-        episode_seed = f"{args.seed_prefix}-{args.seed}-{ep}"
+        episode_seed = seeds[ep % len(seeds)]
         state = backend.reset(seed=episode_seed)
 
         if str(args.stake or "").strip().lower() not in {"", "white"}:
@@ -336,9 +370,9 @@ def main() -> int:
             if phase == "GAME_OVER":
                 break
             if phase == "SELECTING_HAND":
-                action, _ = _pick_hand_action(state, args, torch, device, model, is_multi, episode_seed)
+                action, _ = _pick_hand_action(state, args, torch, device, model, is_multi, model_kind, episode_seed)
             elif phase in action_space_shop.SHOP_PHASES:
-                action, _ = _pick_shop_action(state, args, torch, device, model, is_multi)
+                action, _ = _pick_shop_action(state, args, torch, device, model, is_multi, model_kind)
             else:
                 action = _phase_macro_action(state, episode_seed)
             try:
@@ -364,9 +398,12 @@ def main() -> int:
         reach_target = ante >= int(args.target_ante)
         if won or reach_target:
             wins += 1
+            failure_reason = "win"
         elif done:
-            failure_counter[_failure_reason(state)] += 1
+            failure_reason = _failure_reason(state)
+            failure_counter[failure_reason] += 1
         else:
+            failure_reason = "max_steps_cutoff"
             failure_counter["max_steps_cutoff"] += 1
 
         rules = state.get("rules") if isinstance(state.get("rules"), dict) else {}
@@ -377,6 +414,21 @@ def main() -> int:
         chips_ends.append(chips)
         rounds_list.append(round_num)
         actions_list.append(actions_taken)
+        episode_logs.append(
+            {
+                "episode_id": int(ep),
+                "seed": str(episode_seed),
+                "result": "win" if failure_reason == "win" else "loss",
+                "final_ante": int(ante),
+                "final_money": float(money),
+                "final_chips": float(chips),
+                "failure_reason": str(failure_reason),
+                "failure_phase": str(state.get("state") or ""),
+                "boss_blind_id": str((state.get("round") or {}).get("boss_blind") or ""),
+                "steps": int(actions_taken),
+                "actions": int(actions_taken),
+            }
+        )
 
     backend.close()
 
@@ -400,6 +452,11 @@ def main() -> int:
         "avg_rounds": sum(rounds_list) / len(rounds_list),
         "avg_actions": sum(actions_list) / len(actions_list),
         "failure_breakdown": dict(sorted(failure_counter.items())),
+        "episode_log_values": {
+            "ante_values": ante_values,
+            "money_end_values": money_ends,
+            "chips_end_values": chips_ends,
+        },
         "stake_coverage": {
             "degraded": bool(degraded),
             "note": "stake modifiers partially degraded" if degraded else "stake modifiers fully applied",
@@ -409,6 +466,12 @@ def main() -> int:
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if args.save_episode_logs:
+        logs_path = Path(args.save_episode_logs)
+        logs_path.parent.mkdir(parents=True, exist_ok=True)
+        with logs_path.open("w", encoding="utf-8") as f:
+            for row in episode_logs:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
     txt_path = out_path.with_suffix(".txt")
     lines = [

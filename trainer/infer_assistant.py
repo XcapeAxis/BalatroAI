@@ -29,6 +29,7 @@ def parse_args():
     parser.add_argument("--backend", choices=["real", "sim"], default="real")
     parser.add_argument("--base-url", default="http://127.0.0.1:12346")
     parser.add_argument("--model", required=True)
+    parser.add_argument("--policy", choices=["bc", "pv"], default="bc")
     parser.add_argument("--max-actions", type=int, default=action_space.max_actions())
     parser.add_argument("--max-shop-actions", type=int, default=action_space_shop.max_actions())
     parser.add_argument("--topk", type=int, default=3)
@@ -153,15 +154,23 @@ def _build_multi_model(nn, max_actions: int, max_shop_actions: int):
 
 def _load_model(args, torch, nn, device):
     state_dict = torch.load(args.model, map_location=device)
+
+    if args.policy == "pv":
+        from trainer.models.policy_value import PolicyValueModel
+
+        model = PolicyValueModel(args.max_actions, args.max_shop_actions).to(device)
+        model.load_state_dict(state_dict, strict=True)
+        return model, True, "pv"
+
     is_multi = any(k.startswith("hand_head.") for k in state_dict.keys())
     if is_multi:
         model = _build_multi_model(nn, args.max_actions, args.max_shop_actions).to(device)
         model.load_state_dict(state_dict, strict=True)
-        return model, True
+        return model, True, "bc"
 
     model = _build_hand_model(nn, args.max_actions).to(device)
     model.load_state_dict(state_dict, strict=True)
-    return model, False
+    return model, False, "bc"
 
 
 def _state_to_hand_batch(state, torch):
@@ -184,10 +193,20 @@ def _state_to_shop_batch(state, torch):
     return {"shop_context": torch.tensor([sf["shop_context"]], dtype=torch.float32)}
 
 
-def _forward_hand(model, batch, is_multi):
+def _forward_hand(model, batch, is_multi, policy_kind):
+    if policy_kind == "pv":
+        logits, _ = model.forward_hand(batch)
+        return logits
     if is_multi:
         return model.forward_hand(batch)
     return model(batch)
+
+
+def _forward_shop(model, batch, policy_kind):
+    if policy_kind == "pv":
+        logits, _ = model.forward_shop(batch)
+        return logits
+    return model.forward_shop(batch)
 
 
 def _predict_topk(logits, legal_ids, max_actions, topk, torch, device):
@@ -222,9 +241,9 @@ def main() -> int:
     else:
         device = torch.device(args.device)
 
-    model, is_multi = _load_model(args, torch, nn, device)
+    model, is_multi, policy_kind = _load_model(args, torch, nn, device)
     model.eval()
-    logger.info("Loaded model=%s multi_head=%s", args.model, is_multi)
+    logger.info("Loaded model=%s policy=%s multi_head=%s", args.model, policy_kind, is_multi)
 
     backend = create_backend(
         args.backend,
@@ -264,7 +283,7 @@ def main() -> int:
                     batch = _state_to_hand_batch(state, torch)
                     batch = {k: v.to(device) for k, v in batch.items()}
                     with torch.no_grad():
-                        logits = _forward_hand(model, batch, is_multi)
+                        logits = _forward_hand(model, batch, is_multi, policy_kind)
                     ranked = _predict_topk(logits, legal_ids, args.max_actions, args.topk, torch, device)
 
                     logger.info("Hand Top-%d suggestions:", len(ranked))
@@ -293,7 +312,7 @@ def main() -> int:
                 batch = _state_to_shop_batch(state, torch)
                 batch = {k: v.to(device) for k, v in batch.items()}
                 with torch.no_grad():
-                    logits = model.forward_shop(batch)
+                    logits = _forward_shop(model, batch, policy_kind)
                 ranked = _predict_topk(logits, legal_ids, args.max_shop_actions, args.topk, torch, device)
 
                 logger.info("Shop Top-%d suggestions:", len(ranked))
@@ -314,7 +333,7 @@ def main() -> int:
                 batch = _state_to_shop_batch(state, torch)
                 batch = {k: v.to(device) for k, v in batch.items()}
                 with torch.no_grad():
-                    logits = model.forward_shop(batch)
+                    logits = _forward_shop(model, batch, policy_kind)
                 ranked = _predict_topk(logits, legal_ids, args.max_shop_actions, args.topk, torch, device)
 
                 logger.info("Shop Top-%d suggestions (phase=%s fallback):", len(ranked), phase)
