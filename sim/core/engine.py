@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 import random
 import re
 from pathlib import Path
@@ -16,9 +17,18 @@ _STAKE_RULES_CACHE: dict[str, Any] | None = None
 
 
 class SimEnv:
-    def __init__(self, seed: str = "AAAAAAA", max_hand: int = 8):
+    def __init__(self, seed: str = "AAAAAAA", max_hand: int = 8, fail_fast: bool | None = None):
         self.seed = seed
         self.max_hand = max_hand
+        raw_flag = os.getenv("SIM_FAIL_FAST")
+        if fail_fast is None:
+            # Default to strict mode unless explicitly disabled.
+            if raw_flag is None or str(raw_flag).strip() == "":
+                self.fail_fast = True
+            else:
+                self.fail_fast = str(raw_flag).strip().lower() in {"1", "true", "yes", "on"}
+        else:
+            self.fail_fast = bool(fail_fast)
         self._stake_name = "white"
         self._rng = random.Random(seed)
         self._state: dict[str, Any] = {}
@@ -42,6 +52,8 @@ class SimEnv:
                 if isinstance(raw, dict):
                     payload = raw
             except Exception:
+                if self.fail_fast:
+                    raise RuntimeError(f"failed to parse stake rules file: {path}")
                 payload = {"stakes": []}
         _STAKE_RULES_CACHE = dict(payload)
         return dict(payload)
@@ -176,6 +188,8 @@ class SimEnv:
                 try:
                     level = int(raw_info)
                 except Exception:
+                    if self.fail_fast:
+                        raise ValueError(f"invalid hand level value for {hand_name}: {raw_info!r}")
                     level = 1
                 chips = 0.0
                 mult = 1.0
@@ -229,6 +243,8 @@ class SimEnv:
                 try:
                     buy_cost = float(cost_obj or 0.0)
                 except Exception:
+                    if self.fail_fast:
+                        raise ValueError(f"invalid market buy cost: {cost_obj!r}")
                     buy_cost = 0.0
             out_cards.append(
                 {
@@ -291,7 +307,8 @@ class SimEnv:
             try:
                 self._state["money"] = float(economy.get("money") or 0.0)
             except Exception:
-                pass
+                if self.fail_fast:
+                    raise ValueError(f"invalid economy.money in expected shop context: {economy.get('money')!r}")
 
         info["shop_context_applied"] = True
 
@@ -306,6 +323,8 @@ class SimEnv:
             try:
                 cost = float(item.get("cost") or 0.0)
             except Exception:
+                if self.fail_fast:
+                    raise ValueError(f"invalid RNG market item cost: {item.get('cost')!r}")
                 cost = 0.0
             market_cards.append(
                 {
@@ -806,6 +825,8 @@ class SimEnv:
 
         if phase == "BLIND_SELECT":
             if action_type not in {"SELECT", "SKIP", "WAIT"}:
+                if self.fail_fast:
+                    raise ValueError(f"invalid action_type={action_type} for phase={phase}")
                 fallback = self._phase_default_action()
                 action_type = fallback["action_type"]
                 action = fallback
@@ -879,7 +900,8 @@ class SimEnv:
                                 )
                                 base_mult = float((base_mult + bonus_mult) * bonus_scale)
                         except Exception:
-                            pass
+                            if self.fail_fast:
+                                raise
 
                     self._state["round"]["chips"] = float(self._state["round"]["chips"]) + gain
                     self._state["score"]["chips"] = float(self._state["round"]["chips"])
@@ -900,6 +922,8 @@ class SimEnv:
             elif action_type == "WAIT":
                 pass
             else:
+                if self.fail_fast:
+                    raise ValueError(f"invalid action_type={action_type} for phase={phase}")
                 fallback = self._phase_default_action()
                 info["overridden"] = True
                 return self.step(fallback)
@@ -911,6 +935,8 @@ class SimEnv:
                     self._state["money"] = int(self._state.get("money") or 0) + payout
                 self._state["state"] = "SHOP"
             else:
+                if self.fail_fast:
+                    raise ValueError(f"invalid action_type={action_type} for phase={phase}")
                 info["overridden"] = True
                 return self.step({"action_type": "CASH_OUT"})
 
@@ -926,6 +952,8 @@ class SimEnv:
             elif action_type in {"PACK", "SELL", "USE", "WAIT"}:
                 pass
             else:
+                if self.fail_fast:
+                    raise ValueError(f"invalid action_type={action_type} for phase={phase}")
                 info["overridden"] = True
                 return self.step({"action_type": "NEXT_ROUND"})
             self._apply_expected_shop_context(action, info)
@@ -936,11 +964,15 @@ class SimEnv:
             elif action_type == "NEXT_ROUND":
                 self._begin_round(next_round=True)
             else:
+                if self.fail_fast:
+                    raise ValueError(f"invalid action_type={action_type} for phase={phase}")
                 info["overridden"] = True
                 self._state["state"] = "SHOP"
             self._apply_expected_shop_context(action, info)
 
         elif phase in {"MENU", "GAME_OVER"}:
+            if self.fail_fast:
+                raise ValueError(f"action on terminal/menu phase requires explicit START, got {action_type}")
             info["overridden"] = True
             return self.step({"action_type": "START", "seed": self.seed})
 
@@ -948,6 +980,8 @@ class SimEnv:
             if action_type == "WAIT":
                 pass
             else:
+                if self.fail_fast:
+                    raise ValueError(f"unknown phase={phase} with action_type={action_type}")
                 info["overridden"] = True
                 return self.step(self._phase_default_action())
 
