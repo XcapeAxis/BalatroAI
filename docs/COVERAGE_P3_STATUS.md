@@ -1,6 +1,6 @@
 # P3 Joker Fixture Coverage Status
 
-- Generated at: `2026-02-24T14:34:00.396945+00:00`
+- Generated at: `2026-02-25T07:14:16.405258+00:00`
 - Base URL: `http://127.0.0.1:12346`
 - Scope: `p3_hand_score_observed_core`
 - Classifier total jokers: **150**

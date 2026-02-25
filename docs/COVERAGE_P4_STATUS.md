@@ -1,6 +1,6 @@
 # P4 Consumable Fixture Coverage Status
 
-- Generated at: `2026-02-24T14:34:27.797600+00:00`
+- Generated at: `2026-02-25T07:14:41.603779+00:00`
 - Base URL: `http://127.0.0.1:12346`
 - Scope: `p4_consumable_observed_core`
 - Classifier total consumables: **52**

@@ -1,6 +1,6 @@
 # P4 Consumable Template Coverage
 
-- Generated at: `2026-02-24T14:34:01.077622+00:00`
+- Generated at: `2026-02-25T07:14:17.130007+00:00`
 - Total consumables: **52**
 - Supported (conservative): **24**
 - Unsupported: **28**

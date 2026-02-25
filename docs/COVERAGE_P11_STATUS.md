@@ -1,6 +1,6 @@
 # P11 Prob/Econ Fixture Coverage Status
 
-- Generated at: `2026-02-24T14:38:22.356077+00:00`
+- Generated at: `2026-02-25T07:42:22.406532+00:00`
 - Base URL: `http://127.0.0.1:12346`
 - Scope: `p11_prob_econ_observed_core`
 - Classifier supported: **20**
