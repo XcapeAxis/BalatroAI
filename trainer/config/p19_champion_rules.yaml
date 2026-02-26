@@ -1,0 +1,11 @@
+median_ante_delta_threshold: 0.5
+avg_ante_delta_threshold: 0.3
+use_ci_lower_bound_guard: true
+critical_bucket_regression_max_pct_points: 5.0
+critical_buckets:
+  - boss_blind_specific
+  - econ_collapse
+  - resource_exhausted
+probation_min_perf_passes: 1
+rollback_on_perf_fail_streak: 2
+rollback_on_canary_divergence_threshold: 0.45
