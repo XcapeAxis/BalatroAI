@@ -95,7 +95,7 @@ try {
   $daggerHandSamples = 800
   $daggerShopSamples = 240
   $daggerEpochs = 1
-  $ablationMaxSteps100 = 80
+  $ablationMaxSteps100 = 120
   $ablationMaxSteps500 = 120
 
   $p17Latest = Find-LatestP17Artifact -Root $ProjectRoot
@@ -152,6 +152,24 @@ try {
     "--champion-model",$champModel,
     "--out-dir",$ablation100
   )
+
+  $summaryPath = Join-Path $ablation100 "summary.json"
+  if (Test-Path $summaryPath) {
+    try {
+      $sum = Get-Content $summaryPath -Raw | ConvertFrom-Json
+      foreach ($row in $sum.rows) {
+        $strat = $row.strategy
+        $ep = [int]$row.episodes
+        $fb = $row.failure_breakdown
+        if ($ep -gt 0 -and $fb -and $null -ne $fb.PSObject.Properties["max_steps_cutoff"]) {
+          $cut = [int]$fb.max_steps_cutoff
+          if ($cut -ge $ep) {
+            Write-Warning "[P18] ablation strategy '$strat' had all $ep episodes end with max_steps_cutoff; consider increasing --max-steps-per-episode."
+          }
+        }
+      }
+    } catch {}
+  }
 
   $decision100 = Join-Path $artifactDir "promotion_decision_100.json"
   Run-Step -Label "P18-cc-v2" -Exe $py -CmdArgs @(

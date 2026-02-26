@@ -64,6 +64,15 @@ function Find-LatestModel([string]$Root, [string]$Hint = "") {
   return $null
 }
 
+function Find-LatestP18Artifact([string]$Root) {
+  $p = Join-Path $Root "docs/artifacts/p18"
+  if (-not (Test-Path $p)) { return $null }
+  $latest = Get-ChildItem -Path $p -Directory -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+  if ($latest) { return $latest.FullName }
+  return $null
+}
+
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $artifactDir = Join-Path $ProjectRoot ("docs/artifacts/p19/" + $stamp)
 New-Item -ItemType Directory -Path $artifactDir -Force | Out-Null
@@ -172,8 +181,12 @@ $canaryStatus = "SKIP"
 try {
   if (-not $RunPerfGateOnly) {
     $currPlan = Join-Path $artifactDir "curriculum_plan_smoke.json"
-    $failureInput = Join-Path $ProjectRoot "docs/artifacts/p18/failure_mining_rl/failure_buckets_latest.json"
-    if (-not (Test-Path $failureInput)) { $failureInput = "" }
+    $failureInput = ""
+    $p18Latest = Find-LatestP18Artifact -Root $ProjectRoot
+    if ($p18Latest) {
+      $cand = Join-Path $p18Latest "failure_mining_rl/failure_buckets_latest.json"
+      if (Test-Path $cand) { $failureInput = $cand }
+    }
     $currArgs = @("-B","trainer/curriculum_sampler.py","--config","trainer/config/p18_curriculum.yaml","--out",$currPlan,"--mode","smoke")
     if ($failureInput) { $currArgs += @("--failure-input",$failureInput) }
     Run-Step -Label "P19-curriculum" -Exe $py -CmdArgs $currArgs
@@ -221,7 +234,7 @@ try {
     "--backend","sim",
     "--stake","gold",
     "--episodes","100",
-    "--max-steps-per-episode","90",
+    "--max-steps-per-episode","120",
     "--seeds-file","balatro_mechanics/derived/eval_seeds_100.txt",
     "--heuristic",
     "--pv-model",$champModel,
@@ -244,6 +257,24 @@ try {
     "--auto-rollback"
   )
   $rollbackSmokePass = $true
+
+  $summaryPath = Join-Path $ablation100 "summary.json"
+  if (Test-Path $summaryPath) {
+    try {
+      $sum = Get-Content $summaryPath -Raw | ConvertFrom-Json
+      foreach ($row in $sum.rows) {
+        $strat = $row.strategy
+        $ep = [int]$row.episodes
+        $fb = $row.failure_breakdown
+        if ($ep -gt 0 -and $fb -and $null -ne $fb.PSObject.Properties["max_steps_cutoff"]) {
+          $cut = [int]$fb.max_steps_cutoff
+          if ($cut -ge $ep) {
+            Write-Warning "[P19] ablation strategy '$strat' had all $ep episodes end with max_steps_cutoff; consider increasing --max-steps-per-episode."
+          }
+        }
+      }
+    } catch {}
+  }
 
   Run-Step -Label "P19-failure-mine-rl" -Exe $py -CmdArgs @(
     "-B","trainer/failure_mining.py",

@@ -1,4 +1,4 @@
-﻿param(
+param(
   [string]$BaseUrl = "http://127.0.0.1:12346",
   [string]$OutRoot = "sim/tests/fixtures_runtime",
   [string]$Seed = "AAAAAAA",
@@ -22,6 +22,10 @@
   [switch]$RunP18,
   [switch]$RunPerfGateV4,
   [switch]$RunP19,
+  [switch]$SkipMilestone1000,
+  [switch]$RunP20,
+  [switch]$RunPerfGateV5,
+  [switch]$SkipMilestone2000,
   [switch]$GitSync
 )
 Set-StrictMode -Version Latest
@@ -39,6 +43,8 @@ if ($RunP17 -or $RunPerfGateV2) { $RunP16 = $true }
 if ($RunP18 -or $RunPerfGateV3) { $RunP17 = $true }
 # P19 builds on top of P18.
 if ($RunP19 -or $RunPerfGateV4) { $RunP18 = $true }
+# P20 builds on top of P19.
+if ($RunP20 -or $RunPerfGateV5) { $RunP19 = $true }
 
 function Test-Health([string]$Url, [int]$TimeoutSec = 5) {
   try {
@@ -717,9 +723,37 @@ if ($RunP19 -or $RunPerfGateV4) {
     $p19Args += "-RunPerfGateOnly"
     $p19Args += "-FailOnPerfGate"
   }
+  if ($SkipMilestone1000) {
+    $p19Args += "-SkipMilestone1000"
+  }
   & powershell @p19Args
   if ($LASTEXITCODE -ne 0) {
     throw "[P19] smoke gate failed"
+  }
+}
+
+if ($RunP20 -or $RunPerfGateV5) {
+  $p20SmokeScript = Join-Path $ProjectRoot "scripts/run_p20_smoke.ps1"
+  if (-not (Test-Path $p20SmokeScript)) {
+    throw "[P20] missing script: $p20SmokeScript"
+  }
+  Write-Host "[P20] running RC release smoke gate"
+  $p20Args = @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $p20SmokeScript,
+    "-BaseUrl", $BaseUrl,
+    "-Seed", $Seed
+  )
+  if ($RunPerfGateV5) {
+    $p20Args += "-RunPerfGateOnly"
+    $p20Args += "-FailOnPerfGate"
+  }
+  if ($SkipMilestone2000) {
+    $p20Args += "-SkipMilestone2000"
+  }
+  & powershell @p20Args
+  if ($LASTEXITCODE -ne 0) {
+    throw "[P20] smoke gate failed"
   }
 }
 
