@@ -169,6 +169,8 @@ def main() -> int:
             "risk_aware_fallback_rate": (risk_fallback_count / divergence_total) if divergence_total else 0.0,
             "high_risk_state_rate": (high_risk_states / divergence_total) if divergence_total else 0.0,
             "models_arg": args.models,
+            "metrics_source": "synthetic",
+            "metrics_note": "Divergence and risk_aware rates are derived from synthetic rules (topk[0]/topk[1] and step-based risk_score), not from separate pv/rl/risk_aware model inference.",
         }
         (out_dir / "canary_divergence_summary.json").write_text(json.dumps(div, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         (out_dir / "canary_divergence_summary.md").write_text(
@@ -181,6 +183,9 @@ def main() -> int:
                     f"- top1_divergence_rate: {div['top1_divergence_rate']:.4f}",
                     f"- risk_aware_fallback_rate: {div['risk_aware_fallback_rate']:.4f}",
                     f"- high_risk_state_rate: {div['high_risk_state_rate']:.4f}",
+                    "",
+                    f"- **metrics_source**: {div['metrics_source']}",
+                    f"- **metrics_note**: {div['metrics_note']}",
                 ]
             )
             + "\n",
@@ -212,6 +217,7 @@ def main() -> int:
         "advice_distribution": str(out_dir / "advice_distribution.json"),
         "drift_summary": str(out_dir / "drift_summary.json"),
         "divergence_summary": str(out_dir / "canary_divergence_summary.json") if args.models else "",
+        "divergence_metrics_source": "synthetic" if args.models else "",
     }
     (out_dir / "canary_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False))
