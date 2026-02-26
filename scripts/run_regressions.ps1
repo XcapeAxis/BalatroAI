@@ -20,6 +20,8 @@
   [switch]$RunP17,
   [switch]$RunPerfGateV3,
   [switch]$RunP18,
+  [switch]$RunPerfGateV4,
+  [switch]$RunP19,
   [switch]$GitSync
 )
 Set-StrictMode -Version Latest
@@ -35,6 +37,8 @@ if ($RunP16) { $RunP15 = $true }
 if ($RunP17 -or $RunPerfGateV2) { $RunP16 = $true }
 # P18 builds on top of P17.
 if ($RunP18 -or $RunPerfGateV3) { $RunP17 = $true }
+# P19 builds on top of P18.
+if ($RunP19 -or $RunPerfGateV4) { $RunP18 = $true }
 
 function Test-Health([string]$Url, [int]$TimeoutSec = 5) {
   try {
@@ -694,6 +698,28 @@ if ($RunP18 -or $RunPerfGateV3) {
   & powershell @p18Args
   if ($LASTEXITCODE -ne 0) {
     throw "[P18] smoke gate failed"
+  }
+}
+
+if ($RunP19 -or $RunPerfGateV4) {
+  $p19SmokeScript = Join-Path $ProjectRoot "scripts/run_p19_smoke.ps1"
+  if (-not (Test-Path $p19SmokeScript)) {
+    throw "[P19] missing script: $p19SmokeScript"
+  }
+  Write-Host "[P19] running risk-aware/promotion smoke gate"
+  $p19Args = @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $p19SmokeScript,
+    "-BaseUrl", $BaseUrl,
+    "-Seed", $Seed
+  )
+  if ($RunPerfGateV4) {
+    $p19Args += "-RunPerfGateOnly"
+    $p19Args += "-FailOnPerfGate"
+  }
+  & powershell @p19Args
+  if ($LASTEXITCODE -ne 0) {
+    throw "[P19] smoke gate failed"
   }
 }
 
