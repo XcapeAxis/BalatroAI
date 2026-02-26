@@ -19,7 +19,7 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _run_eval(
+def _build_eval_args(
     *,
     backend: str,
     stake: str,
@@ -32,7 +32,8 @@ def _run_eval(
     out_json: Path,
     logs_jsonl: Path,
     max_steps_per_episode: int = 120,
-) -> None:
+) -> list[str]:
+    """Build argv for eval_long_horizon subprocess. Used by _run_eval and by tests."""
     policy = "heuristic"
     args = [
         sys.executable,
@@ -48,19 +49,27 @@ def _run_eval(
         seeds_file,
         "--policy",
     ]
-    if strategy in {"pv", "rl", "champion"}:
+    if strategy == "pv" or strategy == "champion":
         policy = "pv"
+    elif strategy == "rl":
+        policy = "pv"
+        if not model:
+            raise RuntimeError(f"rl strategy requires a model (--rl-model); got {model!r}")
     elif strategy == "hybrid":
         policy = "hybrid"
     elif strategy == "risk_aware":
         policy = "risk_aware"
+    elif strategy == "deploy_student":
+        policy = "deploy_student"
     elif strategy == "search":
         policy = "search"
     else:
         policy = "heuristic"
     args.append(policy)
-    if policy in {"pv", "hybrid"} and model:
-        args.extend(["--model", model])
+    if policy == "deploy_student" and model:
+        args.extend(["--model", str(model)])
+    elif policy in {"pv", "hybrid"} and model:
+        args.extend(["--model", str(model)])
     if policy == "risk_aware":
         if model:
             args.extend(["--model", model])
@@ -77,6 +86,36 @@ def _run_eval(
             "--save-episode-logs",
             str(logs_jsonl),
         ]
+    )
+    return args
+
+
+def _run_eval(
+    *,
+    backend: str,
+    stake: str,
+    episodes: int,
+    seeds_file: str,
+    strategy: str,
+    model: str | None,
+    rl_model: str | None,
+    risk_config: str | None,
+    out_json: Path,
+    logs_jsonl: Path,
+    max_steps_per_episode: int = 120,
+) -> None:
+    args = _build_eval_args(
+        backend=backend,
+        stake=stake,
+        episodes=episodes,
+        seeds_file=seeds_file,
+        strategy=strategy,
+        model=model,
+        rl_model=rl_model,
+        risk_config=risk_config,
+        out_json=out_json,
+        logs_jsonl=logs_jsonl,
+        max_steps_per_episode=max_steps_per_episode,
     )
     subprocess.run(args, check=True)
 
@@ -102,6 +141,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--rl-model", default="")
     p.add_argument("--risk-aware-config", default="")
     p.add_argument("--champion-model", default="")
+    p.add_argument("--deploy-student-model", default="")
     p.add_argument("--strategies", default="")
     p.add_argument("--max-steps-per-episode", type=int, default=120)
     return p
@@ -130,6 +170,8 @@ def main() -> int:
             strategies.append("rl")
         if args.risk_aware_config:
             strategies.append("risk_aware")
+        if args.deploy_student_model:
+            strategies.append("deploy_student")
     if not strategies:
         raise RuntimeError("no strategies selected")
 
@@ -139,6 +181,7 @@ def main() -> int:
         "rl": args.rl_model,
         "champion": args.champion_model or args.pv_model,
         "risk_aware": args.pv_model or args.champion_model,
+        "deploy_student": args.deploy_student_model,
     }
 
     results: dict[str, dict[str, Any]] = {}

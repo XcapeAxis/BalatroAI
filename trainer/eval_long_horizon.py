@@ -38,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--episodes", type=int, default=30)
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--seed-prefix", default="AAAAAAA")
-    parser.add_argument("--policy", choices=["heuristic", "bc", "search", "pv", "hybrid", "risk_aware"], default="heuristic")
+    parser.add_argument("--policy", choices=["heuristic", "bc", "search", "pv", "hybrid", "risk_aware", "deploy_student"], default="heuristic")
     parser.add_argument("--model", default=None, help="Required when --policy bc/pv/hybrid/risk_aware.")
     parser.add_argument("--rl-model", default=None, help="Optional RL model path for --policy risk_aware.")
     parser.add_argument("--risk-config", default="trainer/config/p19_risk_controller.yaml")
@@ -286,6 +286,26 @@ def _load_model_from_path(model_path: str, args, logger):
     return _load_model(shim, logger)
 
 
+def _load_deploy_student(args, logger):
+    """Load a lightweight deploy student model (from train_distill.py)."""
+    torch, nn = _require_torch()
+    if args.device == "auto":
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device = torch.device(args.device)
+    from trainer.train_distill import _build_student
+    model = _build_student(nn, args.max_actions, args.max_shop_actions)
+    ckpt = torch.load(args.model, map_location=device, weights_only=False)
+    if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+        model.load_state_dict(ckpt["model_state_dict"])
+    else:
+        model.load_state_dict(ckpt)
+    model.to(device)
+    model.eval()
+    logger.info("Loaded deploy_student model=%s", args.model)
+    return torch, device, model, True, "deploy_student"
+
+
 def _phase_macro_action(state: dict, seed: str) -> dict:
     decision = choose_action(state, start_seed=seed)
     macro_action = str(decision.macro_action or "WAIT").upper()
@@ -484,7 +504,7 @@ def _pick_shop_action(
     rl_bundle: tuple[Any, bool, str] | None = None,
     risk_cfg: dict[str, Any] | None = None,
 ) -> tuple[dict, str]:
-    if args.policy in {"heuristic", "search"} or ((args.policy in {"bc", "pv", "hybrid"}) and not is_multi):
+    if args.policy in {"heuristic", "search"} or ((args.policy in {"bc", "pv", "hybrid"}) and not is_multi and args.policy != "deploy_student"):
         d = choose_shop_action(state)
         return dict(d.action), "heuristic_shop"
 
@@ -617,9 +637,12 @@ def main() -> int:
     model_kind = "heuristic"
     rl_bundle = None
     risk_cfg = {}
-    if args.policy in {"bc", "pv", "hybrid", "risk_aware"}:
+    if args.policy in {"bc", "pv", "hybrid", "risk_aware", "deploy_student"}:
         try:
-            torch, device, model, is_multi, model_kind = _load_model(args, logger)
+            if args.policy == "deploy_student":
+                torch, device, model, is_multi, model_kind = _load_deploy_student(args, logger)
+            else:
+                torch, device, model, is_multi, model_kind = _load_model(args, logger)
         except Exception as exc:
             logger.error("Failed to load model: %s", exc)
             return 2
