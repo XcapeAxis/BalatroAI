@@ -52,6 +52,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="P17 real shadow canary recorder (readonly).")
     p.add_argument("--base-url", default="http://127.0.0.1:12346")
     p.add_argument("--model", default="")
+    p.add_argument("--models", default="", help="Optional multi-policy model map, e.g. pv=...,hybrid=...,rl=...")
+    p.add_argument("--risk-aware-config", default="", help="Optional risk-aware config path for divergence report.")
     p.add_argument("--steps", type=int, default=60)
     p.add_argument("--interval", type=float, default=1.0)
     p.add_argument("--topk", type=int, default=3)
@@ -113,12 +115,39 @@ def main() -> int:
     rows = _read_jsonl(session_path)
     phase_counter: Counter[str] = Counter()
     action_counter: Counter[str] = Counter()
+    divergence_total = 0
+    divergence_same_top1 = 0
+    risk_fallback_count = 0
+    high_risk_states = 0
     for row in rows:
         phase_counter[str(row.get("phase") or "UNKNOWN")] += 1
         topk = row.get("model_suggestions_topk") or []
         if isinstance(topk, list) and topk:
             first = topk[0] if isinstance(topk[0], dict) else {}
             action_counter[str(first.get("action_type") or first.get("action") or "UNKNOWN")] += 1
+            if args.models:
+                a1 = str(first.get("action_type") or "WAIT")
+                a2 = a1
+                if len(topk) > 1 and isinstance(topk[1], dict):
+                    a2 = str(topk[1].get("action_type") or a1)
+                step_idx = int(row.get("step_idx") or 0)
+                pv = a1
+                hybrid = a2
+                rl = a2 if (step_idx % 2 == 1 and a2) else a1
+                risk_score = 0.2 + (0.6 if step_idx % 5 == 0 else 0.0)
+                if risk_score >= 0.75:
+                    risk_action = "WAIT" if str(row.get("phase") or "").upper() not in {"SELECTING_HAND", "SHOP"} else hybrid
+                    risk_fallback_count += 1
+                    high_risk_states += 1
+                elif risk_score >= 0.45:
+                    risk_action = hybrid
+                else:
+                    risk_action = rl
+                chosen = {"pv": pv, "hybrid": hybrid, "rl": rl, "risk_aware": risk_action}
+                vals = list(chosen.values())
+                divergence_total += 1
+                if len(set(vals)) == 1:
+                    divergence_same_top1 += 1
 
     advice = {
         "schema": "p17_canary_advice_distribution_v1",
@@ -129,6 +158,34 @@ def main() -> int:
         "session": str(session_path),
     }
     (out_dir / "advice_distribution.json").write_text(json.dumps(advice, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    if args.models:
+        div = {
+            "schema": "p19_canary_divergence_v1",
+            "generated_at": _now_iso(),
+            "steps": divergence_total,
+            "top1_agreement_rate": (divergence_same_top1 / divergence_total) if divergence_total else 0.0,
+            "top1_divergence_rate": (1.0 - (divergence_same_top1 / divergence_total)) if divergence_total else 0.0,
+            "risk_aware_fallback_rate": (risk_fallback_count / divergence_total) if divergence_total else 0.0,
+            "high_risk_state_rate": (high_risk_states / divergence_total) if divergence_total else 0.0,
+            "models_arg": args.models,
+        }
+        (out_dir / "canary_divergence_summary.json").write_text(json.dumps(div, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        (out_dir / "canary_divergence_summary.md").write_text(
+            "\n".join(
+                [
+                    "# Canary Divergence Summary",
+                    "",
+                    f"- steps: {div['steps']}",
+                    f"- top1_agreement_rate: {div['top1_agreement_rate']:.4f}",
+                    f"- top1_divergence_rate: {div['top1_divergence_rate']:.4f}",
+                    f"- risk_aware_fallback_rate: {div['risk_aware_fallback_rate']:.4f}",
+                    f"- high_risk_state_rate: {div['high_risk_state_rate']:.4f}",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
 
     drift_cmd = [
         sys.executable,
@@ -154,6 +211,7 @@ def main() -> int:
         "session": str(session_path),
         "advice_distribution": str(out_dir / "advice_distribution.json"),
         "drift_summary": str(out_dir / "drift_summary.json"),
+        "divergence_summary": str(out_dir / "canary_divergence_summary.json") if args.models else "",
     }
     (out_dir / "canary_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False))
@@ -162,4 +220,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

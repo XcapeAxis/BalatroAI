@@ -83,6 +83,19 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--confirm", default="", help='Must equal "I_UNDERSTAND" when --execute is used.')
     parser.add_argument("--max-actions", type=int, default=12)
     parser.add_argument("--rate-limit-sec", type=float, default=2.0)
+    parser.add_argument(
+        "--strict-errors",
+        dest="strict_errors",
+        action="store_true",
+        default=True,
+        help="Exit immediately when fetch/execute errors occur (default: true).",
+    )
+    parser.add_argument(
+        "--no-strict-errors",
+        dest="strict_errors",
+        action="store_false",
+        help="Continue recording after errors when possible.",
+    )
     parser.add_argument("--include-raw", action="store_true", help="Attach raw gamestate per row (needed for dagger reconstruction).")
     parser.add_argument("--out", default="", help="Output session jsonl path.")
     return parser.parse_args()
@@ -153,6 +166,7 @@ def main() -> int:
     actions_count = 0
     changed_steps = 0
     last_exec_ts = 0.0
+    hard_error = False
 
     try:
         for step_idx in range(max(1, int(args.steps))):
@@ -168,6 +182,10 @@ def main() -> int:
                 }
                 _write_jsonl(out_path, row)
                 written += 1
+                if args.strict_errors:
+                    logger.error("step=%d fetch failed (strict): %s", step_idx, exc)
+                    hard_error = True
+                    break
                 logger.warning("step=%d fetch failed: %s", step_idx, exc)
                 time.sleep(max(0.05, float(args.interval)))
                 continue
@@ -215,9 +233,13 @@ def main() -> int:
                             last_exec_ts = now
                         except Exception as exc:
                             row_errors.append(f"execute_failed:{exc}")
-                            execute_enabled = False
-                            mode = "shadow"
-                            logger.error("step=%d execute failed, downgrade to shadow: %s", step_idx, exc)
+                            if args.strict_errors:
+                                logger.error("step=%d execute failed (strict): %s", step_idx, exc)
+                                hard_error = True
+                            else:
+                                execute_enabled = False
+                                mode = "shadow"
+                                logger.error("step=%d execute failed, downgrade to shadow: %s", step_idx, exc)
                     else:
                         row_errors.append("no_safe_action")
                 else:
@@ -261,6 +283,8 @@ def main() -> int:
                 json.dumps(action_sent, ensure_ascii=False) if action_sent else "-",
                 bool(after_hash != before_hash),
             )
+            if hard_error:
+                break
             if step_idx + 1 < int(args.steps):
                 time.sleep(max(0.05, float(args.interval)))
     finally:
@@ -277,6 +301,8 @@ def main() -> int:
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     logger.info("session recorded: steps=%d out=%s", written, out_path)
     logger.info("summary: %s", summary_path)
+    if hard_error:
+        return 1
     return 0
 
 
