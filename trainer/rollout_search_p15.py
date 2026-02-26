@@ -110,7 +110,13 @@ def main() -> int:
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     if out_path.exists():
-        out_path.unlink()
+        try:
+            out_path.unlink()
+        except OSError:
+            try:
+                out_path.open("w").close()
+            except OSError:
+                pass
 
     backend = create_backend("sim", timeout_sec=float(args.timeout_sec), seed=args.seed_prefix, logger=logger)
     hand_records = 0
