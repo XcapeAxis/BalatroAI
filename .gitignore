@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
@@ -16,6 +16,9 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# safe_run timeout wrapper logs
+.safe_run/
 
 # Balatro runtime and logs
 logs/
@@ -80,6 +83,10 @@ runtime/**
 # Local source dump for mechanics (canonicalized copy goes to balatro_mechanics/)
 Balatro_Mechanics_CSV_UPDATED_20260219/
 
+
+# Cursor IDE
+.cursor/
+.cursorignore
 
 # Local scratch (non-reproducible personal notes/temp files)
 local_scratch/
