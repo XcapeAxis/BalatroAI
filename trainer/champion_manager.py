@@ -49,6 +49,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--allow-promote", action="store_true", help="Actually update current_champion.json.")
     p.add_argument("--auto-rollback", action="store_true", help="Allow rollback decision when challenger fails safeguards.")
     p.add_argument("--git-commit", default="")
+    # v4: release channel support
+    p.add_argument("--release-channel", default="", choices=["", "dev", "canary", "stable"],
+                   help="Target release channel for v4 staged promotion.")
+    p.add_argument("--determinism-pass", default="", help="Determinism audit pass (true/false/skip).")
+    p.add_argument("--package-verify-pass", default="", help="Package verify pass (true/false).")
     return p
 
 
@@ -392,6 +397,28 @@ def main() -> int:
         },
     )
 
+    # v4: Release channel state management
+    release_channel = getattr(args, "release_channel", "") or ""
+    if release_channel:
+        channel_state = _compute_release_state(
+            args, final_decision, perf_pass, risk_guard_pass,
+            milestone_present, milestone_pass, canary_pass,
+            release_channel, reg_root, model_id, decision_payload,
+        )
+        _write_json(reg_root / "release_state.json", channel_state)
+        decision_dir = Path(args.decision_out).parent
+        _write_json(decision_dir / "release_state.json", channel_state)
+        release_md = [
+            "# Release Channel State",
+            "",
+            f"- channel: {channel_state.get('channel')}",
+            f"- stable: {channel_state.get('stable_model_id')}",
+            f"- canary: {channel_state.get('canary_model_id')}",
+            f"- action: {channel_state.get('action')}",
+            f"- reason: {channel_state.get('reason')}",
+        ]
+        (decision_dir / "release_decision.md").write_text("\n".join(release_md) + "\n", encoding="utf-8")
+
     print(
         json.dumps(
             {
@@ -404,6 +431,77 @@ def main() -> int:
         )
     )
     return 0
+
+
+def _compute_release_state(
+    args, final_decision: str, perf_pass: bool, risk_guard_pass: bool,
+    milestone_present: bool, milestone_pass: bool, canary_pass: bool,
+    target_channel: str, reg_root: Path, model_id: str,
+    decision_payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Compute release channel state for v4 staged promotion."""
+    current = _read_json(reg_root / "release_state.json")
+    stable_id = str(current.get("stable_model_id") or "")
+    stable_path = str(current.get("stable_model_path") or "")
+    canary_id = str(current.get("canary_model_id") or "")
+    canary_path = str(current.get("canary_model_path") or "")
+
+    det_pass_str = str(getattr(args, "determinism_pass", "") or "").lower()
+    det_pass = det_pass_str in ("true", "1", "yes")
+    det_skip = det_pass_str in ("skip", "")
+    pkg_pass_str = str(getattr(args, "package_verify_pass", "") or "").lower()
+    pkg_pass = pkg_pass_str in ("true", "1", "yes")
+
+    action = "hold"
+    reason = ""
+
+    if target_channel == "dev":
+        action = "register_dev"
+        reason = "registered as dev candidate"
+    elif target_channel == "canary":
+        if perf_pass and risk_guard_pass:
+            action = "promote_to_canary"
+            reason = "perf+risk gates passed; promoting to canary"
+            canary_id = model_id
+            canary_path = str(Path(args.candidate_model))
+        else:
+            action = "hold"
+            reason = f"canary promotion blocked: perf={perf_pass} risk={risk_guard_pass}"
+    elif target_channel == "stable":
+        if final_decision in ("promote", "hold_for_promote"):
+            if milestone_present and milestone_pass and canary_pass:
+                action = "promote_to_stable"
+                reason = "all gates passed; promoting to stable"
+                stable_id = model_id
+                stable_path = str(Path(args.candidate_model))
+            else:
+                action = "hold"
+                reason = f"stable promotion blocked: milestone={milestone_pass} canary={canary_pass}"
+        elif final_decision == "rolled_back":
+            action = "rollback_to_stable"
+            reason = decision_payload.get("reason") or "rollback triggered"
+        else:
+            action = "hold"
+            reason = f"decision={final_decision}; not promoting"
+
+    return {
+        "schema": "release_state_v1",
+        "generated_at": _now_iso(),
+        "channel": target_channel,
+        "action": action,
+        "reason": reason,
+        "stable_model_id": stable_id,
+        "stable_model_path": stable_path,
+        "canary_model_id": canary_id,
+        "canary_model_path": canary_path,
+        "dev_model_id": model_id if target_channel == "dev" else "",
+        "perf_gate_pass": perf_pass,
+        "risk_guard_pass": risk_guard_pass,
+        "milestone_pass": milestone_pass if milestone_present else None,
+        "canary_pass": canary_pass,
+        "determinism_pass": det_pass if not det_skip else "skip",
+        "package_verify_pass": pkg_pass,
+    }
 
 
 if __name__ == "__main__":
