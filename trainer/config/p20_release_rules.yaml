@@ -1,0 +1,36 @@
+# P20 Release Rules: Champion Manager v4 with release channels
+# Channels: dev -> canary -> stable
+# Thresholds for promotion and rollback
+
+median_ante_delta_threshold: 0.5
+avg_ante_delta_threshold: 0.3
+use_ci_lower_bound_guard: true
+
+critical_bucket_regression_max_pct_points: 5.0
+critical_buckets:
+  - boss_blind_specific
+  - econ_collapse
+  - resource_exhausted
+
+# Release channel promotion rules
+promote_dev_to_canary:
+  require_perf_gate_100: true
+  require_risk_gate: true
+
+promote_canary_to_stable:
+  require_milestone_seeds: 500
+  require_canary_stable: true
+  canary_min_episodes: 20
+  canary_max_divergence_rate: 0.45
+
+# Rollback triggers
+rollback_on_perf_fail_streak: 2
+rollback_on_canary_divergence_threshold: 0.45
+rollback_on_risk_guard_fail: true
+
+# Probation
+probation_min_perf_passes: 1
+
+# Package verification
+require_package_verify: true
+require_determinism_audit: true
