@@ -92,6 +92,12 @@ $gateFunctional = @{
 }
 
 try {
+  $daggerHandSamples = 800
+  $daggerShopSamples = 240
+  $daggerEpochs = 1
+  $ablationMaxSteps100 = 80
+  $ablationMaxSteps500 = 120
+
   $p17Latest = Find-LatestP17Artifact -Root $ProjectRoot
   $failureInput = ""
   if ($p17Latest) {
@@ -137,6 +143,7 @@ try {
     "--backend","sim",
     "--stake","gold",
     "--episodes","100",
+    "--max-steps-per-episode",$ablationMaxSteps100,
     "--seeds-file","balatro_mechanics/derived/eval_seeds_100.txt",
     "--heuristic",
     "--pv-model",$champModel,
@@ -173,15 +180,15 @@ try {
     "--from-failure-buckets",(Join-Path $failureRlDir "failure_buckets_latest.json"),
     "--backend","sim",
     "--out",$daggerOut,
-    "--hand-samples","1500",
-    "--shop-samples","600",
+    "--hand-samples",$daggerHandSamples,
+    "--shop-samples",$daggerShopSamples,
     "--failure-weight","0.7",
     "--uniform-weight","0.3",
-    "--time-budget-ms","20",
+    "--time-budget-ms","15",
     "--summary-out",$daggerSummary
   )
   Run-Step -Label "P18-dagger-dataset" -Exe $py -CmdArgs @("-B","trainer/dataset.py","--path",$daggerOut,"--validate","--summary")
-  Run-Step -Label "P18-dagger-train" -Exe $py -CmdArgs @("-B","trainer/train_bc.py","--train-jsonl",$daggerOut,"--epochs","2","--batch-size","64","--out-dir",(Join-Path $ProjectRoot "trainer_runs/p18_bc_dagger_v3"))
+  Run-Step -Label "P18-dagger-train" -Exe $py -CmdArgs @("-B","trainer/train_bc.py","--train-jsonl",$daggerOut,"--epochs",$daggerEpochs,"--batch-size","64","--out-dir",(Join-Path $ProjectRoot "trainer_runs/p18_bc_dagger_v3"))
   Run-Step -Label "P18-dagger-eval" -Exe $py -CmdArgs @("-B","trainer/eval.py","--offline","--model",(Join-Path $ProjectRoot "trainer_runs/p18_bc_dagger_v3/best.pt"),"--dataset",$daggerOut)
 
   if ($IncludeMilestone500) {
@@ -191,6 +198,7 @@ try {
       "--backend","sim",
       "--stake","gold",
       "--episodes","500",
+      "--max-steps-per-episode",$ablationMaxSteps500,
       "--seeds-file","balatro_mechanics/derived/eval_seeds_500.txt",
       "--champion-model",$champModel,
       "--rl-model",$rlModel,
@@ -211,7 +219,7 @@ try {
     }
   }
 
-  Run-Step -Label "P18-reg-dataset-smoke" -Exe $py -CmdArgs @("-B","trainer/registry/datasets.py","--registry-root",$registryDir,"--dataset-id",("p18_smoke_" + $stamp),"--source-type","mixed","--file-path",$daggerOut,"--hand-records","1500","--shop-records","600","--invalid-rows","0")
+  Run-Step -Label "P18-reg-dataset-smoke" -Exe $py -CmdArgs @("-B","trainer/registry/datasets.py","--registry-root",$registryDir,"--dataset-id",("p18_smoke_" + $stamp),"--source-type","mixed","--file-path",$daggerOut,"--hand-records",$daggerHandSamples,"--shop-records",$daggerShopSamples,"--invalid-rows","0")
   Run-Step -Label "P18-reg-model-rl" -Exe $py -CmdArgs @("-B","trainer/registry/models.py","--registry-root",$registryDir,"--model-id",("p18_rl_" + $stamp),"--dataset-id",("p18_smoke_" + $stamp),"--model-path",$rlModel,"--decision","candidate","--offline-metrics-json",(Join-Path $rlArtDir "rl_train_summary.json"),"--eval100-json",(Join-Path $ablation100 "eval_gold_rl.json"))
 
   $decisionPayload = Get-Content $decision100 -Raw | ConvertFrom-Json

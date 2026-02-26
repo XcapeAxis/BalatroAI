@@ -94,12 +94,20 @@ $gateFunctional = @{
 }
 
 try {
+  $smokeEpisodes = 40
+  $smokeHandTarget = 500
+  $smokeShopTarget = 120
+  $smokeMaxSteps = 220
+  $daggerHandSamples = 500
+  $daggerShopSamples = 120
+  $daggerTrainEpochs = 1
+
   $smokeData = Join-Path $ProjectRoot "trainer_data/p17_smoke_search.jsonl"
   $p17SmokeRunDir = Join-Path $ProjectRoot "trainer_runs/p17_pv_smoke"
   $pvOffline = Join-Path $artifactDir "pv_offline_smoke.json"
 
   if (-not $RunPerfGateOnly) {
-    Run-Step -Label "P17-smoke-rollout" -Exe $py -CmdArgs @("-B","trainer/rollout_search_p15.py","--backend","sim","--stake","gold","--episodes","60","--max-steps-per-episode","260","--hand-target-samples","800","--shop-target-samples","200","--workers","4","--search","algo=beam","--search-budget-ms","15","--out",$smokeData)
+    Run-Step -Label "P17-smoke-rollout" -Exe $py -CmdArgs @("-B","trainer/rollout_search_p15.py","--backend","sim","--stake","gold","--episodes",$smokeEpisodes,"--max-steps-per-episode",$smokeMaxSteps,"--hand-target-samples",$smokeHandTarget,"--shop-target-samples",$smokeShopTarget,"--workers","1","--search","algo=beam","--search-budget-ms","15","--out",$smokeData)
     Run-Step -Label "P17-smoke-dataset" -Exe $py -CmdArgs @("-B","trainer/dataset.py","--path",$smokeData,"--validate","--summary")
     Run-Step -Label "P17-smoke-train" -Exe $py -CmdArgs @("-B","trainer/train_pv.py","--train-jsonl",$smokeData,"--epochs","1","--batch-size","64","--out-dir",$p17SmokeRunDir)
     Run-Step -Label "P17-smoke-offline" -Exe $py -CmdArgs @("-B","trainer/eval_pv.py","--model",(Join-Path $p17SmokeRunDir "best.pt"),"--dataset",$smokeData,"--out",$pvOffline)
@@ -145,9 +153,9 @@ try {
   $daggerV3 = Join-Path $ProjectRoot "trainer_data/p17_dagger_v3.jsonl"
   $daggerSummary = Join-Path $artifactDir ("dagger_v3_summary_" + $stamp + ".json")
   Run-Step -Label "P17-failure-mine" -Exe $py -CmdArgs @("-B","trainer/failure_mining.py","--episode-logs",$logsChall100,"--out-dir",$failureDir)
-  Run-Step -Label "P17-dagger-v3" -Exe $py -CmdArgs @("-B","trainer/dagger_collect.py","--from-failure-buckets",(Join-Path $failureDir "failure_buckets_latest.json"),"--backend","sim","--out",$daggerV3,"--hand-samples","1000","--shop-samples","400","--failure-weight","0.7","--uniform-weight","0.3","--time-budget-ms","20","--summary-out",$daggerSummary)
+  Run-Step -Label "P17-dagger-v3" -Exe $py -CmdArgs @("-B","trainer/dagger_collect.py","--from-failure-buckets",(Join-Path $failureDir "failure_buckets_latest.json"),"--backend","sim","--out",$daggerV3,"--hand-samples",$daggerHandSamples,"--shop-samples",$daggerShopSamples,"--failure-weight","0.7","--uniform-weight","0.3","--time-budget-ms","15","--summary-out",$daggerSummary)
   Run-Step -Label "P17-dagger-v3-dataset" -Exe $py -CmdArgs @("-B","trainer/dataset.py","--path",$daggerV3,"--validate","--summary")
-  Run-Step -Label "P17-dagger-v3-train" -Exe $py -CmdArgs @("-B","trainer/train_bc.py","--train-jsonl",$daggerV3,"--epochs","2","--batch-size","64","--out-dir",(Join-Path $ProjectRoot "trainer_runs/p17_bc_dagger_v3"))
+  Run-Step -Label "P17-dagger-v3-train" -Exe $py -CmdArgs @("-B","trainer/train_bc.py","--train-jsonl",$daggerV3,"--epochs",$daggerTrainEpochs,"--batch-size","64","--out-dir",(Join-Path $ProjectRoot "trainer_runs/p17_bc_dagger_v3"))
   Run-Step -Label "P17-dagger-v3-offline" -Exe $py -CmdArgs @("-B","trainer/eval.py","--offline","--model",(Join-Path $ProjectRoot "trainer_runs/p17_bc_dagger_v3/best.pt"),"--dataset",$daggerV3)
 
   if ($IncludeMilestone500) {
@@ -161,8 +169,8 @@ try {
   Run-Step -Label "P17-canary" -Exe $py -CmdArgs @("-B","trainer/real_shadow_canary.py","--base-url",$BaseUrl,"--model",$challModel,"--steps","60","--interval","1.0","--topk","3","--out-dir",$canaryDir)
 
   # registry writes
-  Run-Step -Label "P17-reg-dataset-smoke" -Exe $py -CmdArgs @("-B","trainer/registry/datasets.py","--registry-root",$registryDir,"--dataset-id",("p17_smoke_search_" + $stamp),"--source-type","search","--file-path",$smokeData,"--hand-records","800","--shop-records","200","--invalid-rows","0")
-  Run-Step -Label "P17-reg-dataset-dagger" -Exe $py -CmdArgs @("-B","trainer/registry/datasets.py","--registry-root",$registryDir,"--dataset-id",("p17_dagger_v3_" + $stamp),"--source-type","dagger","--file-path",$daggerV3,"--hand-records","1000","--shop-records","400","--invalid-rows","0","--source-runs","failure_mining")
+  Run-Step -Label "P17-reg-dataset-smoke" -Exe $py -CmdArgs @("-B","trainer/registry/datasets.py","--registry-root",$registryDir,"--dataset-id",("p17_smoke_search_" + $stamp),"--source-type","search","--file-path",$smokeData,"--hand-records",$smokeHandTarget,"--shop-records",$smokeShopTarget,"--invalid-rows","0")
+  Run-Step -Label "P17-reg-dataset-dagger" -Exe $py -CmdArgs @("-B","trainer/registry/datasets.py","--registry-root",$registryDir,"--dataset-id",("p17_dagger_v3_" + $stamp),"--source-type","dagger","--file-path",$daggerV3,"--hand-records",$daggerHandSamples,"--shop-records",$daggerShopSamples,"--invalid-rows","0","--source-runs","failure_mining")
   $regModelArgs = @("-B","trainer/registry/models.py","--registry-root",$registryDir,"--model-id",("p17_pv_challenger_" + $stamp),"--dataset-id",("p17_smoke_search_" + $stamp),"--model-path",$challModel,"--decision","candidate","--offline-metrics-json",$pvOffline,"--eval100-json",$evalChall100)
   if ($IncludeMilestone500) { $regModelArgs += @("--eval500-json",(Join-Path $artifactDir "eval_gold_challenger_500.json")) }
   Run-Step -Label "P17-reg-model" -Exe $py -CmdArgs $regModelArgs
