@@ -36,8 +36,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--episodes", type=int, default=30)
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--seed-prefix", default="AAAAAAA")
-    parser.add_argument("--policy", choices=["heuristic", "bc", "search", "pv"], default="heuristic")
-    parser.add_argument("--model", default=None, help="Required when --policy bc/pv.")
+    parser.add_argument("--policy", choices=["heuristic", "bc", "search", "pv", "hybrid"], default="heuristic")
+    parser.add_argument("--model", default=None, help="Required when --policy bc/pv/hybrid.")
     parser.add_argument("--search-budget-ms", type=float, default=20.0)
     parser.add_argument("--seeds-file", default=None, help="Optional seeds file, one seed per line.")
     parser.add_argument("--save-episode-logs", default=None, help="Optional output jsonl for episode-level logs.")
@@ -198,6 +198,18 @@ def _masked_argmax(logits, legal_ids: list[int], max_actions: int, torch, device
     return int(masked.argmax(dim=1).item())
 
 
+def _masked_topk(logits, legal_ids: list[int], max_actions: int, k: int, torch, device) -> list[int]:
+    valid = [int(a) for a in legal_ids if 0 <= int(a) < max_actions]
+    if not valid:
+        return []
+    mask = torch.zeros((1, max_actions), dtype=torch.float32, device=device)
+    for aid in valid:
+        mask[0, aid] = 1.0
+    masked = torch.where(mask > 0, logits, torch.full_like(logits, -1e9))
+    kk = min(max(1, int(k)), masked.shape[1])
+    return [int(x) for x in torch.topk(masked, k=kk, dim=1).indices[0].tolist()]
+
+
 def _load_model(args, logger):
     torch, nn = _require_torch()
     if args.device == "auto":
@@ -207,22 +219,39 @@ def _load_model(args, logger):
     if not args.model:
         raise RuntimeError("--model is required for policy=bc/pv")
     state_dict = torch.load(args.model, map_location=device)
-    if args.policy == "pv":
+    pv_load_error = None
+    if args.policy in {"pv", "hybrid"}:
         from trainer.models.policy_value import PolicyValueModel
 
         model = PolicyValueModel(args.max_actions, args.max_shop_actions).to(device)
-        model.load_state_dict(state_dict, strict=True)
-        model.eval()
-        logger.info("Loaded PV model=%s", args.model)
-        return torch, device, model, True, "pv"
+        try:
+            model.load_state_dict(state_dict, strict=True)
+            model.eval()
+            logger.info("Loaded PV model=%s", args.model)
+            return torch, device, model, True, "pv"
+        except Exception as exc:
+            pv_load_error = exc
+            logger.warning("PV load failed for %s; attempting BC fallback: %s", args.model, exc)
 
     is_multi = any(str(k).startswith("hand_head.") for k in state_dict.keys())
     if is_multi:
         model = _build_multi_model(nn, args.max_actions, args.max_shop_actions).to(device)
     else:
         model = _build_hand_model(nn, args.max_actions).to(device)
-    model.load_state_dict(state_dict, strict=True)
+    try:
+        model.load_state_dict(state_dict, strict=True)
+    except Exception:
+        # If caller explicitly requested BC and this fails, surface the direct error.
+        # If caller requested PV/hybrid and both loaders fail, surface both contexts.
+        if args.policy in {"pv", "hybrid"} and pv_load_error is not None:
+            raise RuntimeError(
+                f"PV and BC fallback both failed for checkpoint {args.model}: "
+                f"pv_error={pv_load_error!s}"
+            )
+        raise
     model.eval()
+    if args.policy in {"pv", "hybrid"} and pv_load_error is not None:
+        logger.warning("Using BC fallback model for requested policy=%s", args.policy)
     logger.info("Loaded BC model=%s multi_head=%s", args.model, is_multi)
     return torch, device, model, is_multi, "bc"
 
@@ -258,6 +287,43 @@ def _pick_hand_action(state: dict, args, torch, device, model, is_multi, model_k
         )
         return {"action_type": d.action_type, "indices": d.indices}, "search"
 
+    if args.policy == "hybrid":
+        legal_ids = action_space.legal_action_ids(hand_size)
+        batch = _state_to_hand_batch(state, torch)
+        batch = {k: v.to(device) for k, v in batch.items()}
+        with torch.no_grad():
+            if model_kind == "pv":
+                logits, _ = model.forward_hand(batch)
+            elif is_multi:
+                logits = model.forward_hand(batch)
+            else:
+                logits = model(batch)
+        top_ids = _masked_topk(logits, legal_ids, args.max_actions, 3, torch, device)
+        if not top_ids:
+            return {"action_type": "WAIT", "sleep": 0.01}, "hybrid_no_legal_wait"
+
+        d = choose_search_action(
+            state,
+            max_branch=80,
+            max_depth=2,
+            time_budget_ms=float(args.search_budget_ms),
+            seed=episode_seed,
+        )
+        search_id = None
+        try:
+            if d.action_type in {"PLAY", "DISCARD"}:
+                search_id = action_space.encode(hand_size, d.action_type, action_space.indices_to_mask(list(d.indices or [])))
+        except Exception:
+            search_id = None
+
+        chosen_id = int(top_ids[0])
+        reason = "hybrid_model_top1"
+        if search_id is not None and int(search_id) in top_ids:
+            chosen_id = int(search_id)
+            reason = "hybrid_search_rerank"
+        atype, mask_int = action_space.decode(hand_size, int(chosen_id))
+        return {"action_type": atype, "indices": action_space.mask_to_indices(mask_int, hand_size)}, reason
+
     # bc / pv policy
     legal_ids = action_space.legal_action_ids(hand_size)
     batch = _state_to_hand_batch(state, torch)
@@ -277,9 +343,33 @@ def _pick_hand_action(state: dict, args, torch, device, model, is_multi, model_k
 
 
 def _pick_shop_action(state: dict, args, torch, device, model, is_multi, model_kind: str) -> tuple[dict, str]:
-    if args.policy in {"heuristic", "search"} or ((args.policy in {"bc", "pv"}) and not is_multi):
+    if args.policy in {"heuristic", "search"} or ((args.policy in {"bc", "pv", "hybrid"}) and not is_multi):
         d = choose_shop_action(state)
         return dict(d.action), "heuristic_shop"
+
+    if args.policy == "hybrid":
+        legal_ids = action_space_shop.legal_action_ids(state)
+        batch = _state_to_shop_batch(state, torch)
+        batch = {k: v.to(device) for k, v in batch.items()}
+        with torch.no_grad():
+            if model_kind == "pv":
+                logits, _ = model.forward_shop(batch)
+            else:
+                logits = model.forward_shop(batch)
+        top_ids = _masked_topk(logits, legal_ids, args.max_shop_actions, 3, torch, device)
+        if not top_ids:
+            return {"action_type": "WAIT", "sleep": 0.01}, "hybrid_shop_wait"
+        chosen = int(top_ids[0])
+        reason = "hybrid_shop_model_top1"
+        heur = choose_shop_action(state)
+        try:
+            heur_id = action_space_shop.encode(str((heur.action or {}).get("action_type") or "WAIT"), (heur.action or {}).get("params") or {})
+            if int(heur_id) in top_ids:
+                chosen = int(heur_id)
+                reason = "hybrid_shop_heuristic_rerank"
+        except Exception:
+            pass
+        return action_space_shop.action_from_id(state, int(chosen)), reason
 
     legal_ids = action_space_shop.legal_action_ids(state)
     batch = _state_to_shop_batch(state, torch)
@@ -326,7 +416,7 @@ def main() -> int:
     model = None
     is_multi = False
     model_kind = "heuristic"
-    if args.policy in {"bc", "pv"}:
+    if args.policy in {"bc", "pv", "hybrid"}:
         try:
             torch, device, model, is_multi, model_kind = _load_model(args, logger)
         except Exception as exc:
