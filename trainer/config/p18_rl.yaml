@@ -1,0 +1,33 @@
+{
+  "algo": "awr",
+  "warm_start_model": "trainer_runs/p17_pv_smoke/best.pt",
+  "offline_dataset": "trainer_data/p17_smoke_search.jsonl",
+  "online_steps": 400,
+  "offline_steps": 600,
+  "rollout_workers": 1,
+  "max_steps_per_episode": 180,
+  "episodes_for_online": 24,
+  "batch_size": 64,
+  "epochs_offline": 1,
+  "epochs_online": 1,
+  "learning_rate": 0.0005,
+  "weight_decay": 0.0001,
+  "beta": 1.0,
+  "max_weight": 20.0,
+  "epsilon_explore": 0.05,
+  "reward_terms": {
+    "score_delta_term": 1.0,
+    "survival_term": 2.5,
+    "resource_term": 0.3,
+    "econ_term": 0.15,
+    "ante_progress_term": 3.0,
+    "illegal_action_penalty": -4.0
+  },
+  "checkpoint_every": 200,
+  "eval_every": 200,
+  "seed_files": {
+    "smoke": "balatro_mechanics/derived/eval_seeds_20.txt",
+    "gate": "balatro_mechanics/derived/eval_seeds_100.txt",
+    "milestone": "balatro_mechanics/derived/eval_seeds_500.txt"
+  }
+}
