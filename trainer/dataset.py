@@ -30,7 +30,17 @@ REQUIRED_FIELDS = {
 }
 
 
+DISTILL_REQUIRED_FIELDS = {"schema", "phase", "state_features", "teacher_topk", "metadata"}
+
+
 def validate_record(record: dict) -> None:
+    schema = str(record.get("schema") or "")
+    if schema == "distill_v1":
+        missing = DISTILL_REQUIRED_FIELDS - set(record.keys())
+        if missing:
+            raise ValueError(f"distill record missing required fields: {sorted(missing)}")
+        return
+
     missing = REQUIRED_FIELDS - set(record.keys())
     if missing:
         raise ValueError(f"record missing required fields: {sorted(missing)}")
@@ -138,14 +148,24 @@ def summarize_dataset(path: str | Path) -> dict:
     total = 0
     hand = 0
     shop = 0
+    detected_schema = SCHEMA_VERSION
     for r in read_jsonl(path):
         total += 1
-        if str(r.get("phase")) == TRAIN_PHASE:
-            hand += 1
-        if str(r.get("phase")) in SHOP_TRAIN_PHASES:
-            shop += 1
+        rec_schema = str(r.get("schema") or "")
+        if rec_schema == "distill_v1":
+            detected_schema = "distill_v1"
+            phase = str(r.get("phase") or "")
+            if phase == "HAND":
+                hand += 1
+            elif phase == "SHOP":
+                shop += 1
+        else:
+            if str(r.get("phase")) == TRAIN_PHASE:
+                hand += 1
+            if str(r.get("phase")) in SHOP_TRAIN_PHASES:
+                shop += 1
     return {
-        "schema": SCHEMA_VERSION,
+        "schema": detected_schema,
         "total_records": total,
         "hand_records": hand,
         "shop_records": shop,
