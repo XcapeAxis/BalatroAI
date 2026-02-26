@@ -1,0 +1,25 @@
+weights:
+  uncertainty: 0.35
+  disagreement: 0.30
+  value_gap: 0.20
+  illegal: 0.10
+  ood: 0.05
+
+hand:
+  medium: 0.40
+  high: 0.70
+  low_risk_policy: rl
+  medium_risk_policy: hybrid
+  high_risk_policy: search
+  extreme_risk_policy: heuristic
+
+shop:
+  medium: 0.45
+  high: 0.75
+  low_risk_policy: rl
+  medium_risk_policy: hybrid
+  high_risk_policy: heuristic
+  extreme_risk_policy: heuristic
+
+ood_context_abs_threshold: 6.0
+extreme_risk_threshold: 0.90
