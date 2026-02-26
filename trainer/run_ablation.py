@@ -27,6 +27,8 @@ def _run_eval(
     seeds_file: str,
     strategy: str,
     model: str | None,
+    rl_model: str | None,
+    risk_config: str | None,
     out_json: Path,
     logs_jsonl: Path,
     max_steps_per_episode: int = 120,
@@ -50,6 +52,8 @@ def _run_eval(
         policy = "pv"
     elif strategy == "hybrid":
         policy = "hybrid"
+    elif strategy == "risk_aware":
+        policy = "risk_aware"
     elif strategy == "search":
         policy = "search"
     else:
@@ -57,6 +61,13 @@ def _run_eval(
     args.append(policy)
     if policy in {"pv", "hybrid"} and model:
         args.extend(["--model", model])
+    if policy == "risk_aware":
+        if model:
+            args.extend(["--model", model])
+        if rl_model:
+            args.extend(["--rl-model", rl_model])
+        if risk_config:
+            args.extend(["--risk-config", risk_config])
     args.extend(
         [
             "--max-steps-per-episode",
@@ -89,6 +100,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--pv-model", default="")
     p.add_argument("--hybrid-model", default="")
     p.add_argument("--rl-model", default="")
+    p.add_argument("--risk-aware-config", default="")
     p.add_argument("--champion-model", default="")
     p.add_argument("--strategies", default="")
     p.add_argument("--max-steps-per-episode", type=int, default=120)
@@ -116,6 +128,8 @@ def main() -> int:
             strategies.append("hybrid")
         if args.rl_model:
             strategies.append("rl")
+        if args.risk_aware_config:
+            strategies.append("risk_aware")
     if not strategies:
         raise RuntimeError("no strategies selected")
 
@@ -124,6 +138,7 @@ def main() -> int:
         "hybrid": args.hybrid_model or args.pv_model,
         "rl": args.rl_model,
         "champion": args.champion_model or args.pv_model,
+        "risk_aware": args.pv_model or args.champion_model,
     }
 
     results: dict[str, dict[str, Any]] = {}
@@ -137,6 +152,8 @@ def main() -> int:
             seeds_file=str(args.seeds_file),
             strategy=s,
             model=model_map.get(s),
+            rl_model=args.rl_model if s == "risk_aware" else None,
+            risk_config=args.risk_aware_config if s == "risk_aware" else None,
             out_json=out_json,
             logs_jsonl=logs,
             max_steps_per_episode=int(args.max_steps_per_episode),
@@ -200,6 +217,29 @@ def main() -> int:
             "d_median={delta_vs_baseline_median_ante:.3f}".format(**r)
         )
     (out_dir / "summary.md").write_text("\n".join(md) + "\n", encoding="utf-8")
+
+    best_row = max(summary_rows, key=lambda r: (r["win_rate"], r["avg_ante_reached"], r["median_ante_reached"]))
+    recommended = best_row["strategy"]
+    if "risk_aware" in [r["strategy"] for r in summary_rows] and recommended != "risk_aware":
+        alt = next((r for r in summary_rows if r["strategy"] == "risk_aware"), None)
+        if alt and (float(alt.get("win_rate") or 0) >= float(best_row.get("win_rate") or 0) - 0.02):
+            recommended = "risk_aware"
+    rec_md = [
+        "# Ablation Recommendation",
+        "",
+        f"- recommended_default: {recommended}",
+        f"- baseline: {base_key}",
+        f"- episodes: {args.episodes}",
+        "",
+        "## Rationale",
+        f"Best performer by win_rate/avg_ante/median_ante: {best_row['strategy']}. "
+        + ("risk_aware is recommended when similar win_rate and better risk control." if recommended == "risk_aware" else ""),
+        "",
+        "## Risk note",
+        "In production, high-uncertainty states may fall back to hybrid or heuristic; use risk_aware policy when available for automatic fallback.",
+        "",
+    ]
+    (out_dir / "recommendation.md").write_text("\n".join(rec_md) + "\n", encoding="utf-8")
 
     print(json.dumps({"status": "ok", "out_dir": str(out_dir), "baseline": base_key}, ensure_ascii=False))
     return 0
