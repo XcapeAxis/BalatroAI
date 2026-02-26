@@ -1,0 +1,11 @@
+{
+  "median_ante_delta_threshold": 0.5,
+  "avg_ante_delta_threshold": 0.3,
+  "critical_bucket_regression_max_pct_points": 5.0,
+  "critical_buckets": [
+    "boss_blind_specific",
+    "econ_collapse",
+    "resource_exhausted"
+  ],
+  "use_ci_lower_bound_guard": true
+}
