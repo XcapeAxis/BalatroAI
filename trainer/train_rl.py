@@ -173,9 +173,9 @@ def _collect_online(
     max_steps = int(cfg.get("max_steps_per_episode") or 180)
     online_steps_target = int(cfg.get("online_steps") or 400)
     if mode == "smoke":
-        episodes = min(episodes, 8)
-        max_steps = min(max_steps, 120)
-        online_steps_target = min(online_steps_target, 220)
+        episodes = min(episodes, 12)
+        max_steps = min(max_steps, 140)
+        online_steps_target = min(online_steps_target, 320)
 
     model.eval()
     collected = 0

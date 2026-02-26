@@ -1,8 +1,8 @@
 # P16 Status
 
 - status: PASS
-- updated_at_utc: 2026-02-25T15:45:47.772267+00:00
-- latest_artifact_dir: docs\artifacts\p16\20260225-154048
+- updated_at_utc: 2026-02-26T04:27:43.673740+00:00
+- latest_artifact_dir: docs\artifacts\p16\20260226-042234
 - drift_mismatch_count: 0
 - hand_records: 200
 - shop_records: 50

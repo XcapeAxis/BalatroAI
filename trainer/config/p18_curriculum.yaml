@@ -1,23 +1,23 @@
 {
   "stakes": ["white", "green", "black", "blue", "purple", "orange", "gold"],
   "sampling_weights": {
-    "white": 1.2,
+    "white": 1.1,
     "green": 1.0,
     "black": 1.0,
     "blue": 0.9,
     "purple": 0.8,
-    "orange": 0.7,
-    "gold": 0.6
+    "orange": 0.9,
+    "gold": 1.0
   },
   "ante_buckets": ["1-2", "3-4", "5-6", "7+"],
   "boss_buckets": ["none", "normal", "hard"],
   "failure_bucket_priority": {
-    "blind_score_shortfall": 1.0,
-    "resource_exhausted": 1.1,
-    "econ_collapse": 1.3,
+    "blind_score_shortfall": 1.4,
+    "resource_exhausted": 1.2,
+    "econ_collapse": 1.2,
     "shop_misplay": 1.1,
     "boss_blind_specific": 1.2,
-    "phase_stall": 1.0,
+    "phase_stall": 1.3,
     "other": 1.0
   },
   "schedule": [
@@ -25,15 +25,18 @@
       "name": "stage0_easy",
       "mode": "easy_heavy",
       "stake_weight_overrides": {
-        "white": 1.6,
-        "green": 1.4,
-        "gold": 0.4
+        "white": 1.4,
+        "green": 1.2,
+        "gold": 0.8
       }
     },
     {
       "name": "stage1_mixed",
       "mode": "mixed",
-      "stake_weight_overrides": {}
+      "stake_weight_overrides": {
+        "gold": 1.2,
+        "orange": 1.1
+      }
     },
     {
       "name": "stage2_gold_failure",
