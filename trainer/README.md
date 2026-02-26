@@ -1,4 +1,4 @@
-﻿# Trainer Pipeline (Balatro + balatrobot HTTP / simulator)
+# Trainer Pipeline (Balatro + balatrobot HTTP / simulator)
 
 This directory provides a modular trainer scaffold for hand-level behavior cloning:
 
@@ -139,6 +139,25 @@ python trainer/infer_assistant.py \
   --model trainer_runs/bc_v1/best.pt \
   --execute
 ```
+
+## Regression gates (P18 / P19)
+
+Layered regression is driven from the repo root:
+
+- **P18** (RL pilot + ablation 100 + champion decision + DAgger v3 + canary):  
+  `powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP18`
+- **P19** (risk-aware controller + calibration + champion v3 rollback + ablation 100/1000 + DAgger v4 + canary):  
+  `powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP19`
+- **P19 quick gate** (skip 1000-seed milestone):  
+  `powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP19 -SkipMilestone1000`
+
+P19 requires P18 to have run at least once (for baseline and champion model). See `docs/P19_SPEC.md` for gate definitions, artifact layout, and `-RunPerfGateOnly`.
+
+**Regression tests** (strategy routing, gate decision schema, canary synthetic label):  
+`python -m unittest trainer.tests.test_ablation_and_gates -v`
+
+**Avoiding hangs:** For long or flaky runs, wrap in **safe_run** so the process is killed after a timeout and stdout/stderr are written to `.safe_run/logs/`. From repo root:  
+`powershell -ExecutionPolicy Bypass -File scripts\safe_run.ps1 -TimeoutSec 1200 -- powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP18`
 
 ## Common Errors
 
