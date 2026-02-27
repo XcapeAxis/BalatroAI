@@ -1,0 +1,44 @@
+---
+description: Project execution protocol — plan, implement, verify, summary; minimal change; debug and experiment discipline
+alwaysApply: true
+---
+
+# Project Protocol
+
+## 1. General execution protocol
+
+- **Non-trivial tasks**: Plan first. List: goal, files to change, verification method, risks. Then implement.
+- **After implementation**: Must verify (test / smoke / static check / small run). Report failures; do not claim "done" without verification.
+- **Output format**: Always include: changed files, commands to run, verification result, risks and follow-ups.
+
+## 2. Code and change principles
+
+- **Minimal change**: Prefer local edits; control blast radius.
+- **Readability**: Clear names and structure over cleverness.
+- **Preserve architecture**: Do not refactor unless the task explicitly asks.
+- **Tests**: When changing logic, add or update tests if a test framework exists (e.g. pytest). Prefer fixing tests over deleting them.
+
+## 3. Debug protocol
+
+1. **Reproduce** the failure (steps, env, inputs).
+2. **Rank hypotheses** (most likely first).
+3. **Minimal instrumentation** (logs, asserts, small repro).
+4. **Confirm root cause** before changing behavior.
+5. **Fix** and **regress** (re-run relevant tests or checks).
+
+## 4. Experiment / evaluation discipline
+
+- Define: **fixed variables**, **varying variables**, **metrics**, **acceptance criteria**, **where to record results**.
+- Conclusions: Separate **facts** (observed numbers, logs) from **inference** (interpretation) and **recommendations** (next steps).
+- Do not state "improved" or "better" without measurable evidence.
+
+## 5. Git discipline
+
+- Do not commit unless the user asks.
+- If committing: small, logical commits with clear messages.
+- Do not rewrite history (e.g. force-push, rebase) unless explicitly requested.
+
+## 6. Training / experiment projects (this repo)
+
+- When changing training, evaluation, or experiment logic: provide **suggested verification command** and **metrics** (e.g. pytest path, small ablation command).
+- Do not pull large data or artifacts (e.g. full runs, big checkpoints) into index context; reference paths and summaries instead.

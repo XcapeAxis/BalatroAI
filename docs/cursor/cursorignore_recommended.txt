@@ -1,0 +1,77 @@
+# Recommended .cursorignore content (copy to repo root if .cursorignore is not writable by agent)
+# === Virtual envs and build ===
+.venv/
+venv/
+.venv_trainer/
+.env
+
+# === Trainer / sweep data and artifacts ===
+trainer_data/
+trainer_runs/
+trainer_data/**/*.jsonl
+trainer_data/**/*.lock
+
+# === Logs and runtime ===
+logs/
+runtime/
+.safe_run/
+*.log
+*.tmp
+*.pid
+.tmp/
+
+# === Docs artifacts ===
+docs/artifacts/
+
+# === Sim runtime and temp fixtures ===
+sim/runtime/
+sim/tests/fixtures_runtime/
+
+# === Mechanics data ===
+balatro_mechanics/raw/
+balatro_mechanics/intermediate/
+balatro_mechanics/tmp/
+balatro_mechanics/**/*.jsonl
+balatro_mechanics/**/*.parquet
+balatro_mechanics/**/*.tmp
+
+# === Sweep and local scratch ===
+sweep_raw/
+sweep_*_raw/
+sweep_results*.csv
+sweep_*.csv
+local_scratch/
+local_only/
+
+# === Python / tool caches ===
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# === Binary weights and large binaries ===
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.onnx
+
+# === JS/TS build (if present) ===
+node_modules/
+dist/
+build/
+.next/
+.turbo/
+
+# === OS and IDE ===
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
+
+# === Other ===
+Balatro_Mechanics_CSV_UPDATED_*/
+trainer/config.json
+*.bak

@@ -1,0 +1,68 @@
+﻿# === 铏氭嫙鐜涓庢瀯寤?===
+.venv/
+venv/
+.venv_trainer/
+.env
+
+# === 澶ф暟鎹笌璁粌浜х墿锛堝噺灏戠储寮曞櫔闊筹級===
+trainer_data/
+trainer_runs/
+trainer_data/**/*.jsonl
+trainer_data/**/*.lock
+
+# === 鏃ュ織涓庤繍琛屾椂 ===
+logs/
+runtime/
+.safe_run/
+*.log
+*.tmp
+*.pid
+.tmp/
+
+# === 瀹為獙/璇勪及浜х墿锛堝ぇ銆佸彲鍐嶇敓鎴愶級===
+docs/artifacts/
+
+# === 妯℃嫙鍣ㄨ繍琛屾椂涓庝复鏃?fixture ===
+sim/runtime/
+sim/tests/fixtures_runtime/
+
+# === 鍔涘鏁版嵁锛氫粎鎺掗櫎澶?鍙啀鐢熸垚锛屼繚鐣?derived 涓?manifest ===
+balatro_mechanics/raw/
+balatro_mechanics/intermediate/
+balatro_mechanics/tmp/
+balatro_mechanics/**/*.jsonl
+balatro_mechanics/**/*.parquet
+balatro_mechanics/**/*.tmp
+
+# === Sweep 涓庢湰鍦颁复鏃?===
+sweep_raw/
+sweep_*_raw/
+sweep_results*.csv
+sweep_*.csv
+local_scratch/
+local_only/
+
+# === Python/宸ュ叿缂撳瓨 ===
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# === 浜岃繘鍒舵潈閲嶄笌澶у瀷浜岃繘鍒讹紙涓嶇储寮曪級===
+*.pt
+*.ckpt
+*.bin
+*.onnx
+
+# === 绯荤粺涓?IDE ===
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
+
+# === 鍏朵粬锛堜笌 .gitignore 瀵归綈锛?==
+Balatro_Mechanics_CSV_UPDATED_*/
+trainer/config.json
+*.bak

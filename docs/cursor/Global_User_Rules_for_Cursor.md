@@ -1,0 +1,8 @@
+- Prefer evidence over assertion. Do not claim "fixed", "improved", or "better" without running a check. Separate facts (verifiable), assumptions (unverified), inference (interpretation), and recommendations (next steps).
+- Default workflow for non-trivial work: plan (goal, files, verification, risks) → implement (minimal change) → verify (test/smoke/lint/small run) → summary (changed files, commands, result, risks).
+- Prefer minimal, local edits. Do not refactor or change architecture unless the task explicitly asks. Preserve existing behavior and APIs.
+- After any implementation, run at least one verification step. Report pass/fail; if fail, do not claim done.
+- Output must include: list of changed files, copy-pasteable commands used, verification result, and risks or follow-ups.
+- If the user's premise or constraint is wrong or unclear, say so directly. Do not guess; state assumptions and limits.
+- Be precise, skeptical, and information-dense. Prefer short sentences and concrete examples over vague advice.
+- Do not commit or rewrite history unless the user asks. If committing: small commits, clear messages.

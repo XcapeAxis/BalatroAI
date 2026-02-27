@@ -84,9 +84,9 @@ runtime/**
 Balatro_Mechanics_CSV_UPDATED_20260219/
 
 
-# Cursor IDE
-.cursor/
-.cursorignore
+# Cursor IDE (uncomment to exclude from repo; keep tracked for project bootstrap)
+# .cursor/
+# .cursorignore
 
 # Local scratch (non-reproducible personal notes/temp files)
 local_scratch/
