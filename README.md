@@ -50,7 +50,7 @@ flowchart LR
 ## Prerequisites
 
 - **Python**: 3.12 or 3.13 (recommended). 3.15 alpha may be unstable for long runs.
-- **balatrobot** and Balatro (with lovely `version.dll`). Windows path examples: [项目和命令使用指南.md](项目和命令使用指南.md).
+- **balatrobot** and Balatro (with lovely `version.dll`). Windows path examples: [USAGE_GUIDE.md](USAGE_GUIDE.md).
 - Install dependencies (from repo root):
 
 ```bash
@@ -99,7 +99,7 @@ The repo includes a clean-room Python simulator and an oracle pipeline that quer
 - **benchmark_balatrobot.py**: Single/multi-instance throughput and latency; optional `--launch-instances` with `direct` or `uvx`.
 - **sweep_throughput.py**: Multi-instance sweeps and summary CSV (e.g. `sweep_results.csv`, `sweep_results_summary.csv`).
 
-Command examples: [项目和命令使用指南.md](项目和命令使用指南.md) (sections 2 and 3).
+Command examples: [USAGE_GUIDE.md](USAGE_GUIDE.md) (sections 2 and 3).
 
 ## Regression & Tests
 
@@ -114,7 +114,7 @@ Deploy packages follow the v1 spec: directory layout, metadata, checksums, expor
 ## Documentation
 
 - **Specs**: P15–P20, SIM_ALIGNMENT_STATUS, DEPLOY_PACKAGE_SPEC under `docs/`.
-- **Chinese usage guide**: [项目和命令使用指南.md](项目和命令使用指南.md).
+- **Usage guide**: [USAGE_GUIDE.md](USAGE_GUIDE.md).
 
 ## License & Contributing
 

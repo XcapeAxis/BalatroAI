@@ -1,107 +1,107 @@
-﻿# 项目和命令使用指南
+# Project and Commands Usage Guide
 
-本指南面向当前目录 `D:\我的\小丑牌AI`，汇总项目现有功能与可直接运行的命令。
+This guide is for the project root directory and summarizes available features and runnable commands.
 
-## 0. 约定与目录
+## 0. Conventions and Directory
 
-- 请始终在项目根目录执行命令：`D:\我的\小丑牌AI`
-- 主要模块：
-  - `benchmark_balatrobot.py`：单/多实例吞吐与延迟压测
-  - `sweep_throughput.py`：批量扫描 instances 曲线
-  - `trainer/`：数据采样、BC 训练、评估、推理助手
-  - `sim/`：模拟器 + oracle 对齐 + 差分回归
+- Always run commands from the **project root directory**.
+- Main modules:
+  - `benchmark_balatrobot.py`: Single/multi-instance throughput and latency benchmarks
+  - `sweep_throughput.py`: Batch instance sweep and curves
+  - `trainer/`: Data collection, BC training, evaluation, inference assistant
+  - `sim/`: Simulator + oracle alignment + diff regression
 
-## 1. BalatroBot 服务启动
+## 1. BalatroBot Service Startup
 
-先确认游戏路径：
+Confirm game paths first:
 
 - Balatro: `D:\SteamLibrary\steamapps\common\Balatro\Balatro.exe`
 - Lovely: `D:\SteamLibrary\steamapps\common\Balatro\version.dll`
 
-### 1.1 手动启动（推荐 direct）
+### 1.1 Manual start (recommended: direct)
 
 ```powershell
 balatrobot serve --headless --fast --port 12346 --love-path "D:\SteamLibrary\steamapps\common\Balatro\Balatro.exe" --lovely-path "D:\SteamLibrary\steamapps\common\Balatro\version.dll"
 ```
 
-### 1.2 手动启动（uvx）
+### 1.2 Manual start (uvx)
 
 ```powershell
 uvx balatrobot serve --headless --fast --port 12346 --love-path "D:\SteamLibrary\steamapps\common\Balatro\Balatro.exe" --lovely-path "D:\SteamLibrary\steamapps\common\Balatro\version.dll"
 ```
 
-### 1.3 健康检查
+### 1.3 Health check
 
 ```powershell
 python -c "import requests;print(requests.post('http://127.0.0.1:12346',json={'id':1,'jsonrpc':'2.0','method':'health','params':{}},timeout=5).text)"
 ```
 
-## 2. Benchmark（吞吐与延迟）
+## 2. Benchmark (throughput and latency)
 
-### 2.1 基础单实例
+### 2.1 Single instance (basic)
 
 ```powershell
 python benchmark_balatrobot.py --instances 1 --steps-per-instance 100 --mode action_only
 ```
 
-### 2.2 RL 语义模式
+### 2.2 RL semantic mode
 
 ```powershell
 python benchmark_balatrobot.py --instances 1 --steps-per-instance 100 --mode rl_step
 ```
 
-### 2.3 多实例（已手动启动实例）
+### 2.3 Multi-instance (instances already started manually)
 
 ```powershell
 python benchmark_balatrobot.py --instances 4 --ports 12346,12347,12348,12349 --steps-per-instance 100 --mode action_only
 ```
 
-### 2.4 多实例自动拉起（direct）
+### 2.4 Multi-instance auto-launch (direct)
 
 ```powershell
 python benchmark_balatrobot.py --launch-instances --launcher direct --balatrobot-cmd balatrobot --instances 2 --steps-per-instance 100 --base-url http://127.0.0.1 --love-path "D:\SteamLibrary\steamapps\common\Balatro\Balatro.exe" --lovely-path "D:\SteamLibrary\steamapps\common\Balatro\version.dll"
 ```
 
-### 2.5 多实例自动拉起（uvx）
+### 2.5 Multi-instance auto-launch (uvx)
 
 ```powershell
 python benchmark_balatrobot.py --launch-instances --launcher uvx --uvx-path uvx --instances 2 --steps-per-instance 100 --base-url http://127.0.0.1 --love-path "D:\SteamLibrary\steamapps\common\Balatro\Balatro.exe" --lovely-path "D:\SteamLibrary\steamapps\common\Balatro\version.dll"
 ```
 
-## 3. Sweep（instances 扫描）
+## 3. Sweep (instance scan)
 
-### 3.1 快速验收 sweep（低成本）
+### 3.1 Quick acceptance sweep (low cost)
 
 ```powershell
 python sweep_throughput.py --instances 1,3,5 --repeats 1 --steps-per-instance 50 --mode action_only --launch-instances --launcher direct --balatrobot-cmd balatrobot --love-path "D:\SteamLibrary\steamapps\common\Balatro\Balatro.exe" --lovely-path "D:\SteamLibrary\steamapps\common\Balatro\version.dll" --raw-dir sweep_raw_quick
 ```
 
-### 3.2 完整 sweep（含 rl_step）
+### 3.2 Full sweep (including rl_step)
 
 ```powershell
 python sweep_throughput.py --instances 1,2,4,8 --repeats 3 --steps-per-instance 200 --mode both --launch-instances --launcher direct --balatrobot-cmd balatrobot --love-path "D:\SteamLibrary\steamapps\common\Balatro\Balatro.exe" --lovely-path "D:\SteamLibrary\steamapps\common\Balatro\version.dll" --csv-out sweep_results.csv --raw-dir sweep_raw_full
 ```
 
-输出重点：
+Output highlights:
 
-- 明细 CSV：`sweep_results.csv`
-- 汇总 CSV：`sweep_results_summary.csv`
+- Detail CSV: `sweep_results.csv`
+- Summary CSV: `sweep_results_summary.csv`
 
-## 4. Trainer（rollout -> train -> eval -> infer）
+## 4. Trainer (rollout -> train -> eval -> infer)
 
-### 4.1 一键搭环境（独立 venv）
+### 4.1 One-click environment setup (dedicated venv)
 
 ```powershell
 .\trainer\scripts\setup_trainer_env.ps1
 ```
 
-### 4.2 一键 E2E smoke
+### 4.2 One-click E2E smoke
 
 ```powershell
 .\trainer\scripts\smoke_e2e.ps1 --base-urls "http://127.0.0.1:12346"
 ```
 
-### 4.3 手动分步（real backend）
+### 4.3 Manual steps (real backend)
 
 ```powershell
 .venv_trainer\Scripts\python.exe trainer\rollout.py --backend real --base-urls http://127.0.0.1:12346 --episodes 20 --restart-on-fail --out trainer_data\dataset_real.jsonl
@@ -123,7 +123,7 @@ python sweep_throughput.py --instances 1,2,4,8 --repeats 3 --steps-per-instance 
 .venv_trainer\Scripts\python.exe trainer\infer_assistant.py --backend real --base-url http://127.0.0.1:12346 --model trainer_runs\bc_v1\best.pt --topk 3 --once
 ```
 
-离线评估关注指标：
+Offline evaluation metrics of interest:
 
 - `top1`
 - `top3`
@@ -131,9 +131,9 @@ python sweep_throughput.py --instances 1,2,4,8 --repeats 3 --steps-per-instance 
 - `random_top3`
 - `top3_lift`
 
-## 5. Simulator + Oracle（sim）
+## 5. Simulator + Oracle (sim)
 
-### 5.1 20 步 oracle/sim 对齐 demo
+### 5.1 20-step oracle/sim alignment demo
 
 ```powershell
 .venv_trainer\Scripts\python.exe sim\oracle\run_oracle_trace.py --base-url http://127.0.0.1:12346 --seed AAAAAAA --action-trace sim\tests\fixtures\action_trace_20.jsonl --out sim\runtime\oracle_trace.jsonl --snapshot-every 10
@@ -147,19 +147,19 @@ python sweep_throughput.py --instances 1,2,4,8 --repeats 3 --steps-per-instance 
 .venv_trainer\Scripts\python.exe sim\tests\test_oracle_diff.py --oracle-trace sim\runtime\oracle_trace.jsonl --sim-trace sim\runtime\sim_trace.jsonl --scope hand_core --fail-fast
 ```
 
-### 5.2 Directed fixture（从 snapshot 重放）
+### 5.2 Directed fixture (replay from snapshot)
 
 ```powershell
 .venv_trainer\Scripts\python.exe sim\tests\run_directed_fixture.py --oracle-snapshot sim\tests\fixtures_runtime\start_snapshot_p0_01_pair_play.json --action-trace sim\tests\fixtures_directed\action_trace_p0_01_pair_play.jsonl --out-trace sim\runtime\directed_p0_01_sim_trace.jsonl
 ```
 
-### 5.3 自动构建 P0 oracle fixtures + diff 报告
+### 5.3 Auto-build P0 oracle fixtures + diff report
 
 ```powershell
 .venv_trainer\Scripts\python.exe sim\oracle\batch_build_p0_oracle_fixtures.py --base-url http://127.0.0.1:12346 --out-dir sim\tests\fixtures_runtime\oracle_p0 --scope score_core --max-steps 80 --seed AAAAAAA
 ```
 
-生成重点：
+Output highlights:
 
 - `oracle_start_snapshot_*.json`
 - `action_trace_*.jsonl`
@@ -167,9 +167,9 @@ python sweep_throughput.py --instances 1,2,4,8 --repeats 3 --steps-per-instance 
 - `sim_trace_*.jsonl`
 - `report_p0.json`
 
-## 6. 直接可跑的“命令合集”
+## 6. Ready-to-run command sets
 
-### 6.1 最小全链路（推荐先跑）
+### 6.1 Minimal full pipeline (recommended first run)
 
 ```powershell
 python benchmark_balatrobot.py --instances 1 --steps-per-instance 30 --mode action_only
@@ -177,7 +177,7 @@ python sweep_throughput.py --instances 1,3 --repeats 1 --steps-per-instance 30 -
 .\trainer\scripts\smoke_e2e.ps1 --base-urls "http://127.0.0.1:12346"
 ```
 
-### 6.2 sim/oracle 回归合集
+### 6.2 sim/oracle regression set
 
 ```powershell
 .venv_trainer\Scripts\python.exe sim\oracle\generate_p0_trace.py --base-url http://127.0.0.1:12346 --target p0_01_straight --out-dir sim\tests\fixtures_runtime\oracle_p0
@@ -185,37 +185,36 @@ python sweep_throughput.py --instances 1,3 --repeats 1 --steps-per-instance 30 -
 .venv_trainer\Scripts\python.exe sim\tests\run_directed_fixture.py --oracle-snapshot sim\tests\fixtures_runtime\oracle_p0\oracle_start_snapshot_p0_01_straight.json --action-trace sim\tests\fixtures_runtime\oracle_p0\action_trace_p0_01_straight.jsonl --oracle-trace sim\tests\fixtures_runtime\oracle_p0\oracle_trace_p0_01_straight.jsonl --scope score_core --fail-fast --out-trace sim\tests\fixtures_runtime\oracle_p0\sim_trace_p0_01_straight.jsonl
 ```
 
-## 7. 常见问题排查
+## 7. Troubleshooting
 
 ### 7.1 `WinError 10061` / connection refused
 
-- 实例崩溃或端口未就绪。
-- 降低并发 `--instances`，增加 `--stagger-start`。
-- 检查 `logs\` 下对应端口日志。
+- Instance crashed or port not ready.
+- Reduce concurrency `--instances`, add `--stagger-start`.
+- Check logs under `logs\` for the corresponding port.
 
-### 7.2 Python 3.15 alpha 下 torch 安装失败
+### 7.2 torch install failure on Python 3.15 alpha
 
-- 使用：
-  - `.\trainer\scripts\setup_trainer_env.ps1`
-- 脚本会优先尝试 `py -3.12` / `py -3.14` 创建 `.venv_trainer`。
+- Use: `.\trainer\scripts\setup_trainer_env.ps1`
+- The script will try `py -3.12` / `py -3.14` first to create `.venv_trainer`.
 
-### 7.3 自动拉起后窗口残留过多
+### 7.3 Too many leftover windows after auto-launch
 
-- 优先用脚本托管方式跑 benchmark/rollout，并确保命令正常退出。
-- 必要时手动清理：
+- Prefer script-managed benchmark/rollout and ensure commands exit cleanly.
+- If needed, clean up manually:
 
 ```powershell
 taskkill /F /IM Balatro.exe
 taskkill /F /IM balatrobot.exe
 ```
 
-### 7.4 路径与数据落盘
+### 7.4 Paths and data layout
 
-- 本项目数据与产物统一放在 `D:\我的\小丑牌AI` 内（如 `logs/`、`trainer_data/`、`trainer_runs/`、`sim/runtime/`）。
+- Project data and artifacts are under the project root (e.g. `logs/`, `trainer_data/`, `trainer_runs/`, `sim/runtime/`).
 
 ---
 
-更多细节可参考：
+For more detail, see:
 
 - `trainer/README.md`
 - `sim/README.md`

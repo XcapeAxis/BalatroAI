@@ -2,12 +2,12 @@
 
 - status: PASS
 - updated_at_utc: 2026-02-26T09:15:50.3323698Z
-- latest_artifact_dir: D:\我的\BalatroAI\docs\artifacts\p17\20260226-170839
+- latest_artifact_dir: D:\BalatroAI\docs\artifacts\p17\20260226-170839
 - functional_gate: PASS
 - perf_gate: PASS
 - decision: promote
-- champion_model: D:\我的\BalatroAI\trainer_runs\p18_bc_dagger_v3\best.pt
-- challenger_model: D:\我的\BalatroAI\trainer_runs\p17_pv_smoke\best.pt
+- champion_model: D:\BalatroAI\trainer_runs\p18_bc_dagger_v3\best.pt
+- challenger_model: D:\BalatroAI\trainer_runs\p17_pv_smoke\best.pt
 
 ## P17–P19 completion plan (downstream)
 

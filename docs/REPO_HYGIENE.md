@@ -1,7 +1,7 @@
-﻿# REPO_HYGIENE
+# REPO_HYGIENE
 
 Generated: 2026-02-19
-Working directory: `D:\我的\小丑牌AI`
+Working directory: project root (e.g. `D:\BalatroAI`)
 Branch: `chore/repo-hygiene-after-p3v2`
 
 ## 1. Findings (pre-clean)
@@ -25,7 +25,7 @@ Branch: `chore/repo-hygiene-after-p3v2`
 - Untracked sim/source/spec/test docs and fixtures:
   - `sim/core/*.py`, `sim/spec/*`, `sim/pybind/*`, `sim/tests/*`, `sim/oracle/*`
 - Project usage guide:
-  - `项目和命令使用指南.md`
+  - `USAGE_GUIDE.md`
 
 ### C) Local-only uncertain files
 - `BALATRO_RULES_AND_MECHANICS.md`
