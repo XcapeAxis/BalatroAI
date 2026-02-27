@@ -1,10 +1,10 @@
-# P20 Status
+﻿# P20 Status
 
-- status: PENDING
-- updated_at_utc: (will be updated by run_p20_smoke.ps1)
-- latest_artifact_dir: (will be updated by run_p20_smoke.ps1)
-- functional_gate: PENDING
-- perf_gate: PENDING
-- reliability_gate: PENDING
-- release_gate: PENDING
-- decision: PENDING
+- status: FAIL
+- updated_at_utc: 2026-02-27T06:29:56.8326396Z
+- latest_artifact_dir: D:\MYFILES\BalatroAI\docs\artifacts\p20\20260227-141507
+- functional_gate: PASS
+- perf_gate: FAIL
+- reliability_gate: PASS
+- release_gate: PASS
+- decision: reject
