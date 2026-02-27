@@ -24,13 +24,40 @@ def _sha256(path: Path) -> str:
 
 
 REQUIRED_ENTRIES = ["metadata.json", "checksums.json", "model", "config"]
+DEFAULT_METADATA_REQUIRED_KEYS = ["package_id", "model_id", "source_strategy", "git_commit", "created_at"]
+DEFAULT_ALLOWED_STRATEGIES = ["pv", "hybrid", "rl", "risk_aware", "deploy_student"]
+
+
+def _load_schema(schema_path: Path | None = None) -> dict[str, Any]:
+    path = schema_path or (Path(__file__).resolve().parent / "package_schema_v1.json")
+    if not path.exists():
+        return {
+            "schema_version": "fallback_v1",
+            "required_entries": REQUIRED_ENTRIES,
+            "metadata_required_keys": DEFAULT_METADATA_REQUIRED_KEYS,
+            "allowed_strategies": DEFAULT_ALLOWED_STRATEGIES,
+        }
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {
+            "schema_version": "fallback_v1",
+            "required_entries": REQUIRED_ENTRIES,
+            "metadata_required_keys": DEFAULT_METADATA_REQUIRED_KEYS,
+            "allowed_strategies": DEFAULT_ALLOWED_STRATEGIES,
+        }
+    return payload if isinstance(payload, dict) else {}
 
 
 def verify_package(pkg_dir: Path) -> dict[str, Any]:
     issues: list[str] = []
+    schema = _load_schema()
+    required_entries = list(schema.get("required_entries") or schema.get("required") or REQUIRED_ENTRIES)
+    metadata_required_keys = list(schema.get("metadata_required_keys") or DEFAULT_METADATA_REQUIRED_KEYS)
+    allowed_strategies = [str(x) for x in (schema.get("allowed_strategies") or DEFAULT_ALLOWED_STRATEGIES)]
 
     # 1) Required entries
-    for name in REQUIRED_ENTRIES:
+    for name in required_entries:
         target = pkg_dir / name
         if not target.exists():
             issues.append(f"missing required entry: {name}")
@@ -43,10 +70,15 @@ def verify_package(pkg_dir: Path) -> dict[str, Any]:
             metadata = json.loads(meta_path.read_text(encoding="utf-8"))
         except Exception as e:
             issues.append(f"metadata.json parse error: {e}")
-        required_keys = ["package_id", "model_id", "source_strategy", "git_commit", "created_at"]
-        for k in required_keys:
+        for k in metadata_required_keys:
             if k not in metadata:
                 issues.append(f"metadata.json missing key: {k}")
+        strategy = str(metadata.get("source_strategy") or "")
+        if strategy and strategy not in allowed_strategies:
+            issues.append(f"metadata.json source_strategy unsupported: {strategy}")
+        meta_schema = str(metadata.get("schema") or "")
+        if meta_schema and meta_schema != "deploy_package_v1":
+            issues.append(f"metadata.json schema mismatch: {meta_schema}")
 
     # 3) checksums
     ck_path = pkg_dir / "checksums.json"
@@ -79,6 +111,7 @@ def verify_package(pkg_dir: Path) -> dict[str, Any]:
     passed = len(issues) == 0
     return {
         "schema": "package_verify_report_v1",
+        "spec_schema": str(schema.get("schema_version") or schema.get("title") or "package_schema_v1"),
         "package_dir": str(pkg_dir),
         "package_id": metadata.get("package_id", "unknown"),
         "passed": passed,

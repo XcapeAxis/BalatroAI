@@ -1,0 +1,28 @@
+{
+  "schema_version": "deploy_package_spec_v1",
+  "required_entries": [
+    "metadata.json",
+    "checksums.json",
+    "model",
+    "config",
+    "metrics",
+    "README.md"
+  ],
+  "metadata_required_keys": [
+    "schema",
+    "package_id",
+    "model_id",
+    "source_strategy",
+    "git_commit",
+    "created_at",
+    "compatibility",
+    "seed_files"
+  ],
+  "allowed_strategies": [
+    "pv",
+    "hybrid",
+    "rl",
+    "risk_aware",
+    "deploy_student"
+  ]
+}

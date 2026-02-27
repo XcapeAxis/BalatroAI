@@ -37,21 +37,33 @@ def _load_model(model_path: str | None, torch, nn, max_actions: int, max_shop_ac
     if not model_path or not Path(model_path).exists():
         return None
     ckpt = torch.load(model_path, map_location=device, weights_only=False)
-    if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
+    state = ckpt.get("model_state_dict", ckpt) if isinstance(ckpt, dict) else ckpt
+    if not isinstance(state, dict):
+        return None
+    keys = list(state.keys())
+
+    # PolicyValueModel: hand_policy_head, shop_policy_head
+    if any(k.startswith("hand_policy_head") for k in keys):
+        from trainer.models.policy_value import PolicyValueModel
+        model = PolicyValueModel(max_actions, max_shop_actions)
+        model.load_state_dict(state, strict=True)
+        model.to(device)
+        model.eval()
+        return model
+
+    # BC multi-head: hand_head, shop_head
+    if any(k.startswith("hand_head") or k.startswith("shop_head") for k in keys):
         from trainer.eval_long_horizon import _build_multi_model
         model = _build_multi_model(nn, max_actions, max_shop_actions)
-        model.load_state_dict(ckpt["model_state_dict"])
-    elif isinstance(ckpt, dict) and any(k.startswith("hand_head") or k.startswith("shop_") for k in ckpt):
-        from trainer.eval_long_horizon import _build_multi_model
-        model = _build_multi_model(nn, max_actions, max_shop_actions)
-        model.load_state_dict(ckpt)
-    else:
-        from trainer.eval_long_horizon import _build_hand_model
-        model = _build_hand_model(nn, max_actions)
-        if isinstance(ckpt, dict) and "model_state_dict" in ckpt:
-            model.load_state_dict(ckpt["model_state_dict"])
-        else:
-            model.load_state_dict(ckpt)
+        model.load_state_dict(state, strict=True)
+        model.to(device)
+        model.eval()
+        return model
+
+    # BC hand-only
+    from trainer.eval_long_horizon import _build_hand_model
+    model = _build_hand_model(nn, max_actions)
+    model.load_state_dict(state, strict=False)
     model.to(device)
     model.eval()
     return model
@@ -77,7 +89,8 @@ def _model_topk(model, state, phase: str, torch, device, k: int, max_actions: in
             }
             with torch.no_grad():
                 if hasattr(model, "forward_hand"):
-                    logits = model.forward_hand(batch)
+                    out = model.forward_hand(batch)
+                    logits = out[0] if isinstance(out, (tuple, list)) else out
                 else:
                     logits = model(batch)
             legal = state.get("legal_action_ids") or list(range(max_actions))
@@ -96,7 +109,8 @@ def _model_topk(model, state, phase: str, torch, device, k: int, max_actions: in
             batch = {"shop_context": torch.tensor([ctx], dtype=torch.float32, device=device)}
             with torch.no_grad():
                 if hasattr(model, "forward_shop"):
-                    logits = model.forward_shop(batch)
+                    out = model.forward_shop(batch)
+                    logits = out[0] if isinstance(out, (tuple, list)) else out
                 else:
                     return []
             legal = state.get("shop_legal_action_ids") or list(range(max_shop_actions))
@@ -111,14 +125,54 @@ def _model_topk(model, state, phase: str, torch, device, k: int, max_actions: in
         return []
 
 
+def _expert_to_action_dict(state: dict[str, Any], decision: Any) -> dict[str, Any]:
+    if decision is None:
+        return {"action_type": "WAIT"}
+
+    action_type = str(getattr(decision, "action_type", "") or "").upper()
+    mask_int = getattr(decision, "mask_int", None)
+    if action_type and mask_int is not None:
+        hand = (state.get("hand") or {}).get("cards") or []
+        hand_size = min(len(hand), action_space.MAX_HAND)
+        if hand_size > 0:
+            return {
+                "action_type": action_type,
+                "indices": action_space.mask_to_indices(int(mask_int), hand_size),
+            }
+
+    macro_action = str(getattr(decision, "macro_action", "") or "").upper()
+    if macro_action:
+        out = {"action_type": macro_action}
+        out.update(dict(getattr(decision, "macro_params", None) or {}))
+        return out
+
+    return {"action_type": "WAIT"}
+
+
+def _shop_decision_to_action_dict(decision: Any) -> dict[str, Any]:
+    action = getattr(decision, "action", None)
+    if isinstance(action, dict) and action:
+        return dict(action)
+    return {"action_type": "WAIT"}
+
+
 def _heuristic_topk(state, phase: str, k: int) -> list[int]:
     try:
         if phase == "HAND":
-            act = choose_action(state)
-            return [act] if act is not None else []
+            decision = choose_action(state)
+            hand = (state.get("hand") or {}).get("cards") or []
+            hand_size = min(len(hand), action_space.MAX_HAND)
+            if hand_size > 0 and getattr(decision, "action_type", None) and getattr(decision, "mask_int", None) is not None:
+                aid = action_space.encode(hand_size, str(decision.action_type).upper(), int(decision.mask_int))
+                return [int(aid)]
+            legal = state.get("legal_action_ids") or action_space.legal_action_ids(hand_size)
+            return [int(a) for a in legal[: max(1, k)] if isinstance(a, int) or str(a).isdigit()]
         else:
-            act = choose_shop_action(state)
-            return [act] if act is not None else []
+            decision = choose_shop_action(state)
+            if getattr(decision, "action_id", None) is not None:
+                return [int(decision.action_id)]
+            legal = state.get("shop_legal_action_ids") or action_space_shop.legal_action_ids(state)
+            return [int(a) for a in legal[: max(1, k)] if isinstance(a, int) or str(a).isdigit()]
     except Exception:
         return []
 
@@ -189,35 +243,45 @@ def main() -> int:
 
             seed_val = rng.randrange(1, 2**31 - 1)
             try:
-                state = backend.new_round(stake=args.stake, seed=str(seed_val))
+                state = backend.reset(seed=str(seed_val))
+                if str(args.stake or "").strip().lower() not in ("", "white"):
+                    state, _, _, _ = backend.step({
+                        "action_type": "START",
+                        "seed": str(seed_val),
+                        "stake": str(args.stake).upper(),
+                    })
             except Exception as e:
-                logger.warning(f"ep={ep} new_round failed: {e}")
+                logger.warning(f"ep={ep} reset/start failed: {e}")
                 continue
 
             for step in range(args.max_steps_per_episode):
                 if state.get("done"):
                     break
-                phase_raw = str(state.get("phase") or "")
+                phase_raw = str(state.get("phase") or state.get("state") or "")
                 if phase_raw == "SELECTING_HAND":
                     phase = "HAND"
                 elif phase_raw in ("SHOP", "SMODS_BOOSTER_OPENED"):
                     phase = "SHOP"
                 else:
                     try:
-                        state = backend.step(choose_action(state))
+                        d = choose_action(state)
+                        act_dict = _expert_to_action_dict(state, d)
+                        state, _, _, _ = backend.step(act_dict)
                     except Exception:
                         break
                     continue
 
                 if phase == "HAND" and hand_count >= args.hand_target_samples:
                     try:
-                        state = backend.step(choose_action(state))
+                        d = choose_action(state)
+                        act_dict = _expert_to_action_dict(state, d)
+                        state, _, _, _ = backend.step(act_dict)
                     except Exception:
                         break
                     continue
                 if phase == "SHOP" and shop_count >= args.shop_target_samples:
                     try:
-                        state = backend.step(choose_shop_action(state))
+                        state, _, _, _ = backend.step(_shop_decision_to_action_dict(choose_shop_action(state)))
                     except Exception:
                         break
                     continue
@@ -283,11 +347,23 @@ def main() -> int:
 
                 try:
                     if phase == "HAND":
-                        act = teacher_topk[0] if teacher_topk else choose_action(state)
-                        state = backend.step(act)
+                        act_id = teacher_topk[0] if teacher_topk else None
+                        if act_id is not None:
+                            hand = (state.get("hand") or {}).get("cards") or []
+                            hand_size = min(len(hand), action_space.MAX_HAND)
+                            atype, mask_int = action_space.decode(hand_size, int(act_id))
+                            act_dict = {"action_type": atype, "indices": action_space.mask_to_indices(mask_int, hand_size)}
+                        else:
+                            d = choose_action(state)
+                            act_dict = _expert_to_action_dict(state, d)
+                        state, _, _, _ = backend.step(act_dict)
                     else:
-                        act = teacher_topk[0] if teacher_topk else choose_shop_action(state)
-                        state = backend.step(act)
+                        act_id = teacher_topk[0] if teacher_topk else None
+                        if act_id is not None:
+                            act_dict = action_space_shop.action_from_id(state, int(act_id))
+                        else:
+                            act_dict = _shop_decision_to_action_dict(choose_shop_action(state))
+                        state, _, _, _ = backend.step(act_dict)
                 except Exception:
                     break
 

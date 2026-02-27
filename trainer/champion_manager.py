@@ -94,6 +94,11 @@ def _failure_rate(payload: dict[str, Any], key: str) -> float:
     return (cnt / episodes) * 100.0
 
 
+def _canary_status_pass(status: str) -> bool:
+    token = str(status or "").strip().upper()
+    return token in {"PASS", "SKIP", "SKIPPED"}
+
+
 def main() -> int:
     args = _build_parser().parse_args()
     reg_root = Path(args.registry_root)
@@ -162,7 +167,7 @@ def main() -> int:
 
     canary_payload = _read_json(Path(args.canary_summary)) if args.canary_summary else {}
     canary_status = str(canary_payload.get("status") or "UNKNOWN").upper() if canary_payload else "MISSING"
-    canary_pass = canary_status in {"PASS", "SKIPPED"}
+    canary_pass = _canary_status_pass(canary_status)
 
     rollback_on_perf_streak = int(rules.get("rollback_on_perf_fail_streak", 2))
     rollback_canary_div_threshold = float(rules.get("rollback_on_canary_divergence_threshold", 0.45))

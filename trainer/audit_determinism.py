@@ -71,9 +71,19 @@ def _load_episode_logs(path: Path) -> list[dict[str, Any]]:
 
 def _extract_action_trace(episodes: list[dict[str, Any]]) -> list[list[int | str]]:
     """Extract per-episode action sequences for determinism comparison."""
+    def _normalize_actions(value: Any) -> list[Any]:
+        if value is None:
+            return []
+        if isinstance(value, (list, tuple)):
+            return list(value)
+        # Some pipelines persist only top1 action id per step/episode.
+        return [value]
+
     traces: list[list[int | str]] = []
     for ep in episodes:
-        actions = ep.get("actions") or ep.get("action_trace") or []
+        actions = _normalize_actions(ep.get("actions"))
+        if not actions:
+            actions = _normalize_actions(ep.get("action_trace"))
         if not actions:
             steps = ep.get("steps") or []
             actions = [s.get("action") for s in steps if s.get("action") is not None]
