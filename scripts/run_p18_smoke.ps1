@@ -11,6 +11,9 @@ $ErrorActionPreference = "Stop"
 
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $ProjectRoot
+$safeRunScript = Join-Path $ProjectRoot "scripts/safe_run.ps1"
+if (-not (Test-Path $safeRunScript)) { throw "[P18] missing safe_run script: $safeRunScript" }
+$safeRunRuns = New-Object System.Collections.Generic.List[object]
 
 function Write-Json([string]$Path, $Obj) {
   $dir = Split-Path -Parent $Path
@@ -18,12 +21,33 @@ function Write-Json([string]$Path, $Obj) {
   ($Obj | ConvertTo-Json -Depth 16) | Out-File -LiteralPath $Path -Encoding UTF8
 }
 
+function Get-StepTimeoutSec([string]$Label, [string[]]$CmdArgs) {
+  $joined = (($CmdArgs | ForEach-Object { [string]$_ }) -join " ").ToLowerInvariant()
+  if ($joined.Contains("--episodes 500")) { return 1800 }
+  return 1200
+}
+
 function Run-Step([string]$Label, [string]$Exe, [string[]]$CmdArgs) {
   $filtered = @($CmdArgs | Where-Object { $_ -ne $null -and $_ -ne "" })
-  Write-Host "[$Label] $Exe $($filtered -join ' ')"
-  $out = & $Exe @filtered 2>&1
+  $timeoutSec = Get-StepTimeoutSec -Label $Label -CmdArgs $filtered
+  $safeDir = Join-Path $artifactDir "safe_run"
+  if (-not (Test-Path $safeDir)) { New-Item -ItemType Directory -Path $safeDir -Force | Out-Null }
+  $safeLabel = ($Label -replace "[^A-Za-z0-9._-]", "_")
+  $summaryPath = Join-Path $safeDir ("{0}_{1}.summary.json" -f (Get-Date -Format "yyyyMMdd_HHmmss_fff"), $safeLabel)
+  $safeArgs = @(
+    "-ExecutionPolicy","Bypass",
+    "-File",$safeRunScript,
+    "-TimeoutSec",$timeoutSec,
+    "-NoEcho",
+    "-TailLines","120",
+    "-SummaryJson",$summaryPath,
+    $Exe
+  ) + $filtered
+  Write-Host "[$Label] via safe_run timeout=${timeoutSec}s :: $Exe $($filtered -join ' ')"
+  $out = & powershell @safeArgs 2>&1
   $code = $LASTEXITCODE
   if ($out) { $out | ForEach-Object { Write-Host $_ } }
+  $safeRunRuns.Add([ordered]@{ label = $Label; timeout_sec = $timeoutSec; summary = $summaryPath; exit_code = $code })
   if ($code -ne 0) {
     throw "[$Label] failed with exit code $code"
   }
@@ -300,6 +324,7 @@ try {
     gate_functional = (Join-Path $artifactDir "gate_functional.json")
     gate_perf = (Join-Path $artifactDir "gate_perf.json")
     gate_rl_smoke = (Join-Path $artifactDir "gate_rl_smoke.json")
+    safe_run_runs = @($safeRunRuns.ToArray())
   }
 
   if (($gatePerf.status -ne "PASS") -and $FailOnPerfGate) {

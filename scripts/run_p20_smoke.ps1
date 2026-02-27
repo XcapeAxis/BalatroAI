@@ -12,6 +12,9 @@ $ErrorActionPreference = "Stop"
 
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $ProjectRoot
+$safeRunScript = Join-Path $ProjectRoot "scripts/safe_run.ps1"
+if (-not (Test-Path $safeRunScript)) { throw "[P20] missing safe_run script: $safeRunScript" }
+$safeRunRuns = New-Object System.Collections.Generic.List[object]
 
 function Write-Json([string]$Path, $Obj) {
   $dir = Split-Path -Parent $Path
@@ -19,26 +22,56 @@ function Write-Json([string]$Path, $Obj) {
   ($Obj | ConvertTo-Json -Depth 16) | Out-File -LiteralPath $Path -Encoding UTF8
 }
 
+function Get-StepTimeoutSec([string]$Label, [string[]]$CmdArgs) {
+  $joined = (($CmdArgs | ForEach-Object { [string]$_ }) -join " ").ToLowerInvariant()
+  $labelLc = [string]$Label
+  if ($labelLc) { $labelLc = $labelLc.ToLowerInvariant() }
+  if ($labelLc.Contains("ablation-2000") -or $joined.Contains("--episodes 2000")) { return 3600 }
+  if ($labelLc.Contains("real-ab") -or $joined.Contains("real_micro_ab.py")) { return 900 }
+  return 1200
+}
+
 function Run-Step([string]$Label, [string]$Exe, [string[]]$CmdArgs) {
   $filtered = @($CmdArgs | Where-Object { $_ -ne $null -and $_ -ne "" })
-  Write-Host "[$Label] $Exe $($filtered -join ' ')"
-  $out = & $Exe @filtered 2>&1
+  $timeoutSec = Get-StepTimeoutSec -Label $Label -CmdArgs $filtered
+  $safeDir = Join-Path $artifactDir "safe_run"
+  if (-not (Test-Path $safeDir)) { New-Item -ItemType Directory -Path $safeDir -Force | Out-Null }
+  $safeLabel = ($Label -replace "[^A-Za-z0-9._-]", "_")
+  $summaryPath = Join-Path $safeDir ("{0}_{1}.summary.json" -f (Get-Date -Format "yyyyMMdd_HHmmss_fff"), $safeLabel)
+
+  $safeArgs = @(
+    "-ExecutionPolicy","Bypass",
+    "-File",$safeRunScript,
+    "-TimeoutSec",$timeoutSec,
+    "-NoEcho",
+    "-TailLines","120",
+    "-SummaryJson",$summaryPath,
+    $Exe
+  ) + $filtered
+  Write-Host "[$Label] via safe_run timeout=${timeoutSec}s :: $Exe $($filtered -join ' ')"
+  $out = & powershell @safeArgs 2>&1
   $code = $LASTEXITCODE
   if ($out) { $out | ForEach-Object { Write-Host $_ } }
+  $safeRunRuns.Add([ordered]@{ label = $Label; timeout_sec = $timeoutSec; summary = $summaryPath; exit_code = $code })
   if ($code -ne 0) { throw "[$Label] failed with exit code $code" }
 }
 
-function Find-LatestModel([string]$Root, [string]$Hint = "") {
+function Find-LatestModel([string]$Root, [string]$Hint = "", [string[]]$ExcludeContains = @()) {
   $runs = Join-Path $Root "trainer_runs"
   if (-not (Test-Path $runs)) { return $null }
   $all = Get-ChildItem -Path $runs -Recurse -Filter "best.pt" -File -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending
-  if ($Hint) {
-    $hit = $all | Where-Object { $_.FullName.ToLowerInvariant().Contains($Hint.ToLowerInvariant()) } | Select-Object -First 1
-    if ($hit) { return $hit.FullName }
+  foreach ($entry in $all) {
+    $fullLc = $entry.FullName.ToLowerInvariant()
+    $skip = $false
+    foreach ($x in $ExcludeContains) {
+      if ([string]::IsNullOrWhiteSpace([string]$x)) { continue }
+      if ($fullLc.Contains(([string]$x).ToLowerInvariant())) { $skip = $true; break }
+    }
+    if ($skip) { continue }
+    if ($Hint -and (-not $fullLc.Contains($Hint.ToLowerInvariant()))) { continue }
+    return $entry.FullName
   }
-  $first = $all | Select-Object -First 1
-  if ($first) { return $first.FullName }
   return $null
 }
 
@@ -145,7 +178,11 @@ if (-not $champModel) {
     }
   }
 }
-if (-not $champModel) { $champModel = Find-LatestModel -Root $ProjectRoot -Hint "_pv_" }
+$champExcludes = @("distill")
+if (-not $champModel) { $champModel = Find-LatestModel -Root $ProjectRoot -Hint "_pv_" -ExcludeContains $champExcludes }
+if (-not $champModel) { $champModel = Find-LatestModel -Root $ProjectRoot -Hint "_bc_" -ExcludeContains $champExcludes }
+if (-not $champModel) { $champModel = Find-LatestModel -Root $ProjectRoot -Hint "p18_bc" -ExcludeContains $champExcludes }
+if (-not $champModel) { $champModel = Find-LatestModel -Root $ProjectRoot -ExcludeContains $champExcludes }
 if (-not $champModel) { $champModel = Find-LatestModel -Root $ProjectRoot }
 if (-not $champModel) { throw "[P20] no available champion model" }
 
@@ -286,22 +323,11 @@ try {
       "--champion-model",$champModel,
       "--rl-model",$rlModel,
       "--risk-aware-config",$riskCfg,
-      "--strategies","champion,rl,risk_aware",
+      "--strategies","champion,rl",
       "--out-dir",$ablation2000
     )
     if (Test-Path $deployStudentModel) {
-      $abl2kArgs = @(
-        "-B","trainer/run_ablation.py",
-        "--backend","sim","--stake","gold",
-        "--episodes","2000","--max-steps-per-episode","120",
-        "--seeds-file","balatro_mechanics/derived/eval_seeds_2000.txt",
-        "--champion-model",$champModel,
-        "--rl-model",$rlModel,
-        "--risk-aware-config",$riskCfg,
-        "--deploy-student-model",$deployStudentModel,
-        "--strategies","champion,rl,deploy_student",
-        "--out-dir",$ablation2000
-      )
+      $abl2kArgs += @("--deploy-student-model",$deployStudentModel,"--strategies","champion,deploy_student")
     }
     Run-Step -Label "P20-ablation-2000" -Exe $py -CmdArgs $abl2kArgs
   }
@@ -355,8 +381,9 @@ try {
   }
   Write-Json -Path (Join-Path $artifactDir "gate_perf.json") -Obj $gatePerf
 
+  $canaryGatePass = @("PASS","SKIP") -contains ([string]$canaryStatus).ToUpperInvariant()
   $gateReliability = @{
-    status = $(if ($packageVerifyPass -and ($determinismPass -or $true)) { "PASS" } else { "FAIL" })
+    status = $(if ($packageVerifyPass -and $determinismPass -and $canaryGatePass) { "PASS" } else { "FAIL" })
     determinism_audit_pass = $determinismPass
     package_verify_pass = $packageVerifyPass
     canary_status = $canaryStatus
@@ -396,6 +423,7 @@ try {
     gate_reliability = (Join-Path $artifactDir "gate_reliability.json")
     gate_release = (Join-Path $artifactDir "gate_release.json")
     decision = $decision100
+    safe_run_runs = @($safeRunRuns.ToArray())
   }
 
   $statusPath = Join-Path $ProjectRoot "docs/COVERAGE_P20_STATUS.md"

@@ -32,6 +32,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $ProjectRoot
+$safeRunScript = Join-Path $ProjectRoot "scripts/safe_run.ps1"
+if (-not (Test-Path $safeRunScript)) { throw "missing safe_run script: $safeRunScript" }
+$safeRunLogDir = Join-Path $ProjectRoot ".safe_run/regressions"
+if (-not (Test-Path $safeRunLogDir)) { New-Item -ItemType Directory -Path $safeRunLogDir -Force | Out-Null }
 
 # P15 gate builds on top of P14.
 if ($RunP15) { $RunP14 = $true }
@@ -105,12 +109,49 @@ function Ensure-Service([string]$Url, [bool]$ForceRestart = $false) {
   Start-ServiceProc -Url $Url
 }
 
+function Get-SafeRunTimeoutSec([string]$Label, [string[]]$Args) {
+  $joined = (($Args | ForEach-Object { [string]$_ }) -join " ").ToLowerInvariant()
+  $labelLc = [string]$Label
+  if ($labelLc) { $labelLc = $labelLc.ToLowerInvariant() }
+  if ($joined.Contains("--episodes 2000") -or $labelLc.Contains("p20") -or $labelLc.Contains("ablation-2000")) { return 3600 }
+  if ($joined.Contains("real_micro_ab.py") -or $labelLc.Contains("real-ab")) { return 900 }
+  return 1200
+}
+
 function Run-Py([string]$Label, [string[]]$PyArgs) {
-  Write-Host "[$Label] running: python $($PyArgs -join ' ')"
-  $o = & python @PyArgs 2>&1
+  $timeoutSec = Get-SafeRunTimeoutSec -Label $Label -Args $PyArgs
+  $safeLabel = ($Label -replace "[^A-Za-z0-9._-]", "_")
+  $summaryPath = Join-Path $safeRunLogDir ("{0}_{1}.summary.json" -f (Get-Date -Format "yyyyMMdd_HHmmss_fff"), $safeLabel)
+  $safeArgs = @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $safeRunScript,
+    "-TimeoutSec", $timeoutSec,
+    "-NoEcho",
+    "-TailLines", "120",
+    "-SummaryJson", $summaryPath,
+    "python"
+  ) + $PyArgs
+  Write-Host "[$Label] via safe_run timeout=${timeoutSec}s: python $($PyArgs -join ' ')"
+  $o = & powershell @safeArgs 2>&1
   $code = $LASTEXITCODE
   if ($o) { $o | ForEach-Object { Write-Host $_ } }
-  return @{ Code = $code; Text = ($o -join "`n") }
+
+  $text = ""
+  if (Test-Path $summaryPath) {
+    try {
+      $sum = Get-Content $summaryPath -Raw | ConvertFrom-Json
+      $stdoutPath = [string]($sum.stdout_log)
+      $stderrPath = [string]($sum.stderr_log)
+      $stdoutText = if ($stdoutPath -and (Test-Path $stdoutPath)) { Get-Content -LiteralPath $stdoutPath -Raw -ErrorAction SilentlyContinue } else { "" }
+      $stderrText = if ($stderrPath -and (Test-Path $stderrPath)) { Get-Content -LiteralPath $stderrPath -Raw -ErrorAction SilentlyContinue } else { "" }
+      $text = ($stdoutText + $(if ($stderrText) { "`n" + $stderrText } else { "" }))
+    } catch {
+      $text = ($o -join "`n")
+    }
+  } else {
+    $text = ($o -join "`n")
+  }
+  return @{ Code = $code; Text = $text; Summary = $summaryPath }
 }
 
 function Run-PyStrict([string]$Label, [string[]]$PyArgs) {
@@ -133,6 +174,26 @@ function Run-WithRecovery([string]$Label, [string[]]$PyArgs, [string]$Url) {
     return
   }
   throw "[$Label] failed (non-recoverable)"
+}
+
+function Invoke-SafeRunStep([string]$Label, [string]$Exe, [string[]]$CmdArgs, [int]$TimeoutSec = 1200) {
+  $safeLabel = ($Label -replace "[^A-Za-z0-9._-]", "_")
+  $summaryPath = Join-Path $safeRunLogDir ("{0}_{1}.summary.json" -f (Get-Date -Format "yyyyMMdd_HHmmss_fff"), $safeLabel)
+  $safeArgs = @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $safeRunScript,
+    "-TimeoutSec", $TimeoutSec,
+    "-NoEcho",
+    "-TailLines", "120",
+    "-SummaryJson", $summaryPath,
+    $Exe
+  ) + $CmdArgs
+  Write-Host "[$Label] via safe_run timeout=${TimeoutSec}s: $Exe $($CmdArgs -join ' ')"
+  $o = & powershell @safeArgs 2>&1
+  $code = $LASTEXITCODE
+  if ($o) { $o | ForEach-Object { Write-Host $_ } }
+  if ($code -ne 0) { throw "[$Label] failed with exit code $code" }
+  return $summaryPath
 }
 
 function Persist-ArtifactSet([string]$Prefix, [string]$ReportPath, [string]$ProjectRootPath, [string[]]$ExtraDocs) {
@@ -623,10 +684,7 @@ if ($RunP15) {
     throw "[P15] missing script: $p15SmokeScript"
   }
   Write-Host "[P15] running smoke gate (search->pv->eval)"
-  & powershell -ExecutionPolicy Bypass -File $p15SmokeScript -BaseUrl $BaseUrl -Seed $Seed
-  if ($LASTEXITCODE -ne 0) {
-    throw "[P15] smoke gate failed"
-  }
+  $null = Invoke-SafeRunStep -Label "P15-smoke" -Exe "powershell" -CmdArgs @("-ExecutionPolicy","Bypass","-File",$p15SmokeScript,"-BaseUrl",$BaseUrl,"-Seed",$Seed) -TimeoutSec 1200
 }
 
 if ($RunP16) {
@@ -679,10 +737,7 @@ if ($RunP17 -or $RunPerfGateV2) {
     $p17Args += "-RunPerfGateOnly"
     $p17Args += "-FailOnPerfGate"
   }
-  & powershell @p17Args
-  if ($LASTEXITCODE -ne 0) {
-    throw "[P17] smoke gate failed"
-  }
+  $null = Invoke-SafeRunStep -Label "P17-smoke" -Exe "powershell" -CmdArgs $p17Args -TimeoutSec 1200
 }
 
 if ($RunP18 -or $RunPerfGateV3) {
@@ -701,10 +756,7 @@ if ($RunP18 -or $RunPerfGateV3) {
     $p18Args += "-RunPerfGateOnly"
     $p18Args += "-FailOnPerfGate"
   }
-  & powershell @p18Args
-  if ($LASTEXITCODE -ne 0) {
-    throw "[P18] smoke gate failed"
-  }
+  $null = Invoke-SafeRunStep -Label "P18-smoke" -Exe "powershell" -CmdArgs $p18Args -TimeoutSec 1200
 }
 
 if ($RunP19 -or $RunPerfGateV4) {
@@ -726,10 +778,7 @@ if ($RunP19 -or $RunPerfGateV4) {
   if ($SkipMilestone1000) {
     $p19Args += "-SkipMilestone1000"
   }
-  & powershell @p19Args
-  if ($LASTEXITCODE -ne 0) {
-    throw "[P19] smoke gate failed"
-  }
+  $null = Invoke-SafeRunStep -Label "P19-smoke" -Exe "powershell" -CmdArgs $p19Args -TimeoutSec 1200
 }
 
 if ($RunP20 -or $RunPerfGateV5) {
@@ -751,10 +800,7 @@ if ($RunP20 -or $RunPerfGateV5) {
   if ($SkipMilestone2000) {
     $p20Args += "-SkipMilestone2000"
   }
-  & powershell @p20Args
-  if ($LASTEXITCODE -ne 0) {
-    throw "[P20] smoke gate failed"
-  }
+  $null = Invoke-SafeRunStep -Label "P20-smoke" -Exe "powershell" -CmdArgs $p20Args -TimeoutSec 3600
 }
 
 if ($GitSync) {
@@ -763,13 +809,9 @@ if ($GitSync) {
     throw "[GitSync] missing script: $gitSyncScript"
   }
   Write-Host "[GitSync] running dry-run sync preview"
-  & powershell -ExecutionPolicy Bypass -File $gitSyncScript -DryRun:$true
-  if ($LASTEXITCODE -ne 0) {
-    throw "[GitSync] dry-run failed"
-  }
+  $null = Invoke-SafeRunStep -Label "GitSync-dry-run" -Exe "powershell" -CmdArgs @("-ExecutionPolicy","Bypass","-File",$gitSyncScript,"-DryRun:$true") -TimeoutSec 600
   Write-Host "[GitSync] dry-run complete. To execute push/delete: powershell -ExecutionPolicy Bypass -File scripts/git_sync.ps1 -DryRun:`$false"
 }
-
 
 
 
