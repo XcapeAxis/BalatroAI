@@ -34,8 +34,8 @@ function Invoke-GitCapture([string[]]$GitArgs) {
   }
 }
 
-function Invoke-PowerShellFile([string]$Label, [string]$FilePath, [string[]]$Args) {
-  $cmd = @("-ExecutionPolicy", "Bypass", "-File", $FilePath) + $Args
+function Invoke-PowerShellFile([string]$Label, [string]$FilePath, [string[]]$ScriptArgs) {
+  $cmd = @("-ExecutionPolicy", "Bypass", "-File", $FilePath) + $ScriptArgs
   Write-Host ("[" + $Label + "] powershell " + ($cmd -join " "))
   $res = Invoke-CmdCapture -Script { & powershell @cmd }
   if ($res.output) { $res.output | ForEach-Object { Write-Host $_ } }
@@ -131,7 +131,7 @@ $highestFlag = "-RunP$highest"
 
 $baselineArgs = @($highestFlag)
 if ($RequireMainBranch) { $baselineArgs += "-RequireMainBranch" }
-$baselineResult = Invoke-PowerShellFile -Label "P21-baseline" -FilePath $runRegressions -Args $baselineArgs
+$baselineResult = Invoke-PowerShellFile -Label "P21-baseline" -FilePath $runRegressions -ScriptArgs $baselineArgs
 $baselineSummary = [ordered]@{
   schema = "p21_baseline_summary_v1"
   generated_at = (Get-Date).ToString("o")
@@ -156,20 +156,20 @@ Write-JsonFile -Path (Join-Path $artifactDir "baseline_summary.json") -Object $b
 ) | Out-File -LiteralPath (Join-Path $artifactDir "baseline_summary.md") -Encoding UTF8
 
 $cleanupScript = Join-Path $ProjectRoot "scripts/git_branch_cleanup_mainline.ps1"
-$cleanupDry = Invoke-PowerShellFile -Label "P21-cleanup-dryrun" -FilePath $cleanupScript -Args @("-RepoRoot", $ProjectRoot, "-DryRun:$true", "-ForceDelete:$true", "-WriteReport:$true", "-ArtifactTimestamp", $stamp)
-$cleanupReal = Invoke-PowerShellFile -Label "P21-cleanup-real" -FilePath $cleanupScript -Args @("-RepoRoot", $ProjectRoot, "-DryRun:$false", "-ForceDelete:$true", "-WriteReport:$true", "-ArtifactTimestamp", $stamp)
+$cleanupDry = Invoke-PowerShellFile -Label "P21-cleanup-dryrun" -FilePath $cleanupScript -ScriptArgs @("-RepoRoot", $ProjectRoot, "-DryRun:$true", "-ForceDelete:$true", "-WriteReport:$true", "-ArtifactTimestamp", $stamp)
+$cleanupReal = Invoke-PowerShellFile -Label "P21-cleanup-real" -FilePath $cleanupScript -ScriptArgs @("-RepoRoot", $ProjectRoot, "-DryRun:$false", "-ForceDelete:$true", "-WriteReport:$true", "-ArtifactTimestamp", $stamp)
 
 $statusScript = Join-Path $ProjectRoot "scripts/git_mainline_status.ps1"
 $statusJsonPath = Join-Path $artifactDir "git_mainline_status.json"
-$statusRes = Invoke-PowerShellFile -Label "P21-mainline-status" -FilePath $statusScript -Args @("-RepoRoot", $ProjectRoot, "-OutputPath", $statusJsonPath)
+$statusRes = Invoke-PowerShellFile -Label "P21-mainline-status" -FilePath $statusScript -ScriptArgs @("-RepoRoot", $ProjectRoot, "-OutputPath", $statusJsonPath)
 $mainlineStatus = Read-JsonOrNull -Path $statusJsonPath
 
 $shortArgs = @("-RunFast")
 if ($RequireMainBranch) { $shortArgs += "-RequireMainBranch" }
-$shortResult = Invoke-PowerShellFile -Label "P21-short-gate" -FilePath $runRegressions -Args $shortArgs
+$shortResult = Invoke-PowerShellFile -Label "P21-short-gate" -FilePath $runRegressions -ScriptArgs $shortArgs
 
 $gitSyncScript = Join-Path $ProjectRoot "scripts/git_sync.ps1"
-$gitSyncRes = Invoke-PowerShellFile -Label "P21-gitsync-dryrun" -FilePath $gitSyncScript -Args @("-DryRun:$true")
+$gitSyncRes = Invoke-PowerShellFile -Label "P21-gitsync-dryrun" -FilePath $gitSyncScript -ScriptArgs @("-DryRun:$true")
 $latestGitSync = Get-LatestGitSyncReportPath -ProjectRootPath $ProjectRoot
 $gitSyncReportDest = Join-Path $artifactDir "git_sync_dryrun_report.json"
 if (-not [string]::IsNullOrWhiteSpace($latestGitSync) -and (Test-Path $latestGitSync)) {
