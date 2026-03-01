@@ -180,7 +180,7 @@ if ($currentBranch -ne $mainBranch) {
   $currentBranch = $mainBranch
 }
 
-$branchesBefore = Get-LocalBranches
+$branchesBefore = @(Get-LocalBranches)
 $mergedList = Get-MergedTo -TargetBranch $mainBranch
 $mergedMap = @{}
 foreach ($m in $mergedList) { $mergedMap[$m] = $true }
@@ -215,7 +215,7 @@ foreach ($branchName in $deleteCandidates) {
   }
 }
 
-$branchesAfter = Get-LocalBranches
+$branchesAfter = @(Get-LocalBranches)
 $remainingUnexpected = @($branchesAfter | Where-Object { -not $keepSet.Contains($_) })
 $status = "PASS"
 $exitCode = 0
