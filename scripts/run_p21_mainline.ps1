@@ -198,13 +198,20 @@ if ($gitSyncRes.code -ne 0) {
 }
 $gitSyncPass = ($gitSyncRes.code -eq 0) -or $gitSyncNetworkTolerated
 
+$workingTreeCleanNow = [bool]$(if ($mainlineStatus) { $mainlineStatus.working_tree_clean } else { $false })
+$canCommitNow = [bool]$(if ($mainlineStatus) { $mainlineStatus.can_commit_now } else { $false })
+$canCommitWhenCleanPass = $true
+if ($workingTreeCleanNow) {
+  $canCommitWhenCleanPass = $canCommitNow
+}
+
 $functionalPass = ($baselineResult.code -eq 0 -and $shortResult.code -eq 0)
 $workflowPass = (
   $cleanupDry.code -eq 0 -and
   $cleanupReal.code -eq 0 -and
   $onlyMainRemains -and
   $mainlineStatus -ne $null -and
-  [bool]$mainlineStatus.can_commit_now -and
+  [bool]$canCommitWhenCleanPass -and
   (Test-Path $beforePath) -and
   (Test-Path $afterPath) -and
   (Test-Path $summaryPath) -and
@@ -234,8 +241,9 @@ $gateGit = [ordered]@{
   status = $(if ($workflowPass) { "PASS" } else { "FAIL" })
   checks = [ordered]@{
     local_only_main_branch = [bool]$onlyMainRemains
-    can_commit_now = [bool]$(if ($mainlineStatus) { $mainlineStatus.can_commit_now } else { $false })
-    working_tree_clean = [bool]$(if ($mainlineStatus) { $mainlineStatus.working_tree_clean } else { $false })
+    can_commit_now = [bool]$canCommitNow
+    working_tree_clean = [bool]$workingTreeCleanNow
+    can_commit_when_clean_pass = [bool]$canCommitWhenCleanPass
     git_sync_dryrun_ok = [bool]$gitSyncPass
     git_sync_network_tolerated = [bool]$gitSyncNetworkTolerated
     cleanup_reports_present = [bool]((Test-Path $beforePath) -and (Test-Path $afterPath) -and (Test-Path $summaryPath))

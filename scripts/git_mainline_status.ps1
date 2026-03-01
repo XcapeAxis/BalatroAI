@@ -66,7 +66,7 @@ $mainBranch = Get-DetectedMainBranch
 $statusLines = (Invoke-GitCapture -GitArgs @("status", "--porcelain")).output
 $statusShort = (Invoke-GitCapture -GitArgs @("status", "--short", "--branch")).output
 $workingTreeClean = (@($statusLines).Count -eq 0)
-$untrackedCount = @($statusLines | Where-Object { $_ -like "?? *" }).Count
+$untrackedCount = @($statusLines | Where-Object { $_ -match "^\?\? " }).Count
 
 $ahead = 0
 $behind = 0
