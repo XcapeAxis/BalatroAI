@@ -14,7 +14,9 @@
   [int]$RetryDelaySeconds = 3,
   [int]$BackoffFactor = 2,
   [switch]$SkipCleanupOnFetchFail = $true,
-  [int]$ExitCodeOnRemoteFail = 2
+  [int]$ExitCodeOnRemoteFail = 2,
+  [bool]$MainlineMode = $true,
+  [switch]$AllowNonMainBranch = $false
 )
 
 Set-StrictMode -Version Latest
@@ -53,6 +55,21 @@ function Test-BranchExistsLocal([string]$BranchName) {
 function Test-BranchExistsRemote([string]$RemoteName, [string]$BranchName) {
   & git show-ref --verify --quiet ("refs/remotes/" + $RemoteName + "/" + $BranchName) 2>$null
   return ($LASTEXITCODE -eq 0)
+}
+
+function Get-DetectedMainBranch([string]$RemoteName) {
+  $ref = @(& git symbolic-ref ("refs/remotes/" + $RemoteName + "/HEAD") 2>$null)
+  if ($LASTEXITCODE -eq 0 -and $ref) {
+    $raw = ([string]$ref[0]).Trim()
+    if ($raw -match "^refs/remotes/" + [regex]::Escape($RemoteName) + "/(.+)$") {
+      return $Matches[1]
+    }
+  }
+  if (Test-BranchExistsLocal "main") { return "main" }
+  if (Test-BranchExistsLocal "master") { return "master" }
+  if (Test-BranchExistsRemote $RemoteName "main") { return "main" }
+  if (Test-BranchExistsRemote $RemoteName "master") { return "master" }
+  return ""
 }
 
 function Test-ProtectedBranch([string]$BranchName, [string[]]$Patterns) {
@@ -146,18 +163,33 @@ $currentBranch = (& git rev-parse --abbrev-ref HEAD).Trim()
 $remoteVerbose = @(& git remote -v 2>&1)
 $remoteNames = @(& git remote 2>$null)
 $hasRemote = $remoteNames -contains $Remote
+$detectedMainBranch = Get-DetectedMainBranch -RemoteName $Remote
 
 $chosenBase = $BaseBranch
 if ([string]::IsNullOrWhiteSpace($chosenBase)) {
-  if (Test-BranchExistsLocal "main") {
-    $chosenBase = "main"
-  } elseif (Test-BranchExistsLocal "master") {
-    $chosenBase = "master"
-  } elseif (Test-BranchExistsRemote $Remote "main") {
-    $chosenBase = "main"
+  if ($MainlineMode -and -not [string]::IsNullOrWhiteSpace($detectedMainBranch)) {
+    $chosenBase = $detectedMainBranch
   } else {
-    $chosenBase = "master"
+    if (Test-BranchExistsLocal "main") {
+      $chosenBase = "main"
+    } elseif (Test-BranchExistsLocal "master") {
+      $chosenBase = "master"
+    } elseif (Test-BranchExistsRemote $Remote "main") {
+      $chosenBase = "main"
+    } else {
+      $chosenBase = "master"
+    }
   }
+}
+
+$branchPolicyViolation = $false
+if ($MainlineMode -and -not [string]::IsNullOrWhiteSpace($detectedMainBranch)) {
+  $branchPolicyViolation = ($currentBranch -ne $detectedMainBranch)
+}
+
+$mainlineExecutionBlocked = $false
+if ($MainlineMode -and $branchPolicyViolation -and -not $AllowNonMainBranch) {
+  $mainlineExecutionBlocked = $true
 }
 
 $protectSet = @($ProtectBranches + $currentBranch) | Select-Object -Unique
@@ -180,6 +212,9 @@ $branchCleanupSkippedReason = $null
 
 $localCleanupExecutionAllowed = $true
 if (-not $hasRemote -and -not $dryRunEnabled -and -not $ForceLocalCleanup) {
+  $localCleanupExecutionAllowed = $false
+}
+if ($mainlineExecutionBlocked -and -not $dryRunEnabled) {
   $localCleanupExecutionAllowed = $false
 }
 
@@ -206,6 +241,9 @@ $pullReason = ""
 if ($hasRemote -and ($baseExistsLocal -or $baseExistsRemote)) {
   if ($dryRunEnabled) {
     $pullCanExecute = $false
+  } elseif ($mainlineExecutionBlocked) {
+    $pullCanExecute = $false
+    $pullReason = "mainline policy violation; pass -AllowNonMainBranch to override"
   } elseif ($currentBranch -eq $chosenBase) {
     $pullCanExecute = $true
   } elseif ($workingTreeClean) {
@@ -223,11 +261,11 @@ $planned.pull_base = [ordered]@{
 
 $planned.push_current_branch = [ordered]@{
   command = "git push -u $Remote $currentBranch"
-  will_execute = ($PushCurrentBranch -and $hasRemote -and -not $dryRunEnabled)
+  will_execute = ($PushCurrentBranch -and $hasRemote -and -not $dryRunEnabled -and -not $mainlineExecutionBlocked)
 }
 $planned.push_tags = [ordered]@{
   command = "git push $Remote --tags"
-  will_execute = ($PushTags -and $hasRemote -and -not $dryRunEnabled)
+  will_execute = ($PushTags -and $hasRemote -and -not $dryRunEnabled -and -not $mainlineExecutionBlocked)
 }
 
 $goneCandidates = New-Object System.Collections.Generic.List[string]
@@ -265,9 +303,15 @@ Write-Host ("repo_root: " + $repoRoot)
 Write-Host ("remote: " + $Remote)
 Write-Host ("base_branch: " + $chosenBase)
 Write-Host ("current_branch: " + $currentBranch)
+Write-Host ("mainline_mode: " + $MainlineMode)
+Write-Host ("detected_main_branch: " + $detectedMainBranch)
+Write-Host ("branch_policy_violation: " + $branchPolicyViolation)
 Write-Host ("dry_run: " + $dryRunEnabled)
 if (-not $hasRemote) {
   Write-Host ("remote missing: " + $Remote + ". Configure remote first.")
+}
+if ($mainlineExecutionBlocked) {
+  Write-Host "mainline policy block: non-main branch execution disabled (use -AllowNonMainBranch to override)"
 }
 Write-Host ("planned delete gone: " + (($planned.delete_gone -join ", ") -replace "^$", "<none>"))
 Write-Host ("planned delete merged: " + (($planned.delete_merged -join ", ") -replace "^$", "<none>"))
@@ -303,6 +347,9 @@ if (-not $hasRemote) {
 
 if (-not $fetchSucceeded -and $SkipCleanupOnFetchFail) {
   $branchCleanupSkippedReason = "fetch_failed_skip_cleanup"
+}
+if ($mainlineExecutionBlocked -and -not $branchCleanupSkippedReason) {
+  $branchCleanupSkippedReason = "mainline_policy_violation"
 }
 
 if (-not $baseExistsLocal -and $baseExistsRemote) {
@@ -347,7 +394,7 @@ if ($hasRemote) {
 }
 
 if ($PushCurrentBranch -and $hasRemote) {
-  $canPush = (-not $dryRunEnabled) -and $fetchSucceeded
+  $canPush = (-not $dryRunEnabled) -and $fetchSucceeded -and (-not $mainlineExecutionBlocked)
   $pushBranchResult = Invoke-GitWithRetry -Name "push_current_branch" -Command ("git push -u " + $Remote + " " + $currentBranch) -ShouldExecute $canPush -RetryCountValue $RetryCount -RetryDelaySecondsValue $RetryDelaySeconds -BackoffFactorValue $BackoffFactor
   $executed.Add($pushBranchResult)
   if ($canPush -and -not $pushBranchResult.success) {
@@ -364,7 +411,7 @@ if ($PushCurrentBranch -and $hasRemote) {
 }
 
 if ($PushTags -and $hasRemote) {
-  $canPushTags = (-not $dryRunEnabled) -and $fetchSucceeded
+  $canPushTags = (-not $dryRunEnabled) -and $fetchSucceeded -and (-not $mainlineExecutionBlocked)
   $pushTagsResult = Invoke-GitWithRetry -Name "push_tags" -Command ("git push " + $Remote + " --tags") -ShouldExecute $canPushTags -RetryCountValue $RetryCount -RetryDelaySecondsValue $RetryDelaySeconds -BackoffFactorValue $BackoffFactor
   $executed.Add($pushTagsResult)
   if ($canPushTags -and -not $pushTagsResult.success) {
@@ -404,6 +451,10 @@ $okCount = @($executed | Where-Object { $_.success }).Count
 $failCount = @($executed | Where-Object { -not $_.success }).Count
 
 $summary = [ordered]@{
+  mainline_mode = [bool]$MainlineMode
+  current_branch = $currentBranch
+  detected_main_branch = $detectedMainBranch
+  branch_policy_violation = [bool]$branchPolicyViolation
   remote_exists = $hasRemote
   remote_health = $(if ($hasRemote -and $remoteHealthy) { "ok" } elseif ($hasRemote) { "failed" } else { "missing" })
   dry_run = $dryRunEnabled
@@ -423,6 +474,10 @@ $report = [ordered]@{
   params = [ordered]@{
     remote = $Remote
     base_branch = $chosenBase
+    mainline_mode = [bool]$MainlineMode
+    allow_non_main_branch = [bool]$AllowNonMainBranch
+    detected_main_branch = $detectedMainBranch
+    branch_policy_violation = [bool]$branchPolicyViolation
     push_current_branch = [bool]$PushCurrentBranch
     push_tags = [bool]$PushTags
     prune_remote = [bool]$PruneRemote
@@ -443,6 +498,16 @@ $report = [ordered]@{
     branch_vv = $branchVv
     remote_v = $remoteVerbose
     current_branch = $currentBranch
+    detected_main_branch = $detectedMainBranch
+    branch_policy_violation = [bool]$branchPolicyViolation
+  }
+  mainline_policy = [ordered]@{
+    mainline_mode = [bool]$MainlineMode
+    current_branch = $currentBranch
+    detected_main_branch = $detectedMainBranch
+    branch_policy_violation = [bool]$branchPolicyViolation
+    allow_non_main_branch = [bool]$AllowNonMainBranch
+    execution_blocked = [bool]$mainlineExecutionBlocked
   }
   planned_actions = $planned
   executed_actions = $executed
