@@ -94,3 +94,6 @@ local_only/
 
 # Local persisted regression artifacts (keep on disk, do not commit)
 docs/artifacts/**
+
+# Local one-off helper scripts
+scripts/cursor_fix_transcript_to_jsonl.py
