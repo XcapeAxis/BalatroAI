@@ -90,6 +90,30 @@ function Find-LatestModel([string]$Root, [string]$Hint = "") {
   return $null
 }
 
+function Find-LatestPolicyModel([string]$Root) {
+  $runs = Join-Path $Root "trainer_runs"
+  if (-not (Test-Path $runs)) { return $null }
+  $all = Get-ChildItem -Path $runs -Recurse -Filter "best.pt" -File -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending
+
+  foreach ($c in $all) {
+    $lc = $c.FullName.ToLowerInvariant()
+    if ($lc.Contains("distill")) { continue }
+    if ($lc.Contains("\p18_rl_") -or $lc.Contains("\p19_rl_")) { continue }
+    if ($lc.Contains("_pv_") -or $lc.Contains("_bc_") -or $lc.Contains("pv") -or $lc.Contains("bc_dagger")) {
+      return $c.FullName
+    }
+  }
+
+  foreach ($c in $all) {
+    $lc = $c.FullName.ToLowerInvariant()
+    if ($lc.Contains("distill")) { continue }
+    if ($lc.Contains("\p18_rl_") -or $lc.Contains("\p19_rl_")) { continue }
+    return $c.FullName
+  }
+  return $null
+}
+
 function Find-LatestP18Artifact([string]$Root) {
   $p = Join-Path $Root "docs/artifacts/p18"
   if (-not (Test-Path $p)) { return $null }
@@ -162,6 +186,36 @@ $py = Join-Path $ProjectRoot ".venv_trainer\Scripts\python.exe"
 if (-not (Test-Path $py)) { $py = "python" }
 Ensure-Seeds -DerivedDir (Join-Path $ProjectRoot "balatro_mechanics/derived")
 
+$existingPv = $null
+$runsDir = Join-Path $ProjectRoot "trainer_runs"
+if (Test-Path $runsDir) {
+  $pvCand = Get-ChildItem -Path $runsDir -Recurse -Filter "best.pt" -File -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending |
+    Where-Object { $_.FullName.ToLowerInvariant().Contains("_pv_") } |
+    Select-Object -First 1
+  if ($pvCand) { $existingPv = $pvCand.FullName }
+}
+if (-not $existingPv) {
+  $bootstrapDataset = @(
+    (Join-Path $ProjectRoot "trainer_data/p17_smoke_search.jsonl"),
+    (Join-Path $ProjectRoot "trainer_data/p19_dagger_v4.jsonl"),
+    (Join-Path $ProjectRoot "trainer_data/p18_dagger_v3.jsonl")
+  ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+  if ($bootstrapDataset) {
+    $bootstrapOut = Join-Path $ProjectRoot "trainer_runs/p17_pv_smoke"
+    Write-Host "[P19] no pv model found, bootstrapping p17_pv_smoke"
+    Run-Step -Label "P19-bootstrap-pv" -Exe $py -CmdArgs @(
+      "-B","trainer/train_pv.py",
+      "--train-jsonl",$bootstrapDataset,
+      "--epochs","1",
+      "--batch-size","64",
+      "--out-dir",$bootstrapOut
+    )
+  } else {
+    Write-Host "[P19] warning: no dataset found to bootstrap pv model"
+  }
+}
+
 $champModel = $null
 $p18Root = Join-Path $ProjectRoot "docs/artifacts/p18"
 if (Test-Path $p18Root) {
@@ -176,7 +230,15 @@ if (Test-Path $p18Root) {
     }
   }
 }
-if (-not $champModel) { $champModel = Find-LatestModel -Root $ProjectRoot -Hint "_pv_" }
+if (-not $champModel) {
+  $pvFirst = Get-ChildItem -Path $runsDir -Recurse -Filter "best.pt" -File -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending |
+    Where-Object { $_.FullName.ToLowerInvariant().Contains("_pv_") } |
+    Select-Object -First 1
+  if ($pvFirst) { $champModel = $pvFirst.FullName }
+}
+if (-not $champModel) { $champModel = Find-LatestPolicyModel -Root $ProjectRoot }
+if (-not $champModel) { $champModel = Find-LatestModel -Root $ProjectRoot -Hint "_bc_" }
 if (-not $champModel) { $champModel = Find-LatestModel -Root $ProjectRoot }
 if (-not $champModel) { throw "[P19] no available champion/pv model" }
 

@@ -388,8 +388,36 @@ def main() -> int:
         return 2
 
     model = PolicyValueModel(action_space.max_actions(), action_space_shop.max_actions())
-    state_dict = torch.load(str(warm), map_location="cpu")
-    model.load_state_dict(state_dict, strict=False)
+    loaded = torch.load(str(warm), map_location="cpu")
+    if isinstance(loaded, dict) and "state_dict" in loaded and isinstance(loaded["state_dict"], dict):
+        state_dict = loaded["state_dict"]
+    elif isinstance(loaded, dict):
+        state_dict = loaded
+    else:
+        logger.error("unsupported checkpoint format: %s", warm)
+        return 2
+
+    model_state = model.state_dict()
+    compatible: dict[str, Any] = {}
+    incompatible: list[str] = []
+    for name, tensor in state_dict.items():
+        if name in model_state and tuple(tensor.shape) == tuple(model_state[name].shape):
+            compatible[name] = tensor
+        else:
+            incompatible.append(name)
+
+    load_info = model.load_state_dict(compatible, strict=False)
+    if incompatible:
+        logger.warning(
+            "warm-start partial load: loaded=%d skipped_incompatible=%d checkpoint=%s",
+            len(compatible),
+            len(incompatible),
+            warm,
+        )
+    if load_info.missing_keys:
+        logger.warning("warm-start missing keys: %d", len(load_info.missing_keys))
+    if load_info.unexpected_keys:
+        logger.warning("warm-start unexpected keys: %d", len(load_info.unexpected_keys))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
     opt = torch.optim.AdamW(
@@ -408,8 +436,17 @@ def main() -> int:
     buffer = ReplayBuffer()
     offline_path = Path(str(cfg.get("offline_dataset") or "trainer_data/p17_smoke_search.jsonl"))
     if not offline_path.exists():
-        logger.error("offline dataset missing: %s", offline_path)
-        return 2
+        fallback_candidates = [
+            Path("trainer_data/p18_dagger_v3.jsonl"),
+            Path("trainer_data/p19_dagger_v4.jsonl"),
+            Path("trainer_data/p20_distill_smoke.jsonl"),
+        ]
+        fallback = next((p for p in fallback_candidates if p.exists()), None)
+        if fallback is None:
+            logger.error("offline dataset missing: %s", offline_path)
+            return 2
+        logger.warning("offline dataset missing, fallback to: %s", fallback)
+        offline_path = fallback
     offline_hand, offline_shop = _read_offline_into_buffer(offline_path, buffer)
 
     offline_steps = int(cfg.get("offline_steps") or 600)

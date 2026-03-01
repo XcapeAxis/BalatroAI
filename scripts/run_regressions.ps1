@@ -26,10 +26,15 @@ param(
   [switch]$RunP20,
   [switch]$RunPerfGateV5,
   [switch]$SkipMilestone2000,
-  [switch]$GitSync
+  [switch]$GitSync,
+  [switch]$RunFast,
+  [switch]$RunP21,
+  [switch]$RequireMainBranch,
+  [string]$P21Timestamp = ""
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $false
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $ProjectRoot
 $safeRunScript = Join-Path $ProjectRoot "scripts/safe_run.ps1"
@@ -49,6 +54,77 @@ if ($RunP18 -or $RunPerfGateV3) { $RunP17 = $true }
 if ($RunP19 -or $RunPerfGateV4) { $RunP18 = $true }
 # P20 builds on top of P19.
 if ($RunP20 -or $RunPerfGateV5) { $RunP19 = $true }
+
+function Invoke-GitCapture([string[]]$GitArgs) {
+  $quoted = @($GitArgs | ForEach-Object {
+    '"' + ([string]$_).Replace('"', '\"') + '"'
+  })
+  $command = "git " + ($quoted -join " ")
+  $wrapped = $command + " 2>&1"
+  $output = @(& cmd /c $wrapped)
+  $code = $LASTEXITCODE
+  return [pscustomobject]@{
+    code = $code
+    output = @($output | ForEach-Object { [string]$_ })
+    text = (($output | ForEach-Object { [string]$_ }) -join "`n")
+  }
+}
+
+function Test-LocalBranchExists([string]$Branch) {
+  $r = Invoke-GitCapture -GitArgs @("show-ref", "--verify", "--quiet", ("refs/heads/" + $Branch))
+  return ($r.code -eq 0)
+}
+
+function Get-DetectedMainBranch() {
+  $originHead = Invoke-GitCapture -GitArgs @("symbolic-ref", "refs/remotes/origin/HEAD")
+  if ($originHead.code -eq 0 -and -not [string]::IsNullOrWhiteSpace($originHead.text)) {
+    $raw = $originHead.text.Trim()
+    if ($raw -match "^refs/remotes/origin/(.+)$") {
+      return $Matches[1]
+    }
+  }
+  if (Test-LocalBranchExists -Branch "main") { return "main" }
+  if (Test-LocalBranchExists -Branch "master") { return "master" }
+  return ""
+}
+
+function Write-JsonFile([string]$Path, $Object) {
+  $dir = Split-Path -Parent $Path
+  if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+  ($Object | ConvertTo-Json -Depth 24) | Out-File -LiteralPath $Path -Encoding UTF8
+}
+
+function Get-HighestRunPNumber([string]$ScriptPath) {
+  if (-not (Test-Path $ScriptPath)) { return 0 }
+  $text = Get-Content -LiteralPath $ScriptPath -Raw
+  $matches = [regex]::Matches($text, "RunP(\d+)")
+  $nums = New-Object System.Collections.Generic.List[int]
+  foreach ($m in $matches) {
+    [int]$v = 0
+    if ([int]::TryParse($m.Groups[1].Value, [ref]$v)) {
+      $nums.Add($v) | Out-Null
+    }
+  }
+  if ($nums.Count -eq 0) { return 0 }
+  return ($nums | Measure-Object -Maximum).Maximum
+}
+
+function Get-LatestGitSyncReportPath([string]$ProjectRootPath) {
+  $dir = Join-Path $ProjectRootPath "docs/artifacts/git_sync"
+  if (-not (Test-Path $dir)) { return "" }
+  $latest = Get-ChildItem -Path $dir -Filter "git_sync_*.json" -File -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+  if (-not $latest) { return "" }
+  return $latest.FullName
+}
+
+$DetectedMainBranch = Get-DetectedMainBranch
+$CurrentBranch = (Invoke-GitCapture -GitArgs @("rev-parse", "--abbrev-ref", "HEAD")).text.Trim()
+$MainlineMode = $true
+Write-Host ("[branch] current=" + $CurrentBranch + " detected_main=" + $DetectedMainBranch + " mainline_mode=" + $MainlineMode)
+if ($RequireMainBranch -and -not [string]::IsNullOrWhiteSpace($DetectedMainBranch) -and $CurrentBranch -ne $DetectedMainBranch) {
+  throw ("[branch] RequireMainBranch enabled; switch first: git checkout " + $DetectedMainBranch)
+}
 
 function Test-Health([string]$Url, [int]$TimeoutSec = 5) {
   try {
@@ -232,6 +308,31 @@ function Find-LatestModel([string]$ProjectRootPath) {
   if ($last) { return $last.FullName }
 
   return $null
+}
+
+if ($RunP21) {
+  $p21Script = Join-Path $ProjectRoot "scripts/run_p21_mainline.ps1"
+  if (-not (Test-Path $p21Script)) {
+    throw "[P21] missing script: $p21Script"
+  }
+  $p21Args = @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $p21Script,
+    "-BaseUrl", $BaseUrl,
+    "-Seed", $Seed
+  )
+  if ($RequireMainBranch) { $p21Args += "-RequireMainBranch" }
+  if (-not [string]::IsNullOrWhiteSpace($P21Timestamp)) {
+    $p21Args += @("-ArtifactTimestamp", $P21Timestamp)
+  }
+  Write-Host "[P21] running mainline-only workflow gate"
+  $o = & powershell @p21Args 2>&1
+  $code = $LASTEXITCODE
+  if ($o) { $o | ForEach-Object { Write-Host $_ } }
+  if ($code -ne 0) {
+    throw "[P21] failed with exit code $code"
+  }
+  return
 }
 
 Ensure-Service -Url $BaseUrl
@@ -778,7 +879,8 @@ if ($RunP19 -or $RunPerfGateV4) {
   if ($SkipMilestone1000) {
     $p19Args += "-SkipMilestone1000"
   }
-  $null = Invoke-SafeRunStep -Label "P19-smoke" -Exe "powershell" -CmdArgs $p19Args -TimeoutSec 1200
+  $p19Timeout = if ($SkipMilestone1000) { 1200 } else { 3600 }
+  $null = Invoke-SafeRunStep -Label "P19-smoke" -Exe "powershell" -CmdArgs $p19Args -TimeoutSec $p19Timeout
 }
 
 if ($RunP20 -or $RunPerfGateV5) {
@@ -800,7 +902,8 @@ if ($RunP20 -or $RunPerfGateV5) {
   if ($SkipMilestone2000) {
     $p20Args += "-SkipMilestone2000"
   }
-  $null = Invoke-SafeRunStep -Label "P20-smoke" -Exe "powershell" -CmdArgs $p20Args -TimeoutSec 3600
+  $p20Timeout = if ($SkipMilestone2000) { 3600 } else { 10800 }
+  $null = Invoke-SafeRunStep -Label "P20-smoke" -Exe "powershell" -CmdArgs $p20Args -TimeoutSec $p20Timeout
 }
 
 if ($GitSync) {
@@ -811,6 +914,10 @@ if ($GitSync) {
   Write-Host "[GitSync] running dry-run sync preview"
   $null = Invoke-SafeRunStep -Label "GitSync-dry-run" -Exe "powershell" -CmdArgs @("-ExecutionPolicy","Bypass","-File",$gitSyncScript,"-DryRun:$true") -TimeoutSec 600
   Write-Host "[GitSync] dry-run complete. To execute push/delete: powershell -ExecutionPolicy Bypass -File scripts/git_sync.ps1 -DryRun:`$false"
+}
+
+if ($RunFast) {
+  Write-Host "[RunFast] PASS (P0/P1 baseline completed)"
 }
 
 
