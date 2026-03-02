@@ -30,6 +30,7 @@ from sim.core.hashing import (
     state_hash_p10_long_episode_observed_core,
     state_hash_p11_prob_econ_observed_core,
     state_hash_p14_real_action_observed_core,
+    state_hash_p32_real_action_position_observed_core,
     state_hash_rng_events_core,
     state_hash_score_core,
     state_hash_zones_core,
@@ -120,6 +121,7 @@ def _action_indices_for_rpc(action: dict[str, Any]) -> list[int]:
 
 def apply_action(base_url: str, action: dict[str, Any], timeout_sec: float, wait_sleep: float, seed: str) -> dict[str, Any]:
     action_type = str(action.get("action_type") or "WAIT").upper()
+    params = action.get("params") if isinstance(action.get("params"), dict) else {}
 
     if action_type == "PLAY":
         _call_method(base_url, "play", {"cards": _action_indices_for_rpc(action)}, timeout=timeout_sec)
@@ -150,17 +152,53 @@ def apply_action(base_url: str, action: dict[str, Any], timeout_sec: float, wait
     elif action_type == "REROLL":
         _call_method(base_url, "reroll", {}, timeout=timeout_sec)
     elif action_type == "BUY":
-        params = action.get("params") if isinstance(action.get("params"), dict) else {}
         _call_method(base_url, "buy", params, timeout=timeout_sec)
     elif action_type == "PACK":
-        params = action.get("params") if isinstance(action.get("params"), dict) else {}
         _call_method(base_url, "pack", params, timeout=timeout_sec)
     elif action_type == "SELL":
-        params = action.get("params") if isinstance(action.get("params"), dict) else {}
         _call_method(base_url, "sell", params, timeout=timeout_sec)
     elif action_type == "USE":
-        params = action.get("params") if isinstance(action.get("params"), dict) else {}
         _call_method(base_url, "use", params, timeout=timeout_sec)
+    elif action_type == "REORDER_HAND":
+        permutation = action.get("permutation")
+        if not isinstance(permutation, list):
+            permutation = params.get("permutation")
+        rpc_params = {"permutation": [int(x) for x in (permutation or [])]}
+        try:
+            _call_method(base_url, "reorder_hand", rpc_params, timeout=timeout_sec)
+        except RPCError as exc:
+            if "unknown method" not in str(exc).lower():
+                raise
+            time.sleep(max(0.0, float(wait_sleep)))
+    elif action_type == "REORDER_JOKERS":
+        permutation = action.get("permutation")
+        if not isinstance(permutation, list):
+            permutation = params.get("permutation")
+        rpc_params = {"permutation": [int(x) for x in (permutation or [])]}
+        try:
+            _call_method(base_url, "reorder_jokers", rpc_params, timeout=timeout_sec)
+        except RPCError as exc:
+            if "unknown method" not in str(exc).lower():
+                raise
+            time.sleep(max(0.0, float(wait_sleep)))
+    elif action_type == "SWAP_HAND_CARDS":
+        i = int(action.get("i", params.get("i", 0)))
+        j = int(action.get("j", params.get("j", 0)))
+        try:
+            _call_method(base_url, "swap_hand_cards", {"i": i, "j": j}, timeout=timeout_sec)
+        except RPCError as exc:
+            if "unknown method" not in str(exc).lower():
+                raise
+            time.sleep(max(0.0, float(wait_sleep)))
+    elif action_type == "SWAP_JOKERS":
+        i = int(action.get("i", params.get("i", 0)))
+        j = int(action.get("j", params.get("j", 0)))
+        try:
+            _call_method(base_url, "swap_jokers", {"i": i, "j": j}, timeout=timeout_sec)
+        except RPCError as exc:
+            if "unknown method" not in str(exc).lower():
+                raise
+            time.sleep(max(0.0, float(wait_sleep)))
     elif action_type == "WAIT":
         time.sleep(max(0.0, float(action.get("sleep") or wait_sleep)))
     else:
@@ -306,6 +344,7 @@ def main() -> int:
                     "state_hash_p10_long_episode_observed_core": state_hash_p10_long_episode_observed_core(canonical_with_observed),
                     "state_hash_p11_prob_econ_observed_core": state_hash_p11_prob_econ_observed_core(canonical_with_observed),
                     "state_hash_p14_real_action_observed_core": state_hash_p14_real_action_observed_core(canonical_with_observed),
+                    "state_hash_p32_real_action_position_observed_core": state_hash_p32_real_action_position_observed_core(canonical_with_observed),
                     "state_hash_zones_core": state_hash_zones_core(canonical),
                     "state_hash_zones_counts_core": state_hash_zones_counts_core(canonical),
                     "state_hash_economy_core": state_hash_economy_core(canonical),

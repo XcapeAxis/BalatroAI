@@ -781,6 +781,65 @@ class SimEnv:
             hand.pop(i)
         return selected
 
+    @staticmethod
+    def _validated_permutation(permutation: Any, size: int, label: str) -> list[int]:
+        if not isinstance(permutation, list):
+            raise ValueError(f"{label} permutation must be list")
+        items = [int(x) for x in permutation]
+        if len(items) != size:
+            raise ValueError(f"{label} permutation length mismatch: expected {size} got {len(items)}")
+        if sorted(items) != list(range(size)):
+            raise ValueError(f"{label} permutation must contain each index exactly once")
+        return items
+
+    @staticmethod
+    def _swap_to_permutation(i: Any, j: Any, size: int, label: str) -> list[int]:
+        ii = int(i)
+        jj = int(j)
+        if ii < 0 or jj < 0 or ii >= size or jj >= size:
+            raise ValueError(f"{label} swap indices out of range")
+        perm = list(range(size))
+        perm[ii], perm[jj] = perm[jj], perm[ii]
+        return perm
+
+    def _apply_reorder_hand(self, action: dict[str, Any]) -> None:
+        hand_cards = self._state["hand"]["cards"]
+        size = len(hand_cards)
+        params = action.get("params") if isinstance(action.get("params"), dict) else {}
+        permutation = action.get("permutation")
+        if not isinstance(permutation, list):
+            permutation = params.get("permutation")
+        perm = self._validated_permutation(permutation, size, "REORDER_HAND")
+        self._state["hand"]["cards"] = [hand_cards[idx] for idx in perm]
+
+    def _apply_reorder_jokers(self, action: dict[str, Any]) -> None:
+        jokers = self._state.get("jokers") if isinstance(self._state.get("jokers"), list) else []
+        size = len(jokers)
+        params = action.get("params") if isinstance(action.get("params"), dict) else {}
+        permutation = action.get("permutation")
+        if not isinstance(permutation, list):
+            permutation = params.get("permutation")
+        perm = self._validated_permutation(permutation, size, "REORDER_JOKERS")
+        self._state["jokers"] = [jokers[idx] for idx in perm]
+
+    def _apply_swap_hand_cards(self, action: dict[str, Any]) -> None:
+        hand_cards = self._state["hand"]["cards"]
+        size = len(hand_cards)
+        params = action.get("params") if isinstance(action.get("params"), dict) else {}
+        i = action.get("i", params.get("i"))
+        j = action.get("j", params.get("j"))
+        perm = self._swap_to_permutation(i, j, size, "SWAP_HAND_CARDS")
+        self._state["hand"]["cards"] = [hand_cards[idx] for idx in perm]
+
+    def _apply_swap_jokers(self, action: dict[str, Any]) -> None:
+        jokers = self._state.get("jokers") if isinstance(self._state.get("jokers"), list) else []
+        size = len(jokers)
+        params = action.get("params") if isinstance(action.get("params"), dict) else {}
+        i = action.get("i", params.get("i"))
+        j = action.get("j", params.get("j"))
+        perm = self._swap_to_permutation(i, j, size, "SWAP_JOKERS")
+        self._state["jokers"] = [jokers[idx] for idx in perm]
+
     def step(self, action: dict[str, Any]) -> tuple[dict[str, Any], float, bool, dict[str, Any]]:
         if not isinstance(action, dict):
             raise ValueError("action must be a dict")
@@ -797,6 +856,23 @@ class SimEnv:
             info["overridden"] = True
 
         phase = str(self._state.get("state") or "UNKNOWN")
+
+        if action_type in {"REORDER_HAND", "SWAP_HAND_CARDS", "REORDER_JOKERS", "SWAP_JOKERS"}:
+            if phase in {"MENU", "GAME_OVER"}:
+                raise ValueError(f"invalid action_type={action_type} for phase={phase}")
+            if action_type == "REORDER_HAND":
+                self._apply_reorder_hand(action)
+            elif action_type == "SWAP_HAND_CARDS":
+                self._apply_swap_hand_cards(action)
+            elif action_type == "REORDER_JOKERS":
+                self._apply_reorder_jokers(action)
+            elif action_type == "SWAP_JOKERS":
+                self._apply_swap_jokers(action)
+            self._refresh_done_flags()
+            now = copy.deepcopy(self._state)
+            reward = float((now.get("round") or {}).get("chips") or 0.0) - prev_chips
+            done = bool(now.get("done") or False)
+            return now, reward, done, info
 
         if action_type == "START":
             seed = action.get("seed")

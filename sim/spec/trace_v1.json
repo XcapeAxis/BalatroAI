@@ -205,6 +205,9 @@
     },
     "state_hash_p14_real_action_observed_core": {
       "type": "string"
+    },
+    "state_hash_p32_real_action_position_observed_core": {
+      "type": "string"
     }
   }
 }

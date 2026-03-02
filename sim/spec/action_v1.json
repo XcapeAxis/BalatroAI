@@ -9,7 +9,26 @@
     "phase": {"type": "string"},
     "action_type": {
       "type": "string",
-      "enum": ["PLAY", "DISCARD", "SELECT", "CASH_OUT", "NEXT_ROUND", "START", "WAIT", "MENU", "SKIP", "REROLL", "BUY", "PACK", "SELL", "USE"]
+      "enum": [
+        "PLAY",
+        "DISCARD",
+        "SELECT",
+        "CASH_OUT",
+        "NEXT_ROUND",
+        "START",
+        "WAIT",
+        "MENU",
+        "SKIP",
+        "REROLL",
+        "BUY",
+        "PACK",
+        "SELL",
+        "USE",
+        "REORDER_HAND",
+        "REORDER_JOKERS",
+        "SWAP_HAND_CARDS",
+        "SWAP_JOKERS"
+      ]
     },
     "indices": {
       "type": "array",
@@ -19,6 +38,22 @@
     },
     "index": {"type": "integer", "minimum": 0},
     "seed": {"type": "string"},
-    "params": {"type": "object"}
+    "params": {"type": "object"},
+    "permutation": {
+      "type": "array",
+      "items": {"type": "integer", "minimum": 0},
+      "uniqueItems": true
+    },
+    "i": {"type": "integer", "minimum": 0},
+    "j": {"type": "integer", "minimum": 0},
+    "targets": {
+      "type": "array",
+      "items": {"type": "integer", "minimum": 0},
+      "uniqueItems": true
+    },
+    "target_side": {
+      "type": "string",
+      "enum": ["left", "right", "none"]
+    }
   }
 }

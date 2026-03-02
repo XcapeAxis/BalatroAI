@@ -15,10 +15,12 @@ from sim.core.canonical import to_canonical_state
 from sim.core.engine import SimEnv
 from sim.core.hashing import (
     hand_core_projection,
+    p32_real_action_position_observed_core_projection,
     p14_real_action_observed_core_projection,
     state_hash_full,
     state_hash_hand_core,
     state_hash_p14_real_action_observed_core,
+    state_hash_p32_real_action_position_observed_core,
 )
 from sim.core.score_observed import compute_score_observed
 from sim.oracle.extract_rng_events import extract_rng_events
@@ -26,6 +28,7 @@ from sim.oracle.extract_rng_events import extract_rng_events
 
 SCOPE_TO_HASH_KEY = {
     "p14_real_action_observed_core": "state_hash_p14_real_action_observed_core",
+    "p32_real_action_position_observed_core": "state_hash_p32_real_action_position_observed_core",
     "hand_core": "state_hash_hand_core",
     "full": "state_hash_full",
 }
@@ -36,7 +39,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--fixture-dir", required=True)
     parser.add_argument(
         "--scope",
-        choices=["p14_real_action_observed_core", "hand_core", "full"],
+        choices=["p14_real_action_observed_core", "p32_real_action_position_observed_core", "hand_core", "full"],
         default="p14_real_action_observed_core",
     )
     parser.add_argument("--out", required=True, help="Replay report json path.")
@@ -146,6 +149,8 @@ def _get_by_path(obj: Any, path_str: str) -> tuple[Any, bool]:
 def _projection(scope: str, state: dict[str, Any]) -> Any:
     if scope == "p14_real_action_observed_core":
         return p14_real_action_observed_core_projection(state)
+    if scope == "p32_real_action_position_observed_core":
+        return p32_real_action_position_observed_core_projection(state)
     if scope == "hand_core":
         return hand_core_projection(state)
     return state
@@ -245,6 +250,7 @@ def main() -> int:
             "state_hash_full": state_hash_full(canonical),
             "state_hash_hand_core": state_hash_hand_core(canonical),
             "state_hash_p14_real_action_observed_core": state_hash_p14_real_action_observed_core(canonical_obs),
+            "state_hash_p32_real_action_position_observed_core": state_hash_p32_real_action_position_observed_core(canonical_obs),
             "reward": float(reward),
             "done": bool(done),
             "score_observed": score_observed,

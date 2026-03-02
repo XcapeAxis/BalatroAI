@@ -67,6 +67,10 @@ def _zone_cards_min_sorted(zones: dict[str, Any], name: str) -> list[dict[str, A
     return cards
 
 
+def _zone_cards_min_ordered(zones: dict[str, Any], name: str) -> list[dict[str, Any]]:
+    return [_card_minimal(c) for c in _zone_cards(zones, name)]
+
+
 def _zone_uids(zones: dict[str, Any], name: str) -> list[str]:
     out: list[str] = []
     for idx, card in enumerate(_zone_cards(zones, name)):
@@ -449,6 +453,28 @@ def _extract_joker_ids(state: dict[str, Any]) -> list[str]:
                 if key:
                     out.append(key)
     return sorted(out)
+
+
+def _extract_joker_ids_ordered(state: dict[str, Any]) -> list[str]:
+    raw = state.get("jokers")
+    out: list[str] = []
+    if isinstance(raw, dict):
+        cards = raw.get("cards") if isinstance(raw.get("cards"), list) else []
+        for card in cards:
+            if not isinstance(card, dict):
+                continue
+            key = str(card.get("joker_id") or card.get("key") or card.get("id") or "").strip().lower()
+            if key:
+                out.append(key)
+    elif isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, dict):
+                key = str(item.get("joker_id") or item.get("key") or item.get("id") or "").strip().lower()
+            else:
+                key = str(item).strip().lower()
+            if key:
+                out.append(key)
+    return out
 
 
 
@@ -925,6 +951,64 @@ def _filter_p14_real_action_observed_core(state: dict[str, Any]) -> dict[str, An
     }
 
 
+def _filter_p32_real_action_position_observed_core(state: dict[str, Any]) -> dict[str, Any]:
+    state = to_builtin(state)
+    round_info = state.get("round") if isinstance(state.get("round"), dict) else {}
+    observed = state.get("score_observed") if isinstance(state.get("score_observed"), dict) else {}
+    replay = state.get("rng_replay") if isinstance(state.get("rng_replay"), dict) else {}
+    replay_outcomes_raw = replay.get("outcomes") if isinstance(replay.get("outcomes"), list) else []
+    zones = state.get("zones") if isinstance(state.get("zones"), dict) else {}
+    consumables_raw = state.get("consumables") if isinstance(state.get("consumables"), dict) else {}
+
+    hand_cards = _zone_cards_min_ordered(zones, "hand")
+    hand_keys_ordered = [
+        str(c.get("key") or "").strip().lower()
+        for c in hand_cards
+        if str(c.get("key") or "").strip()
+    ]
+    consumable_cards = consumables_raw.get("cards") if isinstance(consumables_raw.get("cards"), list) else []
+    consumable_keys = sorted(
+        str(c.get("key") or "").strip().lower()
+        for c in consumable_cards
+        if isinstance(c, dict) and str(c.get("key") or "").strip()
+    )
+    joker_keys_ordered = _extract_joker_ids_ordered(state)
+
+    return {
+        "schema_version": state.get("schema_version"),
+        "phase_present": bool(state.get("phase") is not None),
+        "resources": {
+            "hands_left": int(round_info.get("hands_left") or 0),
+            "discards_left": int(round_info.get("discards_left") or 0),
+            "ante": int(round_info.get("ante") or 0),
+            "round_num": int(round_info.get("round_num") or 0),
+            "blind": str(round_info.get("blind") or "").strip().lower(),
+        },
+        "hand": {
+            "count": len(hand_keys_ordered),
+            "ordered_keys": hand_keys_ordered,
+        },
+        "shop": _extract_market_items_min(state, "shop"),
+        "consumables": {
+            "count": len(consumable_keys),
+            "keys": consumable_keys,
+        },
+        "jokers": {
+            "count": len(joker_keys_ordered),
+            "ordered_keys": joker_keys_ordered,
+        },
+        "score_observed": {
+            "total": float(observed.get("total") or 0.0),
+            "delta": float(observed.get("delta") or 0.0),
+        },
+        "rng_replay": {
+            "enabled": bool(replay.get("enabled") or False),
+            "source": str(replay.get("source") or ""),
+            "outcomes": _extract_p11_outcomes(replay_outcomes_raw),
+        },
+    }
+
+
 def _filter_zones_core(state: dict[str, Any]) -> dict[str, Any]:
     state = to_builtin(state)
     zones = state.get("zones") or {}
@@ -1092,6 +1176,10 @@ def state_hash_p14_real_action_observed_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_p14_real_action_observed_core(state)))
 
 
+def state_hash_p32_real_action_position_observed_core(state: dict[str, Any]) -> str:
+    return _sha256_text(canonical_dumps(_filter_p32_real_action_position_observed_core(state)))
+
+
 def state_hash_zones_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_zones_core(state)))
 
@@ -1179,6 +1267,10 @@ def p11_prob_econ_observed_core_projection(state: dict[str, Any]) -> dict[str, A
 
 def p14_real_action_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
     return _filter_p14_real_action_observed_core(state)
+
+
+def p32_real_action_position_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
+    return _filter_p32_real_action_position_observed_core(state)
 
 
 def zones_core_projection(state: dict[str, Any]) -> dict[str, Any]:
