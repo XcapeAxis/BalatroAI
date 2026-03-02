@@ -101,6 +101,23 @@ Selfsup output paths:
 - `docs/artifacts/p22/runs/<run_id>/quick_selfsup_pretrain/progress.jsonl`
 - `docs/artifacts/p22/runs/<run_id>/summary_table.{csv,json,md}`
 
+## P32 Action-Fidelity Integration
+
+P32 adds position-sensitive action fidelity checks to the broader experiment/ops workflow.
+
+- action contract docs:
+  - `docs/P32_REAL_ACTION_CONTRACT_STATUS.md`
+  - `docs/P32_REAL_ACTION_CONTRACT_SPEC.md`
+- shop/rng micro-alignment report:
+  - `docs/P32_SHOP_RNG_ALIGNMENT.md`
+- gate entry:
+  - `powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP32`
+
+Notes:
+
+- P22 experiment rows remain policy/eval oriented; P32 is a fidelity gate that ensures position actions can be represented and replay-validated.
+- Position-sensitive strategy experiments should explicitly include action-space assumptions (allow/deny reorder actions) in their experiment row metadata.
+
 ## Runtime Observability (During Execution)
 
 P22 emits both per-experiment and run-level observability artifacts:

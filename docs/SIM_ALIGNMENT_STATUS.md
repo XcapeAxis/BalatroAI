@@ -89,6 +89,19 @@ The runner executes:
 - source of truth is always `seeds_used.json`, not a presumed single default seed.
 - Curated outputs are written under `docs/artifacts/p22/**` (ignored from git tracking by repo policy).
 
+## P32 RealAction / Position-Fidelity Note
+
+- P32 extends the action contract to include explicit position operations:
+  - `REORDER_HAND`, `SWAP_HAND_CARDS`
+  - `REORDER_JOKERS`, `SWAP_JOKERS`
+- New replay scope `p32_real_action_position_observed_core` captures order-sensitive state so hand/joker ordering drift is detectable.
+- Real-runtime translation supports these actions in env-client; unsupported runtime RPC methods are surfaced as degraded execution with explicit reason.
+- `real_trace_to_fixture` now attempts reorder/swap inference from raw before/after snapshots when explicit action logs are missing.
+- Reference docs:
+  - `docs/P32_REAL_ACTION_CONTRACT_STATUS.md`
+  - `docs/P32_REAL_ACTION_CONTRACT_SPEC.md`
+  - `docs/P32_SHOP_RNG_ALIGNMENT.md`
+
 ## P31 Self-Supervised Backbone Note
 
 - P31 adds a unified trajectory schema (`DecisionStep` / `Trajectory`) to reuse oracle/sim/real traces for self-supervised pretraining.

@@ -239,6 +239,19 @@ Example self-supervised metrics excerpt (P22 `quick_selfsup_pretrain`):
 | selfsup_score_delta_mae | 1.0000 |
 | selfsup_hand_type_acc | 1.0000 |
 
+## Action Fidelity and RealAction Contract (P32)
+
+P32 introduces a unified single-step `RealAction` contract shared by simulator execution, real runtime translation, and fixture replay. The contract now includes position operations (`REORDER_HAND`, `SWAP_HAND_CARDS`, `REORDER_JOKERS`, `SWAP_JOKERS`) and an order-sensitive replay hash scope (`p32_real_action_position_observed_core`) so hand/joker ordering drift is detectable.
+
+Current coverage notes:
+
+- sim engine executes position actions deterministically.
+- real executor/env client accepts the same action schema; on runtimes without reorder RPC methods, actions degrade with explicit `degraded_reason` instead of silent failure.
+- `real_trace_to_fixture` can infer reorder/swap actions from raw before/after snapshots when explicit action logs are absent.
+- shop/rng micro-alignment is augmented with artifactized reroll sampling reports.
+
+See [docs/P32_REAL_ACTION_CONTRACT_STATUS.md](docs/P32_REAL_ACTION_CONTRACT_STATUS.md), [docs/P32_REAL_ACTION_CONTRACT_SPEC.md](docs/P32_REAL_ACTION_CONTRACT_SPEC.md), and [docs/P32_SHOP_RNG_ALIGNMENT.md](docs/P32_SHOP_RNG_ALIGNMENT.md).
+
 ## Project Structure
 
 | Path | Purpose |
@@ -287,8 +300,12 @@ Planned:
 - [docs/SIM_ALIGNMENT_STATUS.md](docs/SIM_ALIGNMENT_STATUS.md)
 - [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
 - [docs/EXPERIMENTS_P31.md](docs/EXPERIMENTS_P31.md)
+- [docs/P32_REAL_ACTION_CONTRACT_STATUS.md](docs/P32_REAL_ACTION_CONTRACT_STATUS.md)
+- [docs/P32_REAL_ACTION_CONTRACT_SPEC.md](docs/P32_REAL_ACTION_CONTRACT_SPEC.md)
+- [docs/P32_SHOP_RNG_ALIGNMENT.md](docs/P32_SHOP_RNG_ALIGNMENT.md)
 - Coverage snapshots: `docs/COVERAGE_P*_STATUS.md`
 - [docs/COVERAGE_P31_STATUS.md](docs/COVERAGE_P31_STATUS.md)
+- [docs/COVERAGE_P32_STATUS.md](docs/COVERAGE_P32_STATUS.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ## Documentation Index
@@ -307,6 +324,9 @@ Planned:
 - [docs/RELEASE_TRAIN_P27.md](docs/RELEASE_TRAIN_P27.md)
 - [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
 - [docs/EXPERIMENTS_P31.md](docs/EXPERIMENTS_P31.md)
+- [docs/P32_REAL_ACTION_CONTRACT_STATUS.md](docs/P32_REAL_ACTION_CONTRACT_STATUS.md)
+- [docs/P32_REAL_ACTION_CONTRACT_SPEC.md](docs/P32_REAL_ACTION_CONTRACT_SPEC.md)
+- [docs/P32_SHOP_RNG_ALIGNMENT.md](docs/P32_SHOP_RNG_ALIGNMENT.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 - [docs/ARCHITECTURE_P25.md](docs/ARCHITECTURE_P25.md)
