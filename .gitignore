@@ -100,3 +100,6 @@ docs/artifacts/p24/**
 
 # Local one-off helper scripts
 scripts/cursor_fix_transcript_to_jsonl.py
+
+# Generated docs lint artifacts
+docs/generated/readme_lint_report.json
