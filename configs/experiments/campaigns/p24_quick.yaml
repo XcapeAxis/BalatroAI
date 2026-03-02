@@ -1,0 +1,52 @@
+{
+  "campaign_id": "p24_quick_campaign",
+  "mode": "quick",
+  "seed_policy_config": "configs/experiments/seeds_p23.yaml",
+  "budget": {
+    "max_wall_time_minutes": 60,
+    "max_parallel": 1,
+    "max_experiments": 3,
+    "max_retries": 1
+  },
+  "stages": [
+    {
+      "stage_id": "exploration_a",
+      "purpose": "exploration",
+      "matrix_ref": "configs/experiments/p23.yaml",
+      "mode": "quick",
+      "include": [
+        "quick_baseline",
+        "quick_hybrid"
+      ],
+      "seed_set_name": "contract_regression",
+      "seed_limit": 8,
+      "failure_policy": "continue"
+    },
+    {
+      "stage_id": "validation_b",
+      "purpose": "validation",
+      "matrix_ref": "configs/experiments/p23.yaml",
+      "mode": "quick",
+      "include": [
+        "quick_risk_aware"
+      ],
+      "depends_on": [
+        "exploration_a"
+      ],
+      "seed_set_name": "perf_gate_100",
+      "seed_limit": 8,
+      "failure_policy": "fail_fast"
+    }
+  ],
+  "post_actions": {
+    "coverage": true,
+    "flake": false,
+    "triage": true,
+    "bisect": true,
+    "ranking": true,
+    "dashboard": true,
+    "champion_update": true,
+    "cleanup": true
+  }
+}
+
