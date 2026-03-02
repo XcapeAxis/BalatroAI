@@ -1,6 +1,6 @@
 # P5 Vouchers + Booster Packs Coverage
 
-- Generated at: `2026-02-25T07:14:41.950162+00:00`
+- Generated at: `2026-03-02T20:54:57.833078+00:00`
 - Total targets: **47**
 - Supported (conservative): **42**
 - Unsupported: **5**
