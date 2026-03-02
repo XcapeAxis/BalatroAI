@@ -31,6 +31,7 @@ param(
   [switch]$RunP21,
   [switch]$RunP22,
   [switch]$RunP22Full,
+  [switch]$RunP23,
   [switch]$RequireMainBranch,
   [string]$P21Timestamp = ""
 )
@@ -57,6 +58,7 @@ if ($RunP19 -or $RunPerfGateV4) { $RunP18 = $true }
 # P20 builds on top of P19.
 if ($RunP20 -or $RunPerfGateV5) { $RunP19 = $true }
 if ($RunP22Full) { $RunP22 = $true }
+if ($RunP23) { $RunP22 = $true }
 
 function Invoke-GitCapture([string[]]$GitArgs) {
   $quoted = @($GitArgs | ForEach-Object {
@@ -121,6 +123,14 @@ function Get-LatestGitSyncReportPath([string]$ProjectRootPath) {
   return $latest.FullName
 }
 
+function Get-LatestRunDir([string]$RunsRootPath) {
+  if (-not (Test-Path $RunsRootPath)) { return "" }
+  $latest = Get-ChildItem -Path $RunsRootPath -Directory -ErrorAction SilentlyContinue |
+    Sort-Object Name -Descending | Select-Object -First 1
+  if (-not $latest) { return "" }
+  return $latest.FullName
+}
+
 $DetectedMainBranch = Get-DetectedMainBranch
 $CurrentBranch = (Invoke-GitCapture -GitArgs @("rev-parse", "--abbrev-ref", "HEAD")).text.Trim()
 $MainlineMode = $true
@@ -128,6 +138,10 @@ Write-Host ("[branch] current=" + $CurrentBranch + " detected_main=" + $Detected
 if ($RequireMainBranch -and -not [string]::IsNullOrWhiteSpace($DetectedMainBranch) -and $CurrentBranch -ne $DetectedMainBranch) {
   throw ("[branch] RequireMainBranch enabled; switch first: git checkout " + $DetectedMainBranch)
 }
+
+$RunP22Status = "SKIPPED"
+$RunP22LatestRun = ""
+$RunP22LatestReport = ""
 
 function Test-Health([string]$Url, [int]$TimeoutSec = 5) {
   try {
@@ -936,6 +950,176 @@ if ($RunP22) {
     $p22Args += "-DryRun"
   }
   $null = Invoke-SafeRunStep -Label "P22-orchestrator" -Exe "powershell" -CmdArgs $p22Args -TimeoutSec 3600
+  $RunP22Status = "PASS"
+  $RunP22LatestRun = Get-LatestRunDir -RunsRootPath (Join-Path $ProjectRoot "docs/artifacts/p22/runs")
+  if ($RunP22LatestRun) {
+    $candidate = Join-Path $RunP22LatestRun "report_p23.json"
+    if (Test-Path $candidate) { $RunP22LatestReport = $candidate }
+    else {
+      $candidateP22 = Join-Path $RunP22LatestRun "report_p22.json"
+      if (Test-Path $candidateP22) { $RunP22LatestReport = $candidateP22 }
+    }
+  }
+}
+
+if ($RunP23) {
+  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $p23Root = Join-Path $ProjectRoot "docs/artifacts/p23"
+  if (-not (Test-Path $p23Root)) { New-Item -ItemType Directory -Path $p23Root -Force | Out-Null }
+  $p23Dir = Join-Path $p23Root $stamp
+  New-Item -ItemType Directory -Path $p23Dir -Force | Out-Null
+
+  $baselineSummary = [ordered]@{
+    schema = "p23_baseline_summary_v1"
+    generated_at = (Get-Date).ToString("o")
+    run_p22_status = $RunP22Status
+    run_p22_latest_run = $RunP22LatestRun
+    run_p22_report = $RunP22LatestReport
+  }
+  $baselineSummaryPath = Join-Path $p23Dir "baseline_summary.json"
+  Write-JsonFile -Path $baselineSummaryPath -Object $baselineSummary
+  $baselineMd = @(
+    "# P23 Baseline Summary",
+    "",
+    "- run_p22_status: $RunP22Status",
+    "- run_p22_latest_run: $RunP22LatestRun",
+    "- run_p22_report: $RunP22LatestReport"
+  )
+  $baselineMdPath = Join-Path $p23Dir "baseline_summary.md"
+  $baselineMd -join "`n" | Out-File -LiteralPath $baselineMdPath -Encoding UTF8
+
+  $seedValidationPath = Join-Path $p23Dir "seed_policy_validation.json"
+  $seedValidateArgs = @(
+    "-B",
+    "-m", "trainer.experiments.seeds",
+    "--validate-policy",
+    "--config", "configs/experiments/seeds_p23.yaml",
+    "--write", $seedValidationPath
+  )
+  Run-PyStrict -Label "P23-seed-validate" -PyArgs $seedValidateArgs | Out-Null
+  $seedPolicySnapshot = Join-Path $p23Dir "seed_policy.json"
+  Copy-Item -LiteralPath (Join-Path $ProjectRoot "configs/experiments/seeds_p23.yaml") -Destination $seedPolicySnapshot -Force
+
+  $seedPerfPath = Join-Path $p23Dir "seeds_perf_gate_100.json"
+  $seedPerfArgs = @(
+    "-B",
+    "-m", "trainer.experiments.seeds",
+    "--materialize", "perf_gate_100",
+    "--config", "configs/experiments/seeds_p23.yaml",
+    "--write", $seedPerfPath
+  )
+  Run-PyStrict -Label "P23-seed-perf100" -PyArgs $seedPerfArgs | Out-Null
+
+  $seedNightlyPath = Join-Path $p23Dir "seeds_nightly_sample.json"
+  $seedNightlyArgs = @(
+    "-B",
+    "-m", "trainer.experiments.seeds",
+    "--materialize-nightly",
+    "--config", "configs/experiments/seeds_p23.yaml",
+    "--write", $seedNightlyPath
+  )
+  Run-PyStrict -Label "P23-seed-nightly" -PyArgs $seedNightlyArgs | Out-Null
+
+  $p23Script = Join-Path $ProjectRoot "scripts/run_p23.ps1"
+  if (-not (Test-Path $p23Script)) { throw "[P23] missing script: $p23Script" }
+  $null = Invoke-SafeRunStep -Label "P23-quick" -Exe "powershell" -CmdArgs @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $p23Script,
+    "-Quick"
+  ) -TimeoutSec 2400
+  $null = Invoke-SafeRunStep -Label "P23-flake" -Exe "powershell" -CmdArgs @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $p23Script,
+    "-FlakeSmoke"
+  ) -TimeoutSec 2400
+
+  $latestP23Run = Get-LatestRunDir -RunsRootPath (Join-Path $p23Root "runs")
+  if (-not [string]::IsNullOrWhiteSpace($latestP23Run)) {
+    $destRunsRoot = Join-Path $p23Dir "runs"
+    New-Item -ItemType Directory -Path $destRunsRoot -Force | Out-Null
+    $destRun = Join-Path $destRunsRoot (Split-Path -Leaf $latestP23Run)
+    Copy-Item -LiteralPath $latestP23Run -Destination $destRun -Recurse -Force
+  }
+
+  $gateFunctional = [ordered]@{
+    schema = "p23_gate_functional_v1"
+    generated_at = (Get-Date).ToString("o")
+    run_p22_status = $RunP22Status
+    run_p22_latest_run = $RunP22LatestRun
+    run_p22_report = $RunP22LatestReport
+    pass = ($RunP22Status -eq "PASS")
+  }
+  $gateExperiments = [ordered]@{
+    schema = "p23_gate_experiments_v1"
+    generated_at = (Get-Date).ToString("o")
+    quick_run_root = $latestP23Run
+    quick_status = "PASS"
+  }
+  $flakeReportRoot = Join-Path $p23Root "flake_report.json"
+  $flakePass = $false
+  if (Test-Path $flakeReportRoot) {
+    try {
+      $flakeObj = Get-Content -LiteralPath $flakeReportRoot -Raw | ConvertFrom-Json
+      $flakePass = ([string]$flakeObj.status -eq "PASS")
+    } catch { $flakePass = $false }
+  }
+  $seedValidationObj = $null
+  if (Test-Path $seedValidationPath) {
+    try { $seedValidationObj = Get-Content -LiteralPath $seedValidationPath -Raw | ConvertFrom-Json } catch {}
+  }
+  $seedValidationPass = $false
+  if ($seedValidationObj -and $seedValidationObj.ok -eq $true) { $seedValidationPass = $true }
+  $gateReliability = [ordered]@{
+    schema = "p23_gate_reliability_v1"
+    generated_at = (Get-Date).ToString("o")
+    seed_policy_validation_pass = $seedValidationPass
+    flake_smoke_pass = $flakePass
+    disallow_single_seed_default = $true
+    pass = ($seedValidationPass -and $flakePass)
+  }
+
+  $gateFunctionalPath = Join-Path $p23Dir "gate_functional.json"
+  $gateExperimentsPath = Join-Path $p23Dir "gate_experiments.json"
+  $gateReliabilityPath = Join-Path $p23Dir "gate_reliability.json"
+  Write-JsonFile -Path $gateFunctionalPath -Object $gateFunctional
+  Write-JsonFile -Path $gateExperimentsPath -Object $gateExperiments
+  Write-JsonFile -Path $gateReliabilityPath -Object $gateReliability
+
+  $reportGate = [ordered]@{
+    schema = "p23_report_gate_v1"
+    generated_at = (Get-Date).ToString("o")
+    functional = $gateFunctional
+    experiments = $gateExperiments
+    reliability = $gateReliability
+    status = $(if ($gateFunctional.pass -and $gateExperiments.quick_status -eq "PASS" -and $gateReliability.pass) { "PASS" } else { "FAIL" })
+  }
+  $reportGatePath = Join-Path $p23Dir "report_p23_gate.json"
+  Write-JsonFile -Path $reportGatePath -Object $reportGate
+
+  $coverageStatusPath = Join-Path $ProjectRoot "docs/COVERAGE_P23_STATUS.md"
+  $coverageStatusLines = @(
+    "# COVERAGE P23 STATUS",
+    "",
+    "- timestamp: " + (Get-Date -Format "yyyy-MM-dd HH:mm:ss"),
+    "- run_p22_status: " + $RunP22Status,
+    "- quick_run_root: " + $latestP23Run,
+    "- seed_policy_validation_pass: " + $seedValidationPass,
+    "- flake_smoke_pass: " + $flakePass,
+    "- gate_status: " + $reportGate.status
+  )
+  $coverageStatusLines -join "`n" | Out-File -LiteralPath $coverageStatusPath -Encoding UTF8
+
+  if (Test-Path (Join-Path $p23Root "flake_report.json")) {
+    Copy-Item -LiteralPath (Join-Path $p23Root "flake_report.json") -Destination (Join-Path $p23Dir "flake_report.json") -Force
+  }
+  if (Test-Path (Join-Path $p23Root "flake_report.md")) {
+    Copy-Item -LiteralPath (Join-Path $p23Root "flake_report.md") -Destination (Join-Path $p23Dir "flake_report.md") -Force
+  }
+
+  Write-Host ("[P23] artifact_dir=" + $p23Dir + " gate_status=" + $reportGate.status)
+  if ($reportGate.status -ne "PASS") {
+    throw "[P23] gate failed; inspect gate_functional/gate_experiments/gate_reliability"
+  }
 }
 
 if ($RunFast) {
