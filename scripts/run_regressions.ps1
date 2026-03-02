@@ -38,6 +38,7 @@ param(
   [switch]$RunP27,
   [switch]$RunP29,
   [switch]$RunP31,
+  [switch]$RunP32,
   [switch]$RequireMainBranch,
   [string]$P21Timestamp = ""
 )
@@ -103,6 +104,10 @@ if ($RunP31) {
   $RunP24 = $true
   $RunP23 = $true
   $RunP22 = $true
+}
+if ($RunP32) {
+  $RunP22 = $true
+  $RunP13 = $true
 }
 
 function Invoke-GitCapture([string[]]$GitArgs) {
@@ -2604,6 +2609,281 @@ if ($RunP31) {
   Write-Host ("[P31] artifact_dir=" + $p31Dir + " gate_status=" + $reportP31.status)
   if ($reportP31.status -ne "PASS") {
     throw "[P31] gate failed; inspect gate_* and report_p31"
+  }
+}
+
+if ($RunP32) {
+  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $p32Root = Join-Path $ProjectRoot "docs/artifacts/p32"
+  if (-not (Test-Path $p32Root)) { New-Item -ItemType Directory -Path $p32Root -Force | Out-Null }
+  $p32Dir = Join-Path $p32Root $stamp
+  New-Item -ItemType Directory -Path $p32Dir -Force | Out-Null
+
+  $p22RunDir = Get-LatestRunDir -RunsRootPath (Join-Path $ProjectRoot "docs/artifacts/p22/runs")
+  $p13RunDir = Get-LatestRunDir -RunsRootPath (Join-Path $ProjectRoot "docs/artifacts/p13")
+  $p22ReportPath = ""
+  if ($p22RunDir) {
+    $r23 = Join-Path $p22RunDir "report_p23.json"
+    $r22 = Join-Path $p22RunDir "report_p22.json"
+    if (Test-Path $r23) { $p22ReportPath = $r23 }
+    elseif (Test-Path $r22) { $p22ReportPath = $r22 }
+  }
+  $p13ReportPath = ""
+  if ($p13RunDir) { $p13ReportPath = Join-Path $p13RunDir "report_p13.json" }
+  $p22ReportObj = Read-JsonFile -Path $p22ReportPath
+  $p13ReportObj = Read-JsonFile -Path $p13ReportPath
+
+  $baseline = [ordered]@{
+    schema = "p32_baseline_v1"
+    generated_at = (Get-Date).ToString("o")
+    requested_gate = "RunP22 + RunP13"
+    run_p22_status = $RunP22Status
+    run_p22_latest_run = $RunP22LatestRun
+    run_p22_report = $p22ReportPath
+    run_p13_latest_run = $p13RunDir
+    run_p13_report = $p13ReportPath
+    run_p13_status = $(if ($p13ReportObj -and $p13ReportObj.status) { [string]$p13ReportObj.status } else { "UNKNOWN" })
+  }
+  Write-JsonFile -Path (Join-Path $p32Dir "baseline.json") -Object $baseline
+
+  $p32Py = Join-Path $ProjectRoot ".venv_trainer\Scripts\python.exe"
+  if (-not (Test-Path $p32Py)) { $p32Py = "python" }
+
+  $positionFixtureDir = Join-Path $p32Dir "fixtures/position_contract"
+  $positionReplayPath = Join-Path $p32Dir "position_replay_report.json"
+  $positionDumpDir = Join-Path $p32Dir "dumps/position_replay"
+
+  $null = Invoke-SafeRunStep -Label "P32-build-position-fixture" -Exe $p32Py -CmdArgs @(
+    "-B",
+    "sim/tests/build_p32_position_fixture.py",
+    "--out-dir", $positionFixtureDir,
+    "--seed", ("P32POS-" + $stamp)
+  ) -TimeoutSec 600
+
+  $null = Invoke-SafeRunStep -Label "P32-replay-position-fixture" -Exe $p32Py -CmdArgs @(
+    "-B",
+    "sim/tests/run_real_action_replay_fixture.py",
+    "--fixture-dir", $positionFixtureDir,
+    "--scope", "p32_real_action_position_observed_core",
+    "--out", $positionReplayPath,
+    "--dump-on-diff", $positionDumpDir
+  ) -TimeoutSec 600
+
+  $positionReplay = Read-JsonFile -Path $positionReplayPath
+  $positionPass = $false
+  if ($positionReplay -and ([string]$positionReplay.status -eq "pass")) { $positionPass = $true }
+
+  $syntheticSessionPath = Join-Path $p32Dir "sessions/session_position_synthetic.jsonl"
+  $syntheticFixtureDir = Join-Path $p32Dir "fixtures/synthetic_session"
+  $syntheticReplayPath = Join-Path $p32Dir "synthetic_session_replay_report.json"
+  $syntheticRoundtripStatus = "FAIL"
+  $syntheticRoundtripReason = ""
+
+  $syntheticSessionArgs = @(
+    "-B",
+    "trainer/build_p32_synthetic_session.py",
+    "--out", $syntheticSessionPath,
+    "--seed", ("P32SYN-" + $stamp)
+  )
+  $syntheticSessionRun = Run-Py -Label "P32-build-synthetic-session" -PyArgs $syntheticSessionArgs
+  if ($syntheticSessionRun.Code -eq 0) {
+    $syntheticTraceArgs = @(
+      "-B",
+      "trainer/real_trace_to_fixture.py",
+      "--in", $syntheticSessionPath,
+      "--out-dir", $syntheticFixtureDir,
+      "--seed", ("P32SYN-" + $stamp)
+    )
+    $syntheticTraceRun = Run-Py -Label "P32-synthetic-trace-to-fixture" -PyArgs $syntheticTraceArgs
+    if ($syntheticTraceRun.Code -eq 0) {
+      $syntheticReplayArgs = @(
+        "-B",
+        "sim/tests/run_real_action_replay_fixture.py",
+        "--fixture-dir", $syntheticFixtureDir,
+        "--scope", "p32_real_action_position_observed_core",
+        "--out", $syntheticReplayPath,
+        "--dump-on-diff", (Join-Path $p32Dir "dumps/synthetic_session_replay")
+      )
+      $syntheticReplayRun = Run-Py -Label "P32-synthetic-session-replay" -PyArgs $syntheticReplayArgs
+      if ($syntheticReplayRun.Code -eq 0) {
+        $syntheticRoundtripStatus = "PASS"
+      } else {
+        $syntheticRoundtripStatus = "FAIL"
+        $syntheticRoundtripReason = "synthetic_session_replay_failed"
+      }
+    } else {
+      $syntheticRoundtripStatus = "FAIL"
+      $syntheticRoundtripReason = "synthetic_trace_to_fixture_failed"
+    }
+  } else {
+    $syntheticRoundtripStatus = "FAIL"
+    $syntheticRoundtripReason = "synthetic_session_build_failed"
+  }
+
+  $realSessionPath = Join-Path $p32Dir "sessions/session_shadow.jsonl"
+  $realFixtureDir = Join-Path $p32Dir "fixtures/real_shadow"
+  $realReplayPath = Join-Path $p32Dir "real_shadow_replay_report.json"
+  $realRoundtripStatus = "SKIPPED"
+  $realRoundtripReason = ""
+  $realActionsCount = 0
+
+  if (Test-Health -Url $BaseUrl -TimeoutSec 3) {
+    $recordArgs = @(
+      "-B", "trainer/record_real_session.py",
+      "--base-url", $BaseUrl,
+      "--steps", "40",
+      "--interval", "0.2",
+      "--topk", "3",
+      "--include-raw",
+      "--out", $realSessionPath,
+      "--strict-errors"
+    )
+    $recordResult = Run-Py -Label "P32-record-shadow" -PyArgs $recordArgs
+    if ($recordResult.Code -eq 0) {
+      $traceArgs = @("-B", "trainer/real_trace_to_fixture.py", "--in", $realSessionPath, "--out-dir", $realFixtureDir, "--seed", $Seed)
+      $traceResult = Run-Py -Label "P32-shadow-trace-to-fixture" -PyArgs $traceArgs
+      if ($traceResult.Code -eq 0) {
+        $realManifestPath = Join-Path $realFixtureDir "manifest.json"
+        $realManifest = Read-JsonFile -Path $realManifestPath
+        if ($realManifest -and $realManifest.actions_count -ne $null) { $realActionsCount = [int]$realManifest.actions_count }
+        if ($realActionsCount -gt 0) {
+          $replayArgs = @(
+            "-B", "sim/tests/run_real_action_replay_fixture.py",
+            "--fixture-dir", $realFixtureDir,
+            "--scope", "p32_real_action_position_observed_core",
+            "--out", $realReplayPath,
+            "--dump-on-diff", (Join-Path $p32Dir "dumps/real_shadow_replay")
+          )
+          $replayResult = Run-Py -Label "P32-real-shadow-replay" -PyArgs $replayArgs
+          if ($replayResult.Code -eq 0) {
+            $realRoundtripStatus = "PASS"
+          } else {
+            $realRoundtripStatus = "FAIL"
+            $realRoundtripReason = "real_shadow_replay_failed"
+          }
+        } else {
+          $realRoundtripStatus = "SKIPPED"
+          $realRoundtripReason = "no_actions_in_shadow_capture"
+        }
+      } else {
+        $realRoundtripStatus = "FAIL"
+        $realRoundtripReason = "trace_to_fixture_failed"
+      }
+    } else {
+      $realRoundtripStatus = "FAIL"
+      $realRoundtripReason = "record_real_session_failed"
+    }
+  } else {
+    $realRoundtripStatus = "SKIPPED"
+    $realRoundtripReason = "real_unavailable"
+  }
+
+  $shopReportDir = Join-Path $p32Dir "shop_rng"
+  $shopSummaryJson = Join-Path $shopReportDir "shop_probability_summary.json"
+  $shopSummaryMd = Join-Path $shopReportDir "shop_probability_summary.md"
+  $shopStatus = "FAIL"
+  $shopReason = ""
+  $shopArgs = @(
+    "-B",
+    "sim/oracle/analyze_shop_probabilities.py",
+    "--base-url", $BaseUrl,
+    "--seed", ("P32SHOP-" + $stamp),
+    "--samples", "300",
+    "--out-dir", $shopReportDir
+  )
+  $shopRun = Run-Py -Label "P32-shop-probability" -PyArgs $shopArgs
+  if ($shopRun.Code -eq 0 -and (Test-Path $shopSummaryJson) -and (Test-Path $shopSummaryMd)) {
+    $shopStatus = "PASS"
+  } else {
+    $shopStatus = "FAIL"
+    $shopReason = "shop_probability_analysis_failed"
+  }
+
+  $gateFunctional = [ordered]@{
+    schema = "p32_gate_functional_v1"
+    generated_at = (Get-Date).ToString("o")
+    baseline_gate = "RunP22 + RunP13"
+    run_p22_status = $RunP22Status
+    run_p22_latest_run = $RunP22LatestRun
+    run_p22_report = $p22ReportPath
+    run_p13_latest_run = $p13RunDir
+    run_p13_report = $p13ReportPath
+    pass = (($RunP22Status -eq "PASS") -and ($baseline.run_p13_status -in @("PASS", "SKIPPED")))
+  }
+  $gateActionContract = [ordered]@{
+    schema = "p32_gate_action_contract_v1"
+    generated_at = (Get-Date).ToString("o")
+    position_fixture_dir = $positionFixtureDir
+    position_replay_report = $positionReplayPath
+    position_replay_pass = $positionPass
+    synthetic_session = $syntheticSessionPath
+    synthetic_fixture_dir = $syntheticFixtureDir
+    synthetic_replay_report = $syntheticReplayPath
+    synthetic_roundtrip_status = $syntheticRoundtripStatus
+    synthetic_roundtrip_reason = $syntheticRoundtripReason
+    real_session = $realSessionPath
+    real_fixture_dir = $realFixtureDir
+    real_replay_report = $realReplayPath
+    real_roundtrip_status = $realRoundtripStatus
+    real_roundtrip_reason = $realRoundtripReason
+    real_actions_count = $realActionsCount
+    pass = ($positionPass -and ($syntheticRoundtripStatus -eq "PASS") -and ($realRoundtripStatus -in @("PASS", "SKIPPED")))
+  }
+  $gateShopRng = [ordered]@{
+    schema = "p32_gate_shop_rng_v1"
+    generated_at = (Get-Date).ToString("o")
+    shop_report_dir = $shopReportDir
+    shop_summary_json = $shopSummaryJson
+    shop_summary_md = $shopSummaryMd
+    status = $shopStatus
+    reason = $shopReason
+    pass = ($shopStatus -eq "PASS")
+  }
+
+  Write-JsonFile -Path (Join-Path $p32Dir "gate_functional.json") -Object $gateFunctional
+  Write-JsonFile -Path (Join-Path $p32Dir "gate_action_contract.json") -Object $gateActionContract
+  Write-JsonFile -Path (Join-Path $p32Dir "gate_shop_rng.json") -Object $gateShopRng
+
+  $reportP32 = [ordered]@{
+    schema = "p32_report_gate_v1"
+    generated_at = (Get-Date).ToString("o")
+    functional = $gateFunctional
+    action_contract = $gateActionContract
+    shop_rng = $gateShopRng
+    status = $(if ($gateFunctional.pass -and $gateActionContract.pass -and $gateShopRng.pass) { "PASS" } else { "FAIL" })
+  }
+  $reportP32Path = Join-Path $p32Dir "report_p32.json"
+  Write-JsonFile -Path $reportP32Path -Object $reportP32
+
+  $coverageP32Path = Join-Path $ProjectRoot "docs/COVERAGE_P32_STATUS.md"
+  @(
+    "# COVERAGE P32 STATUS",
+    "",
+    "- timestamp: " + (Get-Date -Format "yyyy-MM-dd HH:mm:ss"),
+    "- baseline_gate: RunP22 + RunP13",
+    "- run_p22_status: " + $RunP22Status,
+    "- run_p13_status: " + $baseline.run_p13_status,
+    "- position_replay_pass: " + $positionPass,
+    "- synthetic_roundtrip_status: " + $syntheticRoundtripStatus,
+    "- real_roundtrip_status: " + $realRoundtripStatus,
+    "- shop_rng_status: " + $shopStatus,
+    "- gate_status: " + $reportP32.status
+  ) -join "`n" | Out-File -LiteralPath $coverageP32Path -Encoding UTF8
+
+  if ($GitSync) {
+    $gitSyncScript = Join-Path $ProjectRoot "scripts/git_sync.ps1"
+    if (Test-Path $gitSyncScript) {
+      $null = Invoke-SafeRunStep -Label "P32-gitsync-dryrun" -Exe "powershell" -CmdArgs @(
+        "-ExecutionPolicy", "Bypass",
+        "-File", $gitSyncScript,
+        "-DryRun:`$true"
+      ) -TimeoutSec 600
+    }
+  }
+
+  Write-Host ("[P32] artifact_dir=" + $p32Dir + " gate_status=" + $reportP32.status)
+  if ($reportP32.status -ne "PASS") {
+    throw "[P32] gate failed; inspect gate_* and report_p32"
   }
 }
 

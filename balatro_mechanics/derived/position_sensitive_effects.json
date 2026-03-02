@@ -1,0 +1,245 @@
+{
+  "schema": "p32_position_sensitive_effects_v1",
+  "mechanics_root": "D:\\MYFILES\\BalatroAI\\balatro_mechanics",
+  "summary": {
+    "scanned_rows": 237,
+    "hand_order_sensitive_count": 4,
+    "joker_slot_sensitive_count": 5,
+    "position_targeted_effect_count": 13
+  },
+  "categories": {
+    "hand_order_sensitive": [
+      {
+        "source_file": "jokers.csv",
+        "entity_name": "Brainstorm",
+        "category": "hand_order_sensitive",
+        "text": "Brainstorm | Copies the ability of leftmost Joker | unknown | Discard a Royal Flush .",
+        "matched_patterns": [
+          "\\bleftmost\\b"
+        ]
+      },
+      {
+        "source_file": "jokers.csv",
+        "entity_name": "Hanging Chad",
+        "category": "hand_order_sensitive",
+        "text": "Hanging Chad | Retrigger first played card used in scoring 2 additional times | on_scored | retrigger | Beat a Boss Blind with a High Card hand.",
+        "matched_patterns": [
+          "\\bfirst played\\b"
+        ]
+      },
+      {
+        "source_file": "jokers.csv",
+        "entity_name": "Photograph",
+        "category": "hand_order_sensitive",
+        "text": "Photograph | First played face card gives X2 Mult when scored | on_scored | mult_mult | Available from start.",
+        "matched_patterns": [
+          "\\bfirst played\\b"
+        ]
+      },
+      {
+        "source_file": "tarot_cards.csv",
+        "entity_name": "Death (XIII)",
+        "category": "hand_order_sensitive",
+        "text": "Death (XIII) | Select 2 cards, convert the left card into the right card (Drag to rearrange) | deck_change",
+        "matched_patterns": [
+          "\\bleft card\\b",
+          "\\bright card\\b",
+          "\\bdrag to rearrange\\b",
+          "\\brearrange\\b"
+        ]
+      }
+    ],
+    "joker_slot_sensitive": [
+      {
+        "source_file": "jokers.csv",
+        "entity_name": "Blueprint",
+        "category": "joker_slot_sensitive",
+        "text": "Blueprint | Copies ability of Joker to the right | unknown | Win 1 run.",
+        "matched_patterns": [
+          "\\bto the right\\b"
+        ]
+      },
+      {
+        "source_file": "jokers.csv",
+        "entity_name": "Brainstorm",
+        "category": "joker_slot_sensitive",
+        "text": "Brainstorm | Copies the ability of leftmost Joker | unknown | Discard a Royal Flush .",
+        "matched_patterns": [
+          "\\bleftmost joker\\b"
+        ]
+      },
+      {
+        "source_file": "jokers.csv",
+        "entity_name": "Ceremonial Dagger",
+        "category": "joker_slot_sensitive",
+        "text": "Ceremonial Dagger | When Blind is selected, destroy Joker to the right and permanently add double its sell value to this Mult (Currently +0 Mult ) | unknown | mult_add; money; deck_change | Available from start.",
+        "matched_patterns": [
+          "\\bto the right\\b"
+        ]
+      },
+      {
+        "source_file": "jokers.csv",
+        "entity_name": "Joker Stencil",
+        "category": "joker_slot_sensitive",
+        "text": "Joker Stencil | X1 Mult for each empty Joker slot. Joker Stencil included (Currently X1 ) | unknown | mult_mult | Available from start.",
+        "matched_patterns": [
+          "\\bjoker slot\\b"
+        ]
+      },
+      {
+        "source_file": "vouchers.csv",
+        "entity_name": "Antimatter",
+        "category": "joker_slot_sensitive",
+        "text": "Antimatter | +1 Joker slot | Redeem Blank 10 total times | The Antimatter Voucher is always displayed in game as if it was a negative edition and applies the same effect as negative Jokers. If all vouchers have been purchased in a run, blank will appear in the shop.",
+        "matched_patterns": [
+          "\\bjoker slot\\b"
+        ]
+      }
+    ],
+    "position_targeted_effect": [
+      {
+        "source_file": "jokers.csv",
+        "entity_name": "Joker Stencil",
+        "category": "position_targeted_effect",
+        "text": "Joker Stencil | X1 Mult for each empty Joker slot. Joker Stencil included (Currently X1 ) | unknown | mult_mult | Available from start.",
+        "matched_patterns": [
+          "\\bslot\\b"
+        ]
+      },
+      {
+        "source_file": "spectral_cards.csv",
+        "entity_name": "Aura",
+        "category": "position_targeted_effect",
+        "text": "Aura | Add Foil , Holographic , or Polychrome edition (determined at random) to 1 selected card in hand. | deck_change",
+        "matched_patterns": [
+          "\\bselected card\\b"
+        ]
+      },
+      {
+        "source_file": "spectral_cards.csv",
+        "entity_name": "Cryptid",
+        "category": "position_targeted_effect",
+        "text": "Cryptid | Creates 2 exact copies (including Enhancements, Editions and Seals ) of a selected card in your hand. | deck_change",
+        "matched_patterns": [
+          "\\bselected card\\b"
+        ]
+      },
+      {
+        "source_file": "spectral_cards.csv",
+        "entity_name": "Deja Vu",
+        "category": "position_targeted_effect",
+        "text": "Deja Vu | Adds a Red Seal to 1 selected card. | deck_change",
+        "matched_patterns": [
+          "\\bselected card\\b"
+        ]
+      },
+      {
+        "source_file": "spectral_cards.csv",
+        "entity_name": "Medium",
+        "category": "position_targeted_effect",
+        "text": "Medium | Adds a Purple Seal to 1 selected card. | deck_change",
+        "matched_patterns": [
+          "\\bselected card\\b"
+        ]
+      },
+      {
+        "source_file": "spectral_cards.csv",
+        "entity_name": "Talisman",
+        "category": "position_targeted_effect",
+        "text": "Talisman | Add a Gold Seal to 1 selected card. | deck_change",
+        "matched_patterns": [
+          "\\bselected card\\b"
+        ]
+      },
+      {
+        "source_file": "spectral_cards.csv",
+        "entity_name": "Trance",
+        "category": "position_targeted_effect",
+        "text": "Trance | Adds a Blue Seal to 1 selected card. | deck_change",
+        "matched_patterns": [
+          "\\bselected card\\b"
+        ]
+      },
+      {
+        "source_file": "tarot_cards.csv",
+        "entity_name": "Death (XIII)",
+        "category": "position_targeted_effect",
+        "text": "Death (XIII) | Select 2 cards, convert the left card into the right card (Drag to rearrange) | deck_change",
+        "matched_patterns": [
+          "\\bselect 2 cards\\b"
+        ]
+      },
+      {
+        "source_file": "tarot_cards.csv",
+        "entity_name": "Justice (VIII)",
+        "category": "position_targeted_effect",
+        "text": "Justice (VIII) | Enhances 1 selected card into a Glass Card | deck_change",
+        "matched_patterns": [
+          "\\bselected card\\b"
+        ]
+      },
+      {
+        "source_file": "tarot_cards.csv",
+        "entity_name": "The Chariot (VII)",
+        "category": "position_targeted_effect",
+        "text": "The Chariot (VII) | Enhances 1 selected card into a Steel Card | deck_change",
+        "matched_patterns": [
+          "\\bselected card\\b"
+        ]
+      },
+      {
+        "source_file": "tarot_cards.csv",
+        "entity_name": "The Devil (XV)",
+        "category": "position_targeted_effect",
+        "text": "The Devil (XV) | Enhances 1 selected card into a Gold Card | deck_change",
+        "matched_patterns": [
+          "\\bselected card\\b"
+        ]
+      },
+      {
+        "source_file": "tarot_cards.csv",
+        "entity_name": "The Lovers (VI)",
+        "category": "position_targeted_effect",
+        "text": "The Lovers (VI) | Enhances 1 selected card into a Wild Card | deck_change",
+        "matched_patterns": [
+          "\\bselected card\\b"
+        ]
+      },
+      {
+        "source_file": "tarot_cards.csv",
+        "entity_name": "The Tower (XVI)",
+        "category": "position_targeted_effect",
+        "text": "The Tower (XVI) | Enhances 1 selected card into a Stone Card | deck_change",
+        "matched_patterns": [
+          "\\bselected card\\b"
+        ]
+      }
+    ]
+  },
+  "wiki_probe": {
+    "enabled": true,
+    "pages": [
+      {
+        "url": "https://balatrogame.fandom.com/wiki/Jokers",
+        "status_code": 403,
+        "hand_keyword_hits": 0,
+        "joker_keyword_hits": 0,
+        "target_keyword_hits": 0
+      },
+      {
+        "url": "https://balatrogame.fandom.com/wiki/Tarot_Cards",
+        "status_code": 403,
+        "hand_keyword_hits": 0,
+        "joker_keyword_hits": 0,
+        "target_keyword_hits": 0
+      },
+      {
+        "url": "https://balatrogame.fandom.com/wiki/Spectral_Cards",
+        "status_code": 403,
+        "hand_keyword_hits": 0,
+        "joker_keyword_hits": 0,
+        "target_keyword_hits": 0
+      }
+    ]
+  }
+}
