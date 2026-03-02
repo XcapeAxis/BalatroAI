@@ -204,6 +204,7 @@ Done:
 - P22 orchestrator (modes, telemetry, summaries)
 - P23 seed governance + coverage/flake harness
 - P24 campaign manager + triage/bisect + ranking + dashboard
+- P25 README/docs productization with RunP25 docs gate
 
 In progress:
 
@@ -223,6 +224,7 @@ Planned:
 - Performance claims are seed/budget/version dependent.
 - Some gate logic still uses local/manual artifacts, not centralized CI.
 - Simulator/mechanic coverage is still expanding across milestones.
+- Generated status/readme snippets are local-run artifacts and should be refreshed before release notes.
 
 ## Documentation Index
 
