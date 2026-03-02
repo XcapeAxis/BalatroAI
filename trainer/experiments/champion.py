@@ -263,3 +263,122 @@ def update_nightly_decision(
         "champion_path": str(champion_path),
         "nightly_decision_path": str(decision_path),
     }
+
+
+def update_p24_from_ranking(
+    *,
+    out_root: Path,
+    run_id: str,
+    ranking_summary: dict[str, Any],
+) -> dict[str, Any]:
+    champion_path = out_root / "champion.json"
+    candidate_path = out_root / "candidate.json"
+    decision_path = out_root / "nightly_decision.json"
+    decision_md_path = out_root / "nightly_decision.md"
+    changelog_path = out_root / "CHANGELOG_P24.md"
+
+    old_champion = _read_json(champion_path)
+    recs = ranking_summary.get("recommendations") if isinstance(ranking_summary.get("recommendations"), dict) else {}
+    top_candidate = recs.get("top_candidate") if isinstance(recs.get("top_candidate"), dict) else None
+    conservative = recs.get("conservative_candidate") if isinstance(recs.get("conservative_candidate"), dict) else None
+    exploratory = recs.get("exploratory_candidate") if isinstance(recs.get("exploratory_candidate"), dict) else None
+
+    if top_candidate is None:
+        decision = "hold"
+        reason = "no_ranked_candidate"
+        champion_changed = False
+    else:
+        top_score = float(top_candidate.get("weighted_score") or 0.0)
+        old_score = 0.0
+        if old_champion and isinstance(old_champion.get("weighted_score"), (int, float)):
+            old_score = float(old_champion.get("weighted_score") or 0.0)
+        if old_champion is None:
+            decision = "promote"
+            reason = "bootstrap_from_ranking"
+            champion_changed = True
+        elif top_score > old_score + 0.01:
+            decision = "promote"
+            reason = f"weighted_score delta={(top_score - old_score):.6f} > 0.01"
+            champion_changed = True
+        else:
+            decision = "hold"
+            reason = f"weighted_score delta={(top_score - old_score):.6f} <= 0.01"
+            champion_changed = False
+
+    candidate_payload = {
+        "schema": "p24_candidate_v1",
+        "generated_at": _now_iso(),
+        "run_id": run_id,
+        "decision": decision,
+        "reason": reason,
+        "top_candidate": top_candidate,
+        "conservative_candidate": conservative,
+        "exploratory_candidate": exploratory,
+    }
+    _write_json(candidate_path, candidate_payload)
+
+    champion_payload = old_champion if old_champion else {}
+    if champion_changed and top_candidate is not None:
+        champion_payload = {
+            "schema": "p24_champion_v1",
+            "updated_at": _now_iso(),
+            "updated_by_run": run_id,
+            "exp_id": top_candidate.get("exp_id"),
+            "run_dir": top_candidate.get("run_dir"),
+            "weighted_score": float(top_candidate.get("weighted_score") or 0.0),
+            "avg_ante_reached": float(top_candidate.get("avg_ante_reached") or 0.0),
+            "median_ante": float(top_candidate.get("median_ante") or 0.0),
+            "win_rate": float(top_candidate.get("win_rate") or 0.0),
+            "reason": reason,
+            "status": "champion",
+        }
+        _write_json(champion_path, champion_payload)
+
+    decision_payload = {
+        "schema": "p24_nightly_decision_v1",
+        "generated_at": _now_iso(),
+        "run_id": run_id,
+        "decision": decision,
+        "reason": reason,
+        "champion_changed": champion_changed,
+        "candidate": top_candidate,
+        "conservative_candidate": conservative,
+        "exploratory_candidate": exploratory,
+        "champion_before": old_champion,
+        "champion_after": champion_payload if champion_payload else old_champion,
+    }
+    _write_json(decision_path, decision_payload)
+
+    md_lines = [
+        "# P24 Nightly Recommendation Decision",
+        "",
+        f"- run_id: `{run_id}`",
+        f"- decision: `{decision}`",
+        f"- reason: {reason}",
+        f"- champion_changed: `{champion_changed}`",
+        f"- top_candidate: `{top_candidate.get('exp_id') if isinstance(top_candidate, dict) else 'N/A'}`",
+    ]
+    decision_md_path.write_text("\n".join(md_lines) + "\n", encoding="utf-8")
+
+    changelog_lines = []
+    if changelog_path.exists():
+        changelog_lines = changelog_path.read_text(encoding="utf-8").splitlines()
+    if not changelog_lines:
+        changelog_lines = ["# P24 Champion/Candidate Changelog", ""]
+    changelog_lines.append(f"## {run_id}")
+    changelog_lines.append(f"- decision: {decision}")
+    changelog_lines.append(f"- reason: {reason}")
+    changelog_lines.append(
+        f"- top_candidate: {top_candidate.get('exp_id') if isinstance(top_candidate, dict) else 'N/A'}"
+    )
+    changelog_lines.append("")
+    changelog_path.write_text("\n".join(changelog_lines).rstrip() + "\n", encoding="utf-8")
+
+    return {
+        "decision": decision,
+        "reason": reason,
+        "champion_path": str(champion_path),
+        "candidate_path": str(candidate_path),
+        "nightly_decision_path": str(decision_path),
+        "changelog_path": str(changelog_path),
+    }
