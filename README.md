@@ -10,7 +10,7 @@
   <a href="configs/experiments/seeds_p23.yaml"><img src="https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16" alt="Seed Governance" /></a>
   <a href="scripts/run_p22.ps1"><img src="https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB" alt="Experiment Orchestrator" /></a>
   <a href="docs/TREND_WAREHOUSE_P26.md"><img src="https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16" alt="Trend Warehouse" /></a>
-  <a href="docs/"><img src="https://img.shields.io/badge/Docs_Coverage-P15-P27-6E7781" alt="Docs Coverage" /></a>
+  <a href="docs/"><img src="https://img.shields.io/badge/Docs_Coverage-P15-P29-6E7781" alt="Docs Coverage" /></a>
   <a href="USAGE_GUIDE.md"><img src="https://img.shields.io/badge/Platform-Windows-0078D6" alt="Platform" /></a>
   <a href="trainer/requirements.txt"><img src="https://img.shields.io/badge/Python-3.12%2B-3776AB" alt="Python" /></a>
   <a href="#license-and-contributing"><img src="https://img.shields.io/badge/License-Not_Specified-6E7781" alt="License" /></a>
@@ -157,11 +157,11 @@ Full guide: [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 - branch: main
 - latest_gate: RunP27 (PASS)
 - recent_trend_signal: regression
-- trend_warehouse_last_updated: 2026-03-02T11:05:01.095809+00:00
-- trend_rows_count: 15731
+- trend_warehouse_last_updated: 2026-03-02T12:42:05.280528+00:00
+- trend_rows_count: 16841
 - champion: quick_risk_aware (champion)
 - candidate: quick_hybrid (decision: hold)
-- docs_coverage: P15-P27
+- docs_coverage: P15-P29
 <!-- README_STATUS:END -->
 <!-- STATUS:END -->
 
@@ -249,6 +249,14 @@ Planned:
 
 - License: currently not specified by a top-level `LICENSE` file.
 - Contributions: use mainline-only workflow and run gates before proposing changes.
+
+
+
+
+
+
+
+
 
 
 
