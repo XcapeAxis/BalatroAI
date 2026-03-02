@@ -5,7 +5,7 @@
 
 <!-- BADGES:START -->
 <p align="center">
-  <a href="scripts/run_regressions.ps1"><img src="https://img.shields.io/badge/Latest_Gate-RunP26_PASS-2EA44F" alt="Latest Gate" /></a>
+  <a href="scripts/run_regressions.ps1"><img src="https://img.shields.io/badge/Latest_Gate-RunP27_PASS-2EA44F" alt="Latest Gate" /></a>
   <a href="scripts/git_sync.ps1"><img src="https://img.shields.io/badge/Workflow-mainline-only-2EA44F" alt="Workflow" /></a>
   <a href="configs/experiments/seeds_p23.yaml"><img src="https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16" alt="Seed Governance" /></a>
   <a href="scripts/run_p22.ps1"><img src="https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB" alt="Experiment Orchestrator" /></a>
@@ -155,10 +155,10 @@ Full guide: [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 ### Repository Status (Auto-generated, P27)
 
 - branch: main
-- latest_gate: RunP26 (PASS)
+- latest_gate: RunP27 (PASS)
 - recent_trend_signal: regression
-- trend_warehouse_last_updated: 2026-03-02T10:25:10.203752+00:00
-- trend_rows_count: 13561
+- trend_warehouse_last_updated: 2026-03-02T10:56:52.347402+00:00
+- trend_rows_count: 14646
 - champion: quick_risk_aware (champion)
 - candidate: quick_hybrid (decision: hold)
 - docs_coverage: P15-P27
@@ -249,6 +249,12 @@ Planned:
 
 - License: currently not specified by a top-level `LICENSE` file.
 - Contributions: use mainline-only workflow and run gates before proposing changes.
+
+
+
+
+
+
 
 
 
