@@ -97,6 +97,9 @@ docs/artifacts/**
 docs/artifacts/p23/**
 docs/artifacts/p22/**
 docs/artifacts/p24/**
+docs/artifacts/p25/**
+docs/artifacts/p26/**
+docs/artifacts/trends/**
 
 # Local one-off helper scripts
 scripts/cursor_fix_transcript_to_jsonl.py
