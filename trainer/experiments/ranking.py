@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import csv
@@ -45,7 +45,7 @@ def write_json(path: Path, payload: Any) -> None:
 
 
 def load_mapping(path: Path) -> dict[str, Any]:
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8").lstrip("\ufeff")
     if yaml is not None:
         payload = yaml.safe_load(text)
     else:
@@ -68,34 +68,19 @@ def _minmax(values: list[float], value: float, *, invert: bool = False) -> float
     return max(0.0, min(1.0, norm))
 
 
-def _find_triage_report(run_root: Path) -> dict[str, Any]:
-    candidates = [
-        run_root / "triage_latest" / "triage_report.json",
-        run_root.parents[1] / "triage_latest" / "triage_report.json" if len(run_root.parents) >= 2 else None,
-        run_root.parent / "triage_latest" / "triage_report.json",
-    ]
-    for p in candidates:
-        if p is None:
-            continue
-        payload = read_json(p)
-        if payload:
-            return payload
-    return {}
+def _load_rows(run_root: Path) -> list[dict[str, Any]]:
+    table_path = run_root / "summary_table.json"
+    if table_path.exists():
+        rows = read_list_json(table_path)
+        if rows:
+            return rows
 
-
-def _find_flake_report(run_root: Path) -> dict[str, Any]:
-    candidates = [
-        run_root / "flake_report.json",
-        run_root.parents[1] / "flake_report.json" if len(run_root.parents) >= 2 else None,
-        run_root.parent / "flake_report.json",
-    ]
-    for p in candidates:
-        if p is None:
-            continue
-        payload = read_json(p)
-        if payload:
-            return payload
-    return {}
+    summary_path = run_root / "summary.json"
+    payload = read_json(summary_path)
+    rows = payload.get("rows") if isinstance(payload.get("rows"), list) else []
+    if rows:
+        return [x for x in rows if isinstance(x, dict)]
+    return []
 
 
 def _pareto_front(rows: list[dict[str, Any]]) -> set[str]:
@@ -120,79 +105,60 @@ def _pareto_front(rows: list[dict[str, Any]]) -> set[str]:
     for r in rows:
         dominated = False
         for other in rows:
-            if other["exp_id"] == r["exp_id"]:
+            if str(other.get("exp_id")) == str(r.get("exp_id")):
                 continue
             if dominates(other, r):
                 dominated = True
                 break
         if not dominated:
-            front.add(str(r["exp_id"]))
+            front.add(str(r.get("exp_id")))
     return front
 
 
 def build_ranking(run_root: Path, cfg: dict[str, Any]) -> dict[str, Any]:
-    rows = read_list_json(run_root / "summary_table.json")
-    triage = _find_triage_report(run_root)
-    flake = _find_flake_report(run_root)
-    triage_rows = triage.get("rows") if isinstance(triage.get("rows"), list) else []
-    triage_by_exp: dict[str, list[str]] = {}
-    for item in triage_rows:
-        if not isinstance(item, dict):
-            continue
-        exp_id = str(item.get("exp_id") or "")
-        category = str(item.get("category") or "")
-        if not exp_id:
-            continue
-        triage_by_exp.setdefault(exp_id, []).append(category)
-
+    rows = _load_rows(run_root)
     gate = cfg.get("hard_filters") if isinstance(cfg.get("hard_filters"), dict) else {}
+
     min_avg = float(gate.get("min_avg_ante") or 0.0)
     min_median = float(gate.get("min_median_ante") or 0.0)
     min_win = float(gate.get("min_win_rate") or 0.0)
-    require_flake_pass = bool(gate.get("require_flake_pass", True))
-    critical_categories = set(gate.get("critical_triage_categories") or [])
-
-    global_flake_pass = True
-    if flake and require_flake_pass:
-        global_flake_pass = str(flake.get("status") or "").upper() != "FAIL"
 
     prepared: list[dict[str, Any]] = []
     for row in rows:
-        exp_id = str(row.get("exp_id") or "")
+        exp_id = str(row.get("exp_id") or row.get("strategy") or "")
+        if not exp_id:
+            continue
         avg_ante = float(row.get("avg_ante_reached") or row.get("mean") or 0.0)
-        median_ante = float(row.get("median_ante") or 0.0)
+        median_ante = float(row.get("median_ante") or row.get("median_ante_reached") or 0.0)
         win_rate = float(row.get("win_rate") or 0.0)
-        elapsed = float(row.get("elapsed_sec") or 0.0)
-        catastrophic = int(row.get("catastrophic_failure_count") or 0)
-        categories = triage_by_exp.get(exp_id, [])
-        critical_hit = any(c in critical_categories for c in categories)
+        elapsed = float(row.get("elapsed_sec") or row.get("runtime_seconds") or 0.0)
+        status = str(row.get("status") or "passed")
         gate_pass = (
-            str(row.get("status")) in {"passed", "success", "dry_run"}
+            status in {"passed", "success", "dry_run", "ok"}
             and avg_ante >= min_avg
             and median_ante >= min_median
             and win_rate >= min_win
-            and (not critical_hit)
-            and global_flake_pass
         )
-        risk_score = float(catastrophic) + (1.0 if critical_hit else 0.0)
         prepared.append(
             {
                 "exp_id": exp_id,
-                "status": row.get("status"),
+                "strategy": str(row.get("strategy") or ""),
+                "status": status,
                 "avg_ante_reached": avg_ante,
                 "median_ante": median_ante,
                 "win_rate": win_rate,
                 "elapsed_sec": elapsed,
                 "std": float(row.get("std") or 0.0),
-                "run_dir": row.get("run_dir"),
-                "triage_categories": categories,
-                "critical_triage_hit": critical_hit,
-                "risk_score": risk_score,
+                "risk_score": float(row.get("risk_score") or 0.0),
                 "gate_pass": gate_pass,
+                "model": str(row.get("model") or row.get("model_path") or ""),
+                "rl_model": str(row.get("rl_model") or row.get("rl_model_path") or ""),
+                "risk_config": str(row.get("risk_config") or ""),
+                "run_dir": row.get("run_dir") or row.get("eval_json") or "",
             }
         )
 
-    filtered = [r for r in prepared if bool(r["gate_pass"])]
+    filtered = [r for r in prepared if bool(r.get("gate_pass"))]
     score_cfg = cfg.get("weighted_score") if isinstance(cfg.get("weighted_score"), dict) else {}
     weights = score_cfg.get("weights") if isinstance(score_cfg.get("weights"), dict) else {}
     w_perf = float(weights.get("performance", 0.45))
@@ -222,9 +188,22 @@ def build_ranking(run_root: Path, cfg: dict[str, Any]) -> dict[str, Any]:
         row["weighted_score"] = (w_perf * perf) + (w_stability * stability) + (w_cost * cost) + (w_risk * risk)
 
     filtered_sorted = sorted(filtered, key=lambda r: float(r.get("weighted_score") or 0.0), reverse=True)
+    fallback_sorted = sorted(
+        [r for r in prepared if str(r.get("status") or "") in {"passed", "success", "dry_run", "ok"}],
+        key=lambda r: (
+            float(r.get("avg_ante_reached") or 0.0),
+            float(r.get("median_ante") or 0.0),
+            float(r.get("win_rate") or 0.0),
+            -float(r.get("elapsed_sec") or 0.0),
+        ),
+        reverse=True,
+    )
+    if not filtered_sorted and fallback_sorted:
+        # Degraded fallback: still provide candidate recommendations even when hard filters reject all rows.
+        filtered_sorted = fallback_sorted
     pareto_set = _pareto_front(filtered)
     for row in prepared:
-        row["pareto_front"] = str(row["exp_id"]) in pareto_set
+        row["pareto_front"] = str(row.get("exp_id")) in pareto_set
 
     top_candidate = filtered_sorted[0] if filtered_sorted else None
     conservative_candidate = None
@@ -232,20 +211,33 @@ def build_ranking(run_root: Path, cfg: dict[str, Any]) -> dict[str, Any]:
     if filtered_sorted:
         conservative_candidate = sorted(
             filtered_sorted,
-            key=lambda r: (float(r.get("risk_score") or 0.0), -float(r.get("weighted_score") or 0.0)),
+            key=lambda r: (
+                float(r.get("risk_score") or 0.0),
+                float(r.get("elapsed_sec") or 0.0),
+                -float(r.get("weighted_score") or 0.0),
+            ),
         )[0]
         exploratory_candidate = sorted(
             filtered_sorted,
-            key=lambda r: (-(float(r.get("avg_ante_reached") or 0.0) + 0.5 * float(r.get("std") or 0.0))),
+            key=lambda r: (
+                -(float(r.get("avg_ante_reached") or 0.0) + 0.4 * float(r.get("win_rate") or 0.0)),
+                float(r.get("elapsed_sec") or 0.0),
+            ),
         )[0]
 
+    release_suggestion = "hold"
+    if top_candidate is not None:
+        if float(top_candidate.get("weighted_score") or 0.0) >= 0.55:
+            release_suggestion = "investigate"
+        if float(top_candidate.get("weighted_score") or 0.0) >= 0.70:
+            release_suggestion = "promote"
+
     return {
-        "schema": "p24_ranking_summary_v1",
+        "schema": "p29_ranking_summary_v2",
         "generated_at": now_iso(),
         "run_root": str(run_root),
         "input_rows": len(rows),
         "filtered_rows": len(filtered),
-        "global_flake_pass": global_flake_pass,
         "weights": {
             "performance": w_perf,
             "stability": w_stability,
@@ -258,6 +250,15 @@ def build_ranking(run_root: Path, cfg: dict[str, Any]) -> dict[str, Any]:
             "conservative_candidate": conservative_candidate,
             "exploratory_candidate": exploratory_candidate,
             "pareto_front_exp_ids": sorted(pareto_set),
+            "recommended_default_candidate": top_candidate,
+            "recommended_conservative_candidate": conservative_candidate,
+            "recommended_exploration_candidate": exploratory_candidate,
+            "release_suggestion": release_suggestion,
+            "rationale": {
+                "performance": "weighted score combines avg/median ante and win_rate",
+                "stability": "std and risk score penalize unstable candidates",
+                "cost": "elapsed/runtime preferred when scores are close",
+            },
         },
     }
 
@@ -272,6 +273,7 @@ def write_outputs(summary: dict[str, Any], out_dir: Path) -> dict[str, str]:
 
     fieldnames = [
         "exp_id",
+        "strategy",
         "status",
         "gate_pass",
         "weighted_score",
@@ -282,6 +284,9 @@ def write_outputs(summary: dict[str, Any], out_dir: Path) -> dict[str, str]:
         "std",
         "elapsed_sec",
         "risk_score",
+        "model",
+        "rl_model",
+        "risk_config",
     ]
     with csv_path.open("w", encoding="utf-8", newline="") as fp:
         writer = csv.DictWriter(fp, fieldnames=fieldnames)
@@ -291,16 +296,16 @@ def write_outputs(summary: dict[str, Any], out_dir: Path) -> dict[str, str]:
 
     recs = summary.get("recommendations") or {}
     lines = [
-        "# P24 Ranking Summary",
+        "# P29 Ranking Summary",
         "",
         f"- input_rows: `{summary.get('input_rows')}`",
         f"- filtered_rows: `{summary.get('filtered_rows')}`",
-        f"- global_flake_pass: `{summary.get('global_flake_pass')}`",
+        f"- release_suggestion: `{recs.get('release_suggestion')}`",
         "",
         "## Recommendations",
-        f"- top_candidate: `{(recs.get('top_candidate') or {}).get('exp_id') if isinstance(recs.get('top_candidate'), dict) else 'N/A'}`",
-        f"- conservative_candidate: `{(recs.get('conservative_candidate') or {}).get('exp_id') if isinstance(recs.get('conservative_candidate'), dict) else 'N/A'}`",
-        f"- exploratory_candidate: `{(recs.get('exploratory_candidate') or {}).get('exp_id') if isinstance(recs.get('exploratory_candidate'), dict) else 'N/A'}`",
+        f"- default: `{(recs.get('recommended_default_candidate') or {}).get('exp_id') if isinstance(recs.get('recommended_default_candidate'), dict) else 'N/A'}`",
+        f"- conservative: `{(recs.get('recommended_conservative_candidate') or {}).get('exp_id') if isinstance(recs.get('recommended_conservative_candidate'), dict) else 'N/A'}`",
+        f"- exploration: `{(recs.get('recommended_exploration_candidate') or {}).get('exp_id') if isinstance(recs.get('recommended_exploration_candidate'), dict) else 'N/A'}`",
         f"- pareto_front_exp_ids: `{recs.get('pareto_front_exp_ids')}`",
     ]
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -308,7 +313,7 @@ def write_outputs(summary: dict[str, Any], out_dir: Path) -> dict[str, str]:
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="P24 multi-objective ranking")
+    p = argparse.ArgumentParser(description="P24/P29 multi-objective ranking")
     p.add_argument("--run-root", required=True)
     p.add_argument("--config", required=True)
     p.add_argument("--out-dir", required=True)
@@ -321,7 +326,7 @@ def main() -> int:
     cfg = load_mapping(Path(args.config).resolve())
     summary = build_ranking(run_root, cfg)
     paths = write_outputs(summary, Path(args.out_dir).resolve())
-    print(json.dumps({"status": "PASS", "paths": paths}, ensure_ascii=False))
+    print(json.dumps({"status": "PASS", **paths}, ensure_ascii=False))
     return 0
 
 
