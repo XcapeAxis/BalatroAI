@@ -10,7 +10,7 @@
   <a href="configs/experiments/seeds_p23.yaml"><img src="https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16" alt="Seed Governance" /></a>
   <a href="scripts/run_p22.ps1"><img src="https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB" alt="Experiment Orchestrator" /></a>
   <a href="docs/TREND_WAREHOUSE_P26.md"><img src="https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16" alt="Trend Warehouse" /></a>
-  <a href="docs/"><img src="https://img.shields.io/badge/Docs_Coverage-P15-P26-6E7781" alt="Docs Coverage" /></a>
+  <a href="docs/"><img src="https://img.shields.io/badge/Docs_Coverage-P15-P27-6E7781" alt="Docs Coverage" /></a>
   <a href="USAGE_GUIDE.md"><img src="https://img.shields.io/badge/Platform-Windows-0078D6" alt="Platform" /></a>
   <a href="trainer/requirements.txt"><img src="https://img.shields.io/badge/Python-3.12%2B-3776AB" alt="Python" /></a>
   <a href="#license-and-contributing"><img src="https://img.shields.io/badge/License-Not_Specified-6E7781" alt="License" /></a>
@@ -152,23 +152,16 @@ Full guide: [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 
 <!-- STATUS:START -->
 <!-- README_STATUS:BEGIN -->
-### Repository Status (Auto-generated)
+### Repository Status (Auto-generated, P27)
 
 - branch: main
-- mainline_status: mainline-dirty (detected main: main)
-- working_tree_clean: False
-- highest_supported_gate: RunP26
-- latest_supported_gate: RunP26
-- seed_governance: enabled (P23+)
-- experiment_platform: ready
-- experiment_orchestrator: enabled (P22+)
-- trend_warehouse_status: enabled (P26+)
-- trend_warehouse_last_updated: 2026-03-02T09:55:22.469609+00:00
+- latest_gate: RunP26 (PASS)
 - recent_trend_signal: regression
-- latest_gate_snapshot: RunP26:PASS
-- docs_specs_range: P15-P26 (available: P16, P17, P18, P19, P20, P21, P23, P24, P25, P26)
-- artifacts_guide: docs/artifacts/p24/runs/latest, docs/artifacts/p25/, docs/artifacts/trends/
-- published_status_used: True
+- trend_warehouse_last_updated: 2026-03-02T10:25:10.203752+00:00
+- trend_rows_count: 13561
+- champion: quick_risk_aware (champion)
+- candidate: quick_hybrid (decision: hold)
+- docs_coverage: P15-P27
 <!-- README_STATUS:END -->
 <!-- STATUS:END -->
 
@@ -256,6 +249,12 @@ Planned:
 
 - License: currently not specified by a top-level `LICENSE` file.
 - Contributions: use mainline-only workflow and run gates before proposing changes.
+
+
+
+
+
+
 
 
 
