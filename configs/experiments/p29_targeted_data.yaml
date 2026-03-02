@@ -1,0 +1,32 @@
+﻿{
+  "schema": "p29_targeted_data_config_v1",
+  "seed": 29,
+  "base_url": "sim://p29-targeted",
+  "instance_prefix": "p29",
+  "weakness_top_n": 10,
+  "target_size": {
+    "hand_records": 5200,
+    "shop_records": 1600
+  },
+  "teacher_mix": {
+    "heuristic_teacher": 0.34,
+    "search_expert": 0.28,
+    "risk_aware_fallback": 0.20,
+    "failure_replay": 0.12,
+    "champion_prior": 0.06
+  },
+  "phase_balance": {
+    "hand_weight": 0.76,
+    "shop_weight": 0.24
+  },
+  "stake_mix": {
+    "gold": 0.62,
+    "orange": 0.25,
+    "white": 0.13
+  },
+  "ante_tier_mix": {
+    "low": 0.28,
+    "mid": 0.44,
+    "high": 0.28
+  }
+}
