@@ -19,6 +19,7 @@ Badge data source notes:
 
 - Static shields are mapped to repo files/scripts and maintained in README.
 - Gate/status details come from `scripts/run_regressions.ps1` and `scripts/generate_readme_status.ps1`.
+- `Latest Gate` / `Docs Specs` badges are refreshed when `RunP25` and readme status generation are executed.
 
 ## What This Project Is
 
