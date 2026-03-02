@@ -9,7 +9,7 @@
 [![Seed Governance](https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16)](configs/experiments/seeds_p23.yaml)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Trend Warehouse](https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16)](docs/TREND_WAREHOUSE_P26.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15-P30-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15-P31-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -25,7 +25,7 @@ Badge/status refresh source:
 - `docs/artifacts/status/latest_badges.json` and `latest_status.json` from `python -m trainer.experiments.status_publish`
 - `powershell -ExecutionPolicy Bypass -File scripts\update_readme_badges.ps1 -DryRun|-Apply`
 
-## Project Value & Scope
+## What This Project Is
 
 BalatroAI exists to make policy development and validation for Balatro engineering-grade instead of one-off scripting:
 
@@ -34,6 +34,8 @@ BalatroAI exists to make policy development and validation for Balatro engineeri
 - oracle/simulator parity checks with canonical traces
 - gated experiment operations (orchestrator, campaign manager, triage, ranking)
 - reproducibility by seed governance and artifactized reports
+
+## Scope and Boundaries
 
 Suitable for:
 
@@ -112,7 +114,7 @@ More details:
 - [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
 - [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 
-## Architecture & Data Flow
+## Architecture Overview
 
 ```mermaid
 flowchart LR
@@ -150,7 +152,7 @@ For a detailed architecture and dataflow overview, see [docs/ARCHITECTURE.md](do
 | Training | `trainer/train_bc.py`, `trainer/train_rl.py`, `trainer/train_pv.py` | checkpoints + eval metrics |
 | Inference | `trainer/infer_assistant.py` | suggestions / optional controlled execution |
 
-## Reproducible Experiments (P22)
+## Reproducibility
 
 P22 experiments are config-first and artifactized:
 
@@ -179,20 +181,13 @@ For details and repro patterns: [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.m
 ### Repository Status (Auto-generated)
 
 - branch: main
-- mainline_status: mainline-dirty (detected main: main)
-- working_tree_clean: False
-- highest_supported_gate: RunP29
-- latest_supported_gate: RunP29
-- seed_governance: enabled (P23+)
-- experiment_platform: ready
-- experiment_orchestrator: enabled (P22+)
-- trend_warehouse_status: enabled (P26+)
-- trend_warehouse_last_updated: 2026-03-02T12:42:05.280528+00:00
+- latest_gate: RunP29 (PASS)
 - recent_trend_signal: regression
-- latest_gate_snapshot: RunP29:PASS
-- docs_specs_range: P15-P30 (available: P16, P17, P18, P19, P20, P21, P23, P24, P25, P26, P27, P29, P30)
-- artifacts_guide: docs/artifacts/p24/runs/latest, docs/artifacts/p25/, docs/artifacts/trends/
-- published_status_used: True
+- trend_warehouse_last_updated: 2026-03-02T15:47:52.205655+00:00
+- trend_rows_count: 18800
+- champion: quick_risk_aware (champion)
+- candidate: quick_hybrid (decision: hold)
+- docs_coverage: P15-P31
 <!-- README_STATUS:END -->
 <!-- STATUS:END -->
 
@@ -292,47 +287,4 @@ Planned:
 
 - License: currently not specified by a top-level `LICENSE` file.
 - Contributions: use mainline-only workflow and run gates before proposing changes.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
