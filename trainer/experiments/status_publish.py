@@ -358,7 +358,7 @@ def status_markdown(status: dict[str, Any]) -> str:
     candidate_obj = status.get("candidate", {})
     trend_warehouse_obj = status.get("trend_warehouse", {})
     lines = [
-        "### Repository Status (Auto-generated, P27)",
+        "### Repository Status (Auto-generated)",
         "",
         f"- branch: {status.get('repo', {}).get('branch', 'unknown')}",
         f"- latest_gate: {latest_gate_obj.get('gate_name', 'unknown')} ({latest_gate_obj.get('status', 'UNKNOWN')})",

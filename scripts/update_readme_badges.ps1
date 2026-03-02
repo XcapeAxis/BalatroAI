@@ -35,9 +35,25 @@ function Encode-BadgeToken([string]$Token) {
   return $encoded.Replace("%20", "_")
 }
 
-function New-BadgesBlock($badgesObj) {
+function Get-GitHubRepoSlug() {
+  $remote = ""
+  try {
+    $remote = (& git config --get remote.origin.url 2>$null | Select-Object -First 1)
+  } catch {
+    $remote = ""
+  }
+  if ([string]::IsNullOrWhiteSpace($remote)) { return "" }
+  $token = [string]$remote
+  $token = $token.Trim()
+  $token = $token -replace "\.git$", ""
+  if ($token -match "github\.com[:/](?<slug>[^/]+/[^/]+)$") {
+    return [string]$Matches["slug"]
+  }
+  return ""
+}
+
+function New-BadgesBlock($badgesObj, [string]$RepoSlug) {
   $lines = New-Object System.Collections.Generic.List[string]
-  $lines.Add('<p align="center">') | Out-Null
   $badgeRows = @($badgesObj.badges)
   foreach ($b in $badgeRows) {
     $label = [string]$b.label
@@ -47,9 +63,19 @@ function New-BadgesBlock($badgesObj) {
     $link = [string]$b.link
     if ([string]::IsNullOrWhiteSpace($link)) { $link = "#" }
     $url = "https://img.shields.io/badge/{0}-{1}-{2}" -f (Encode-BadgeToken $label), (Encode-BadgeToken $message), (Encode-BadgeToken $color)
-    $lines.Add(('  <a href="{0}"><img src="{1}" alt="{2}" /></a>' -f $link, $url, $label)) | Out-Null
+    $lines.Add(('[![{0}]({1})]({2})' -f $label, $url, $link)) | Out-Null
   }
-  $lines.Add('</p>') | Out-Null
+
+  if (-not [string]::IsNullOrWhiteSpace($RepoSlug)) {
+    $ciWorkflow = Join-Path $ProjectRoot ".github/workflows/ci-smoke.yml"
+    if (Test-Path $ciWorkflow) {
+      $ciUrl = "https://github.com/{0}/actions/workflows/ci-smoke.yml" -f $RepoSlug
+      $lines.Add(('[![CI Smoke]({0}/badge.svg)]({0})' -f $ciUrl)) | Out-Null
+    }
+    $lines.Add(('[![GitHub Stars](https://img.shields.io/github/stars/{0}?style=social)](https://github.com/{0}/stargazers)' -f $RepoSlug)) | Out-Null
+    $lines.Add(('[![GitHub Issues](https://img.shields.io/github/issues/{0})](https://github.com/{0}/issues)' -f $RepoSlug)) | Out-Null
+  }
+
   return ($lines -join "`n")
 }
 
@@ -67,7 +93,7 @@ function New-StatusBlock($statusObj) {
 
   $lines = @(
     "<!-- README_STATUS:BEGIN -->",
-    "### Repository Status (Auto-generated, P27)",
+    "### Repository Status (Auto-generated)",
     "",
     "- branch: $($statusObj.repo.branch)",
     "- latest_gate: $latestGate ($latestGateStatus)",
@@ -104,7 +130,8 @@ if (-not (Test-Path $readmeFullPath)) {
 $statusObj = Read-Json -Path (Join-Path $ProjectRoot $StatusJsonPath)
 $badgesObj = Read-Json -Path (Join-Path $ProjectRoot $BadgesJsonPath)
 
-$badgesBlock = New-BadgesBlock -badgesObj $badgesObj
+$repoSlug = Get-GitHubRepoSlug
+$badgesBlock = New-BadgesBlock -badgesObj $badgesObj -RepoSlug $repoSlug
 $statusBlock = New-StatusBlock -statusObj $statusObj
 
 $readmeBefore = Get-Content -LiteralPath $readmeFullPath -Raw
