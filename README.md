@@ -116,22 +116,25 @@ More details:
 
 ```mermaid
 flowchart LR
-A[Balatro Game (real)] -->|RPC| B[balatrobot server]
-B --> C[Oracle Trace and Snapshots<br/>P0-P10]
-C --> D[Sim Engine and Canonical Hashing<br/>core, P1-P10]
-D --> E[Fixtures and Coverage Reports<br/>P0-P10, P3-P8]
-E --> F[Trainer and Policies<br/>Search/BC/DAgger/RL]
-F --> G[P22 Orchestrator<br/>matrix + multi-seed + resume]
-G --> H[Artifacts and Status Surfaces<br/>docs/artifacts/* + dashboard]
+  A["Balatro Game real runtime"] -->|RPC| B["balatrobot server"]
+  B --> C["Oracle trace and snapshots (P0-P10)"]
+  C --> D["Sim engine and canonical hashing (core, P1-P10)"]
+  D --> E["Fixtures and coverage reports (P0-P10, P3-P8)"]
+  E --> F["Trainer and policies (Search, BC, DAgger, RL)"]
+  F --> G["P22 orchestrator (matrix, multi-seed, resume)"]
+  G --> H["Artifacts and status surfaces (docs/artifacts and dashboard)"]
 
-subgraph OBS[P22 Runtime Observability]
-  O1[telemetry.jsonl]
-  O2[live_summary_snapshot.json]
-  O3[summary_table.csv/json/md]
-  O4[progress.jsonl and seeds_used.json]
-end
+  subgraph OBS["P22 Runtime Observability"]
+    O1["telemetry.jsonl"]
+    O2["live_summary_snapshot.json"]
+    O3["summary_table.csv/json/md"]
+    O4["progress.jsonl and seeds_used.json"]
+  end
 
-G --> OBS
+  G --> O1
+  G --> O2
+  G --> O3
+  G --> O4
 ```
 
 Data-flow details: [docs/ARCHITECTURE_P25.md](docs/ARCHITECTURE_P25.md)
