@@ -25,7 +25,7 @@ try:  # pragma: no cover - optional dependency in local venv
 except Exception:  # pragma: no cover
     yaml = None
 
-from trainer.experiments.champion import update_champion_candidate
+from trainer.experiments.champion import update_nightly_decision
 from trainer.experiments.matrix import build_matrix
 from trainer.experiments.metrics import aggregate_seed_metrics, is_success
 from trainer.experiments.report import write_comparison_report, write_summary_tables
@@ -1053,16 +1053,10 @@ def main() -> int:
     rows_sorted = sorted(rows, key=lambda r: (str(r.get("status")) != "passed", -(float(r.get("mean") or 0.0))))
 
     summary_paths = write_summary_tables(run_root, rows_sorted, primary_metric=primary_metric, run_id=run_id)
-    champion_rows = []
-    for row in rows_sorted:
-        token = str(row.get("status"))
-        copied = dict(row)
-        copied["status"] = "success" if token in {"passed", "dry_run"} else "failed"
-        champion_rows.append(copied)
-    champion_update = update_champion_candidate(
+    champion_update = update_nightly_decision(
         out_root,
         run_id=run_id,
-        ranked_rows=champion_rows,
+        ranked_rows=rows_sorted,
         primary_metric=primary_metric,
         evaluation_cfg=(cfg.get("evaluation") or {}),
     )

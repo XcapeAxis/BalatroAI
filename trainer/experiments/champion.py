@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:
@@ -114,3 +119,147 @@ def update_champion_candidate(
         "candidate_path": str(candidate_path),
     }
 
+
+def update_nightly_decision(
+    out_root: Path,
+    *,
+    run_id: str,
+    ranked_rows: list[dict[str, Any]],
+    primary_metric: str,
+    evaluation_cfg: dict[str, Any],
+) -> dict[str, Any]:
+    champion_path = out_root / "champion.json"
+    candidate_path = out_root / "candidate.json"
+    decision_path = out_root / "nightly_decision.json"
+    decision_md_path = out_root / "nightly_decision.md"
+    changelog_path = out_root / "CHANGELOG_P23.md"
+
+    gate_thresholds = evaluation_cfg.get("gate_thresholds") if isinstance(evaluation_cfg.get("gate_thresholds"), dict) else {}
+    min_avg = float(gate_thresholds.get("min_avg_ante") or 0.0)
+    min_median = float(gate_thresholds.get("min_median_ante") or 0.0)
+    min_win = float(gate_thresholds.get("min_win_rate") or 0.0)
+    min_delta = float((evaluation_cfg.get("promotion") or {}).get("min_delta") or 0.0)
+
+    old_champion = _read_json(champion_path)
+
+    valid_rows: list[dict[str, Any]] = []
+    for row in ranked_rows:
+        if str(row.get("status")) not in {"passed", "success", "dry_run"}:
+            continue
+        avg_ante = float(row.get("avg_ante_reached") or row.get("mean") or 0.0)
+        median_ante = float(row.get("median_ante") or 0.0)
+        win_rate = float(row.get("win_rate") or 0.0)
+        gate_pass = (avg_ante >= min_avg) and (median_ante >= min_median) and (win_rate >= min_win)
+        enriched = dict(row)
+        enriched["gate_pass"] = gate_pass
+        valid_rows.append(enriched)
+
+    candidate = None
+    for row in valid_rows:
+        if bool(row.get("gate_pass")):
+            candidate = row
+            break
+
+    if candidate is None:
+        decision = "hold"
+        reason = "no_valid_candidate"
+        champion_changed = False
+    else:
+        old_metric = float(old_champion.get("avg_ante_reached") or old_champion.get("mean") or 0.0) if old_champion else None
+        candidate_metric = float(candidate.get("avg_ante_reached") or candidate.get("mean") or 0.0)
+        if old_metric is None:
+            decision = "promote"
+            reason = "bootstrap_no_previous_champion"
+            champion_changed = True
+        else:
+            delta = candidate_metric - old_metric
+            if delta >= min_delta:
+                decision = "promote"
+                reason = f"delta_avg_ante={delta:.6f} meets threshold={min_delta:.6f}"
+                champion_changed = True
+            else:
+                decision = "hold"
+                reason = f"delta_avg_ante={delta:.6f} below threshold={min_delta:.6f}"
+                champion_changed = False
+
+    candidate_payload = {
+        "schema": "p23_candidate_v1",
+        "generated_at": _now_iso(),
+        "run_id": run_id,
+        "primary_metric": primary_metric,
+        "candidate": candidate,
+        "decision": decision,
+        "reason": reason,
+        "gate_thresholds": {
+            "min_avg_ante": min_avg,
+            "min_median_ante": min_median,
+            "min_win_rate": min_win,
+        },
+    }
+    _write_json(candidate_path, candidate_payload)
+
+    champion_payload = old_champion if old_champion is not None else {}
+    if candidate is not None and champion_changed:
+        champion_payload = {
+            "schema": "p23_champion_v1",
+            "updated_at": _now_iso(),
+            "updated_by_run": run_id,
+            "primary_metric": primary_metric,
+            "exp_id": candidate.get("exp_id"),
+            "run_dir": candidate.get("run_dir"),
+            "avg_ante_reached": float(candidate.get("avg_ante_reached") or candidate.get("mean") or 0.0),
+            "median_ante": float(candidate.get("median_ante") or 0.0),
+            "win_rate": float(candidate.get("win_rate") or 0.0),
+            "mean": float(candidate.get("mean") or 0.0),
+            "std": float(candidate.get("std") or 0.0),
+            "status": "champion",
+            "reason": reason,
+        }
+        _write_json(champion_path, champion_payload)
+    elif old_champion is not None:
+        champion_payload = old_champion
+
+    decision_payload = {
+        "schema": "p23_nightly_decision_v1",
+        "generated_at": _now_iso(),
+        "run_id": run_id,
+        "decision": decision,
+        "reason": reason,
+        "primary_metric": primary_metric,
+        "champion_changed": champion_changed,
+        "candidate": candidate,
+        "champion_before": old_champion,
+        "champion_after": champion_payload if champion_payload else old_champion,
+    }
+    _write_json(decision_path, decision_payload)
+
+    md_lines = [
+        "# P23 Nightly Decision",
+        "",
+        f"- run_id: `{run_id}`",
+        f"- decision: `{decision}`",
+        f"- reason: {reason}",
+        f"- champion_changed: `{champion_changed}`",
+        f"- candidate: `{candidate.get('exp_id') if candidate else 'N/A'}`",
+    ]
+    decision_md_path.write_text("\n".join(md_lines) + "\n", encoding="utf-8")
+
+    changelog_lines = []
+    if changelog_path.exists():
+        changelog_lines = changelog_path.read_text(encoding="utf-8").splitlines()
+    if not changelog_lines:
+        changelog_lines = ["# P23 Champion/Candidate Changelog", ""]
+    changelog_lines.append(f"## {run_id}")
+    changelog_lines.append(f"- decision: {decision}")
+    changelog_lines.append(f"- reason: {reason}")
+    changelog_lines.append(f"- candidate: {candidate.get('exp_id') if candidate else 'N/A'}")
+    changelog_lines.append("")
+    changelog_path.write_text("\n".join(changelog_lines).rstrip() + "\n", encoding="utf-8")
+
+    return {
+        "decision": decision,
+        "reason": reason,
+        "candidate_path": str(candidate_path),
+        "champion_path": str(champion_path),
+        "nightly_decision_path": str(decision_path),
+    }
