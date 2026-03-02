@@ -19,6 +19,7 @@ from typing import Any
 from trainer.experiments.campaign import CampaignSpec, load_campaign
 from trainer.experiments.campaign_report import render_campaign_summary_md, write_json
 from trainer.experiments.champion import update_p24_from_ranking
+from trainer.experiments.report import write_summary_tables
 
 
 def now_iso() -> str:
@@ -103,6 +104,31 @@ def copy_stage_experiments(stage_run_root: Path, campaign_run_root: Path, stage_
         shutil.copytree(p, target)
         copied.append(target_name)
     return copied
+
+
+def collect_campaign_rows(run_root: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for exp_dir in sorted([p for p in run_root.iterdir() if p.is_dir()], key=lambda p: p.name):
+        manifest = read_json(exp_dir / "run_manifest.json")
+        if not manifest:
+            continue
+        status = read_json(exp_dir / "status.json")
+        rows.append(
+            {
+                "exp_id": str(manifest.get("exp_id") or exp_dir.name),
+                "status": "passed" if str(status.get("status")) in {"success", "passed", "dry_run"} else str(status.get("status") or "failed"),
+                "mean": float(status.get("mean") or status.get("avg_ante_reached") or 0.0),
+                "std": float(status.get("std") or 0.0),
+                "avg_ante_reached": float(status.get("avg_ante_reached") or status.get("mean") or 0.0),
+                "median_ante": float(status.get("median_ante") or 0.0),
+                "win_rate": float(status.get("win_rate") or 0.0),
+                "seed_count": int(status.get("seed_count") or 0),
+                "catastrophic_failure_count": int(status.get("catastrophic_failure_count") or 0),
+                "elapsed_sec": float(status.get("elapsed_sec") or 0.0),
+                "run_dir": str(exp_dir),
+            }
+        )
+    return rows
 
 
 def merge_stage_telemetry(
@@ -222,6 +248,39 @@ def run_post_action(
         ]
         result = run_process(cmd, cwd=repo_root, timeout_sec=600)
         return {"enabled": True, "status": "pass" if result["returncode"] == 0 else "fail", "cmd": cmd}
+
+    if name == "flake":
+        exp_ids = [p.name for p in run_root.iterdir() if p.is_dir() and (p / "run_manifest.json").exists()]
+        if not exp_ids:
+            return {"enabled": True, "status": "skipped", "reason": "no_experiments"}
+        exp_id = sorted(exp_ids)[0]
+        campaign_runs = sorted(
+            [p for p in run_root.parent.iterdir() if p.is_dir() and p.name != "latest"],
+            key=lambda p: p.name,
+            reverse=True,
+        )
+        run_roots: list[str] = []
+        for rr in campaign_runs:
+            if (rr / exp_id / "exp_summary.json").exists():
+                run_roots.append(str(rr))
+            if len(run_roots) >= 3:
+                break
+        if len(run_roots) < 3:
+            return {"enabled": True, "status": "skipped", "reason": "need_3_runs_for_flake", "exp_id": exp_id}
+        cmd = [
+            python_exe,
+            "-B",
+            "-m",
+            "trainer.experiments.flake",
+            "--run-roots",
+            ",".join(run_roots),
+            "--exp-id",
+            exp_id,
+            "--out-dir",
+            str(run_root),
+        ]
+        result = run_process(cmd, cwd=repo_root, timeout_sec=600)
+        return {"enabled": True, "status": "pass" if result["returncode"] == 0 else "fail", "cmd": cmd, "exp_id": exp_id}
 
     if name == "dashboard":
         if not headless_dashboard:
@@ -409,6 +468,20 @@ def main() -> int:
             status_payload["state"] = "stage_fail"
         write_status(status_path, status_payload)
 
+    rows = collect_campaign_rows(run_root)
+    rows_sorted = sorted(rows, key=lambda r: (str(r.get("status")) != "passed", -(float(r.get("mean") or 0.0))))
+    write_summary_tables(run_root, rows_sorted, primary_metric="avg_ante_reached", run_id=run_id)
+    live_snapshot = {
+        "schema": "p24_live_summary_v1",
+        "generated_at": now_iso(),
+        "campaign_id": spec.campaign_id,
+        "run_id": run_id,
+        "state": status_payload.get("state"),
+        "stage_status": status_payload.get("stage_status"),
+        "rows": rows_sorted,
+    }
+    write_json(run_root / "live_summary_snapshot.json", live_snapshot)
+
     post_action_results: dict[str, Any] = {}
     for action_name, enabled in spec.post_actions.items():
         post_action_results[action_name] = run_post_action(
@@ -451,9 +524,8 @@ def main() -> int:
     summary_md_path.write_text(render_campaign_summary_md(summary_payload), encoding="utf-8")
 
     print(f"[P24-campaign] run_id={run_id} status={summary_payload['status']} run_root={run_root}")
-    return 0 if summary_payload["status"] in {"completed", "stage_fail"} else 1
+    return 0 if summary_payload["status"] == "completed" else 1
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
