@@ -1,121 +1,243 @@
-# BalatroAI
+﻿# BalatroAI
 
-AI training and evaluation framework for [Balatro](https://store.steampowered.com/app/2578540/Balatro/) (poker roguelike), with real-game integration via **balatrobot** HTTP RPC and a **Python clean-room simulator** for fast rollouts and regression.
+A simulator-first Balatro experimentation platform focused on parity, reproducibility, and gated iteration.
 
-## Features
+## Badges
 
-- **Dual environment**: Real gameplay through **balatrobot** HTTP JSON-RPC and a **Python simulator** for high-throughput rollouts.
-- **Training pipeline**: Behavior cloning (BC), policy-value (PV), reinforcement learning (RL), distillation, DAgger; expert search; champion–challenger and risk-aware controllers.
-- **Simulator parity**: Oracle (real gamestate) vs sim traces; canonical `state_v1` / `action_v1` / `trace_v1` schemas; directed fixtures and diff tooling for alignment (e.g. `hand_core`, P0–P2b).
-- **Deployment**: v1 package spec, inference assistant (TUI / Streamlit), optional “suggest + execute” for sim.
+[![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](trainer/requirements.txt)
+[![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows&logoColor=white)](USAGE_GUIDE.md)
+[![Workflow](https://img.shields.io/badge/Workflow-mainline--only-2EA44F)](scripts/git_sync.ps1)
+[![Seed Governance](https://img.shields.io/badge/Seed%20Governance-P23%2B-0E8A16)](configs/experiments/seeds_p23.yaml)
+[![Orchestrator](https://img.shields.io/badge/Experiment%20Orchestrator-P22%2B-1F6FEB)](scripts/run_p22.ps1)
+[![Campaign Manager](https://img.shields.io/badge/Campaign%20Manager-P24%2B-5319E7)](scripts/run_p24.ps1)
+[![Latest Gate](https://img.shields.io/badge/Latest%20Gate-RunP25-orange)](scripts/run_regressions.ps1)
+[![Oracle-Sim Parity](https://img.shields.io/badge/Oracle%E2%86%94Sim-Parity%20Tracked-blue)](sim/README.md)
+[![Docs Specs](https://img.shields.io/badge/Docs%20Specs-P16%E2%80%93P25%20(partial)-6E7781)](docs/)
+[![License](https://img.shields.io/badge/License-Not%20Specified-lightgrey)](#license-and-contributing)
 
-## Architecture
+Badge data source notes:
 
-```mermaid
-flowchart LR
-  subgraph real [Real Game]
-    Balatro[Balatro]
-    RPC[balatrobot RPC]
-    Balatro --> RPC
-  end
-  subgraph pipeline [Pipeline]
-    Rollout[rollout]
-    Train[train_bc / train_rl / train_pv]
-    Eval[eval]
-    Infer[infer_assistant]
-    Rollout --> Train --> Eval --> Infer
-  end
-  subgraph sim [Simulator]
-    SimEnv[SimEnv]
-    Oracle[Oracle]
-  end
-  RPC --> Rollout
-  SimEnv --> Rollout
-  Oracle --> SimEnv
-```
+- Static shields are mapped to repo files/scripts and maintained in README.
+- Gate/status details come from `scripts/run_regressions.ps1` and `scripts/generate_readme_status.ps1`.
 
-## Project Structure
+## What This Project Is
 
-| Directory / File | Description |
-|------------------|-------------|
-| `trainer/` | Data collection, BC/RL/PV/distillation training, evaluation, inference assistant. See [trainer/README.md](trainer/README.md). |
-| `sim/` | Simulator engine, oracle, canonical schemas, directed fixtures. See [sim/README.md](sim/README.md). |
-| `balatro_mechanics/` | Rules and parity CSV/manifests. See [balatro_mechanics/README.md](balatro_mechanics/README.md). |
-| `ui/` | Inference assistant TUI and Streamlit UI. |
-| `scripts/` | Regression, smoke, cleanup, and git sync PowerShell scripts. |
-| `docs/` | P15–P20 specs, alignment status, deploy package spec. |
-| `benchmark_balatrobot.py` | Single/multi-instance throughput and latency benchmarks. |
-| `sweep_throughput.py` | Batch instance sweeps and summary CSV. |
+BalatroAI exists to make policy development and validation for Balatro engineering-grade instead of one-off scripting:
 
-## Prerequisites
+- real-game integration via `balatrobot` RPC
+- simulator-driven high-throughput experiments
+- oracle/simulator parity checks with canonical traces
+- gated experiment operations (orchestrator, campaign manager, triage, ranking)
+- reproducibility by seed governance and artifactized reports
 
-- **Python**: 3.12 or 3.13 (recommended). 3.15 alpha may be unstable for long runs.
-- **balatrobot** and Balatro (with lovely `version.dll`). Windows path examples: [USAGE_GUIDE.md](USAGE_GUIDE.md).
-- Install dependencies (from repo root):
+## Scope and Boundaries
 
-```bash
-python -m pip install -r trainer/requirements.txt
-```
+Suitable for:
 
-Optional: create a dedicated venv:
+- simulator parity and canonical trace alignment work
+- offline-online policy iteration (Search -> BC -> DAgger -> RL)
+- regression-gated experiment automation (P22+ / P23+ / P24+)
+- engineering workflows around champion/candidate decisions
 
-```powershell
-.\trainer\scripts\setup_trainer_env.ps1
-```
+Not suitable for:
+
+- a plug-and-play "always-win" agent
+- uncontrolled real-game execution without safety rails
+- interpreting metrics outside seed/budget/config/version context
+- claiming universal performance without reproducible gate artifacts
 
 ## Quick Start
 
-1. Start balatrobot (e.g. port 12346):
+Fastest verified path from repo root:
+
+1. Install trainer dependencies.
+
+```powershell
+python -m pip install -r trainer/requirements.txt
+```
+
+2. (Optional) Start `balatrobot` service.
 
 ```powershell
 balatrobot serve --headless --fast --port 12346 --love-path "<path-to-Balatro.exe>" --lovely-path "<path-to-version.dll>"
 ```
 
-2. Run E2E smoke from repo root (rollout → train_bc 1 epoch → eval --offline → infer_assistant --once):
+3. Run a dry-run gate smoke.
 
 ```powershell
-.\trainer\scripts\smoke_e2e.ps1 --base-urls "http://127.0.0.1:12346"
+powershell -ExecutionPolicy Bypass -File scripts\run_p23.ps1 -DryRun
 ```
 
-Full pipeline details (rollout, train, eval, infer) are in [trainer/README.md](trainer/README.md).
+4. Check outputs.
 
-## Pipeline Summary
+- `docs/artifacts/p23/runs/latest/`
+- `docs/artifacts/p24/runs/latest/`
 
-| Step | Script | Notes |
-|------|--------|-------|
-| **Rollout** | `trainer/rollout.py` | `--backend real|sim`, outputs JSONL. |
-| **Train** | `train_bc.py` / `train_rl.py` / `train_pv.py` / `train_distill.py` | Outputs `best.pt`, etc. |
-| **Eval** | `trainer/eval.py` | `--offline` / `--online`, `--backend real|sim`. |
-| **Inference** | `trainer/infer_assistant.py` | Optional `--execute` (sim). |
+More details:
 
-For exact arguments and examples, see [trainer/README.md](trainer/README.md).
+- [trainer/README.md](trainer/README.md)
+- [USAGE_GUIDE.md](USAGE_GUIDE.md)
+- [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 
-## Simulator & Oracle
+## Architecture Overview
 
-The repo includes a clean-room Python simulator and an oracle pipeline that queries the local balatrobot service. Directed fixtures and oracle/sim diff target alignment (e.g. `hand_core`). For demo steps and commands, see [sim/README.md](sim/README.md).
+```mermaid
+flowchart LR
+  subgraph Real[Real Runtime]
+    G[Balatro]
+    RPC[balatrobot RPC]
+    G --> RPC
+  end
 
-## Benchmark & Sweep
+  subgraph Canonical[Oracle and Canonical]
+    ORA[oracle collectors]
+    CAN[state_v1/action_v1/trace_v1]
+    DIFF[oracle-sim diff]
+    ORA --> CAN --> DIFF
+  end
 
-- **benchmark_balatrobot.py**: Single/multi-instance throughput and latency; optional `--launch-instances` with `direct` or `uvx`.
-- **sweep_throughput.py**: Multi-instance sweeps and summary CSV (e.g. `sweep_results.csv`, `sweep_results_summary.csv`).
+  subgraph Sim[Simulator]
+    SIM[sim engine]
+  end
 
-Command examples: [USAGE_GUIDE.md](USAGE_GUIDE.md) (sections 2 and 3).
+  subgraph Train[Trainer]
+    RO[rollout]
+    TR[train_bc / train_rl / train_pv]
+    EV[eval]
+    INFER[infer assistant]
+    RO --> TR --> EV --> INFER
+  end
 
-## Regression & Tests
+  subgraph Ops[Experiment Ops]
+    ORCH[P22 orchestrator]
+    CAMP[P24 campaign manager]
+    TRI[triage + bisect]
+    RANK[ranking]
+    CC[champion/candidate]
+    ART[artifacts + reports]
+    ORCH --> CAMP --> TRI --> RANK --> CC
+    CAMP --> ART
+  end
 
-- **Regression gates**: P18 / P19 / P20 via `scripts\run_regressions.ps1` (e.g. `-RunP18`, `-RunP19`, `-RunP20`). Wrap in `scripts/safe_run.ps1` for timeout and log capture.
-- **Unit tests**: e.g. `python -m unittest trainer.tests.test_ablation_and_gates -v`; sim tests live in `sim/tests/`.
-- Gate definitions and artifact layout: `docs/P18_SPEC.md`–`P20_SPEC.md`.
+  RPC --> ORA
+  CAN --> SIM
+  SIM --> RO
+  EV --> ORCH
+```
 
-## Deploy Package
+Data-flow details: [docs/ARCHITECTURE_P25.md](docs/ARCHITECTURE_P25.md)
 
-Deploy packages follow the v1 spec: directory layout, metadata, checksums, export and verification scripts. See [docs/DEPLOY_PACKAGE_SPEC.md](docs/DEPLOY_PACKAGE_SPEC.md).
+## Core Workflows
 
-## Documentation
+| Workflow | Entry | Output |
+|---|---|---|
+| Regression gates | `scripts/run_regressions.ps1` (`-RunP23/-RunP24/-RunP25`) | `docs/artifacts/p23|p24|p25/*` |
+| Orchestrator | `scripts/run_p22.ps1`, `scripts/run_p23.ps1` | run plans, telemetry, summary tables |
+| Campaign ops | `scripts/run_p24.ps1` | campaign status/summary, triage, ranking |
+| Training | `trainer/train_bc.py`, `trainer/train_rl.py`, `trainer/train_pv.py` | checkpoints + eval metrics |
+| Inference | `trainer/infer_assistant.py` | suggestions / optional controlled execution |
 
-- **Specs**: P15–P20, SIM_ALIGNMENT_STATUS, DEPLOY_PACKAGE_SPEC under `docs/`.
-- **Usage guide**: [USAGE_GUIDE.md](USAGE_GUIDE.md).
+## Reproducibility
 
-## License & Contributing
+Use this repo with explicit gate + seed + config references:
 
-License: see repository. Contributions welcome via issues and pull requests.
+- gate entry: `scripts/run_regressions.ps1`
+- seed policy: `configs/experiments/seeds_p23.yaml`
+- matrix config: `configs/experiments/p23.yaml`
+- campaign config: `configs/experiments/campaigns/p24_quick.yaml`
+
+Full guide: [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
+
+<!-- README_STATUS:BEGIN -->
+### Repository Status (Auto-generated)
+
+- branch: main
+- mainline_status: mainline (detected main: main)
+- highest_supported_gate: RunP25
+- seed_governance: enabled (P23+)
+- experiment_orchestrator: enabled (P22+)
+- docs_specs_range: P16-P25 (available: P16, P17, P18, P19, P20, P21, P23, P24, P25)
+- artifacts_guide: docs/artifacts/p24/runs/latest and docs/artifacts/p25/
+<!-- README_STATUS:END -->
+
+## Example Outputs
+
+Assets directory: [docs/assets/readme/](docs/assets/readme/)
+
+1. Gate log snippet: [sample_run_log.txt](docs/assets/readme/sample_run_log.txt)
+2. Summary table snippet: [sample_summary_table.md](docs/assets/readme/sample_summary_table.md)
+3. Data-flow visual source: [architecture_dataflow.mmd](docs/assets/readme/architecture_dataflow.mmd)
+4. Dashboard snippet: [sample_dashboard_log.txt](docs/assets/readme/sample_dashboard_log.txt)
+
+Example log excerpt:
+
+```text
+[RunP24] gate_status=PASS
+artifact_dir=docs/artifacts/p24/20260302-150119
+functional.pass=true campaign.pass=true reliability.pass=true ops.pass=true
+```
+
+Example summary table excerpt:
+
+| exp_id | status | avg_ante | median_ante | win_rate | seeds |
+|---|---:|---:|---:|---:|---:|
+| quick_risk_aware | passed | 3.8352 | 3.5750 | 0.4041 | 8 |
+| quick_hybrid | passed | 3.7396 | 3.4875 | 0.4876 | 8 |
+| quick_baseline | passed | 3.5838 | 3.7125 | 0.4143 | 8 |
+
+## Project Structure
+
+| Path | Purpose |
+|---|---|
+| `trainer/` | rollout/train/eval/infer pipelines |
+| `sim/` | simulator, oracle, canonical schemas, parity fixtures |
+| `scripts/` | gates, smokes, maintenance scripts |
+| `configs/experiments/` | experiment matrix, seeds, campaign, ranking configs |
+| `docs/` | specs, status docs, architecture/repro guides |
+| `docs/artifacts/` | persisted run artifacts and gate outputs |
+
+## Roadmap
+
+Done:
+
+- P22 orchestrator (modes, telemetry, summaries)
+- P23 seed governance + coverage/flake harness
+- P24 campaign manager + triage/bisect + ranking + dashboard
+
+In progress:
+
+- RL pilot stabilization and promotion criteria hardening
+- stronger nightly scheduling policy and cost controls
+- tighter docs and gate coupling for operator onboarding
+
+Planned:
+
+- deeper real canary safeguards and rollout channels
+- broader mechanism coverage and richer failure taxonomy
+- CI-friendly docs status publishing and release packaging
+
+## Known Limitations
+
+- Real runtime depends on local Balatro + lovely + balatrobot setup.
+- Performance claims are seed/budget/version dependent.
+- Some gate logic still uses local/manual artifacts, not centralized CI.
+- Simulator/mechanic coverage is still expanding across milestones.
+
+## Documentation Index
+
+- [trainer/README.md](trainer/README.md)
+- [sim/README.md](sim/README.md)
+- [USAGE_GUIDE.md](USAGE_GUIDE.md)
+- [docs/P24_SPEC.md](docs/P24_SPEC.md)
+- [docs/P25_SPEC.md](docs/P25_SPEC.md)
+- [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
+- [docs/ARCHITECTURE_P25.md](docs/ARCHITECTURE_P25.md)
+
+## License and Contributing
+
+- License: currently not specified by a top-level `LICENSE` file.
+- Contributions: use mainline-only workflow and run gates before proposing changes.
+
+
+
+
