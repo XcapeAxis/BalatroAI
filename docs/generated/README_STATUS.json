@@ -1,0 +1,25 @@
+﻿{
+    "schema":  "p25_readme_status_v1",
+    "branch":  "main",
+    "detected_main_branch":  "main",
+    "mainline_status":  "mainline",
+    "highest_supported_gate":  "RunP25",
+    "seed_governance":  "enabled (P23+)",
+    "orchestrator":  "enabled (P22+)",
+    "docs_specs_range":  "P16-P25",
+    "docs_specs_available":  [
+                                 "P16",
+                                 "P17",
+                                 "P18",
+                                 "P19",
+                                 "P20",
+                                 "P21",
+                                 "P23",
+                                 "P24",
+                                 "P25"
+                             ],
+    "artifacts_guide":  [
+                            "docs/artifacts/p24/runs/latest",
+                            "docs/artifacts/p25"
+                        ]
+}
