@@ -51,7 +51,9 @@ Key sections:
 - `matrix[]`:
   - `id`, `name`
   - `backend`, `policy`
+  - `experiment_type` (optional, e.g. `selfsup_pretrain`)
   - `seed_mode` (`regression_fixed` or `nightly`)
+  - `seeds` (optional explicit seed override list)
   - `gate_flag` (passed to `scripts/run_regressions.ps1`)
   - `stages` (`sanity/gate/dataset/train/eval`)
   - `eval` settings
@@ -75,6 +77,29 @@ Key sections:
   - 2 seeds: fast smoke and gate sanity only.
   - 8+ seeds: meaningful model comparison in local development.
   - fixed + extra_random: nightly trend monitoring and anti-overfit checks.
+
+## P31 Self-Supervised Integration
+
+P22 now supports `experiment_type: selfsup_pretrain`.
+
+Current reference row in `configs/experiments/p22.yaml`:
+
+- `id: quick_selfsup_pretrain`
+- `experiment_type: selfsup_pretrain`
+- explicit seeds: `AAAAAAA, BBBBBBB, CCCCCCC` (`-Quick` applies `--seed-limit 2`)
+- selfsup config: `configs/experiments/p31_selfsup.yaml`
+
+Behavior:
+
+- orchestrator invokes `trainer.selfsup_train.run_selfsup_training(...)` directly.
+- `run_manifest.json` records selfsup config and declared data sources.
+- per-seed selfsup outputs are written under experiment run directories.
+
+Selfsup output paths:
+
+- `docs/artifacts/p22/runs/<run_id>/quick_selfsup_pretrain/selfsup_runs/seed_*/summary.json`
+- `docs/artifacts/p22/runs/<run_id>/quick_selfsup_pretrain/progress.jsonl`
+- `docs/artifacts/p22/runs/<run_id>/summary_table.{csv,json,md}`
 
 ## Runtime Observability (During Execution)
 
@@ -136,8 +161,15 @@ Then inspect:
 - `docs/artifacts/p22/runs/<run_id>/quick_baseline/seeds_used.json`
 - `docs/artifacts/p22/runs/<run_id>/summary_table.md`
 
+Reproduce selfsup row only:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_selfsup_pretrain -SeedLimit 2
+```
+
 ## Related Docs
 
 - [../README.md](../README.md)
 - [REPRODUCIBILITY_P25.md](REPRODUCIBILITY_P25.md)
 - [SEED_POLICY_P23.md](SEED_POLICY_P23.md)
+- [EXPERIMENTS_P31.md](EXPERIMENTS_P31.md)

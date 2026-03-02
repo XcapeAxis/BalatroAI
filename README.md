@@ -18,7 +18,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/XcapeAxis/BalatroAI)](https://github.com/XcapeAxis/BalatroAI/issues)
 <!-- BADGES:END -->
 
-BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations). It is designed for mechanism research and Search/BC/DAgger/RL iteration, not as a cheat injector or memory-hook tool.
+BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes a P31 self-supervised encoder backbone for trajectory-native pretraining. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised iteration, not as a cheat injector or memory-hook tool.
 
 Badge/status refresh source:
 
@@ -69,13 +69,19 @@ python -m pip install --upgrade pip
 python -m pip install -r trainer/requirements.txt
 ```
 
-3. Run a minimal baseline regression smoke (P0/P1 path).
+3. Start `balatrobot` (required for oracle/alignment gates and full regression suites).
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunFast
+uvx balatrobot serve --headless --fast --port 12346
 ```
 
-4. Run the P22 quick orchestration matrix (2 experiments x 2 seeds).
+4. Run a baseline alignment regression (P0-P10 path).
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP10
+```
+
+5. Run the P22 quick orchestration matrix (now includes `quick_selfsup_pretrain`).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
@@ -87,7 +93,7 @@ Optional verbose progress:
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -VerboseLogs
 ```
 
-5. Inspect generated artifacts.
+6. Inspect generated artifacts.
 
 - `docs/artifacts/p22/runs/<run_id>/summary_table.md`
 - `docs/artifacts/p22/runs/<run_id>/run_plan.json`
@@ -98,14 +104,15 @@ Expected console excerpt (trimmed):
 
 ```text
 [RunFast] PASS (P0/P1 baseline completed)
-[P22] Experiment 1/2: quick_baseline (seeds 2, mode=gate)
-[P22] Completed 1/2: quick_baseline status=passed | avg_ante=3.4716 median_ante=3.850 win_rate=51.32% hand_top1=59.69% hand_top3=78.52% shop_top1=82.15% illegal=2.41%
-[P23] run_id=20260302-223827 mode=gate status=PASS
-[P23] live_snapshot=.../docs/artifacts/p22/runs/20260302-223827/live_summary_snapshot.json
-[P23] summary_json=.../docs/artifacts/p22/runs/20260302-223827/summary_table.json
+[P22] Experiment 1/3: quick_baseline (seeds 2, mode=gate)
+[P22] Experiment 3/3: quick_selfsup_pretrain (seeds 2, mode=gate)
+[P22] Completed 3/3: quick_selfsup_pretrain status=passed | avg_ante=4.6000 median_ante=4.600 win_rate=100.00% hand_top1=100.00% hand_top3=100.00% shop_top1=0.00% illegal=11.41%
+[P23] run_id=20260303-005315 mode=gate status=PASS
+[P23] live_snapshot=.../docs/artifacts/p22/runs/20260303-005315/live_summary_snapshot.json
+[P23] summary_json=.../docs/artifacts/p22/runs/20260303-005315/summary_table.json
 ```
 
-Real-game step note: for live RPC/oracle workflows you still need a legal local Balatro install plus `balatrobot` runtime. For simulator-only P22 quick mode, this is not required.
+Real-game step note: P0-P10/P13 oracle-alignment workflows require a legal local Balatro install plus `balatrobot` runtime. P22 synthetic modes can run simulator-only when gate stages are disabled.
 
 More details:
 
@@ -176,6 +183,13 @@ Seed policy clarification:
 
 For details and repro patterns: [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md), [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 
+P31 self-supervised backbone reproducibility:
+
+- config: `configs/experiments/p31_selfsup.yaml`
+- training entrypoint: `python -B trainer/selfsup_train.py --config configs/experiments/p31_selfsup.yaml --max-steps 100`
+- orchestrated run: `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` (includes `quick_selfsup_pretrain`)
+- reference docs: [docs/EXPERIMENTS_P31.md](docs/EXPERIMENTS_P31.md), [docs/COVERAGE_P31_STATUS.md](docs/COVERAGE_P31_STATUS.md)
+
 <!-- STATUS:START -->
 <!-- README_STATUS:BEGIN -->
 ### Repository Status (Auto-generated)
@@ -217,6 +231,14 @@ Example summary table excerpt:
 | quick_hybrid | passed | 3.7396 | 3.4875 | 0.4876 | 8 |
 | quick_baseline | passed | 3.5838 | 3.7125 | 0.4143 | 8 |
 
+Example self-supervised metrics excerpt (P22 `quick_selfsup_pretrain`):
+
+| metric | value |
+|---|---:|
+| selfsup_val_loss | 11.4079 |
+| selfsup_score_delta_mae | 1.0000 |
+| selfsup_hand_type_acc | 1.0000 |
+
 ## Project Structure
 
 | Path | Purpose |
@@ -232,10 +254,12 @@ Example summary table excerpt:
 
 Done:
 
+- P0-P13 alignment and oracle/sim parity gates
 - P22 orchestrator (modes, telemetry, summaries)
 - P23 seed governance + coverage/flake harness
 - P24 campaign manager + triage/bisect + ranking + dashboard
 - P25 README/docs productization with RunP25 docs gate
+- P31 self-supervised trajectory backbone (`DecisionStep/Trajectory`, encoder, quick pretrain)
 
 In progress:
 
@@ -247,7 +271,7 @@ Planned:
 
 - deeper real canary safeguards and rollout channels
 - broader mechanism coverage and richer failure taxonomy
-- CI-friendly docs status publishing and release packaging
+- self-play/RL integration on top of the P31 self-supervised encoder
 
 ## Known Limitations
 
@@ -256,12 +280,15 @@ Planned:
 - Some gate logic still uses local/manual artifacts, not centralized CI.
 - Simulator/mechanic coverage is still expanding across milestones.
 - Generated status/readme snippets are local-run artifacts and should be refreshed before release notes.
+- P31 self-supervised backbone is alpha-grade: current heads focus on `score_delta` and `hand_type`; broader tactical targets will be added incrementally.
 
 ## Further Reading
 
 - [docs/SIM_ALIGNMENT_STATUS.md](docs/SIM_ALIGNMENT_STATUS.md)
 - [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
+- [docs/EXPERIMENTS_P31.md](docs/EXPERIMENTS_P31.md)
 - Coverage snapshots: `docs/COVERAGE_P*_STATUS.md`
+- [docs/COVERAGE_P31_STATUS.md](docs/COVERAGE_P31_STATUS.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ## Documentation Index
@@ -279,12 +306,13 @@ Planned:
 - [docs/STATUS_PUBLISHING_P27.md](docs/STATUS_PUBLISHING_P27.md)
 - [docs/RELEASE_TRAIN_P27.md](docs/RELEASE_TRAIN_P27.md)
 - [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
+- [docs/EXPERIMENTS_P31.md](docs/EXPERIMENTS_P31.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 - [docs/ARCHITECTURE_P25.md](docs/ARCHITECTURE_P25.md)
+- [docs/COVERAGE_P31_STATUS.md](docs/COVERAGE_P31_STATUS.md)
 
 ## License and Contributing
 
 - License: currently not specified by a top-level `LICENSE` file.
 - Contributions: use mainline-only workflow and run gates before proposing changes.
-

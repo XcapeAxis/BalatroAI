@@ -4,13 +4,13 @@
 
 ```mermaid
 flowchart LR
-  A[Balatro Game Runtime] -->|RPC| B[balatrobot service]
-  B --> C[Oracle collectors and snapshots]
-  C --> D[Canonical traces + scope hashes]
-  D --> E[Simulator parity checks and fixtures]
-  E --> F[Trainer pipelines Search/BC/DAgger/RL]
-  F --> G[P22/P23 experiment orchestrator]
-  G --> H[Artifacts and reports in docs/artifacts]
+  A["Balatro Game Runtime"] -->|RPC| B["balatrobot service"]
+  B --> C["Oracle collectors and snapshots"]
+  C --> D["Canonical traces and scope hashes"]
+  D --> E["Simulator parity checks and fixtures"]
+  E --> F["Trainer pipelines Search BC DAgger RL"]
+  F --> G["P22 P23 experiment orchestrator"]
+  G --> H["Artifacts and reports in docs artifacts"]
 ```
 
 ## Module Responsibilities (1-2 sentences each)

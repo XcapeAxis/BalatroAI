@@ -86,5 +86,14 @@ The runner executes:
   - fixed seeds are used for strict regression comparability.
   - P22 quick gate keeps `>1` seeds by default (`seed_limit=2`) for stable but non-single-seed smoke.
   - nightly/expanded runs add deterministic extra seeds.
-  - source of truth is always `seeds_used.json`, not a presumed single default seed.
+- source of truth is always `seeds_used.json`, not a presumed single default seed.
 - Curated outputs are written under `docs/artifacts/p22/**` (ignored from git tracking by repo policy).
+
+## P31 Self-Supervised Backbone Note
+
+- P31 adds a unified trajectory schema (`DecisionStep` / `Trajectory`) to reuse oracle/sim/real traces for self-supervised pretraining.
+- Initial heads focus on `score_observed.delta` regression and `hand_type` classification.
+- P22 now includes `quick_selfsup_pretrain` so self-supervised smoke experiments are first-class orchestrator runs.
+- Details:
+  - `docs/EXPERIMENTS_P31.md`
+  - `docs/COVERAGE_P31_STATUS.md`
