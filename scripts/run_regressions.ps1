@@ -34,6 +34,7 @@ param(
   [switch]$RunP23,
   [switch]$RunP24,
   [switch]$RunP25,
+  [switch]$RunP26,
   [switch]$RequireMainBranch,
   [string]$P21Timestamp = ""
 )
@@ -66,6 +67,12 @@ if ($RunP24) {
   $RunP22 = $true
 }
 if ($RunP25) {
+  $RunP24 = $true
+  $RunP23 = $true
+  $RunP22 = $true
+}
+if ($RunP26) {
+  $RunP25 = $true
   $RunP24 = $true
   $RunP23 = $true
   $RunP22 = $true
@@ -159,6 +166,9 @@ $RunP23GateReport = ""
 $RunP24Status = "SKIPPED"
 $RunP24ArtifactDir = ""
 $RunP24GateReport = ""
+$RunP25Status = "SKIPPED"
+$RunP25ArtifactDir = ""
+$RunP25GateReport = ""
 
 function Test-Health([string]$Url, [int]$TimeoutSec = 5) {
   try {
@@ -1560,8 +1570,223 @@ if ($RunP25) {
   $coverageStatusLines -join "`n" | Out-File -LiteralPath $coverageStatusPath -Encoding UTF8
 
   Write-Host ("[P25] artifact_dir=" + $p25Dir + " gate_status=" + $reportGate.status)
+  $RunP25Status = [string]$reportGate.status
+  $RunP25ArtifactDir = $p25Dir
+  $RunP25GateReport = $reportGatePath
   if ($reportGate.status -ne "PASS") {
     throw "[P25] gate failed; inspect gate_functional/gate_docs/report_p25_gate"
+  }
+}
+
+if ($RunP26) {
+  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $p26Root = Join-Path $ProjectRoot "docs/artifacts/p26"
+  if (-not (Test-Path $p26Root)) { New-Item -ItemType Directory -Path $p26Root -Force | Out-Null }
+  $p26Dir = Join-Path $p26Root $stamp
+  New-Item -ItemType Directory -Path $p26Dir -Force | Out-Null
+
+  $baselineSummary = [ordered]@{
+    schema = "p26_baseline_summary_v1"
+    generated_at = (Get-Date).ToString("o")
+    baseline_gate = "RunP25"
+    run_p25_status = $RunP25Status
+    run_p25_artifact_dir = $RunP25ArtifactDir
+    run_p25_gate_report = $RunP25GateReport
+  }
+  $baselineSummaryPath = Join-Path $p26Dir "baseline_summary.json"
+  Write-JsonFile -Path $baselineSummaryPath -Object $baselineSummary
+  $baselineMd = @(
+    "# P26 Baseline Summary",
+    "",
+    "- baseline_gate: RunP25",
+    "- run_p25_status: $RunP25Status",
+    "- run_p25_artifact_dir: $RunP25ArtifactDir",
+    "- run_p25_gate_report: $RunP25GateReport"
+  )
+  $baselineMdPath = Join-Path $p26Dir "baseline_summary.md"
+  $baselineMd -join "`n" | Out-File -LiteralPath $baselineMdPath -Encoding UTF8
+
+  $p26Py = Join-Path $ProjectRoot ".venv_trainer\Scripts\python.exe"
+  if (-not (Test-Path $p26Py)) { $p26Py = "python" }
+  $trendsRoot = Join-Path $ProjectRoot "docs/artifacts/trends"
+  $trendRowsJsonl = Join-Path $trendsRoot "trend_rows.jsonl"
+  $trendRowsCsv = Join-Path $trendsRoot "trend_rows.csv"
+  $trendSummaryPath = Join-Path $trendsRoot "trend_index_summary.json"
+  $requestedSinceTag = "sim-p23-seed-governance-v1"
+
+  $null = Invoke-SafeRunStep -Label "P26-trend-index" -Exe $p26Py -CmdArgs @(
+    "-B",
+    "-m", "trainer.experiments.index_artifacts",
+    "--scan-root", "docs/artifacts",
+    "--latest-only",
+    "--out-root", "docs/artifacts/trends",
+    "--append"
+  ) -TimeoutSec 900
+
+  $alertsDir = Join-Path $p26Dir "alerts_latest"
+  $null = Invoke-SafeRunStep -Label "P26-regression-alert" -Exe $p26Py -CmdArgs @(
+    "-B",
+    "-m", "trainer.experiments.regression_alert",
+    "--trends-root", "docs/artifacts/trends",
+    "--config", "configs/experiments/regression_alert_p26.yaml",
+    "--out-dir", $alertsDir
+  ) -TimeoutSec 900
+  $alertJsonPath = Join-Path $alertsDir "regression_alert_report.json"
+  $alertMdPath = Join-Path $alertsDir "regression_alert_report.md"
+  $alertCsvPath = Join-Path $alertsDir "regression_alert_table.csv"
+
+  $releaseMdPath = Join-Path $p26Dir "release_summary_p26.md"
+  $null = Invoke-SafeRunStep -Label "P26-release-summary" -Exe $p26Py -CmdArgs @(
+    "-B",
+    "-m", "trainer.experiments.release_notes",
+    "--since-tag", $requestedSinceTag,
+    "--out", $releaseMdPath,
+    "--include-commits",
+    "--include-benchmarks",
+    "--include-risks",
+    "--trends-root", "docs/artifacts/trends"
+  ) -TimeoutSec 900
+  $releaseJsonPath = [System.IO.Path]::ChangeExtension($releaseMdPath, ".json")
+
+  $p26Script = Join-Path $ProjectRoot "scripts/run_p26.ps1"
+  if (-not (Test-Path $p26Script)) { throw "[P26] missing script: $p26Script" }
+  $null = Invoke-SafeRunStep -Label "P26-scheduler-quick" -Exe "powershell" -CmdArgs @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $p26Script,
+    "-OutRoot", "docs/artifacts/p26",
+    "-Quick",
+    "-Resume",
+    "-SinceTag", $requestedSinceTag
+  ) -TimeoutSec 3600
+
+  $statusScript = Join-Path $ProjectRoot "scripts/generate_readme_status.ps1"
+  if (-not (Test-Path $statusScript)) { throw "[P26] missing script: $statusScript" }
+  $null = Invoke-SafeRunStep -Label "P26-readme-status" -Exe "powershell" -CmdArgs @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $statusScript
+  ) -TimeoutSec 300
+
+  $schedulerManifestPath = Join-Path $p26Dir "scheduler_run_manifest.json"
+  $schedulerStagePath = Join-Path $p26Dir "scheduler_stage_status.json"
+  $schedulerSummaryPath = Join-Path $p26Dir "scheduler_summary.md"
+
+  $trendSummaryObj = $null
+  if (Test-Path $trendSummaryPath) {
+    try { $trendSummaryObj = Get-Content -LiteralPath $trendSummaryPath -Raw | ConvertFrom-Json } catch { $trendSummaryObj = $null }
+  }
+  $alertObj = $null
+  if (Test-Path $alertJsonPath) {
+    try { $alertObj = Get-Content -LiteralPath $alertJsonPath -Raw | ConvertFrom-Json } catch { $alertObj = $null }
+  }
+  $releaseObj = $null
+  if (Test-Path $releaseJsonPath) {
+    try { $releaseObj = Get-Content -LiteralPath $releaseJsonPath -Raw | ConvertFrom-Json } catch { $releaseObj = $null }
+  }
+  $schedulerObj = $null
+  if (Test-Path $schedulerStagePath) {
+    try { $schedulerObj = Get-Content -LiteralPath $schedulerStagePath -Raw | ConvertFrom-Json } catch { $schedulerObj = $null }
+  }
+
+  $statusMdPath = Join-Path $ProjectRoot "docs/generated/README_STATUS.md"
+  $statusMdText = if (Test-Path $statusMdPath) { Get-Content -LiteralPath $statusMdPath -Raw } else { "" }
+  $statusHasTrend = $statusMdText -match "recent_trend_signal"
+
+  $functionalPass = ($RunP25Status -eq "PASS")
+  $trendsPass = (
+    (Test-Path $trendRowsJsonl) -and
+    (Test-Path $trendRowsCsv) -and
+    (Test-Path $trendSummaryPath) -and
+    (Test-Path $alertJsonPath) -and
+    (Test-Path $alertMdPath) -and
+    (Test-Path $alertCsvPath) -and
+    (Test-Path $releaseMdPath) -and
+    (Test-Path $releaseJsonPath)
+  )
+  $opsPass = (
+    (Test-Path $schedulerManifestPath) -and
+    (Test-Path $schedulerStagePath) -and
+    (Test-Path $schedulerSummaryPath) -and
+    ($schedulerObj -ne $null) -and
+    ([string]$schedulerObj.overall_status -eq "PASS")
+  )
+  $docsPass = ((Test-Path $statusMdPath) -and $statusHasTrend)
+
+  $gateFunctional = [ordered]@{
+    schema = "p26_gate_functional_v1"
+    generated_at = (Get-Date).ToString("o")
+    baseline_gate = "RunP25"
+    baseline_status = $RunP25Status
+    baseline_artifact_dir = $RunP25ArtifactDir
+    baseline_gate_report = $RunP25GateReport
+    pass = $functionalPass
+  }
+  $gateTrends = [ordered]@{
+    schema = "p26_gate_trends_v1"
+    generated_at = (Get-Date).ToString("o")
+    trend_rows_jsonl = $trendRowsJsonl
+    trend_rows_csv = $trendRowsCsv
+    trend_index_summary = $trendSummaryPath
+    trend_rows_total = $(if ($trendSummaryObj) { [int]$trendSummaryObj.rows_total } else { 0 })
+    milestones = $(if ($trendSummaryObj) { @($trendSummaryObj.milestones) } else { @() })
+    alert_report_json = $alertJsonPath
+    release_summary_json = $releaseJsonPath
+    pass = $trendsPass
+  }
+  $gateOps = [ordered]@{
+    schema = "p26_gate_ops_v1"
+    generated_at = (Get-Date).ToString("o")
+    scheduler_run_manifest = $schedulerManifestPath
+    scheduler_stage_status = $schedulerStagePath
+    scheduler_summary = $schedulerSummaryPath
+    scheduler_overall_status = $(if ($schedulerObj) { [string]$schedulerObj.overall_status } else { "UNKNOWN" })
+    scheduler_stage_count = $(if ($schedulerObj) { [int]$schedulerObj.stage_count } else { 0 })
+    scheduler_fail_count = $(if ($schedulerObj) { [int]$schedulerObj.fail_count } else { 0 })
+    pass = $opsPass
+  }
+  $gateDocsStatus = [ordered]@{
+    schema = "p26_gate_docs_status_v1"
+    generated_at = (Get-Date).ToString("o")
+    readme_status_md = $statusMdPath
+    readme_status_contains_trend = $statusHasTrend
+    pass = $docsPass
+  }
+
+  Write-JsonFile -Path (Join-Path $p26Dir "gate_functional.json") -Object $gateFunctional
+  Write-JsonFile -Path (Join-Path $p26Dir "gate_trends.json") -Object $gateTrends
+  Write-JsonFile -Path (Join-Path $p26Dir "gate_ops.json") -Object $gateOps
+  Write-JsonFile -Path (Join-Path $p26Dir "gate_docs_status.json") -Object $gateDocsStatus
+
+  $reportGate = [ordered]@{
+    schema = "p26_report_gate_v1"
+    generated_at = (Get-Date).ToString("o")
+    functional = $gateFunctional
+    trends = $gateTrends
+    ops = $gateOps
+    docs_status = $gateDocsStatus
+    status = $(if ($functionalPass -and $trendsPass -and $opsPass -and $docsPass) { "PASS" } else { "FAIL" })
+  }
+  $reportGatePath = Join-Path $p26Dir "report_p26_gate.json"
+  Write-JsonFile -Path $reportGatePath -Object $reportGate
+
+  $coverageStatusPath = Join-Path $ProjectRoot "docs/COVERAGE_P26_STATUS.md"
+  $coverageStatusLines = @(
+    "# COVERAGE P26 STATUS",
+    "",
+    "- timestamp: " + (Get-Date -Format "yyyy-MM-dd HH:mm:ss"),
+    "- baseline_gate: RunP25",
+    "- baseline_status: " + $RunP25Status,
+    "- trend_rows_total: " + $(if ($trendSummaryObj) { [int]$trendSummaryObj.rows_total } else { 0 }),
+    "- alert_report_exists: " + (Test-Path $alertJsonPath),
+    "- release_summary_exists: " + (Test-Path $releaseJsonPath),
+    "- scheduler_status: " + $(if ($schedulerObj) { [string]$schedulerObj.overall_status } else { "UNKNOWN" }),
+    "- readme_status_has_trend: " + $statusHasTrend,
+    "- gate_status: " + $reportGate.status
+  )
+  $coverageStatusLines -join "`n" | Out-File -LiteralPath $coverageStatusPath -Encoding UTF8
+
+  Write-Host ("[P26] artifact_dir=" + $p26Dir + " gate_status=" + $reportGate.status)
+  if ($reportGate.status -ne "PASS") {
+    throw "[P26] gate failed; inspect gate_functional/gate_trends/gate_ops/gate_docs_status/report_p26_gate"
   }
 }
 
