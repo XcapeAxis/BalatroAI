@@ -29,6 +29,8 @@ param(
   [switch]$GitSync,
   [switch]$RunFast,
   [switch]$RunP21,
+  [switch]$RunP22,
+  [switch]$RunP22Full,
   [switch]$RequireMainBranch,
   [string]$P21Timestamp = ""
 )
@@ -54,6 +56,7 @@ if ($RunP18 -or $RunPerfGateV3) { $RunP17 = $true }
 if ($RunP19 -or $RunPerfGateV4) { $RunP18 = $true }
 # P20 builds on top of P19.
 if ($RunP20 -or $RunPerfGateV5) { $RunP19 = $true }
+if ($RunP22Full) { $RunP22 = $true }
 
 function Invoke-GitCapture([string[]]$GitArgs) {
   $quoted = @($GitArgs | ForEach-Object {
@@ -914,6 +917,25 @@ if ($GitSync) {
   Write-Host "[GitSync] running dry-run sync preview"
   $null = Invoke-SafeRunStep -Label "GitSync-dry-run" -Exe "powershell" -CmdArgs @("-ExecutionPolicy","Bypass","-File",$gitSyncScript,"-DryRun:$true") -TimeoutSec 600
   Write-Host "[GitSync] dry-run complete. To execute push/delete: powershell -ExecutionPolicy Bypass -File scripts/git_sync.ps1 -DryRun:`$false"
+}
+
+if ($RunP22) {
+  $p22Script = Join-Path $ProjectRoot "scripts/run_p22.ps1"
+  if (-not (Test-Path $p22Script)) {
+    throw "[P22] missing script: $p22Script"
+  }
+  $p22Args = @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $p22Script
+  )
+  if ($RunP22Full) {
+    Write-Host "[P22] running full nightly-style orchestrator"
+    $p22Args += "-Nightly"
+  } else {
+    Write-Host "[P22] running dry-run orchestrator gate"
+    $p22Args += "-DryRun"
+  }
+  $null = Invoke-SafeRunStep -Label "P22-orchestrator" -Exe "powershell" -CmdArgs $p22Args -TimeoutSec 3600
 }
 
 if ($RunFast) {

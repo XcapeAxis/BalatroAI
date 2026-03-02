@@ -80,9 +80,9 @@ function Get-HighestFunctionalRunP([string]$RunRegressionsPath) {
   $nums = New-Object System.Collections.Generic.List[int]
   foreach ($h in $hits) {
     [int]$v = 0
-    if ([int]::TryParse($h.Groups[1].Value, [ref]$v)) {
-      if ($v -ne 21) { $nums.Add($v) | Out-Null }
-    }
+            if ([int]::TryParse($h.Groups[1].Value, [ref]$v)) {
+                if ($v -ne 21 -and $v -ne 22) { $nums.Add($v) | Out-Null }
+            }
   }
   if ($nums.Count -eq 0) { return 0 }
   return ($nums | Measure-Object -Maximum).Maximum
