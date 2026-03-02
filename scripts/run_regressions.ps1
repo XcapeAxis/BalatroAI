@@ -32,6 +32,7 @@ param(
   [switch]$RunP22,
   [switch]$RunP22Full,
   [switch]$RunP23,
+  [switch]$RunP24,
   [switch]$RequireMainBranch,
   [string]$P21Timestamp = ""
 )
@@ -59,6 +60,10 @@ if ($RunP19 -or $RunPerfGateV4) { $RunP18 = $true }
 if ($RunP20 -or $RunPerfGateV5) { $RunP19 = $true }
 if ($RunP22Full) { $RunP22 = $true }
 if ($RunP23) { $RunP22 = $true }
+if ($RunP24) {
+  $RunP23 = $true
+  $RunP22 = $true
+}
 
 function Invoke-GitCapture([string[]]$GitArgs) {
   $quoted = @($GitArgs | ForEach-Object {
@@ -142,6 +147,9 @@ if ($RequireMainBranch -and -not [string]::IsNullOrWhiteSpace($DetectedMainBranc
 $RunP22Status = "SKIPPED"
 $RunP22LatestRun = ""
 $RunP22LatestReport = ""
+$RunP23Status = "SKIPPED"
+$RunP23ArtifactDir = ""
+$RunP23GateReport = ""
 
 function Test-Health([string]$Url, [int]$TimeoutSec = 5) {
   try {
@@ -1148,8 +1156,249 @@ if ($RunP23) {
   }
 
   Write-Host ("[P23] artifact_dir=" + $p23Dir + " gate_status=" + $reportGate.status)
+  $RunP23Status = [string]$reportGate.status
+  $RunP23ArtifactDir = $p23Dir
+  $RunP23GateReport = $reportGatePath
   if ($reportGate.status -ne "PASS") {
     throw "[P23] gate failed; inspect gate_functional/gate_experiments/gate_reliability"
+  }
+}
+
+if ($RunP24) {
+  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $p24Root = Join-Path $ProjectRoot "docs/artifacts/p24"
+  if (-not (Test-Path $p24Root)) { New-Item -ItemType Directory -Path $p24Root -Force | Out-Null }
+  $p24Dir = Join-Path $p24Root $stamp
+  New-Item -ItemType Directory -Path $p24Dir -Force | Out-Null
+
+  $baselineSummary = [ordered]@{
+    schema = "p24_baseline_summary_v1"
+    generated_at = (Get-Date).ToString("o")
+    run_p23_status = $RunP23Status
+    run_p23_artifact_dir = $RunP23ArtifactDir
+    run_p23_gate_report = $RunP23GateReport
+  }
+  $baselineSummaryPath = Join-Path $p24Dir "baseline_summary.json"
+  Write-JsonFile -Path $baselineSummaryPath -Object $baselineSummary
+  $baselineMd = @(
+    "# P24 Baseline Summary",
+    "",
+    "- run_p23_status: $RunP23Status",
+    "- run_p23_artifact_dir: $RunP23ArtifactDir",
+    "- run_p23_gate_report: $RunP23GateReport"
+  )
+  $baselineMdPath = Join-Path $p24Dir "baseline_summary.md"
+  $baselineMd -join "`n" | Out-File -LiteralPath $baselineMdPath -Encoding UTF8
+
+  $p24Script = Join-Path $ProjectRoot "scripts/run_p24.ps1"
+  if (-not (Test-Path $p24Script)) { throw "[P24] missing script: $p24Script" }
+  $null = Invoke-SafeRunStep -Label "P24-quick" -Exe "powershell" -CmdArgs @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $p24Script,
+    "-Quick",
+    "-HeadlessDashboard"
+  ) -TimeoutSec 3600
+
+  $latestP24Run = Get-LatestRunDir -RunsRootPath (Join-Path $p24Root "runs")
+  if (-not [string]::IsNullOrWhiteSpace($latestP24Run)) {
+    $destRunsRoot = Join-Path $p24Dir "runs"
+    New-Item -ItemType Directory -Path $destRunsRoot -Force | Out-Null
+    $destRun = Join-Path $destRunsRoot (Split-Path -Leaf $latestP24Run)
+    Copy-Item -LiteralPath $latestP24Run -Destination $destRun -Recurse -Force
+  }
+
+  $p24Py = Join-Path $ProjectRoot ".venv_trainer\Scripts\python.exe"
+  if (-not (Test-Path $p24Py)) { $p24Py = "python" }
+
+  $dashOut = Join-Path $p24Root "dashboard_headless_log.txt"
+  $dashCmdArgs = @(
+    "-B",
+    "-m", "trainer.experiments.dashboard_tui",
+    "--watch", (Join-Path $p24Root "runs/latest/telemetry.jsonl"),
+    "--headless-log",
+    "--out", $dashOut
+  )
+  $null = Invoke-SafeRunStep -Label "P24-dashboard" -Exe $p24Py -CmdArgs $dashCmdArgs -TimeoutSec 600
+
+  $triageOut = Join-Path $p24Root "triage_latest"
+  $triageCmdArgs = @(
+    "-B",
+    "-m", "trainer.experiments.triage",
+    "--run-root", (Join-Path $p24Root "runs/latest"),
+    "--out-dir", $triageOut
+  )
+  $null = Invoke-SafeRunStep -Label "P24-triage" -Exe $p24Py -CmdArgs $triageCmdArgs -TimeoutSec 600
+
+  $bisectOut = Join-Path $p24Root "bisect_latest"
+  $bisectCmdArgs = @(
+    "-B",
+    "-m", "trainer.experiments.bisect_lite",
+    "--run-root", (Join-Path $p24Root "runs/latest"),
+    "--mode", "seed_bisect",
+    "--out-dir", $bisectOut
+  )
+  $null = Invoke-SafeRunStep -Label "P24-bisect" -Exe $p24Py -CmdArgs $bisectCmdArgs -TimeoutSec 600
+
+  $rankingOut = Join-Path $p24Root "ranking_latest"
+  $rankingCmdArgs = @(
+    "-B",
+    "-m", "trainer.experiments.ranking",
+    "--run-root", (Join-Path $p24Root "runs/latest"),
+    "--config", "configs/experiments/ranking_p24.yaml",
+    "--out-dir", $rankingOut
+  )
+  $null = Invoke-SafeRunStep -Label "P24-ranking" -Exe $p24Py -CmdArgs $rankingCmdArgs -TimeoutSec 600
+
+  foreach ($name in @("dashboard_headless_log.txt")) {
+    $src = Join-Path $p24Root $name
+    if (Test-Path $src) { Copy-Item -LiteralPath $src -Destination (Join-Path $p24Dir $name) -Force }
+  }
+  foreach ($dirName in @("triage_latest", "bisect_latest", "ranking_latest")) {
+    $srcDir = Join-Path $p24Root $dirName
+    if (Test-Path $srcDir) {
+      Copy-Item -LiteralPath $srcDir -Destination (Join-Path $p24Dir $dirName) -Recurse -Force
+    }
+  }
+
+  $campaignSummaryPath = Join-Path $p24Root "runs/latest/campaign_summary.json"
+  $campaignSummary = if (Test-Path $campaignSummaryPath) { Get-Content -LiteralPath $campaignSummaryPath -Raw | ConvertFrom-Json } else { $null }
+  $summaryTablePath = Join-Path $p24Root "runs/latest/summary_table.json"
+  $summaryRows = @()
+  if (Test-Path $summaryTablePath) {
+    try {
+      $summaryRows = Get-Content -LiteralPath $summaryTablePath -Raw | ConvertFrom-Json
+      if ($null -eq $summaryRows) {
+        $summaryRows = @()
+      } elseif ($summaryRows -isnot [System.Array]) {
+        $summaryRows = @($summaryRows)
+      }
+    } catch {
+      $summaryRows = @()
+    }
+  }
+  $stagePassCount = 0
+  if ($campaignSummary -and $campaignSummary.stages) {
+    $stagePassCount = @($campaignSummary.stages | Where-Object { [string]$_.status -eq "stage_pass" }).Count
+  }
+  $campaignStatusToken = if ($campaignSummary) { [string]$campaignSummary.status } else { "" }
+  $campaignPass = (($campaignStatusToken -eq "completed") -and ($stagePassCount -ge 2) -and ($summaryRows.Count -ge 3))
+
+  $seedPolicyUsed = $true
+  $seedCountMin = 999999
+  $latestRunDirPath = Join-Path $p24Root "runs/latest"
+  $expDirs = Get-ChildItem -Path $latestRunDirPath -Directory -ErrorAction SilentlyContinue | Where-Object { Test-Path (Join-Path $_.FullName "run_manifest.json") }
+  foreach ($ed in $expDirs) {
+    $manifestPath = Join-Path $ed.FullName "run_manifest.json"
+    $seedPath = Join-Path $ed.FullName "seeds_used.json"
+    $m = if (Test-Path $manifestPath) { Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json } else { $null }
+    $s = if (Test-Path $seedPath) { Get-Content -LiteralPath $seedPath -Raw | ConvertFrom-Json } else { $null }
+    $spv = if ($m) { [string]$m.seed_policy_version } else { "" }
+    if ([string]::IsNullOrWhiteSpace($spv) -or $spv -eq "legacy.p22") { $seedPolicyUsed = $false }
+    $cnt = 0
+    if ($s -and $s.seed_count -ne $null) { $cnt = [int]$s.seed_count }
+    elseif ($s -and $s.seeds) { $cnt = @($s.seeds).Count }
+    if ($cnt -lt $seedCountMin) { $seedCountMin = $cnt }
+    if ($cnt -le 1) { $seedPolicyUsed = $false }
+  }
+  if ($seedCountMin -eq 999999) { $seedCountMin = 0 }
+
+  $coverageExists = Test-Path (Join-Path $p24Root "runs/latest/coverage_summary.json")
+  $flakeReportPath = Join-Path $p24Root "runs/latest/flake_report.json"
+  $flakeStatus = "SKIPPED"
+  if (Test-Path $flakeReportPath) {
+    try {
+      $fobj = Get-Content -LiteralPath $flakeReportPath -Raw | ConvertFrom-Json
+      $flakeStatus = [string]$fobj.status
+    } catch {
+      $flakeStatus = "UNKNOWN"
+    }
+  }
+  $reliabilityPass = ($seedPolicyUsed -and $coverageExists -and ($flakeStatus -ne "FAIL"))
+
+  $dashboardPass = ((Test-Path $dashOut) -and ((Get-Item $dashOut).Length -gt 0))
+  $triagePass = Test-Path (Join-Path $triageOut "triage_report.json")
+  $bisectPass = Test-Path (Join-Path $bisectOut "bisect_report.json")
+  $rankingSummaryPath = Join-Path $rankingOut "ranking_summary.json"
+  $rankingPass = Test-Path $rankingSummaryPath
+  $opsPass = ($dashboardPass -and $triagePass -and $bisectPass -and $rankingPass)
+
+  $gateFunctional = [ordered]@{
+    schema = "p24_gate_functional_v1"
+    generated_at = (Get-Date).ToString("o")
+    run_p23_status = $RunP23Status
+    run_p23_artifact_dir = $RunP23ArtifactDir
+    run_p23_gate_report = $RunP23GateReport
+    pass = ($RunP23Status -eq "PASS")
+  }
+  $gateCampaign = [ordered]@{
+    schema = "p24_gate_campaign_v1"
+    generated_at = (Get-Date).ToString("o")
+    campaign_status = $campaignStatusToken
+    stage_pass_count = $stagePassCount
+    experiment_count = $summaryRows.Count
+    quick_run_root = $latestP24Run
+    pass = $campaignPass
+  }
+  $gateReliability = [ordered]@{
+    schema = "p24_gate_reliability_v1"
+    generated_at = (Get-Date).ToString("o")
+    seed_policy_used = $seedPolicyUsed
+    min_seed_count = $seedCountMin
+    coverage_report_exists = $coverageExists
+    flake_status = $flakeStatus
+    pass = $reliabilityPass
+  }
+  $gateOps = [ordered]@{
+    schema = "p24_gate_ops_v1"
+    generated_at = (Get-Date).ToString("o")
+    dashboard_pass = $dashboardPass
+    triage_pass = $triagePass
+    bisect_pass = $bisectPass
+    ranking_pass = $rankingPass
+    pass = $opsPass
+  }
+
+  Write-JsonFile -Path (Join-Path $p24Dir "gate_functional.json") -Object $gateFunctional
+  Write-JsonFile -Path (Join-Path $p24Dir "gate_campaign.json") -Object $gateCampaign
+  Write-JsonFile -Path (Join-Path $p24Dir "gate_reliability.json") -Object $gateReliability
+  Write-JsonFile -Path (Join-Path $p24Dir "gate_ops.json") -Object $gateOps
+
+  $reportGate = [ordered]@{
+    schema = "p24_report_gate_v1"
+    generated_at = (Get-Date).ToString("o")
+    functional = $gateFunctional
+    campaign = $gateCampaign
+    reliability = $gateReliability
+    ops = $gateOps
+    status = $(if ($gateFunctional.pass -and $gateCampaign.pass -and $gateReliability.pass -and $gateOps.pass) { "PASS" } else { "FAIL" })
+  }
+  $reportGatePath = Join-Path $p24Dir "report_p24_gate.json"
+  Write-JsonFile -Path $reportGatePath -Object $reportGate
+
+  foreach ($name in @("champion.json", "candidate.json", "nightly_decision.json", "nightly_decision.md", "CHANGELOG_P24.md")) {
+    $src = Join-Path $p24Root $name
+    if (Test-Path $src) { Copy-Item -LiteralPath $src -Destination (Join-Path $p24Dir $name) -Force }
+  }
+
+  $coverageStatusPath = Join-Path $ProjectRoot "docs/COVERAGE_P24_STATUS.md"
+  $coverageStatusLines = @(
+    "# COVERAGE P24 STATUS",
+    "",
+    "- timestamp: " + (Get-Date -Format "yyyy-MM-dd HH:mm:ss"),
+    "- run_p23_status: " + $RunP23Status,
+    "- campaign_status: " + $campaignStatusToken,
+    "- stage_pass_count: " + $stagePassCount,
+    "- experiment_count: " + $summaryRows.Count,
+    "- seed_policy_used: " + $seedPolicyUsed,
+    "- coverage_exists: " + $coverageExists,
+    "- flake_status: " + $flakeStatus,
+    "- gate_status: " + $reportGate.status
+  )
+  $coverageStatusLines -join "`n" | Out-File -LiteralPath $coverageStatusPath -Encoding UTF8
+
+  Write-Host ("[P24] artifact_dir=" + $p24Dir + " gate_status=" + $reportGate.status)
+  if ($reportGate.status -ne "PASS") {
+    throw "[P24] gate failed; inspect gate_functional/gate_campaign/gate_reliability/gate_ops"
   }
 }
 
