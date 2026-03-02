@@ -1,6 +1,7 @@
 param(
   [string]$OutMd = "docs/generated/README_STATUS.md",
-  [string]$OutJson = "docs/generated/README_STATUS.json"
+  [string]$OutJson = "docs/generated/README_STATUS.json",
+  [string]$PublishedStatusJson = "docs/artifacts/status/latest_status.json"
 )
 
 Set-StrictMode -Version Latest
@@ -17,7 +18,17 @@ function Invoke-GitText([string[]]$GitArgs) {
 
 function Read-JsonIfExists([string]$Path) {
   if (-not (Test-Path $Path)) { return $null }
-  try { return (Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json) } catch { return $null }
+  try {
+    return (Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json)
+  } catch {
+    try {
+      $raw = Get-Content -LiteralPath $Path -Raw
+      if ($raw.StartsWith([char]0xFEFF)) { $raw = $raw.TrimStart([char]0xFEFF) }
+      return ($raw | ConvertFrom-Json)
+    } catch {
+      return $null
+    }
+  }
 }
 
 function Get-RecentTrendSnapshot([string]$TrendRowsPath, [string]$AlertsPath) {
@@ -132,9 +143,12 @@ if ($trendWarehouseExists) {
   $trendUpdatedAt = (Get-Item $trendRowsPath).LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
 }
 $trendSnapshot = Get-RecentTrendSnapshot -TrendRowsPath $trendRowsPath -AlertsPath $alertsPath
+$publishedStatusPath = Join-Path $ProjectRoot $PublishedStatusJson
+$publishedStatus = Read-JsonIfExists -Path $publishedStatusPath
+$publishedUsed = ($publishedStatus -ne $null)
 
 $statusObj = [ordered]@{
-  schema = "p26_readme_status_v1"
+  schema = "p27_readme_status_v1"
   branch = $branch
   detected_main_branch = $detectedMain
   mainline_status = $mainlineStatus
@@ -151,6 +165,47 @@ $statusObj = [ordered]@{
   docs_specs_range = $specRange
   docs_specs_available = @($specIds | ForEach-Object { "P$_" })
   artifacts_guide = $artifactGuide
+  published_status_source = $publishedStatusPath
+  published_status_used = $publishedUsed
+}
+
+if ($publishedUsed) {
+  if ($publishedStatus.latest_gate) {
+    $gateName = [string]$publishedStatus.latest_gate.gate_name
+    $gateStatus = [string]$publishedStatus.latest_gate.status
+    if (-not [string]::IsNullOrWhiteSpace($gateName)) {
+      $statusObj.latest_supported_gate = $gateName
+      $statusObj.latest_gate_snapshot = ($gateName + ":" + $gateStatus)
+    }
+  }
+  if ($publishedStatus.highest_supported_gate) {
+    $statusObj.highest_supported_gate = [string]$publishedStatus.highest_supported_gate
+  }
+  if ($publishedStatus.seed_governance) {
+    $statusObj.seed_governance = $(if ([bool]$publishedStatus.seed_governance.enabled) { "enabled (P23+)" } else { "missing" })
+  }
+  if ($publishedStatus.experiment_platform) {
+    $platformToken = [string]$publishedStatus.experiment_platform.status
+    if (-not [string]::IsNullOrWhiteSpace($platformToken)) {
+      $statusObj.experiment_platform = $platformToken
+    }
+    if ($publishedStatus.experiment_platform.orchestrator_enabled -ne $null) {
+      $statusObj.orchestrator = $(if ([bool]$publishedStatus.experiment_platform.orchestrator_enabled) { "enabled (P22+)" } else { "missing" })
+    }
+  }
+  if ($publishedStatus.trend_warehouse) {
+    $twEnabled = [bool]$publishedStatus.trend_warehouse.enabled
+    $statusObj.trend_warehouse_status = $(if ($twEnabled) { "enabled (P26+)" } else { "missing" })
+    if ($publishedStatus.trend_warehouse.last_updated) {
+      $statusObj.trend_warehouse_last_updated = [string]$publishedStatus.trend_warehouse.last_updated
+    }
+  }
+  if ($publishedStatus.benchmark_snapshot -and $publishedStatus.benchmark_snapshot.trend_signal) {
+    $statusObj.recent_trend_signal = [string]$publishedStatus.benchmark_snapshot.trend_signal
+  }
+  if ($publishedStatus.docs_coverage -and $publishedStatus.docs_coverage.range) {
+    $statusObj.docs_specs_range = [string]$publishedStatus.docs_coverage.range
+  }
 }
 
 $mdLines = @(
@@ -169,7 +224,8 @@ $mdLines = @(
   ("- recent_trend_signal: " + $statusObj.recent_trend_signal),
   ("- latest_gate_snapshot: " + $statusObj.latest_gate_snapshot),
   ("- docs_specs_range: " + $statusObj.docs_specs_range + " (available: " + (($statusObj.docs_specs_available) -join ", ") + ")"),
-  "- artifacts_guide: docs/artifacts/p24/runs/latest, docs/artifacts/p25/, docs/artifacts/trends/"
+  "- artifacts_guide: docs/artifacts/p24/runs/latest, docs/artifacts/p25/, docs/artifacts/trends/",
+  ("- published_status_used: " + $statusObj.published_status_used)
 )
 
 $mdPath = Join-Path $ProjectRoot $OutMd
