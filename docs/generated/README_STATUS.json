@@ -10,9 +10,9 @@
     "experiment_platform":  "ready (P22+/P23+/P24+)",
     "orchestrator":  "enabled (P22+)",
     "trend_warehouse_status":  "enabled (P26+)",
-    "trend_warehouse_last_updated":  "2026-03-02 16:26:32",
+    "trend_warehouse_last_updated":  "2026-03-02 16:39:05",
     "recent_trend_signal":  "regression",
-    "latest_gate_snapshot":  "n/a",
+    "latest_gate_snapshot":  "RunP25:1.0",
     "docs_specs_range":  "P16-P26",
     "docs_specs_available":  [
                                  "P16",
