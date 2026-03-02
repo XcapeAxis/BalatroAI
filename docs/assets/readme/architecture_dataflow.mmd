@@ -1,0 +1,10 @@
+﻿flowchart LR
+  A[Real Game via balatrobot RPC] --> B[Oracle Trace / Canonical Schema]
+  B --> C[Simulator Alignment & Diff]
+  C --> D[Rollout Dataset]
+  D --> E[Train BC/DAgger/RL]
+  E --> F[Eval + Gate Metrics]
+  F --> G[Orchestrator / Campaign Manager]
+  G --> H[Artifacts: summary_table, telemetry, reports]
+  H --> I[Ranking + Triage + Bisect]
+  I --> J[Champion/Candidate Decision]

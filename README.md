@@ -164,6 +164,7 @@ Full guide: [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 ## Example Outputs
 
 Assets directory: [docs/assets/readme/](docs/assets/readme/)
+These samples are lightweight snapshots derived from recent local gate artifacts.
 
 1. Gate log snippet: [sample_run_log.txt](docs/assets/readme/sample_run_log.txt)
 2. Summary table snippet: [sample_summary_table.md](docs/assets/readme/sample_summary_table.md)

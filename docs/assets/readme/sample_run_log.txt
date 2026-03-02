@@ -1,0 +1,8 @@
+﻿[RunP24] gate_status=PASS
+artifact_dir=docs/artifacts/p24/20260302-150119
+functional.pass=true campaign.pass=true reliability.pass=true ops.pass=true
+
+[Quick campaign]
+run_id=20260302-150121
+stages=2 experiments=3
+seed_counts=8/8/8
