@@ -106,3 +106,8 @@ scripts/cursor_fix_transcript_to_jsonl.py
 
 # Generated docs lint artifacts
 docs/generated/readme_lint_report.json
+
+# Generated static dashboard runtime payloads
+docs/dashboard/data/latest.json
+docs/dashboard/data/latest.js
+docs/dashboard/build_dashboard_summary.json
