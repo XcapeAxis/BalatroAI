@@ -82,6 +82,7 @@ if ([string]::IsNullOrWhiteSpace($runDir)) {
 $StageEntries = @()
 $py = Get-PythonExe
 $budgetCut = $false
+$cleanupExecuted = $false
 
 Write-Host ("[P26] repo_root: " + $ProjectRoot)
 Write-Host ("[P26] mode: " + $mode)
@@ -150,6 +151,7 @@ Invoke-Stage -StageId "cleanup" -CommandText $cleanupCmd -Action {
   if ($DryRun) { return }
   & powershell -ExecutionPolicy Bypass -File (Join-Path $ProjectRoot "scripts/cleanup.ps1")
   if ($LASTEXITCODE -ne 0) { throw ("cleanup exit=" + $LASTEXITCODE) }
+  $script:cleanupExecuted = $true
 }
 
 $stageStatusPath = Join-Path $runDir "scheduler_stage_status.json"
@@ -166,11 +168,15 @@ $manifest = [ordered]@{
   repo_root = $ProjectRoot
   run_dir = $runDir
   mode = $mode
+  quick_mode = [bool]($mode -eq "quick")
+  nightly_mode = [bool]($mode -eq "nightly")
   dry_run = [bool]$DryRun
   resume = [bool]$Resume
   since_tag = $SinceTag
   trends_root = (Resolve-Path (New-Item -ItemType Directory -Path $TrendsRoot -Force)).Path
   budget_cut = $budgetCut
+  cleanup_executed = [bool]$cleanupExecuted
+  pipeline = @("campaign", "trend_append", "regression_alert", "ranking_update", "release_summary", "cleanup")
 }
 $stageObj = [ordered]@{
   schema = "p26_scheduler_stage_status_v1"
@@ -180,6 +186,11 @@ $stageObj = [ordered]@{
   pass_count = $stagePass
   fail_count = $stageFail
   stages = @($StageEntries)
+  outputs = [ordered]@{
+    alerts_dir = $alertsDir
+    ranking_dir = $rankingOut
+    release_summary_md = $releaseMd
+  }
 }
 
 Write-JsonFile -Path $manifestPath -Object $manifest
