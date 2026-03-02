@@ -152,16 +152,23 @@ Full guide: [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 
 <!-- STATUS:START -->
 <!-- README_STATUS:BEGIN -->
-### Repository Status (Auto-generated, P27)
+### Repository Status (Auto-generated)
 
 - branch: main
-- latest_gate: RunP26 (PASS)
-- recent_trend_signal: regression
+- mainline_status: mainline-dirty (detected main: main)
+- working_tree_clean: False
+- highest_supported_gate: RunP26
+- latest_supported_gate: RunP26
+- seed_governance: enabled (P23+)
+- experiment_platform: ready
+- experiment_orchestrator: enabled (P22+)
+- trend_warehouse_status: enabled (P26+)
 - trend_warehouse_last_updated: 2026-03-02T09:55:22.469609+00:00
-- trend_rows_count: 12501
-- champion: quick_risk_aware (champion)
-- candidate: quick_hybrid (decision: hold)
-- docs_coverage: P15-P26
+- recent_trend_signal: regression
+- latest_gate_snapshot: RunP26:PASS
+- docs_specs_range: P15-P26 (available: P16, P17, P18, P19, P20, P21, P23, P24, P25, P26)
+- artifacts_guide: docs/artifacts/p24/runs/latest, docs/artifacts/p25/, docs/artifacts/trends/
+- published_status_used: True
 <!-- README_STATUS:END -->
 <!-- STATUS:END -->
 
@@ -238,6 +245,10 @@ Planned:
 - [USAGE_GUIDE.md](USAGE_GUIDE.md)
 - [docs/P24_SPEC.md](docs/P24_SPEC.md)
 - [docs/P25_SPEC.md](docs/P25_SPEC.md)
+- [docs/P26_SPEC.md](docs/P26_SPEC.md)
+- [docs/P27_SPEC.md](docs/P27_SPEC.md)
+- [docs/STATUS_PUBLISHING_P27.md](docs/STATUS_PUBLISHING_P27.md)
+- [docs/RELEASE_TRAIN_P27.md](docs/RELEASE_TRAIN_P27.md)
 - [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 - [docs/ARCHITECTURE_P25.md](docs/ARCHITECTURE_P25.md)
 
@@ -245,6 +256,7 @@ Planned:
 
 - License: currently not specified by a top-level `LICENSE` file.
 - Contributions: use mainline-only workflow and run gates before proposing changes.
+
 
 
 
