@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 if __package__ is None or __package__ == "":
     import sys
@@ -10,6 +10,7 @@ import argparse
 import json
 import subprocess
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,25 @@ from typing import Any
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+@dataclass
+class CandidateSpec:
+    exp_id: str
+    strategy: str
+    model: str = ""
+    rl_model: str = ""
+    risk_config: str = ""
 
 
 def _build_eval_args(
@@ -33,7 +53,6 @@ def _build_eval_args(
     logs_jsonl: Path,
     max_steps_per_episode: int = 120,
 ) -> list[str]:
-    """Build argv for eval_long_horizon subprocess. Used by _run_eval and by tests."""
     policy = "heuristic"
     args = [
         sys.executable,
@@ -49,12 +68,11 @@ def _build_eval_args(
         seeds_file,
         "--policy",
     ]
-    if strategy == "pv" or strategy == "champion":
+
+    if strategy in {"pv", "champion"}:
         policy = "pv"
     elif strategy == "rl":
         policy = "pv"
-        if not model:
-            raise RuntimeError(f"rl strategy requires a model (--rl-model); got {model!r}")
     elif strategy == "hybrid":
         policy = "hybrid"
     elif strategy == "risk_aware":
@@ -63,20 +81,24 @@ def _build_eval_args(
         policy = "deploy_student"
     elif strategy == "search":
         policy = "search"
+    elif strategy == "bc":
+        policy = "bc"
     else:
         policy = "heuristic"
+
     args.append(policy)
-    if policy == "deploy_student" and model:
-        args.extend(["--model", str(model)])
-    elif policy in {"pv", "hybrid"} and model:
+    if policy in {"bc", "pv", "hybrid", "deploy_student"} and model:
         args.extend(["--model", str(model)])
     if policy == "risk_aware":
         if model:
-            args.extend(["--model", model])
+            args.extend(["--model", str(model)])
         if rl_model:
-            args.extend(["--rl-model", rl_model])
+            args.extend(["--rl-model", str(rl_model)])
+        elif model:
+            args.extend(["--rl-model", str(model)])
         if risk_config:
-            args.extend(["--risk-config", risk_config])
+            args.extend(["--risk-config", str(risk_config)])
+
     args.extend(
         [
             "--max-steps-per-episode",
@@ -90,46 +112,116 @@ def _build_eval_args(
     return args
 
 
-def _run_eval(
-    *,
-    backend: str,
-    stake: str,
-    episodes: int,
-    seeds_file: str,
-    strategy: str,
-    model: str | None,
-    rl_model: str | None,
-    risk_config: str | None,
-    out_json: Path,
-    logs_jsonl: Path,
-    max_steps_per_episode: int = 120,
-) -> None:
-    args = _build_eval_args(
-        backend=backend,
-        stake=stake,
-        episodes=episodes,
-        seeds_file=seeds_file,
-        strategy=strategy,
-        model=model,
-        rl_model=rl_model,
-        risk_config=risk_config,
-        out_json=out_json,
-        logs_jsonl=logs_jsonl,
-        max_steps_per_episode=max_steps_per_episode,
-    )
-    subprocess.run(args, check=True)
-
-
 def _extract_metrics(payload: dict[str, Any]) -> dict[str, float]:
     return {
         "win_rate": float(payload.get("win_rate") or 0.0),
         "avg_ante_reached": float(payload.get("avg_ante_reached") or 0.0),
         "median_ante_reached": float(payload.get("median_ante") or 0.0),
+        "runtime_seconds": float(payload.get("elapsed_sec") or payload.get("runtime_seconds") or 0.0),
     }
 
 
+def _infer_strategy(exp_id: str, strategy_hint: str = "") -> str:
+    token = str(strategy_hint or "").strip().lower()
+    if token:
+        return token
+    exp = str(exp_id or "").lower()
+    if "deploy" in exp or "distill" in exp:
+        return "deploy_student"
+    if "risk" in exp:
+        return "risk_aware"
+    if "hybrid" in exp:
+        return "hybrid"
+    if "search" in exp:
+        return "search"
+    if "pv" in exp or "bc" in exp:
+        return "pv"
+    if "champion" in exp:
+        return "champion"
+    return "heuristic"
+
+
+def _load_candidates_from_manifest(path: Path) -> list[CandidateSpec]:
+    payload = _read_json(path)
+    rows = payload.get("candidates") if isinstance(payload.get("candidates"), list) else []
+    out: list[CandidateSpec] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("status") or "").lower() not in {"success", "passed", "pass", "ok"}:
+            continue
+        exp_id = str(row.get("exp_id") or "")
+        if not exp_id:
+            continue
+        out.append(
+            CandidateSpec(
+                exp_id=exp_id,
+                strategy=_infer_strategy(exp_id, str(row.get("strategy") or "")),
+                model=str(row.get("model_path") or ""),
+                rl_model=str(row.get("rl_model_path") or ""),
+                risk_config=str(row.get("risk_config") or ""),
+            )
+        )
+    return out
+
+
+def _load_candidates_from_ranking(path: Path, topk: int) -> list[CandidateSpec]:
+    payload = _read_json(path)
+    rows = payload.get("rows") if isinstance(payload.get("rows"), list) else []
+    filtered = [r for r in rows if isinstance(r, dict) and bool(r.get("gate_pass", True))]
+    if not filtered:
+        # In degraded regimes all candidates may fail hard filters; still evaluate the top scored rows.
+        filtered = [r for r in rows if isinstance(r, dict)]
+    filtered = sorted(filtered, key=lambda r: float(r.get("weighted_score") or 0.0), reverse=True)
+    if topk > 0:
+        filtered = filtered[:topk]
+    out: list[CandidateSpec] = []
+    for row in filtered:
+        exp_id = str(row.get("exp_id") or "")
+        if not exp_id:
+            continue
+        out.append(
+            CandidateSpec(
+                exp_id=exp_id,
+                strategy=_infer_strategy(exp_id, str(row.get("strategy") or "")),
+                model=str(row.get("model") or row.get("model_path") or ""),
+                rl_model=str(row.get("rl_model") or row.get("rl_model_path") or ""),
+                risk_config=str(row.get("risk_config") or ""),
+            )
+        )
+    return out
+
+
+def _load_champion_candidate() -> CandidateSpec | None:
+    candidates = [
+        Path("docs/artifacts/p24/runs/latest/stages/validation_b/champion.json"),
+        Path("docs/artifacts/p24/champion.json"),
+    ]
+    path = next((p for p in candidates if p.exists()), None)
+    if path is None:
+        return None
+    payload = _read_json(path)
+    exp_id = str(payload.get("exp_id") or "champion")
+    model = str(payload.get("model_path") or payload.get("model") or "")
+    # current champion artifacts often lack model checkpoint; fallback to heuristic policy.
+    strategy = "champion" if model else "heuristic"
+    return CandidateSpec(exp_id=f"champion::{exp_id}", strategy=strategy, model=model)
+
+
+def _dedupe_candidates(rows: list[CandidateSpec]) -> list[CandidateSpec]:
+    out: list[CandidateSpec] = []
+    seen: set[str] = set()
+    for row in rows:
+        key = f"{row.exp_id}|{row.strategy}|{row.model}|{row.rl_model}|{row.risk_config}"
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(row)
+    return out
+
+
 def _build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Run multi-strategy long-horizon ablation for P18.")
+    p = argparse.ArgumentParser(description="Run multi-strategy long-horizon ablation.")
     p.add_argument("--backend", choices=["sim"], default="sim")
     p.add_argument("--stake", default="gold")
     p.add_argument("--episodes", type=int, default=100)
@@ -144,148 +236,217 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--deploy-student-model", default="")
     p.add_argument("--strategies", default="")
     p.add_argument("--max-steps-per-episode", type=int, default=120)
+
+    p.add_argument("--from-train-batch-manifest", default="")
+    p.add_argument("--from-ranking", default="")
+    p.add_argument("--topk", type=int, default=0)
+    p.add_argument("--include-champion", action="store_true")
     return p
 
 
 def main() -> int:
     args = _build_parser().parse_args()
-    out_dir = Path(args.out_dir)
+    out_dir = Path(args.out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    strategies: list[str] = []
-    if args.strategies:
-        strategies = [x.strip() for x in str(args.strategies).split(",") if x.strip()]
-    else:
-        if args.heuristic:
-            strategies.append("heuristic")
-        if args.champion_model:
-            strategies.append("champion")
-        if args.pv_model:
-            if "champion" not in strategies:
+    candidates: list[CandidateSpec] = []
+
+    if args.from_train_batch_manifest:
+        candidates.extend(_load_candidates_from_manifest(Path(args.from_train_batch_manifest).resolve()))
+
+    if args.from_ranking:
+        candidates.extend(_load_candidates_from_ranking(Path(args.from_ranking).resolve(), int(args.topk)))
+
+    if args.include_champion:
+        champion = _load_champion_candidate()
+        if champion is not None:
+            candidates.append(champion)
+
+    if not candidates:
+        strategies: list[str] = []
+        if args.strategies:
+            strategies = [x.strip() for x in str(args.strategies).split(",") if x.strip()]
+        else:
+            if args.heuristic:
+                strategies.append("heuristic")
+            if args.champion_model:
                 strategies.append("champion")
-            strategies.append("pv")
-        if args.hybrid_model:
-            strategies.append("hybrid")
-        if args.rl_model:
-            strategies.append("rl")
-        if args.risk_aware_config:
-            strategies.append("risk_aware")
-        if args.deploy_student_model:
-            strategies.append("deploy_student")
-    if not strategies:
-        raise RuntimeError("no strategies selected")
+            if args.pv_model:
+                if "champion" not in strategies:
+                    strategies.append("champion")
+                strategies.append("pv")
+            if args.hybrid_model:
+                strategies.append("hybrid")
+            if args.rl_model:
+                strategies.append("rl")
+            if args.risk_aware_config:
+                strategies.append("risk_aware")
+            if args.deploy_student_model:
+                strategies.append("deploy_student")
+        if not strategies:
+            raise RuntimeError("no strategies selected")
+        model_map = {
+            "pv": args.pv_model,
+            "hybrid": args.hybrid_model or args.pv_model,
+            "rl": args.rl_model,
+            "champion": args.champion_model or args.pv_model,
+            "risk_aware": args.pv_model or args.champion_model,
+            "deploy_student": args.deploy_student_model,
+        }
+        for s in strategies:
+            candidates.append(
+                CandidateSpec(
+                    exp_id=s,
+                    strategy=s,
+                    model=str(model_map.get(s) or ""),
+                    rl_model=str(args.rl_model if s == "risk_aware" else ""),
+                    risk_config=str(args.risk_aware_config if s == "risk_aware" else ""),
+                )
+            )
 
-    model_map = {
-        "pv": args.pv_model,
-        "hybrid": args.hybrid_model or args.pv_model,
-        "rl": args.rl_model,
-        "champion": args.champion_model or args.pv_model,
-        "risk_aware": args.pv_model or args.champion_model,
-        "deploy_student": args.deploy_student_model,
-    }
+    candidates = _dedupe_candidates(candidates)
+    if not candidates:
+        raise RuntimeError("candidate set is empty")
 
-    results: dict[str, dict[str, Any]] = {}
-    for s in strategies:
-        out_json = out_dir / f"eval_gold_{s}.json"
-        logs = out_dir / f"episodes_{s}.jsonl"
-        _run_eval(
+    rows: list[dict[str, Any]] = []
+    for c in candidates:
+        out_json = out_dir / f"eval_gold_{c.exp_id.replace(':', '_')}.json"
+        logs = out_dir / f"episodes_{c.exp_id.replace(':', '_')}.jsonl"
+        cmd = _build_eval_args(
             backend=args.backend,
             stake=str(args.stake),
             episodes=int(args.episodes),
             seeds_file=str(args.seeds_file),
-            strategy=s,
-            model=model_map.get(s),
-            rl_model=args.rl_model if s == "risk_aware" else None,
-            risk_config=args.risk_aware_config if s == "risk_aware" else None,
+            strategy=c.strategy,
+            model=c.model or None,
+            rl_model=c.rl_model or None,
+            risk_config=c.risk_config or None,
             out_json=out_json,
             logs_jsonl=logs,
             max_steps_per_episode=int(args.max_steps_per_episode),
         )
-        results[s] = json.loads(out_json.read_text(encoding="utf-8"))
+        status = "passed"
+        err = ""
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as exc:
+            status = "failed"
+            err = str(exc)
 
-    summary_rows: list[dict[str, Any]] = []
-    base_key = "champion" if "champion" in results else ("pv" if "pv" in results else strategies[0])
-    base_metrics = _extract_metrics(results[base_key])
-    for s in strategies:
-        m = _extract_metrics(results[s])
-        summary_rows.append(
+        payload = _read_json(out_json)
+        metrics = _extract_metrics(payload)
+        rows.append(
             {
-                "strategy": s,
-                "win_rate": m["win_rate"],
-                "avg_ante_reached": m["avg_ante_reached"],
-                "median_ante_reached": m["median_ante_reached"],
-                "delta_vs_baseline_avg_ante": m["avg_ante_reached"] - base_metrics["avg_ante_reached"],
-                "delta_vs_baseline_median_ante": m["median_ante_reached"] - base_metrics["median_ante_reached"],
-                "delta_vs_baseline_win_rate": m["win_rate"] - base_metrics["win_rate"],
-                "failure_breakdown": results[s].get("failure_breakdown") or {},
-                "eval_json": str(out_dir / f"eval_gold_{s}.json"),
-                "episode_logs": str(out_dir / f"episodes_{s}.jsonl"),
+                "exp_id": c.exp_id,
+                "strategy": c.strategy,
+                "status": status,
+                "error": err,
+                "win_rate": metrics["win_rate"],
+                "avg_ante_reached": metrics["avg_ante_reached"],
+                "median_ante_reached": metrics["median_ante_reached"],
+                "runtime_seconds": metrics["runtime_seconds"],
+                "model": c.model,
+                "rl_model": c.rl_model,
+                "risk_config": c.risk_config,
+                "eval_json": str(out_json),
+                "episode_logs": str(logs),
             }
         )
 
+    passing = [r for r in rows if r["status"] == "passed"]
+    baseline_row = next((r for r in rows if "champion::" in str(r.get("exp_id"))), None)
+    if baseline_row is None:
+        baseline_row = passing[0] if passing else rows[0]
+    base_metrics = _extract_metrics(baseline_row)
+
+    for r in rows:
+        r["delta_vs_baseline_avg_ante"] = float(r["avg_ante_reached"]) - base_metrics["avg_ante_reached"]
+        r["delta_vs_baseline_median_ante"] = float(r["median_ante_reached"]) - base_metrics["median_ante_reached"]
+        r["delta_vs_baseline_win_rate"] = float(r["win_rate"]) - base_metrics["win_rate"]
+        r["elapsed_sec"] = float(r.get("runtime_seconds") or 0.0)
+        r["std"] = 0.0
+        r["gate_pass"] = r["status"] == "passed"
+        r["weighted_score"] = (
+            0.45 * float(r["avg_ante_reached"])
+            + 0.25 * float(r["median_ante_reached"])
+            + 0.20 * float(r["win_rate"])
+            - 0.10 * float(r["runtime_seconds"])
+        )
+
     summary = {
-        "schema": "p18_ablation_summary_v1",
+        "schema": "p29_ablation_summary_v2",
         "generated_at": _now_iso(),
         "backend": args.backend,
         "stake": args.stake,
         "episodes": int(args.episodes),
         "seeds_file": str(args.seeds_file),
-        "baseline": base_key,
-        "rows": summary_rows,
+        "baseline": str(baseline_row.get("exp_id") or ""),
+        "rows": rows,
+        "source": {
+            "from_train_batch_manifest": str(args.from_train_batch_manifest or ""),
+            "from_ranking": str(args.from_ranking or ""),
+            "include_champion": bool(args.include_champion),
+            "topk": int(args.topk),
+        },
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (out_dir / "summary_table.json").write_text(json.dumps(rows, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    csv_lines = ["strategy,win_rate,avg_ante_reached,median_ante_reached,delta_avg,delta_median,delta_win"]
-    for r in summary_rows:
+    csv_lines = [
+        "exp_id,strategy,status,win_rate,avg_ante_reached,median_ante_reached,runtime_seconds,delta_avg,delta_median,delta_win"
+    ]
+    for r in rows:
         csv_lines.append(
-            f"{r['strategy']},{r['win_rate']:.6f},{r['avg_ante_reached']:.6f},{r['median_ante_reached']:.6f},{r['delta_vs_baseline_avg_ante']:.6f},{r['delta_vs_baseline_median_ante']:.6f},{r['delta_vs_baseline_win_rate']:.6f}"
+            f"{r['exp_id']},{r['strategy']},{r['status']},{r['win_rate']:.6f},{r['avg_ante_reached']:.6f},{r['median_ante_reached']:.6f},{r['runtime_seconds']:.6f},{r['delta_vs_baseline_avg_ante']:.6f},{r['delta_vs_baseline_median_ante']:.6f},{r['delta_vs_baseline_win_rate']:.6f}"
         )
     tables = out_dir / "tables"
     tables.mkdir(parents=True, exist_ok=True)
     (tables / "ablation.csv").write_text("\n".join(csv_lines) + "\n", encoding="utf-8")
 
-    md = [
-        "# P18 Ablation Summary",
-        "",
-        f"- baseline: {base_key}",
-        f"- episodes: {args.episodes}",
-        f"- stake: {args.stake}",
-        "",
-        "## Strategies",
-    ]
-    for r in summary_rows:
-        md.append(
-            "- {strategy}: win_rate={win_rate:.4f}, avg_ante={avg_ante_reached:.3f}, "
-            "median_ante={median_ante_reached:.3f}, d_avg={delta_vs_baseline_avg_ante:.3f}, "
-            "d_median={delta_vs_baseline_median_ante:.3f}".format(**r)
-        )
-    (out_dir / "summary.md").write_text("\n".join(md) + "\n", encoding="utf-8")
-
-    best_row = max(summary_rows, key=lambda r: (r["win_rate"], r["avg_ante_reached"], r["median_ante_reached"]))
-    recommended = best_row["strategy"]
-    if "risk_aware" in [r["strategy"] for r in summary_rows] and recommended != "risk_aware":
-        alt = next((r for r in summary_rows if r["strategy"] == "risk_aware"), None)
-        if alt and (float(alt.get("win_rate") or 0) >= float(best_row.get("win_rate") or 0) - 0.02):
-            recommended = "risk_aware"
+    ranked = sorted(passing, key=lambda r: (r["win_rate"], r["avg_ante_reached"], r["median_ante_reached"]), reverse=True)
+    best_row = ranked[0] if ranked else baseline_row
+    recommended = str(best_row.get("exp_id") or "")
     rec_md = [
         "# Ablation Recommendation",
         "",
         f"- recommended_default: {recommended}",
-        f"- baseline: {base_key}",
+        f"- baseline: {summary['baseline']}",
         f"- episodes: {args.episodes}",
         "",
         "## Rationale",
-        f"Best performer by win_rate/avg_ante/median_ante: {best_row['strategy']}. "
-        + ("risk_aware is recommended when similar win_rate and better risk control." if recommended == "risk_aware" else ""),
-        "",
-        "## Risk note",
-        "In production, high-uncertainty states may fall back to hybrid or heuristic; use risk_aware policy when available for automatic fallback.",
-        "",
+        f"Best passing row by win_rate/avg_ante/median_ante: {recommended}.",
     ]
     (out_dir / "recommendation.md").write_text("\n".join(rec_md) + "\n", encoding="utf-8")
 
-    print(json.dumps({"status": "ok", "out_dir": str(out_dir), "baseline": base_key}, ensure_ascii=False))
-    return 0
+    md = [
+        "# P29 Ablation Summary",
+        "",
+        f"- baseline: {summary['baseline']}",
+        f"- episodes: {args.episodes}",
+        f"- stake: {args.stake}",
+        "",
+        "## Rows",
+    ]
+    for r in rows:
+        md.append(
+            f"- {r['exp_id']} ({r['strategy']}): status={r['status']} win_rate={r['win_rate']:.4f} avg_ante={r['avg_ante_reached']:.3f} median_ante={r['median_ante_reached']:.3f}"
+        )
+    (out_dir / "summary.md").write_text("\n".join(md) + "\n", encoding="utf-8")
+
+    failed_count = len([r for r in rows if r["status"] != "passed"])
+    print(
+        json.dumps(
+            {
+                "status": "ok",
+                "out_dir": str(out_dir),
+                "baseline": summary["baseline"],
+                "failed_count": failed_count,
+                "row_count": len(rows),
+            },
+            ensure_ascii=False,
+        )
+    )
+    return 0 if passing else 1
 
 
 if __name__ == "__main__":
