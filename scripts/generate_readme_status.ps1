@@ -1,4 +1,4 @@
-﻿param(
+param(
   [string]$OutMd = "docs/generated/README_STATUS.md",
   [string]$OutJson = "docs/generated/README_STATUS.json"
 )
@@ -15,6 +15,53 @@ function Invoke-GitText([string[]]$GitArgs) {
   return (($output | ForEach-Object { [string]$_ }) -join "`n").Trim()
 }
 
+function Read-JsonIfExists([string]$Path) {
+  if (-not (Test-Path $Path)) { return $null }
+  try { return (Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json) } catch { return $null }
+}
+
+function Get-RecentTrendSnapshot([string]$TrendRowsPath, [string]$AlertsPath) {
+  $trendSignal = "unknown"
+  $latestGateLine = "n/a"
+  $rows = @()
+  if (Test-Path $TrendRowsPath) {
+    $lines = Get-Content -LiteralPath $TrendRowsPath -ErrorAction SilentlyContinue
+    foreach ($ln in $lines) {
+      if ([string]::IsNullOrWhiteSpace($ln)) { continue }
+      try {
+        $obj = $ln | ConvertFrom-Json
+        if ($obj) { $rows += $obj }
+      } catch {}
+    }
+  }
+  if ($rows.Count -gt 0) {
+    $gateRows = @($rows | Where-Object { $_.metric_name -in @("gate_overall_pass", "gate_pass") } | Sort-Object timestamp, run_id)
+    if ($gateRows.Count -gt 0) {
+      $latestGate = $gateRows[-1]
+      $latestGateLine = "$($latestGate.gate_name):$($latestGate.metric_value)"
+    }
+  }
+
+  $alertObj = Read-JsonIfExists -Path $AlertsPath
+  if ($alertObj -and $alertObj.summary) {
+    $hard = [int]($alertObj.summary.hard_regression)
+    $soft = [int]($alertObj.summary.soft_regression)
+    $noisy = [int]($alertObj.summary.noisy_needs_more_data)
+    $improve = [int]($alertObj.summary.improvement)
+    if ($hard -gt 0 -or $soft -gt 0) { $trendSignal = "regression" }
+    elseif ($noisy -gt 0) { $trendSignal = "noisy" }
+    elseif ($improve -gt 0) { $trendSignal = "improving" }
+    else { $trendSignal = "stable" }
+  } elseif ($rows.Count -gt 0) {
+    $trendSignal = "stable"
+  }
+
+  return [ordered]@{
+    trend_signal = $trendSignal
+    latest_gate_snapshot = $latestGateLine
+  }
+}
+
 $branch = Invoke-GitText -GitArgs @("rev-parse", "--abbrev-ref", "HEAD")
 $originHead = Invoke-GitText -GitArgs @("symbolic-ref", "refs/remotes/origin/HEAD")
 if ([string]::IsNullOrWhiteSpace($branch)) { $branch = "unknown" }
@@ -24,7 +71,13 @@ if ($originHead -match "refs/remotes/origin/(.+)$") {
 } elseif (-not (Test-Path ".git")) {
   $detectedMain = "unknown"
 }
-$mainlineStatus = if ($branch -and $detectedMain -and $branch -eq $detectedMain) { "mainline" } else { "non-mainline" }
+$statusShort = Invoke-GitText -GitArgs @("status", "--porcelain")
+$isClean = [string]::IsNullOrWhiteSpace($statusShort)
+$mainlineStatus = if ($branch -and $detectedMain -and $branch -eq $detectedMain) {
+  if ($isClean) { "mainline-clean" } else { "mainline-dirty" }
+} else {
+  if ($isClean) { "non-mainline-clean" } else { "non-mainline-dirty" }
+}
 
 $runRegressions = Join-Path $ProjectRoot "scripts/run_regressions.ps1"
 $highestGate = 0
@@ -40,11 +93,14 @@ if (Test-Path $runRegressions) {
 $seedPolicyPath = Join-Path $ProjectRoot "configs/experiments/seeds_p23.yaml"
 $seedGovernance = Test-Path $seedPolicyPath
 
-$orchestratorPaths = @(
+$platformPaths = @(
   (Join-Path $ProjectRoot "scripts/run_p22.ps1"),
+  (Join-Path $ProjectRoot "scripts/run_p23.ps1"),
+  (Join-Path $ProjectRoot "scripts/run_p24.ps1"),
   (Join-Path $ProjectRoot "trainer/experiments/orchestrator.py")
 )
-$orchestratorReady = ($orchestratorPaths | Where-Object { Test-Path $_ }).Count -eq $orchestratorPaths.Count
+$platformReady = ($platformPaths | Where-Object { Test-Path $_ }).Count -eq $platformPaths.Count
+$platformStatus = if ($platformReady) { "ready (P22+/P23+/P24+)" } else { "partial" }
 
 $specFiles = Get-ChildItem -Path (Join-Path $ProjectRoot "docs") -Filter "P*_SPEC.md" -File -ErrorAction SilentlyContinue
 $specIds = @()
@@ -61,17 +117,37 @@ if ($specIds.Count -gt 0) {
 
 $artifactGuide = @(
   "docs/artifacts/p24/runs/latest",
-  "docs/artifacts/p25"
+  "docs/artifacts/p25",
+  "docs/artifacts/trends"
 )
 
+$trendsRoot = Join-Path $ProjectRoot "docs/artifacts/trends"
+$trendRowsPath = Join-Path $trendsRoot "trend_rows.jsonl"
+$trendSummaryPath = Join-Path $trendsRoot "trend_index_summary.json"
+$alertsPath = Join-Path $ProjectRoot "docs/artifacts/p26/alerts_latest/regression_alert_report.json"
+$trendWarehouseExists = (Test-Path $trendRowsPath) -and (Test-Path $trendSummaryPath)
+$trendWarehouseStatus = if ($trendWarehouseExists) { "enabled (P26+)" } else { "missing" }
+$trendUpdatedAt = ""
+if ($trendWarehouseExists) {
+  $trendUpdatedAt = (Get-Item $trendRowsPath).LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
+}
+$trendSnapshot = Get-RecentTrendSnapshot -TrendRowsPath $trendRowsPath -AlertsPath $alertsPath
+
 $statusObj = [ordered]@{
-  schema = "p25_readme_status_v1"
+  schema = "p26_readme_status_v1"
   branch = $branch
   detected_main_branch = $detectedMain
   mainline_status = $mainlineStatus
+  working_tree_clean = $isClean
   highest_supported_gate = if ($highestGate -gt 0) { "RunP$highestGate" } else { "unknown" }
+  latest_supported_gate = if ($highestGate -gt 0) { "RunP$highestGate" } else { "unknown" }
   seed_governance = if ($seedGovernance) { "enabled (P23+)" } else { "missing" }
-  orchestrator = if ($orchestratorReady) { "enabled (P22+)" } else { "missing" }
+  experiment_platform = $platformStatus
+  orchestrator = if (Test-Path (Join-Path $ProjectRoot "trainer/experiments/orchestrator.py")) { "enabled (P22+)" } else { "missing" }
+  trend_warehouse_status = $trendWarehouseStatus
+  trend_warehouse_last_updated = $trendUpdatedAt
+  recent_trend_signal = $trendSnapshot.trend_signal
+  latest_gate_snapshot = $trendSnapshot.latest_gate_snapshot
   docs_specs_range = $specRange
   docs_specs_available = @($specIds | ForEach-Object { "P$_" })
   artifacts_guide = $artifactGuide
@@ -82,11 +158,18 @@ $mdLines = @(
   "",
   ("- branch: " + $statusObj.branch),
   ("- mainline_status: " + $statusObj.mainline_status + " (detected main: " + $statusObj.detected_main_branch + ")"),
+  ("- working_tree_clean: " + $statusObj.working_tree_clean),
   ("- highest_supported_gate: " + $statusObj.highest_supported_gate),
+  ("- latest_supported_gate: " + $statusObj.latest_supported_gate),
   ("- seed_governance: " + $statusObj.seed_governance),
+  ("- experiment_platform: " + $statusObj.experiment_platform),
   ("- experiment_orchestrator: " + $statusObj.orchestrator),
+  ("- trend_warehouse_status: " + $statusObj.trend_warehouse_status),
+  ("- trend_warehouse_last_updated: " + $statusObj.trend_warehouse_last_updated),
+  ("- recent_trend_signal: " + $statusObj.recent_trend_signal),
+  ("- latest_gate_snapshot: " + $statusObj.latest_gate_snapshot),
   ("- docs_specs_range: " + $statusObj.docs_specs_range + " (available: " + (($statusObj.docs_specs_available) -join ", ") + ")"),
-  "- artifacts_guide: docs/artifacts/p24/runs/latest and docs/artifacts/p25/"
+  "- artifacts_guide: docs/artifacts/p24/runs/latest, docs/artifacts/p25/, docs/artifacts/trends/"
 )
 
 $mdPath = Join-Path $ProjectRoot $OutMd
@@ -117,5 +200,7 @@ $result = [ordered]@{
   out_md = $mdPath
   out_json = $jsonPath
   highest_supported_gate = $statusObj.highest_supported_gate
+  trend_warehouse_status = $statusObj.trend_warehouse_status
+  recent_trend_signal = $statusObj.recent_trend_signal
 }
 ($result | ConvertTo-Json -Depth 8)

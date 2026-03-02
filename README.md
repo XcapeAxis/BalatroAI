@@ -153,12 +153,19 @@ Full guide: [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 ### Repository Status (Auto-generated)
 
 - branch: main
-- mainline_status: mainline (detected main: main)
-- highest_supported_gate: RunP25
+- mainline_status: mainline-dirty (detected main: main)
+- working_tree_clean: False
+- highest_supported_gate: RunP26
+- latest_supported_gate: RunP26
 - seed_governance: enabled (P23+)
+- experiment_platform: ready (P22+/P23+/P24+)
 - experiment_orchestrator: enabled (P22+)
-- docs_specs_range: P16-P25 (available: P16, P17, P18, P19, P20, P21, P23, P24, P25)
-- artifacts_guide: docs/artifacts/p24/runs/latest and docs/artifacts/p25/
+- trend_warehouse_status: enabled (P26+)
+- trend_warehouse_last_updated: 2026-03-02 16:26:32
+- recent_trend_signal: regression
+- latest_gate_snapshot: n/a
+- docs_specs_range: P16-P26 (available: P16, P17, P18, P19, P20, P21, P23, P24, P25, P26)
+- artifacts_guide: docs/artifacts/p24/runs/latest, docs/artifacts/p25/, docs/artifacts/trends/
 <!-- README_STATUS:END -->
 
 ## Example Outputs
@@ -241,6 +248,9 @@ Planned:
 
 - License: currently not specified by a top-level `LICENSE` file.
 - Contributions: use mainline-only workflow and run gates before proposing changes.
+
+
+
 
 
 

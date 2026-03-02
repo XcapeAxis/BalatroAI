@@ -1,12 +1,19 @@
 ﻿{
-    "schema":  "p25_readme_status_v1",
+    "schema":  "p26_readme_status_v1",
     "branch":  "main",
     "detected_main_branch":  "main",
-    "mainline_status":  "mainline",
-    "highest_supported_gate":  "RunP25",
+    "mainline_status":  "mainline-dirty",
+    "working_tree_clean":  false,
+    "highest_supported_gate":  "RunP26",
+    "latest_supported_gate":  "RunP26",
     "seed_governance":  "enabled (P23+)",
+    "experiment_platform":  "ready (P22+/P23+/P24+)",
     "orchestrator":  "enabled (P22+)",
-    "docs_specs_range":  "P16-P25",
+    "trend_warehouse_status":  "enabled (P26+)",
+    "trend_warehouse_last_updated":  "2026-03-02 16:26:32",
+    "recent_trend_signal":  "regression",
+    "latest_gate_snapshot":  "n/a",
+    "docs_specs_range":  "P16-P26",
     "docs_specs_available":  [
                                  "P16",
                                  "P17",
@@ -16,10 +23,12 @@
                                  "P21",
                                  "P23",
                                  "P24",
-                                 "P25"
+                                 "P25",
+                                 "P26"
                              ],
     "artifacts_guide":  [
                             "docs/artifacts/p24/runs/latest",
-                            "docs/artifacts/p25"
+                            "docs/artifacts/p25",
+                            "docs/artifacts/trends"
                         ]
 }
