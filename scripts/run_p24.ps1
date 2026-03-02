@@ -99,13 +99,31 @@ if ($HeadlessDashboard) {
 }
 
 if ($FlakeSmoke) {
-  $runRoots = Get-ChildItem -Path (Join-Path $resolvedOutRoot "runs") -Directory -ErrorAction SilentlyContinue |
+  $candidateRuns = Get-ChildItem -Path (Join-Path $resolvedOutRoot "runs") -Directory -ErrorAction SilentlyContinue |
     Where-Object { $_.Name -ne "latest" } |
-    Sort-Object Name -Descending | Select-Object -First 3
-  if (-not $runRoots -or $runRoots.Count -lt 3) {
-    throw "[P24] flake smoke requires at least 3 campaign runs"
+    Sort-Object Name -Descending
+  $runRoots = @()
+  foreach ($rr in $candidateRuns) {
+    $expDir = Join-Path $rr.FullName $FlakeExpId
+    $summaryPath = Join-Path $expDir "exp_summary.json"
+    $statusPath = Join-Path $expDir "status.json"
+    if (-not (Test-Path $summaryPath) -or -not (Test-Path $statusPath)) { continue }
+    $statusObj = $null
+    try {
+      $statusObj = Get-Content -LiteralPath $statusPath -Raw | ConvertFrom-Json
+    } catch {
+      $statusObj = $null
+    }
+    $statusToken = ""
+    if ($statusObj) { $statusToken = [string]$statusObj.status }
+    if ($statusToken -notin @("success", "passed")) { continue }
+    $runRoots += $rr.FullName
+    if ($runRoots.Count -ge 3) { break }
   }
-  $runCsv = (($runRoots | Select-Object -ExpandProperty FullName) -join ",")
+  if ($runRoots.Count -lt 3) {
+    throw "[P24] flake smoke requires at least 3 completed runs for exp_id: $FlakeExpId"
+  }
+  $runCsv = ($runRoots -join ",")
   $flakeOut = Join-Path $resolvedOutRoot "flake_latest"
   New-Item -ItemType Directory -Path $flakeOut -Force | Out-Null
   $flakeArgs = @(
