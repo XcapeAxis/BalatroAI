@@ -1,0 +1,45 @@
+{
+  "schema": "p31_selfsup_config_v1",
+  "data": {
+    "max_trajectories_per_source": 8,
+    "max_steps": 2000,
+    "require_steps": true,
+    "sources": [
+      {
+        "type": "oracle_traces",
+        "path": "sim/tests/fixtures_runtime/oracle_p3_jokers_v1_regression"
+      },
+      {
+        "type": "oracle_traces",
+        "path": "sim/tests/fixtures_runtime/oracle_p8_shop_v1_regression"
+      },
+      {
+        "type": "p13_drift_fixture",
+        "path": "docs/artifacts/p13"
+      }
+    ]
+  },
+  "model": {
+    "hidden_dim": 128,
+    "embed_dim": 24,
+    "dropout": 0.1
+  },
+  "training": {
+    "seed": 20260303,
+    "epochs": 2,
+    "batch_size": 64,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "val_ratio": 0.15,
+    "log_every": 10,
+    "max_steps": 400,
+    "device": "auto"
+  },
+  "losses": {
+    "score_delta": 1.0,
+    "hand_type": 0.5
+  },
+  "output": {
+    "run_root": "trainer_runs/p31_selfsup"
+  }
+}
