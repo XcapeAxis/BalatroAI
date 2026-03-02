@@ -1,0 +1,61 @@
+﻿{
+  "schema": "p29_train_batch_config_v1",
+  "jobs": [
+    {
+      "id": "p29_bc_pv_main",
+      "exp_id": "p29_bc_pv_main",
+      "kind": "bc_pv",
+      "trainer": "pv",
+      "epochs": 1,
+      "batch_size": 128,
+      "lr": 0.001,
+      "timeout_sec": 3600,
+      "allow_fail": false
+    },
+    {
+      "id": "p29_bc_pv_aux",
+      "exp_id": "p29_bc_pv_aux",
+      "kind": "bc_pv",
+      "trainer": "bc",
+      "epochs": 1,
+      "batch_size": 128,
+      "lr": 0.001,
+      "timeout_sec": 3600,
+      "allow_fail": false
+    },
+    {
+      "id": "p29_distill_student",
+      "exp_id": "p29_distill_student",
+      "kind": "distill",
+      "epochs": 1,
+      "batch_size": 128,
+      "lr": 0.001,
+      "max_records": 5000,
+      "timeout_sec": 3600,
+      "allow_fail": false
+    },
+    {
+      "id": "p29_hybrid_tune_v1",
+      "exp_id": "p29_hybrid_tune_v1",
+      "kind": "hybrid_tuning",
+      "allow_fail": false,
+      "params": {
+        "search_budget_ms": 24,
+        "fallback_threshold": 0.42,
+        "risk_alpha": 0.56
+      }
+    },
+    {
+      "id": "p29_rl_smoke_v1",
+      "exp_id": "p29_rl_smoke_v1",
+      "kind": "rl_finetune",
+      "mode": "smoke",
+      "offline_steps": 180,
+      "online_steps": 80,
+      "batch_size": 64,
+      "lr": 0.0003,
+      "timeout_sec": 3600,
+      "allow_fail": true
+    }
+  ]
+}
