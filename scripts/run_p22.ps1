@@ -6,6 +6,7 @@ param(
   [switch]$Nightly,
   [switch]$Resume,
   [switch]$KeepIntermediate,
+  [switch]$VerboseLogs,
   [string]$Only = "",
   [string]$Exclude = "",
   [int]$MaxParallel = 1,
@@ -51,6 +52,7 @@ if ($DryRun) { $args += "--dry-run" }
 if ($Nightly) { $args += "--nightly" }
 if ($Resume) { $args += "--resume" }
 if ($KeepIntermediate) { $args += "--keep-intermediate" }
+if ($VerboseLogs) { $args += "--verbose" }
 if (-not [string]::IsNullOrWhiteSpace($Only)) { $args += @("--only", $Only) }
 if (-not [string]::IsNullOrWhiteSpace($Exclude)) { $args += @("--exclude", $Exclude) }
 if ($SeedLimit -gt 0) { $args += @("--seed-limit", "$SeedLimit") }

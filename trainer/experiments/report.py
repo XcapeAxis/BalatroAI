@@ -32,6 +32,10 @@ def write_summary_tables(
         "avg_ante_reached",
         "median_ante",
         "win_rate",
+        "hand_top1",
+        "hand_top3",
+        "shop_top1",
+        "illegal_action_rate",
         "seed_count",
         "catastrophic_failure_count",
         "elapsed_sec",
@@ -52,6 +56,10 @@ def write_summary_tables(
                     "avg_ante_reached": _safe_float(row.get("avg_ante_reached")),
                     "median_ante": _safe_float(row.get("median_ante")),
                     "win_rate": _safe_float(row.get("win_rate")),
+                    "hand_top1": _safe_float(row.get("hand_top1")),
+                    "hand_top3": _safe_float(row.get("hand_top3")),
+                    "shop_top1": _safe_float(row.get("shop_top1")),
+                    "illegal_action_rate": _safe_float(row.get("illegal_action_rate")),
                     "seed_count": row.get("seed_count"),
                     "catastrophic_failure_count": row.get("catastrophic_failure_count"),
                     "elapsed_sec": _safe_float(row.get("elapsed_sec")),
@@ -64,12 +72,12 @@ def write_summary_tables(
     md_lines = [
         f"# P23 Summary ({run_id})",
         "",
-        "| exp_id | status | mean | std | avg_ante | median_ante | win_rate | seeds | failures | elapsed_sec |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| exp_id | status | mean | std | avg_ante | median_ante | win_rate | hand_top1 | hand_top3 | shop_top1 | illegal_rate | seeds | failures | elapsed_sec |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
         md_lines.append(
-            "| {exp} | {status} | {mean} | {std} | {avg_ante} | {median_ante} | {win_rate} | {seeds} | {fails} | {elapsed} |".format(
+            "| {exp} | {status} | {mean} | {std} | {avg_ante} | {median_ante} | {win_rate} | {hand_top1} | {hand_top3} | {shop_top1} | {illegal_rate} | {seeds} | {fails} | {elapsed} |".format(
                 exp=row.get("exp_id"),
                 status=row.get("status"),
                 mean=_safe_float(row.get("mean")),
@@ -77,6 +85,10 @@ def write_summary_tables(
                 avg_ante=_safe_float(row.get("avg_ante_reached")),
                 median_ante=_safe_float(row.get("median_ante")),
                 win_rate=_safe_float(row.get("win_rate")),
+                hand_top1=_safe_float(row.get("hand_top1")),
+                hand_top3=_safe_float(row.get("hand_top3")),
+                shop_top1=_safe_float(row.get("shop_top1")),
+                illegal_rate=_safe_float(row.get("illegal_action_rate")),
                 seeds=row.get("seed_count"),
                 fails=row.get("catastrophic_failure_count"),
                 elapsed=_safe_float(row.get("elapsed_sec")),
@@ -112,6 +124,10 @@ def write_comparison_report(
             f"avg_ante={_safe_float(row.get('avg_ante_reached'))} "
             f"median_ante={_safe_float(row.get('median_ante'))} "
             f"win_rate={_safe_float(row.get('win_rate'))} "
+            f"hand_top1={_safe_float(row.get('hand_top1'))} "
+            f"hand_top3={_safe_float(row.get('hand_top3'))} "
+            f"shop_top1={_safe_float(row.get('shop_top1'))} "
+            f"illegal_rate={_safe_float(row.get('illegal_action_rate'))} "
             f"failures={row.get('catastrophic_failure_count')}"
         )
     lines += [

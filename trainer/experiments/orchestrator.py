@@ -370,6 +370,7 @@ class RunContext:
     seed_policy: dict[str, Any] | None
     seed_policy_config: str
     mode: str
+    verbose: bool
     telemetry_path: Path
     live_summary_path: Path
     run_started_ts: float
@@ -422,6 +423,15 @@ def _run_stage_command(
     result: dict[str, Any] = {}
     while attempts < max(1, max_retries):
         attempts += 1
+        if ctx.verbose:
+            print(
+                "[P22][verbose] exp={exp} stage={stage} attempt={attempt} cmd={cmd}".format(
+                    exp=exp_id,
+                    stage=stage,
+                    attempt=attempts,
+                    cmd=command,
+                )
+            )
         result = run_process(command, cwd=repo_root, timeout_sec=timeout_sec)
         timed_out = bool(result.get("timed_out"))
         status = "timed_out" if timed_out else ("ok" if result["returncode"] == 0 else "failed")
@@ -473,15 +483,59 @@ def _synthetic_eval_metrics(exp_id: str, seed: str, bias: float) -> dict[str, fl
     median_ante = round(3.0 + bias + (frac_b * 1.0), 1)
     win_rate = max(0.0, min(1.0, 0.25 + (frac_c * 0.45) + (bias * 0.05)))
     score = avg_ante + (win_rate * 0.4)
+    hand_top1 = max(0.0, min(1.0, 0.42 + (frac_a * 0.45) + (bias * 0.06)))
+    hand_top3 = max(hand_top1, min(1.0, hand_top1 + 0.10 + (frac_b * 0.10)))
+    shop_top1 = max(0.0, min(1.0, 0.38 + (frac_b * 0.50) + (bias * 0.04)))
+    illegal_action_rate = max(0.0, min(0.20, 0.02 + ((1.0 - frac_c) * 0.01) - (bias * 0.003)))
     return {
         "score": score,
         "avg_ante_reached": avg_ante,
         "median_ante": median_ante,
         "win_rate": win_rate,
+        "hand_top1": hand_top1,
+        "hand_top3": hand_top3,
+        "shop_top1": shop_top1,
+        "illegal_action_rate": illegal_action_rate,
     }
 
 
-def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any]:
+def _as_number(value: Any) -> float | None:
+    try:
+        v = float(value)
+    except Exception:
+        return None
+    if v != v:
+        return None
+    return v
+
+
+def _fmt_num(value: Any, digits: int = 4) -> str:
+    v = _as_number(value)
+    if v is None:
+        return "n/a"
+    return f"{v:.{digits}f}"
+
+
+def _fmt_pct(value: Any) -> str:
+    v = _as_number(value)
+    if v is None:
+        return "n/a"
+    return f"{(v * 100.0):.2f}%"
+
+
+def _experiment_summary_line(metric_summary: dict[str, Any]) -> str:
+    return "avg_ante={avg} median_ante={median} win_rate={win} hand_top1={h1} hand_top3={h3} shop_top1={s1} illegal={illegal}".format(
+        avg=_fmt_num(metric_summary.get("avg_ante_reached")),
+        median=_fmt_num(metric_summary.get("median_ante"), digits=3),
+        win=_fmt_pct(metric_summary.get("win_rate")),
+        h1=_fmt_pct(metric_summary.get("hand_top1")),
+        h3=_fmt_pct(metric_summary.get("hand_top3")),
+        s1=_fmt_pct(metric_summary.get("shop_top1")),
+        illegal=_fmt_pct(metric_summary.get("illegal_action_rate")),
+    )
+
+
+def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, exp_total: int) -> dict[str, Any]:
     exp_id = str(exp["id"])
     exp_dir = ctx.run_root / exp_id
     exp_dir.mkdir(parents=True, exist_ok=True)
@@ -515,6 +569,10 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
             "avg_ante_reached": 0.0,
             "median_ante": 0.0,
             "win_rate": 0.0,
+            "hand_top1": 0.0,
+            "hand_top3": 0.0,
+            "shop_top1": 0.0,
+            "illegal_action_rate": 1.0,
         }
         write_json(status_path, payload)
         emit_progress(
@@ -533,6 +591,10 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
             "avg_ante_reached": payload["avg_ante_reached"],
             "median_ante": payload["median_ante"],
             "win_rate": payload["win_rate"],
+            "hand_top1": payload["hand_top1"],
+            "hand_top3": payload["hand_top3"],
+            "shop_top1": payload["shop_top1"],
+            "illegal_action_rate": payload["illegal_action_rate"],
             "seed_count": payload["seed_count"],
             "catastrophic_failure_count": payload["catastrophic_failure_count"],
             "elapsed_sec": payload["elapsed_sec"],
@@ -596,6 +658,15 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
         "experiment": exp,
     }
     write_json(exp_dir / "run_manifest.json", manifest)
+    print(
+        "[P22] Experiment {idx}/{total}: {exp_id} (seeds {seed_count}, mode={mode})".format(
+            idx=exp_index,
+            total=exp_total,
+            exp_id=exp_id,
+            seed_count=len(seeds),
+            mode=ctx.mode,
+        )
+    )
 
     append_jsonl(progress_path, {"ts": now_iso(), "exp_id": exp_id, "stage": "init", "status": "start"})
     emit_progress(ctx, exp_id=exp_id, stage="init", status="running", elapsed_sec=0.0)
@@ -608,6 +679,10 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
             "avg_ante_reached": 0.0,
             "median_ante": 0.0,
             "win_rate": 0.0,
+            "hand_top1": 0.0,
+            "hand_top3": 0.0,
+            "shop_top1": 0.0,
+            "illegal_action_rate": 0.0,
             "seed_count": len(seeds),
             "catastrophic_failure_count": 0,
             "elapsed_sec": 0.0,
@@ -622,6 +697,10 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
             "avg_ante_reached": 0.0,
             "median_ante": 0.0,
             "win_rate": 0.0,
+            "hand_top1": 0.0,
+            "hand_top3": 0.0,
+            "shop_top1": 0.0,
+            "illegal_action_rate": 0.0,
             "seed_count": len(seeds),
             "catastrophic_failure_count": 0,
             "elapsed_sec": 0.0,
@@ -716,6 +795,17 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
             seed_ctx["seed"] = seed
             seed_ctx["seed_index"] = seed_idx
             seed_ctx["seed_total"] = len(seeds)
+            if ctx.verbose:
+                print(
+                    "[P22][verbose] Experiment {idx}/{total}: {exp_id} (seed {seed_idx}/{seed_total}: {seed})".format(
+                        idx=exp_index,
+                        total=exp_total,
+                        exp_id=exp_id,
+                        seed_idx=seed_idx,
+                        seed_total=len(seeds),
+                        seed=seed,
+                    )
+                )
             metrics = _synthetic_eval_metrics(exp_id, seed, bias)
             if eval_cmd_tmpl:
                 result = _run_stage_command(
@@ -815,6 +905,10 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
             "avg_ante_reached": metric_summary.get("avg_ante_reached"),
             "median_ante": metric_summary.get("median_ante"),
             "win_rate": metric_summary.get("win_rate"),
+            "hand_top1": metric_summary.get("hand_top1"),
+            "hand_top3": metric_summary.get("hand_top3"),
+            "shop_top1": metric_summary.get("shop_top1"),
+            "illegal_action_rate": metric_summary.get("illegal_action_rate"),
             "seed_count": metric_summary.get("count"),
             "catastrophic_failure_count": metric_summary.get("catastrophic_failure_count"),
             "elapsed_sec": elapsed_total,
@@ -838,6 +932,15 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
         elapsed_sec=elapsed_total,
         metric_snapshot=f"{primary_metric}={metric_summary.get('mean')}",
     )
+    print(
+        "[P22] Completed {idx}/{total}: {exp_id} status={status} | {summary}".format(
+            idx=exp_index,
+            total=exp_total,
+            exp_id=exp_id,
+            status=final_status,
+            summary=_experiment_summary_line(metric_summary),
+        )
+    )
     return {
         "exp_id": exp_id,
         "status": final_status,
@@ -846,6 +949,10 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
         "avg_ante_reached": metric_summary.get("avg_ante_reached"),
         "median_ante": metric_summary.get("median_ante"),
         "win_rate": metric_summary.get("win_rate"),
+        "hand_top1": metric_summary.get("hand_top1"),
+        "hand_top3": metric_summary.get("hand_top3"),
+        "shop_top1": metric_summary.get("shop_top1"),
+        "illegal_action_rate": metric_summary.get("illegal_action_rate"),
         "seed_count": metric_summary.get("count"),
         "catastrophic_failure_count": metric_summary.get("catastrophic_failure_count"),
         "elapsed_sec": elapsed_total,
@@ -912,6 +1019,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-wall-time-minutes", type=int, default=0)
     p.add_argument("--seed-limit", type=int, default=0)
     p.add_argument("--seed-policy-config", default="")
+    p.add_argument("--verbose", action="store_true")
     return p.parse_args()
 
 
@@ -989,6 +1097,7 @@ def main() -> int:
         seed_policy=seed_policy,
         seed_policy_config=seed_policy_config,
         mode=mode,
+        verbose=bool(args.verbose),
         telemetry_path=run_root / "telemetry.jsonl",
         live_summary_path=run_root / "live_summary_snapshot.json",
         run_started_ts=time.time(),
@@ -1008,6 +1117,7 @@ def main() -> int:
         "nightly": ctx.nightly,
         "dry_run": ctx.dry_run,
         "resume": ctx.resume,
+        "verbose": ctx.verbose,
         "max_parallel": ctx.max_parallel,
         "max_experiments": max_experiments,
         "seed_policy_config": seed_policy_config,
@@ -1020,6 +1130,7 @@ def main() -> int:
     rows: list[dict[str, Any]] = []
     max_wall_minutes = int(args.max_wall_time_minutes) if int(args.max_wall_time_minutes) > 0 else int(budget_cfg.get("max_wall_time_minutes") or 120)
     max_wall_sec = max(60, max_wall_minutes * 60)
+    exp_total = len(experiments)
     for idx, exp in enumerate(experiments):
         if (time.time() - ctx.run_started_ts) > max_wall_sec:
             exp_id = str(exp["id"])
@@ -1040,6 +1151,10 @@ def main() -> int:
                     "avg_ante_reached": 0.0,
                     "median_ante": 0.0,
                     "win_rate": 0.0,
+                    "hand_top1": 0.0,
+                    "hand_top3": 0.0,
+                    "shop_top1": 0.0,
+                    "illegal_action_rate": 1.0,
                     "seed_count": 0,
                     "catastrophic_failure_count": 1,
                     "elapsed_sec": 0.0,
@@ -1047,7 +1162,7 @@ def main() -> int:
                 }
             )
             continue
-        rows.append(run_single_experiment(ctx, exp))
+        rows.append(run_single_experiment(ctx, exp, exp_index=idx + 1, exp_total=exp_total))
 
     primary_metric = str((cfg.get("evaluation") or {}).get("primary_metric") or "avg_ante_reached")
     rows_sorted = sorted(rows, key=lambda r: (str(r.get("status")) != "passed", -(float(r.get("mean") or 0.0))))
