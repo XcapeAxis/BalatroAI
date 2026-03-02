@@ -157,8 +157,8 @@ Full guide: [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 - branch: main
 - latest_gate: RunP27 (PASS)
 - recent_trend_signal: regression
-- trend_warehouse_last_updated: 2026-03-02T10:56:52.347402+00:00
-- trend_rows_count: 14646
+- trend_warehouse_last_updated: 2026-03-02T11:05:01.095809+00:00
+- trend_rows_count: 15731
 - champion: quick_risk_aware (champion)
 - candidate: quick_hybrid (decision: hold)
 - docs_coverage: P15-P27
@@ -249,6 +249,12 @@ Planned:
 
 - License: currently not specified by a top-level `LICENSE` file.
 - Contributions: use mainline-only workflow and run gates before proposing changes.
+
+
+
+
+
+
 
 
 
