@@ -68,3 +68,10 @@ The runner executes:
 - Runtime outputs are regenerated artifacts under `sim/tests/fixtures_runtime` (and related runtime/log paths).
 - These outputs are ignored by `.gitignore` and should not be committed.
 - Keep only scripts/spec/docs/source fixtures in git.
+
+## P22 Experiment Pipeline Note
+- P22 introduces matrix-based experiment orchestration with resumable runs and seed-governed evaluation.
+- Entry points:
+  - `scripts/run_p22.ps1`
+  - `python -B -m trainer.experiments.orchestrator`
+- Curated outputs are written under `docs/artifacts/p22/**` (ignored from git tracking by repo policy).
