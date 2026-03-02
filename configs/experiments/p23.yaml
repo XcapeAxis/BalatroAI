@@ -1,0 +1,211 @@
+{
+  "schema": "p23_experiment_config_v1",
+  "seed_policy_config": "configs/experiments/seeds_p23.yaml",
+  "budget": {
+    "max_wall_time_minutes": 120,
+    "max_per_experiment_minutes": 20,
+    "max_experiments": 8,
+    "max_concurrent_workers": 1,
+    "max_retries_per_stage": 1
+  },
+  "evaluation": {
+    "primary_metric": "avg_ante_reached",
+    "promotion": {
+      "min_delta": 0.05,
+      "require_all_gates_pass": true
+    },
+    "gate_thresholds": {
+      "min_avg_ante": 3.20,
+      "min_median_ante": 3.00,
+      "min_win_rate": 0.25
+    }
+  },
+  "matrix": [
+    {
+      "id": "quick_baseline",
+      "name": "quick_baseline",
+      "backend": "sim",
+      "policy": "heuristic",
+      "policy_type": "heuristic",
+      "seed_set_name": "contract_regression",
+      "seed_mode": "regression_fixed",
+      "stake": "white",
+      "ante": 3,
+      "phases": [
+        "HAND",
+        "SHOP"
+      ],
+      "modes": {
+        "quick": true,
+        "gate": true,
+        "nightly": true,
+        "milestone": true
+      },
+      "parameters": {
+        "beam_width": 4,
+        "policy_mode": "baseline",
+        "budget_ms": 20
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "eval": {
+        "mode": "synthetic",
+        "primary_metric_bias": 0.00
+      }
+    },
+    {
+      "id": "quick_hybrid",
+      "name": "quick_hybrid",
+      "backend": "sim",
+      "policy": "hybrid",
+      "policy_type": "hybrid",
+      "seed_set_name": "contract_regression",
+      "seed_mode": "regression_fixed",
+      "stake": "red",
+      "ante": 4,
+      "phases": [
+        "HAND",
+        "SHOP"
+      ],
+      "modes": {
+        "quick": true,
+        "gate": true,
+        "nightly": true,
+        "milestone": true
+      },
+      "parameters": {
+        "beam_width": 8,
+        "policy_mode": "hybrid",
+        "budget_ms": 25
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "eval": {
+        "mode": "synthetic",
+        "primary_metric_bias": 0.08
+      }
+    },
+    {
+      "id": "quick_risk_aware",
+      "name": "quick_risk_aware",
+      "backend": "sim",
+      "policy": "risk_aware",
+      "policy_type": "risk_aware",
+      "seed_set_name": "perf_gate_100",
+      "seed_mode": "regression_fixed",
+      "stake": "black",
+      "ante": 5,
+      "phases": [
+        "HAND",
+        "SHOP"
+      ],
+      "modes": {
+        "quick": true,
+        "gate": true,
+        "nightly": true,
+        "milestone": true
+      },
+      "parameters": {
+        "beam_width": 12,
+        "policy_mode": "risk_aware",
+        "budget_ms": 30
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "eval": {
+        "mode": "synthetic",
+        "primary_metric_bias": 0.12
+      }
+    },
+    {
+      "id": "nightly_deploy_student",
+      "name": "nightly_deploy_student",
+      "backend": "sim",
+      "policy": "deploy_student",
+      "policy_type": "deploy_student",
+      "seed_set_name": "perf_gate_100",
+      "seed_mode": "nightly",
+      "stake": "gold",
+      "ante": 6,
+      "phases": [
+        "HAND",
+        "SHOP"
+      ],
+      "modes": {
+        "quick": false,
+        "gate": true,
+        "nightly": true,
+        "milestone": true
+      },
+      "parameters": {
+        "beam_width": 16,
+        "policy_mode": "deploy_student",
+        "budget_ms": 35
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "eval": {
+        "mode": "synthetic",
+        "primary_metric_bias": 0.15
+      }
+    },
+    {
+      "id": "milestone_rl",
+      "name": "milestone_rl",
+      "backend": "sim",
+      "policy": "rl",
+      "policy_type": "rl",
+      "seed_set_name": "milestone_500",
+      "seed_mode": "regression_fixed",
+      "stake": "gold",
+      "ante": 8,
+      "phases": [
+        "HAND",
+        "SHOP"
+      ],
+      "modes": {
+        "quick": false,
+        "gate": false,
+        "nightly": true,
+        "milestone": true
+      },
+      "parameters": {
+        "beam_width": 20,
+        "policy_mode": "rl",
+        "budget_ms": 40
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "eval": {
+        "mode": "synthetic",
+        "primary_metric_bias": 0.20
+      }
+    }
+  ]
+}
+
