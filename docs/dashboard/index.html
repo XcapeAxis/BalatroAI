@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BalatroAI Status Dashboard</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <p class="kicker">BalatroAI</p>
+      <h1>Status Dashboard</h1>
+      <p id="build-meta" class="meta">Awaiting data...</p>
+      <div id="status-chips" class="chips"></div>
+    </header>
+
+    <section class="card-grid" aria-label="Top Metrics">
+      <article class="card">
+        <h2>Latest Gate</h2>
+        <p id="latest-gate" class="value">-</p>
+      </article>
+      <article class="card">
+        <h2>Trend Signal</h2>
+        <p id="trend-signal" class="value">-</p>
+      </article>
+      <article class="card">
+        <h2>Hard Regressions</h2>
+        <p id="hard-regressions" class="value">-</p>
+      </article>
+      <article class="card">
+        <h2>Total Series</h2>
+        <p id="total-series" class="value">-</p>
+      </article>
+    </section>
+
+    <section class="panel">
+      <h2>Trend Summary</h2>
+      <div id="trend-table" class="table-wrap"></div>
+    </section>
+
+    <section class="panel split">
+      <div>
+        <h2>Regression Alerts</h2>
+        <ul id="alert-list" class="list"></ul>
+      </div>
+      <div>
+        <h2>Champion / Candidate</h2>
+        <ul id="cc-list" class="list"></ul>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Recent Runs</h2>
+      <div id="runs-table" class="table-wrap"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Recent Gate History</h2>
+      <div id="gates-table" class="table-wrap"></div>
+    </section>
+  </main>
+
+  <script src="./data/latest.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
