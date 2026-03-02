@@ -1,20 +1,20 @@
-﻿# BalatroAI
+﻿<h1 align="center">BalatroAI</h1>
+<p align="center">
+  A simulator-first Balatro experimentation platform focused on parity, reproducibility, and gated iteration.
+</p>
 
-A simulator-first Balatro experimentation platform focused on parity, reproducibility, and gated iteration.
-
-## Badges
-
-[![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](trainer/requirements.txt)
-[![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows&logoColor=white)](USAGE_GUIDE.md)
-[![Workflow](https://img.shields.io/badge/Workflow-mainline--only-2EA44F)](scripts/git_sync.ps1)
-[![Seed Governance](https://img.shields.io/badge/Seed%20Governance-P23%2B-0E8A16)](configs/experiments/seeds_p23.yaml)
-[![Orchestrator](https://img.shields.io/badge/Experiment%20Orchestrator-P22%2B-1F6FEB)](scripts/run_p22.ps1)
-[![Campaign Manager](https://img.shields.io/badge/Campaign%20Manager-P24%2B-5319E7)](scripts/run_p24.ps1)
-[![Latest Gate](https://img.shields.io/badge/Latest%20Gate-RunP25-orange)](scripts/run_regressions.ps1)
-[![Oracle-Sim Parity](https://img.shields.io/badge/Oracle%E2%86%94Sim-Parity%20Tracked-blue)](sim/README.md)
-[![Docs Specs](https://img.shields.io/badge/Docs%20Specs-P16%E2%80%93P25%20(partial)-6E7781)](docs/)
-[![License](https://img.shields.io/badge/License-Not%20Specified-lightgrey)](#license-and-contributing)
-
+<p align="center">
+  <a href="trainer/requirements.txt"><img src="https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white" alt="Python" /></a>
+  <a href="USAGE_GUIDE.md"><img src="https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows&logoColor=white" alt="Platform" /></a>
+  <a href="scripts/git_sync.ps1"><img src="https://img.shields.io/badge/Workflow-mainline--only-2EA44F" alt="Workflow" /></a>
+  <a href="configs/experiments/seeds_p23.yaml"><img src="https://img.shields.io/badge/Seed%20Governance-P23%2B-0E8A16" alt="Seed Governance" /></a>
+  <a href="scripts/run_p22.ps1"><img src="https://img.shields.io/badge/Experiment%20Orchestrator-P22%2B-1F6FEB" alt="Orchestrator" /></a>
+  <a href="scripts/run_p24.ps1"><img src="https://img.shields.io/badge/Campaign%20Manager-P24%2B-5319E7" alt="Campaign Manager" /></a>
+  <a href="scripts/run_regressions.ps1"><img src="https://img.shields.io/badge/Latest%20Gate-RunP25-orange" alt="Latest Gate" /></a>
+  <a href="sim/README.md"><img src="https://img.shields.io/badge/Oracle%E2%86%94Sim-Parity%20Tracked-blue" alt="Oracle-Sim Parity" /></a>
+  <a href="docs/"><img src="https://img.shields.io/badge/Docs%20Specs-P16%E2%80%93P25%20(partial)-6E7781" alt="Docs Specs" /></a>
+  <a href="#license-and-contributing"><img src="https://img.shields.io/badge/License-Not%20Specified-lightgrey" alt="License" /></a>
+</p>
 Badge data source notes:
 
 - Static shields are mapped to repo files/scripts and maintained in README.
@@ -241,6 +241,7 @@ Planned:
 
 - License: currently not specified by a top-level `LICENSE` file.
 - Contributions: use mainline-only workflow and run gates before proposing changes.
+
 
 
 
