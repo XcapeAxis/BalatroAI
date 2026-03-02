@@ -37,6 +37,7 @@ param(
   [switch]$RunP26,
   [switch]$RunP27,
   [switch]$RunP29,
+  [switch]$RunP31,
   [switch]$RequireMainBranch,
   [string]$P21Timestamp = ""
 )
@@ -87,6 +88,15 @@ if ($RunP27) {
   $RunP22 = $true
 }
 if ($RunP29) {
+  $RunP27 = $true
+  $RunP26 = $true
+  $RunP25 = $true
+  $RunP24 = $true
+  $RunP23 = $true
+  $RunP22 = $true
+}
+if ($RunP31) {
+  $RunP29 = $true
   $RunP27 = $true
   $RunP26 = $true
   $RunP25 = $true
@@ -2465,6 +2475,135 @@ if ($RunP29) {
   Write-Host ("[P29] artifact_dir=" + $p29Dir + " gate_status=" + $reportP29.status)
   if ($reportP29.status -ne "PASS") {
     throw "[P29] gate failed; inspect gate_* and report_p29_gate"
+  }
+}
+
+if ($RunP31) {
+  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $p31Root = Join-Path $ProjectRoot "docs/artifacts/p31"
+  if (-not (Test-Path $p31Root)) { New-Item -ItemType Directory -Path $p31Root -Force | Out-Null }
+  $p31Dir = Join-Path $p31Root $stamp
+  New-Item -ItemType Directory -Path $p31Dir -Force | Out-Null
+
+  $p29Root = Join-Path $ProjectRoot "docs/artifacts/p29"
+  $p29RunDir = ""
+  if (Test-Path $p29Root) {
+    $p29Candidates = Get-ChildItem -Path $p29Root -Directory -ErrorAction SilentlyContinue |
+      Where-Object { $_.Name -match "^\d{8}-\d{6}$" } |
+      Sort-Object Name -Descending
+    if ($p29Candidates) { $p29RunDir = $p29Candidates[0].FullName }
+  }
+  $p29ReportPath = ""
+  if ($p29RunDir) { $p29ReportPath = Join-Path $p29RunDir "report_p29_gate.json" }
+  $p29ReportObj = Read-JsonFile -Path $p29ReportPath
+  $p29Status = "UNKNOWN"
+  if ($p29ReportObj) { $p29Status = [string]$p29ReportObj.status }
+
+  $baselineSummary = [ordered]@{
+    schema = "p31_baseline_v1"
+    generated_at = (Get-Date).ToString("o")
+    requested_gate = "RunP29"
+    baseline_status = $p29Status
+    baseline_artifact_dir = $p29RunDir
+    baseline_report = $p29ReportPath
+    functional_pass = $(if ($p29ReportObj -and $p29ReportObj.functional) { [bool]$p29ReportObj.functional.pass } else { $false })
+    data_flywheel_pass = $(if ($p29ReportObj -and $p29ReportObj.data_flywheel) { [bool]$p29ReportObj.data_flywheel.pass } else { $false })
+    training_eval_pass = $(if ($p29ReportObj -and $p29ReportObj.training_eval) { [bool]$p29ReportObj.training_eval.pass } else { $false })
+    reliability_pass = $(if ($p29ReportObj -and $p29ReportObj.reliability) { [bool]$p29ReportObj.reliability.pass } else { $false })
+  }
+  Write-JsonFile -Path (Join-Path $p31Dir "baseline.json") -Object $baselineSummary
+
+  $p31Py = Join-Path $ProjectRoot ".venv_trainer\Scripts\python.exe"
+  if (-not (Test-Path $p31Py)) { $p31Py = "python" }
+
+  $null = Invoke-SafeRunStep -Label "P31-router-smoke" -Exe $p31Py -CmdArgs @(
+    "-B",
+    "-m", "py_compile",
+    "trainer/decision_stack/context_features.py",
+    "trainer/decision_stack/risk_model.py",
+    "trainer/decision_stack/router.py",
+    "trainer/search/adaptive_budget.py"
+  ) -TimeoutSec 300
+
+  $null = Invoke-SafeRunStep -Label "P31-quick-eval-50" -Exe $p31Py -CmdArgs @(
+    "-B",
+    "-m", "trainer.eval.run_p31_eval",
+    "--seeds", "50",
+    "--timestamp", $stamp,
+    "--out-root", "docs/artifacts/p31",
+    "--config", "configs/decision_stack/p31_router.json"
+  ) -TimeoutSec 1200
+
+  $p31EvalDir = Join-Path $p31Dir "eval"
+  $ablation50Path = Join-Path $p31EvalDir "ablation_50.json"
+  $rankingSmokePath = Join-Path $p31EvalDir "ranking_smoke_50.json"
+  $compareSummaryPath = Join-Path $p31EvalDir "compare_summary.md"
+
+  $evalObj = Read-JsonFile -Path $ablation50Path
+  $improvement = $null
+  $recommendation = "unknown"
+  $recommendedVariant = ""
+  $meetsThreshold = $false
+  if ($evalObj -and $evalObj.improvement) {
+    $improvement = $evalObj.improvement
+    $recommendation = [string]$improvement.recommendation
+    $recommendedVariant = [string]$improvement.recommended_variant
+    $meetsThreshold = [bool]$improvement.meets_threshold
+  }
+
+  $gateFunctional = [ordered]@{
+    schema = "p31_gate_functional_v1"
+    generated_at = (Get-Date).ToString("o")
+    baseline_gate = "RunP29"
+    baseline_status = $p29Status
+    baseline_artifact_dir = $p29RunDir
+    baseline_report = $p29ReportPath
+    router_smoke = $true
+    pass = ($p29Status -eq "PASS")
+  }
+  $gateStrength = [ordered]@{
+    schema = "p31_gate_strength_v1"
+    generated_at = (Get-Date).ToString("o")
+    eval_ablation_50 = $ablation50Path
+    ranking_smoke = $rankingSmokePath
+    compare_summary = $compareSummaryPath
+    recommendation = $recommendation
+    recommended_variant = $recommendedVariant
+    meets_threshold = $meetsThreshold
+    pass = ((Test-Path $ablation50Path) -and (Test-Path $rankingSmokePath) -and (Test-Path $compareSummaryPath))
+  }
+
+  Write-JsonFile -Path (Join-Path $p31Dir "gate_functional.json") -Object $gateFunctional
+  Write-JsonFile -Path (Join-Path $p31Dir "gate_strength.json") -Object $gateStrength
+
+  $reportP31 = [ordered]@{
+    schema = "p31_report_gate_v1"
+    generated_at = (Get-Date).ToString("o")
+    functional = $gateFunctional
+    strength = $gateStrength
+    status = $(if ($gateFunctional.pass -and $gateStrength.pass) { "PASS" } else { "FAIL" })
+  }
+  $reportP31Path = Join-Path $p31Dir "report_p31.json"
+  Write-JsonFile -Path $reportP31Path -Object $reportP31
+
+  $coverageP31Path = Join-Path $ProjectRoot "docs/COVERAGE_P31_STATUS.md"
+  @(
+    "# COVERAGE P31 STATUS",
+    "",
+    "- timestamp: " + (Get-Date -Format "yyyy-MM-dd HH:mm:ss"),
+    "- baseline_gate: RunP29",
+    "- baseline_status: " + $p29Status,
+    "- router_smoke_pass: true",
+    "- eval_50_pass: " + (Test-Path $ablation50Path),
+    "- ranking_smoke_pass: " + (Test-Path $rankingSmokePath),
+    "- recommendation: " + $recommendation,
+    "- recommended_variant: " + $recommendedVariant,
+    "- gate_status: " + $reportP31.status
+  ) -join "`n" | Out-File -LiteralPath $coverageP31Path -Encoding UTF8
+
+  Write-Host ("[P31] artifact_dir=" + $p31Dir + " gate_status=" + $reportP31.status)
+  if ($reportP31.status -ne "PASS") {
+    throw "[P31] gate failed; inspect gate_* and report_p31"
   }
 }
 
