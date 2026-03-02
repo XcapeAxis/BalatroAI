@@ -1674,6 +1674,16 @@ if ($RunP26) {
   if (Test-Path $trendSummaryPath) {
     try { $trendSummaryObj = Get-Content -LiteralPath $trendSummaryPath -Raw | ConvertFrom-Json } catch { $trendSummaryObj = $null }
   }
+  $trendMilestones = @()
+  if ($trendSummaryObj -and $trendSummaryObj.milestones) {
+    $trendMilestones = @($trendSummaryObj.milestones | ForEach-Object { [string]$_ })
+  }
+  $milestoneCoveragePass = (
+    ($trendMilestones -contains "P22") -and
+    ($trendMilestones -contains "P23") -and
+    ($trendMilestones -contains "P24") -and
+    ($trendMilestones -contains "P25")
+  )
   $alertObj = $null
   if (Test-Path $alertJsonPath) {
     try { $alertObj = Get-Content -LiteralPath $alertJsonPath -Raw | ConvertFrom-Json } catch { $alertObj = $null }
@@ -1700,7 +1710,8 @@ if ($RunP26) {
     (Test-Path $alertMdPath) -and
     (Test-Path $alertCsvPath) -and
     (Test-Path $releaseMdPath) -and
-    (Test-Path $releaseJsonPath)
+    (Test-Path $releaseJsonPath) -and
+    $milestoneCoveragePass
   )
   $opsPass = (
     (Test-Path $schedulerManifestPath) -and
@@ -1727,7 +1738,8 @@ if ($RunP26) {
     trend_rows_csv = $trendRowsCsv
     trend_index_summary = $trendSummaryPath
     trend_rows_total = $(if ($trendSummaryObj) { [int]$trendSummaryObj.rows_total } else { 0 })
-    milestones = $(if ($trendSummaryObj) { @($trendSummaryObj.milestones) } else { @() })
+    milestones = $trendMilestones
+    milestone_coverage_pass = $milestoneCoveragePass
     alert_report_json = $alertJsonPath
     release_summary_json = $releaseJsonPath
     pass = $trendsPass

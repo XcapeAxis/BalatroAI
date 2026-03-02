@@ -26,9 +26,22 @@ class ScanStats:
 
 def _safe_json(path: Path) -> Any:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
     except Exception:
         return None
+    candidates = [text]
+    if text.startswith("\ufeff"):
+        candidates.append(text.lstrip("\ufeff"))
+    try:
+        return json.loads(candidates[0])
+    except Exception:
+        pass
+    if len(candidates) > 1:
+        try:
+            return json.loads(candidates[1])
+        except Exception:
+            return None
+    return None
 
 
 def _now_iso() -> str:
