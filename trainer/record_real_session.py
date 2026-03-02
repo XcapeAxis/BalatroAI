@@ -83,6 +83,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--confirm", default="", help='Must equal "I_UNDERSTAND" when --execute is used.')
     parser.add_argument("--max-actions", type=int, default=12)
     parser.add_argument("--rate-limit-sec", type=float, default=2.0)
+    parser.add_argument("--action-trace", default="", help="Optional action_v1 jsonl to drive execute actions in order.")
     parser.add_argument(
         "--strict-errors",
         dest="strict_errors",
@@ -99,6 +100,25 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--include-raw", action="store_true", help="Attach raw gamestate per row (needed for dagger reconstruction).")
     parser.add_argument("--out", default="", help="Output session jsonl path.")
     return parser.parse_args()
+
+
+def _load_action_trace(path: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    if not str(path or "").strip():
+        return rows
+    inp = Path(path)
+    if not inp.exists():
+        raise FileNotFoundError(f"action trace not found: {inp}")
+    with inp.open("r", encoding="utf-8-sig") as f:
+        for line_no, line in enumerate(f, start=1):
+            text = line.strip()
+            if not text:
+                continue
+            item = json.loads(text)
+            if not isinstance(item, dict):
+                raise ValueError(f"action trace line {line_no} must be object")
+            rows.append(item)
+    return rows
 
 
 def _suggestions(state: dict[str, Any], topk: int) -> list[dict[str, Any]]:
@@ -160,6 +180,8 @@ def main() -> int:
     if out_path.exists():
         out_path.unlink()
     backend = create_backend("real", base_url=args.base_url, timeout_sec=8.0, seed="AAAAAAA", logger=logger)
+    scripted_actions = _load_action_trace(args.action_trace)
+    scripted_cursor = 0
 
     phase_counter: Counter[str] = Counter()
     written = 0
@@ -217,7 +239,13 @@ def main() -> int:
             if execute_enabled and actions_count < max(0, int(args.max_actions)):
                 now = time.time()
                 if (now - last_exec_ts) >= float(args.rate_limit_sec):
-                    safe_action = _choose_safe_action(before_state, suggestions)
+                    action_source = "auto_safe_action"
+                    if scripted_cursor < len(scripted_actions):
+                        safe_action = dict(scripted_actions[scripted_cursor])
+                        scripted_cursor += 1
+                        action_source = "scripted_action_trace"
+                    else:
+                        safe_action = _choose_safe_action(before_state, suggestions)
                     if safe_action is not None:
                         try:
                             action_sent = dict(safe_action)
@@ -228,6 +256,7 @@ def main() -> int:
                                 "reward": float(reward),
                                 "done": bool(done),
                                 "info": info,
+                                "source": action_source,
                             }
                             actions_count += 1
                             last_exec_ts = now
@@ -294,6 +323,8 @@ def main() -> int:
         "out": str(out_path),
         "steps_written": written,
         "actions_count": actions_count,
+        "scripted_actions_total": len(scripted_actions),
+        "scripted_actions_consumed": scripted_cursor,
         "state_changed_steps": changed_steps,
         "phase_distribution": dict(phase_counter),
     }

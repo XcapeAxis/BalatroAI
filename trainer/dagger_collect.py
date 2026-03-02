@@ -126,6 +126,7 @@ def _hand_record_from_state(
     student_topk: list[dict[str, Any]],
     valid_reconstruct: bool,
     failure_reason: str | None,
+    source_action: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     hand_cards = ((state.get("hand") or {}).get("cards") or []) if isinstance(state.get("hand"), dict) else []
     hand_size = min(len(hand_cards), action_space.MAX_HAND)
@@ -164,6 +165,8 @@ def _hand_record_from_state(
         "shop_features": None,
         "student_action_topk": student_topk,
         "teacher_action": teacher_action,
+        "source_action_type": str((source_action or {}).get("action_type") or "").upper(),
+        "source_action": dict(source_action) if isinstance(source_action, dict) else None,
         "valid_reconstruct": bool(valid_reconstruct),
         "failure_reason": failure_reason,
     }
@@ -180,6 +183,7 @@ def _shop_record_from_state(
     student_topk: list[dict[str, Any]],
     valid_reconstruct: bool,
     failure_reason: str | None,
+    source_action: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     shop_legal = action_space_shop.legal_action_ids(state)
     if not shop_legal:
@@ -209,6 +213,8 @@ def _shop_record_from_state(
         "shop_features": extract_shop_features(state),
         "student_action_topk": student_topk,
         "teacher_action": teacher_action,
+        "source_action_type": str((source_action or {}).get("action_type") or "").upper(),
+        "source_action": dict(source_action) if isinstance(source_action, dict) else None,
         "valid_reconstruct": bool(valid_reconstruct),
         "failure_reason": failure_reason,
     }
@@ -296,11 +302,15 @@ def main() -> int:
 
     stats = Counter()
     failure_reasons = Counter()
+    source_action_types = Counter()
     records: list[dict[str, Any]] = []
 
     def add_record(rec: dict[str, Any], kind: str) -> None:
         records.append(rec)
         stats[f"{kind}_records"] += 1
+        sat = str(rec.get("source_action_type") or "").strip().upper()
+        if sat:
+            source_action_types[sat] += 1
 
     for idx, row in enumerate(rows):
         state = _state_from_row(row)
@@ -308,6 +318,9 @@ def main() -> int:
             stats["invalid_rows"] += 1
             failure_reasons["missing_gamestate_raw"] += 1
             continue
+        source_action = row.get("action_sent")
+        if not isinstance(source_action, dict):
+            source_action = row.get("executed_action")
 
         phase = str(state.get("state") or "UNKNOWN")
         try:
@@ -334,6 +347,7 @@ def main() -> int:
                 student_topk=student_topk,
                 valid_reconstruct=True,
                 failure_reason=None,
+                source_action=source_action if isinstance(source_action, dict) else None,
             )
             if rec is not None:
                 add_record(rec, "hand")
@@ -355,6 +369,7 @@ def main() -> int:
                 student_topk=student_topk,
                 valid_reconstruct=True,
                 failure_reason=None,
+                source_action=source_action if isinstance(source_action, dict) else None,
             )
             if rec is not None:
                 add_record(rec, "shop")
@@ -415,6 +430,7 @@ def main() -> int:
                             student_topk=student_topk,
                             valid_reconstruct=False,
                             failure_reason="sim_augment",
+                            source_action=chosen_action,
                         )
                         if rec is not None:
                             add_record(rec, "hand")
@@ -432,6 +448,7 @@ def main() -> int:
                             student_topk=student_topk,
                             valid_reconstruct=False,
                             failure_reason="sim_augment",
+                            source_action=chosen_action,
                         )
                         if rec is not None:
                             add_record(rec, "shop")
@@ -476,6 +493,7 @@ def main() -> int:
                         student_topk=student_topk,
                         valid_reconstruct=False,
                         failure_reason="sim_augment_shop_synth",
+                        source_action=decision.action,
                     )
                     if rec is not None:
                         add_record(rec, "shop")
@@ -495,6 +513,7 @@ def main() -> int:
         "invalid_rows": int(stats["invalid_rows"]),
         "reconstruct_failure_rate": float(stats["invalid_rows"] / max(1, len(rows))),
         "top_failure_reasons": failure_reasons.most_common(10),
+        "source_action_type_counts": dict(source_action_types),
         "failure_bucket_source": str(Path(args.from_failure_buckets)) if str(args.from_failure_buckets).strip() else None,
         "sampling_weights": {"failure_weight": float(args.failure_weight), "uniform_weight": float(args.uniform_weight)},
         "out": str(out_path),

@@ -270,6 +270,11 @@ def _phase_default_action(state: dict[str, Any], seed: str) -> dict[str, Any]:
     return {"action_type": "WAIT"}
 
 
+def _is_unknown_method_error(exc: Exception) -> bool:
+    text = str(exc or "").lower()
+    return "unknown method" in text
+
+
 @dataclass
 class RealBackend:
     base_url: str
@@ -304,6 +309,7 @@ class RealBackend:
 
         before = self.get_state()
         action_type = str(action.get("action_type") or "WAIT").upper()
+        degraded_reason = ""
 
         if action_type == "AUTO":
             action = _phase_default_action(before, self.seed)
@@ -376,6 +382,68 @@ class RealBackend:
             _call_method(self.base_url, "use", params, timeout=self.timeout_sec)
             after = self.get_state()
 
+        elif action_type == "REORDER_HAND":
+            params = action.get("params") if isinstance(action.get("params"), dict) else {}
+            permutation = action.get("permutation")
+            if not isinstance(permutation, list):
+                permutation = params.get("permutation")
+            rpc_params = {"permutation": [int(x) for x in (permutation or [])]}
+            try:
+                _call_method(self.base_url, "reorder_hand", rpc_params, timeout=self.timeout_sec)
+            except RPCError as exc:
+                if not _is_unknown_method_error(exc):
+                    raise
+                degraded_reason = "reorder_hand_rpc_unavailable"
+                if self.logger is not None:
+                    self.logger.warning("REORDER_HAND degraded: reorder_hand RPC unavailable, keeping real state unchanged.")
+            after = self.get_state()
+
+        elif action_type == "REORDER_JOKERS":
+            params = action.get("params") if isinstance(action.get("params"), dict) else {}
+            permutation = action.get("permutation")
+            if not isinstance(permutation, list):
+                permutation = params.get("permutation")
+            rpc_params = {"permutation": [int(x) for x in (permutation or [])]}
+            try:
+                _call_method(self.base_url, "reorder_jokers", rpc_params, timeout=self.timeout_sec)
+            except RPCError as exc:
+                if not _is_unknown_method_error(exc):
+                    raise
+                degraded_reason = "reorder_jokers_rpc_unavailable"
+                if self.logger is not None:
+                    self.logger.warning("REORDER_JOKERS degraded: reorder_jokers RPC unavailable, keeping real state unchanged.")
+            after = self.get_state()
+
+        elif action_type == "SWAP_HAND_CARDS":
+            params = action.get("params") if isinstance(action.get("params"), dict) else {}
+            i = int(action.get("i", params.get("i", 0)))
+            j = int(action.get("j", params.get("j", 0)))
+            rpc_params = {"i": i, "j": j}
+            try:
+                _call_method(self.base_url, "swap_hand_cards", rpc_params, timeout=self.timeout_sec)
+            except RPCError as exc:
+                if not _is_unknown_method_error(exc):
+                    raise
+                degraded_reason = "swap_hand_cards_rpc_unavailable"
+                if self.logger is not None:
+                    self.logger.warning("SWAP_HAND_CARDS degraded: swap_hand_cards RPC unavailable, keeping real state unchanged.")
+            after = self.get_state()
+
+        elif action_type == "SWAP_JOKERS":
+            params = action.get("params") if isinstance(action.get("params"), dict) else {}
+            i = int(action.get("i", params.get("i", 0)))
+            j = int(action.get("j", params.get("j", 0)))
+            rpc_params = {"i": i, "j": j}
+            try:
+                _call_method(self.base_url, "swap_jokers", rpc_params, timeout=self.timeout_sec)
+            except RPCError as exc:
+                if not _is_unknown_method_error(exc):
+                    raise
+                degraded_reason = "swap_jokers_rpc_unavailable"
+                if self.logger is not None:
+                    self.logger.warning("SWAP_JOKERS degraded: swap_jokers RPC unavailable, keeping real state unchanged.")
+            after = self.get_state()
+
         elif action_type == "WAIT":
             time.sleep(max(0.0, float(action.get("sleep") or 0.05)))
             after = self.get_state()
@@ -389,6 +457,8 @@ class RealBackend:
         reward = _round_chips(after) - _round_chips(before)
         done = str(after.get("state") or "") == "GAME_OVER"
         info = {"backend": "real", "action_type": action_type}
+        if degraded_reason:
+            info["degraded_reason"] = degraded_reason
         return after, float(reward), done, info
 
     def close(self) -> None:

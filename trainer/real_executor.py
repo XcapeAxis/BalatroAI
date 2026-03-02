@@ -78,8 +78,28 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--confirm", default="")
     parser.add_argument("--print-arm-token", action="store_true", help="Print a random one-time arm token and exit.")
     parser.add_argument("--min-action-interval", type=float, default=2.0, help="Rate limit: minimum seconds between actions.")
+    parser.add_argument("--action-trace", default="", help="Optional action_v1 jsonl. If provided, execute in sequence before heuristic fallback.")
     parser.add_argument("--out-dir", default="docs/artifacts/p13/exec_logs")
     return parser.parse_args()
+
+
+def _load_action_trace(path: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    if not str(path or "").strip():
+        return rows
+    inp = Path(path)
+    if not inp.exists():
+        raise FileNotFoundError(f"action trace not found: {inp}")
+    with inp.open("r", encoding="utf-8-sig") as f:
+        for line_no, line in enumerate(f, start=1):
+            text = line.strip()
+            if not text:
+                continue
+            item = json.loads(text)
+            if not isinstance(item, dict):
+                raise ValueError(f"action trace line {line_no} must be object")
+            rows.append(item)
+    return rows
 
 
 def _resolve_mode(args: argparse.Namespace, logger) -> ExecutorState:
@@ -113,6 +133,8 @@ def main() -> int:
     summary_path = out_dir / "summary.json"
 
     backend = create_backend("real", base_url=args.base_url, timeout_sec=8.0, seed="AAAAAAA", logger=logger)
+    scripted_actions = _load_action_trace(args.action_trace)
+    scripted_cursor = 0
     loop = bool(args.loop and not args.once)
     rows = 0
 
@@ -125,6 +147,11 @@ def main() -> int:
                 return 2
 
             ranked, top_action = _select_top_action(before, topk=max(1, int(args.topk)))
+            action_source = "heuristic_topk"
+            if scripted_cursor < len(scripted_actions):
+                top_action = dict(scripted_actions[scripted_cursor])
+                scripted_cursor += 1
+                action_source = "scripted_action_trace"
             row: dict[str, Any] = {
                 "timestamp": timestamp(),
                 "mode": ex.mode,
@@ -132,6 +159,7 @@ def main() -> int:
                 "phase": str(before.get("state") or "UNKNOWN"),
                 "before": _projection(before),
                 "topk": ranked,
+                "action_source": action_source,
             }
 
             if ex.execute_enabled and top_action is not None:
@@ -168,7 +196,14 @@ def main() -> int:
     finally:
         backend.close()
 
-    summary = {"timestamp": stamp, "mode": ex.mode, "rows": rows, "log_path": str(log_path)}
+    summary = {
+        "timestamp": stamp,
+        "mode": ex.mode,
+        "rows": rows,
+        "log_path": str(log_path),
+        "scripted_actions_total": len(scripted_actions),
+        "scripted_actions_consumed": scripted_cursor,
+    }
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     logger.info("wrote %d rows: %s", rows, log_path)
