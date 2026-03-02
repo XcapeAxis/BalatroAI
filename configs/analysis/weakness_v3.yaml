@@ -1,0 +1,22 @@
+﻿{
+  "schema": "p29_weakness_v3_config",
+  "top_n": 12,
+  "min_frequency": 0.1,
+  "penalty_scale": 1.0,
+  "seed_thresholds": {
+    "min_avg_ante": 3.30,
+    "min_median_ante": 3.20,
+    "min_win_rate": 0.35
+  },
+  "priority": {
+    "hard_regression_weight": 2.0,
+    "soft_regression_weight": 1.0,
+    "trend_weight": 0.5
+  },
+  "sources": {
+    "include_alerts": true,
+    "include_triage": true,
+    "include_per_seed_eval": true,
+    "include_trend_rows": true
+  }
+}
