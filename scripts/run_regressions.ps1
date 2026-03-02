@@ -35,6 +35,7 @@ param(
   [switch]$RunP24,
   [switch]$RunP25,
   [switch]$RunP26,
+  [switch]$RunP27,
   [switch]$RequireMainBranch,
   [string]$P21Timestamp = ""
 )
@@ -72,6 +73,13 @@ if ($RunP25) {
   $RunP22 = $true
 }
 if ($RunP26) {
+  $RunP25 = $true
+  $RunP24 = $true
+  $RunP23 = $true
+  $RunP22 = $true
+}
+if ($RunP27) {
+  $RunP26 = $true
   $RunP25 = $true
   $RunP24 = $true
   $RunP23 = $true
@@ -115,6 +123,23 @@ function Write-JsonFile([string]$Path, $Object) {
   $dir = Split-Path -Parent $Path
   if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
   ($Object | ConvertTo-Json -Depth 24) | Out-File -LiteralPath $Path -Encoding UTF8
+}
+
+function Read-JsonFile([string]$Path) {
+  if (-not (Test-Path $Path)) { return $null }
+  try {
+    return (Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json)
+  } catch {
+    try {
+      $raw = Get-Content -LiteralPath $Path -Raw
+      if ($raw.StartsWith([char]0xFEFF)) {
+        $raw = $raw.TrimStart([char]0xFEFF)
+      }
+      return ($raw | ConvertFrom-Json)
+    } catch {
+      return $null
+    }
+  }
 }
 
 function Get-HighestRunPNumber([string]$ScriptPath) {
@@ -169,6 +194,9 @@ $RunP24GateReport = ""
 $RunP25Status = "SKIPPED"
 $RunP25ArtifactDir = ""
 $RunP25GateReport = ""
+$RunP26Status = "SKIPPED"
+$RunP26ArtifactDir = ""
+$RunP26GateReport = ""
 
 function Test-Health([string]$Url, [int]$TimeoutSec = 5) {
   try {
@@ -1797,8 +1825,280 @@ if ($RunP26) {
   $coverageStatusLines -join "`n" | Out-File -LiteralPath $coverageStatusPath -Encoding UTF8
 
   Write-Host ("[P26] artifact_dir=" + $p26Dir + " gate_status=" + $reportGate.status)
+  $RunP26Status = [string]$reportGate.status
+  $RunP26ArtifactDir = $p26Dir
+  $RunP26GateReport = $reportGatePath
   if ($reportGate.status -ne "PASS") {
     throw "[P26] gate failed; inspect gate_functional/gate_trends/gate_ops/gate_docs_status/report_p26_gate"
+  }
+}
+
+if ($RunP27) {
+  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $p27Root = Join-Path $ProjectRoot "docs/artifacts/p27"
+  if (-not (Test-Path $p27Root)) { New-Item -ItemType Directory -Path $p27Root -Force | Out-Null }
+  $p27Dir = Join-Path $p27Root $stamp
+  New-Item -ItemType Directory -Path $p27Dir -Force | Out-Null
+
+  $baselineSummary = [ordered]@{
+    schema = "p27_baseline_summary_v1"
+    generated_at = (Get-Date).ToString("o")
+    baseline_gate = "RunP26"
+    run_p26_status = $RunP26Status
+    run_p26_artifact_dir = $RunP26ArtifactDir
+    run_p26_gate_report = $RunP26GateReport
+  }
+  $baselineSummaryPath = Join-Path $p27Dir "baseline_summary.json"
+  Write-JsonFile -Path $baselineSummaryPath -Object $baselineSummary
+  $baselineMd = @(
+    "# P27 Baseline Summary",
+    "",
+    "- baseline_gate: RunP26",
+    "- run_p26_status: $RunP26Status",
+    "- run_p26_artifact_dir: $RunP26ArtifactDir",
+    "- run_p26_gate_report: $RunP26GateReport"
+  )
+  $baselineMdPath = Join-Path $p27Dir "baseline_summary.md"
+  $baselineMd -join "`n" | Out-File -LiteralPath $baselineMdPath -Encoding UTF8
+
+  $p27Py = Join-Path $ProjectRoot ".venv_trainer\Scripts\python.exe"
+  if (-not (Test-Path $p27Py)) { $p27Py = "python" }
+
+  $statusRootPath = Join-Path $ProjectRoot "docs/artifacts/status"
+  $latestStatusJson = Join-Path $statusRootPath "latest_status.json"
+  $latestBadgesJson = Join-Path $statusRootPath "latest_badges.json"
+  $latestDashboardDataJson = Join-Path $statusRootPath "latest_dashboard_data.json"
+  $latestStatusMd = Join-Path $statusRootPath "latest_status.md"
+  $statusPublishSummaryPath = Join-Path $statusRootPath "status_publish_summary.json"
+
+  $null = Invoke-SafeRunStep -Label "P27-status-publish" -Exe $p27Py -CmdArgs @(
+    "-B",
+    "-m", "trainer.experiments.status_publish",
+    "--trends-root", "docs/artifacts/trends",
+    "--artifacts-root", "docs/artifacts",
+    "--out-root", "docs/artifacts/status"
+  ) -TimeoutSec 900
+
+  $updateReadmeScript = Join-Path $ProjectRoot "scripts/update_readme_badges.ps1"
+  if (-not (Test-Path $updateReadmeScript)) { throw "[P27] missing script: $updateReadmeScript" }
+  $null = Invoke-SafeRunStep -Label "P27-readme-badge-dryrun" -Exe "powershell" -CmdArgs @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $updateReadmeScript,
+    "-DryRun"
+  ) -TimeoutSec 300
+  $null = Invoke-SafeRunStep -Label "P27-readme-badge-apply" -Exe "powershell" -CmdArgs @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $updateReadmeScript,
+    "-Apply"
+  ) -TimeoutSec 300
+
+  $buildDashboardScript = Join-Path $ProjectRoot "scripts/build_dashboard.ps1"
+  if (-not (Test-Path $buildDashboardScript)) { throw "[P27] missing script: $buildDashboardScript" }
+  $null = Invoke-SafeRunStep -Label "P27-dashboard-build" -Exe "powershell" -CmdArgs @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $buildDashboardScript
+  ) -TimeoutSec 300
+  $dashboardIndex = Join-Path $ProjectRoot "docs/dashboard/index.html"
+  $dashboardJson = Join-Path $ProjectRoot "docs/dashboard/data/latest.json"
+  $dashboardJs = Join-Path $ProjectRoot "docs/dashboard/data/latest.js"
+  $dashboardBuildSummary = Join-Path $ProjectRoot "docs/dashboard/build_dashboard_summary.json"
+
+  $releaseTrainScript = Join-Path $ProjectRoot "scripts/run_release_train.ps1"
+  if (-not (Test-Path $releaseTrainScript)) { throw "[P27] missing script: $releaseTrainScript" }
+  $releaseOutDir = Join-Path $p27Dir "release_train"
+  New-Item -ItemType Directory -Path $releaseOutDir -Force | Out-Null
+  $null = Invoke-SafeRunStep -Label "P27-release-train" -Exe "powershell" -CmdArgs @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $releaseTrainScript,
+    "-OutDir", $releaseOutDir,
+    "-DryRun:`$false"
+  ) -TimeoutSec 1200
+  $rcSummaryJson = Join-Path $releaseOutDir "rc_summary.json"
+  $rcSummaryMd = Join-Path $releaseOutDir "rc_summary.md"
+  $benchmarkDeltaCsv = Join-Path $releaseOutDir "benchmark_delta.csv"
+  $gateSnapshotJson = Join-Path $releaseOutDir "gate_snapshot.json"
+  $riskSnapshotJson = Join-Path $releaseOutDir "risk_snapshot.json"
+
+  $lintWorkflowScript = Join-Path $ProjectRoot "scripts/lint_workflows.ps1"
+  if (-not (Test-Path $lintWorkflowScript)) { throw "[P27] missing script: $lintWorkflowScript" }
+  $null = Invoke-SafeRunStep -Label "P27-workflow-lint" -Exe "powershell" -CmdArgs @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $lintWorkflowScript
+  ) -TimeoutSec 300
+  $workflowLintJson = Join-Path $statusRootPath "workflow_lint_report.json"
+  $workflowLintMd = Join-Path $statusRootPath "workflow_lint_report.md"
+
+  $generateStatusScript = Join-Path $ProjectRoot "scripts/generate_readme_status.ps1"
+  if (-not (Test-Path $generateStatusScript)) { throw "[P27] missing script: $generateStatusScript" }
+  $null = Invoke-SafeRunStep -Label "P27-generate-readme-status" -Exe "powershell" -CmdArgs @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $generateStatusScript
+  ) -TimeoutSec 300
+
+  $null = Invoke-SafeRunStep -Label "P27-readme-badge-reapply" -Exe "powershell" -CmdArgs @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $updateReadmeScript,
+    "-Apply"
+  ) -TimeoutSec 300
+
+  $lintReadmeScript = Join-Path $ProjectRoot "scripts/lint_readme_p25.ps1"
+  if (-not (Test-Path $lintReadmeScript)) { throw "[P27] missing script: $lintReadmeScript" }
+  $null = Invoke-SafeRunStep -Label "P27-readme-lint" -Exe "powershell" -CmdArgs @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $lintReadmeScript
+  ) -TimeoutSec 300
+  $readmeLintJson = Join-Path $ProjectRoot "docs/generated/readme_lint_report.json"
+  $readmeLintObj = Read-JsonFile -Path $readmeLintJson
+  $readmeLintPass = $false
+  if ($readmeLintObj) { $readmeLintPass = [bool]$readmeLintObj.pass }
+
+  $readmeText = Get-Content -LiteralPath (Join-Path $ProjectRoot "README.md") -Raw
+  $hasBadgeMarkers = ($readmeText.Contains("<!-- BADGES:START -->") -and $readmeText.Contains("<!-- BADGES:END -->"))
+  $hasStatusMarkers = ($readmeText.Contains("<!-- STATUS:START -->") -and $readmeText.Contains("<!-- STATUS:END -->"))
+  $hasLegacyStatusMarkers = ($readmeText.Contains("<!-- README_STATUS:BEGIN -->") -and $readmeText.Contains("<!-- README_STATUS:END -->"))
+
+  $statusFilesPass = (
+    (Test-Path $latestStatusJson) -and
+    (Test-Path $latestBadgesJson) -and
+    (Test-Path $latestDashboardDataJson) -and
+    (Test-Path $latestStatusMd)
+  )
+  $dashboardPass = (
+    (Test-Path $dashboardIndex) -and
+    (Test-Path $dashboardJson) -and
+    (Test-Path $dashboardJs) -and
+    (Test-Path $dashboardBuildSummary)
+  )
+  $releaseTrainPass = (
+    (Test-Path $rcSummaryJson) -and
+    (Test-Path $rcSummaryMd) -and
+    (Test-Path $benchmarkDeltaCsv) -and
+    (Test-Path $gateSnapshotJson) -and
+    (Test-Path $riskSnapshotJson)
+  )
+
+  $workflowLintObj = Read-JsonFile -Path $workflowLintJson
+  $workflowLintPass = $false
+  if ($workflowLintObj) { $workflowLintPass = [bool]$workflowLintObj.pass }
+  $workflowFilesExist = (
+    (Test-Path (Join-Path $ProjectRoot ".github/workflows/ci-smoke.yml")) -and
+    (Test-Path (Join-Path $ProjectRoot ".github/workflows/nightly-orchestrator.yml"))
+  )
+
+  $functionalPass = ($RunP26Status -eq "PASS")
+  $statusPublishingPass = ($statusFilesPass -and $hasBadgeMarkers -and $hasStatusMarkers -and $hasLegacyStatusMarkers)
+  $docsRefreshPass = ((Test-Path (Join-Path $ProjectRoot "docs/generated/README_STATUS.md")) -and (Test-Path (Join-Path $ProjectRoot "docs/generated/README_STATUS.json")) -and $readmeLintPass)
+  $releaseOpsPass = ($dashboardPass -and $releaseTrainPass)
+  $workflowCiPass = ($workflowLintPass -and $workflowFilesExist)
+
+  $gateFunctional = [ordered]@{
+    schema = "p27_gate_functional_v1"
+    generated_at = (Get-Date).ToString("o")
+    baseline_gate = "RunP26"
+    baseline_status = $RunP26Status
+    baseline_artifact_dir = $RunP26ArtifactDir
+    baseline_gate_report = $RunP26GateReport
+    pass = $functionalPass
+  }
+  $gateStatusPublishing = [ordered]@{
+    schema = "p27_gate_status_publishing_v1"
+    generated_at = (Get-Date).ToString("o")
+    latest_status_json = $latestStatusJson
+    latest_badges_json = $latestBadgesJson
+    latest_dashboard_data_json = $latestDashboardDataJson
+    latest_status_md = $latestStatusMd
+    readme_has_badges_markers = $hasBadgeMarkers
+    readme_has_status_markers = $hasStatusMarkers
+    readme_has_legacy_status_markers = $hasLegacyStatusMarkers
+    pass = $statusPublishingPass
+  }
+  $gateDocsRefresh = [ordered]@{
+    schema = "p27_gate_docs_refresh_v1"
+    generated_at = (Get-Date).ToString("o")
+    generate_readme_status_json = (Join-Path $ProjectRoot "docs/generated/README_STATUS.json")
+    generate_readme_status_md = (Join-Path $ProjectRoot "docs/generated/README_STATUS.md")
+    readme_lint_report = $readmeLintJson
+    readme_lint_pass = $readmeLintPass
+    pass = $docsRefreshPass
+  }
+  $gateReleaseOps = [ordered]@{
+    schema = "p27_gate_release_ops_v1"
+    generated_at = (Get-Date).ToString("o")
+    dashboard_index = $dashboardIndex
+    dashboard_data_json = $dashboardJson
+    release_out_dir = $releaseOutDir
+    rc_summary_json = $rcSummaryJson
+    benchmark_delta_csv = $benchmarkDeltaCsv
+    risk_snapshot_json = $riskSnapshotJson
+    pass = $releaseOpsPass
+  }
+  $gateWorkflowCi = [ordered]@{
+    schema = "p27_gate_workflow_ci_v1"
+    generated_at = (Get-Date).ToString("o")
+    workflow_lint_json = $workflowLintJson
+    workflow_lint_md = $workflowLintMd
+    workflow_lint_pass = $workflowLintPass
+    required_workflows_exist = $workflowFilesExist
+    pass = $workflowCiPass
+  }
+
+  Write-JsonFile -Path (Join-Path $p27Dir "gate_functional.json") -Object $gateFunctional
+  Write-JsonFile -Path (Join-Path $p27Dir "gate_status_publishing.json") -Object $gateStatusPublishing
+  Write-JsonFile -Path (Join-Path $p27Dir "gate_docs_refresh.json") -Object $gateDocsRefresh
+  Write-JsonFile -Path (Join-Path $p27Dir "gate_release_ops.json") -Object $gateReleaseOps
+  Write-JsonFile -Path (Join-Path $p27Dir "gate_workflow_ci.json") -Object $gateWorkflowCi
+
+  $reportP27 = [ordered]@{
+    schema = "p27_report_gate_v1"
+    generated_at = (Get-Date).ToString("o")
+    functional = $gateFunctional
+    status_publishing = $gateStatusPublishing
+    docs_refresh = $gateDocsRefresh
+    release_ops = $gateReleaseOps
+    workflow_ci = $gateWorkflowCi
+    status = $(if ($functionalPass -and $statusPublishingPass -and $docsRefreshPass -and $releaseOpsPass -and $workflowCiPass) { "PASS" } else { "FAIL" })
+  }
+  $reportP27Path = Join-Path $p27Dir "report_p27_gate.json"
+  Write-JsonFile -Path $reportP27Path -Object $reportP27
+
+  if (Test-Path $statusPublishSummaryPath) { Copy-Item -LiteralPath $statusPublishSummaryPath -Destination (Join-Path $p27Dir "status_publish_summary.json") -Force }
+  if (Test-Path $workflowLintJson) { Copy-Item -LiteralPath $workflowLintJson -Destination (Join-Path $p27Dir "workflow_lint_report.json") -Force }
+  if (Test-Path $workflowLintMd) { Copy-Item -LiteralPath $workflowLintMd -Destination (Join-Path $p27Dir "workflow_lint_report.md") -Force }
+  if (Test-Path $rcSummaryJson) { Copy-Item -LiteralPath $rcSummaryJson -Destination (Join-Path $p27Dir "rc_summary.json") -Force }
+  if (Test-Path $rcSummaryMd) { Copy-Item -LiteralPath $rcSummaryMd -Destination (Join-Path $p27Dir "rc_summary.md") -Force }
+  if (Test-Path $benchmarkDeltaCsv) { Copy-Item -LiteralPath $benchmarkDeltaCsv -Destination (Join-Path $p27Dir "benchmark_delta.csv") -Force }
+  if (Test-Path $gateSnapshotJson) { Copy-Item -LiteralPath $gateSnapshotJson -Destination (Join-Path $p27Dir "gate_snapshot.json") -Force }
+  if (Test-Path $riskSnapshotJson) { Copy-Item -LiteralPath $riskSnapshotJson -Destination (Join-Path $p27Dir "risk_snapshot.json") -Force }
+
+  $coverageP27Path = Join-Path $ProjectRoot "docs/COVERAGE_P27_STATUS.md"
+  $coverageP27Lines = @(
+    "# COVERAGE P27 STATUS",
+    "",
+    "- timestamp: " + (Get-Date -Format "yyyy-MM-dd HH:mm:ss"),
+    "- baseline_gate: RunP26",
+    "- baseline_status: " + $RunP26Status,
+    "- status_publishing_pass: " + $statusPublishingPass,
+    "- docs_refresh_pass: " + $docsRefreshPass,
+    "- release_ops_pass: " + $releaseOpsPass,
+    "- workflow_ci_pass: " + $workflowCiPass,
+    "- gate_status: " + $reportP27.status
+  )
+  $coverageP27Lines -join "`n" | Out-File -LiteralPath $coverageP27Path -Encoding UTF8
+
+  if ($GitSync) {
+    $gitSyncScript = Join-Path $ProjectRoot "scripts/git_sync.ps1"
+    if (Test-Path $gitSyncScript) {
+      $null = Invoke-SafeRunStep -Label "P27-gitsync-dryrun" -Exe "powershell" -CmdArgs @(
+        "-ExecutionPolicy", "Bypass",
+        "-File", $gitSyncScript,
+        "-DryRun:`$true"
+      ) -TimeoutSec 600
+    }
+  }
+
+  Write-Host ("[P27] artifact_dir=" + $p27Dir + " gate_status=" + $reportP27.status)
+  if ($reportP27.status -ne "PASS") {
+    throw "[P27] gate failed; inspect gate_* and report_p27_gate"
   }
 }
 
