@@ -1,0 +1,49 @@
+{
+  "schema": "p31_router_config_v1",
+  "router": {
+    "policy_preferred_phases": [
+      "SHOP",
+      "SHOPPING",
+      "TRANSITION"
+    ],
+    "search_phases": [
+      "SELECTING_HAND"
+    ],
+    "hand_strength_search_threshold": 0.45,
+    "economy_pressure_threshold": 0.25,
+    "budget_low_ms": 6.0,
+    "risk_fallback_on_high": true,
+    "prefer_deep_search_on_medium": true
+  },
+  "risk_model": {
+    "weights": {
+      "score_gap": 0.42,
+      "resource_burn": 0.23,
+      "joker_volatility": 0.2,
+      "remaining_outs": 0.15
+    },
+    "thresholds": {
+      "low_max": 0.35,
+      "medium_max": 0.68
+    }
+  },
+  "search": {
+    "shallow_depth": 2,
+    "deep_depth": 4
+  },
+  "adaptive_budget": {
+    "base_depth": 2,
+    "base_rollouts": 48,
+    "base_pruning_threshold": 0.08,
+    "base_time_budget_ms": 15.0,
+    "base_hand_max_candidates": 80,
+    "medium_depth_bonus": 1,
+    "high_depth_bonus": 2,
+    "medium_rollout_multiplier": 1.35,
+    "high_rollout_multiplier": 1.8,
+    "medium_budget_multiplier": 1.2,
+    "high_budget_multiplier": 1.5,
+    "medium_pruning_multiplier": 0.85,
+    "high_pruning_multiplier": 0.7
+  }
+}
