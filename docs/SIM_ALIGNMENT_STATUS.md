@@ -74,4 +74,17 @@ The runner executes:
 - Entry points:
   - `scripts/run_p22.ps1`
   - `python -B -m trainer.experiments.orchestrator`
+- Runtime observability (run-level):
+  - `docs/artifacts/p22/runs/<run_id>/telemetry.jsonl`
+  - `docs/artifacts/p22/runs/<run_id>/live_summary_snapshot.json`
+  - `docs/artifacts/p22/runs/<run_id>/summary_table.{csv,json,md}`
+- Runtime observability (per experiment):
+  - `docs/artifacts/p22/runs/<run_id>/<exp_id>/run_manifest.json`
+  - `docs/artifacts/p22/runs/<run_id>/<exp_id>/progress.jsonl`
+  - `docs/artifacts/p22/runs/<run_id>/<exp_id>/seeds_used.json`
+- Seed clarification:
+  - fixed seeds are used for strict regression comparability.
+  - P22 quick gate keeps `>1` seeds by default (`seed_limit=2`) for stable but non-single-seed smoke.
+  - nightly/expanded runs add deterministic extra seeds.
+  - source of truth is always `seeds_used.json`, not a presumed single default seed.
 - Curated outputs are written under `docs/artifacts/p22/**` (ignored from git tracking by repo policy).

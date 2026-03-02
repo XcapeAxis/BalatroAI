@@ -64,3 +64,17 @@ Every run writes a machine-readable report:
 `docs/artifacts/git_sync/git_sync_<timestamp>.json`
 
 The report includes params, pre-state, planned actions, executed actions, and summary.
+
+## Recommended Pre-Sync Checks
+
+Before running non-dry sync, complete at least one experiment gate pass:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP22
+```
+
+If you changed experiment configs/runner UX, also run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
+```
