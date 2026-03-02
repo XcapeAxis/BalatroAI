@@ -1,0 +1,60 @@
+name: Nightly Orchestrator Mirror (P27)
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Run mode: quick or nightly"
+        required: false
+        default: "nightly"
+
+jobs:
+  nightly:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install minimal dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          if (Test-Path trainer/requirements.txt) {
+            python -m pip install -r trainer/requirements.txt
+          }
+
+      - name: Run orchestrator baseline
+        shell: pwsh
+        run: |
+          $selected = "${{ github.event.inputs.mode }}"
+          if ($selected -eq "") { $selected = "nightly" }
+          if ($selected -eq "quick") {
+            powershell -ExecutionPolicy Bypass -File scripts/run_p26.ps1 -Quick -Resume -SinceTag sim-p23-seed-governance-v1
+          } else {
+            powershell -ExecutionPolicy Bypass -File scripts/run_p26.ps1 -Nightly -Resume -SinceTag sim-p23-seed-governance-v1
+          }
+
+      - name: Publish status and dashboard
+        shell: pwsh
+        run: |
+          python -m trainer.experiments.status_publish --trends-root docs/artifacts/trends --artifacts-root docs/artifacts --out-root docs/artifacts/status
+          powershell -ExecutionPolicy Bypass -File scripts/update_readme_badges.ps1 -Apply
+          powershell -ExecutionPolicy Bypass -File scripts/build_dashboard.ps1
+
+      - name: Upload nightly artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-orchestrator-artifacts
+          path: |
+            docs/artifacts/p26
+            docs/artifacts/status
+            docs/dashboard
