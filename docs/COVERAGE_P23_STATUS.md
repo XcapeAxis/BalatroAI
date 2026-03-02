@@ -1,5 +1,14 @@
-# COVERAGE P23 STATUS
+﻿# COVERAGE P23 STATUS
 
-- status: initialized
-- note: updated by `scripts/run_regressions.ps1 -RunP23`
-
+- timestamp: 
+2026-03-02 14:12:58
+- run_p22_status: 
+PASS
+- quick_run_root: 
+D:\MYFILES\BalatroAI\docs\artifacts\p23\runs\20260302-141253
+- seed_policy_validation_pass: 
+True
+- flake_smoke_pass: 
+True
+- gate_status: 
+PASS

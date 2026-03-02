@@ -1027,6 +1027,21 @@ if ($RunP23) {
     "-File", $p23Script,
     "-Quick"
   ) -TimeoutSec 2400
+  $quickRunRoot = Get-LatestRunDir -RunsRootPath (Join-Path $p23Root "runs")
+  $quickRunStatus = "UNKNOWN"
+  $quickExperimentCount = 0
+  if (-not [string]::IsNullOrWhiteSpace($quickRunRoot)) {
+    $quickReport = Join-Path $quickRunRoot "report_p23.json"
+    if (Test-Path $quickReport) {
+      try {
+        $quickObj = Get-Content -LiteralPath $quickReport -Raw | ConvertFrom-Json
+        $quickRunStatus = [string]$quickObj.status
+        if ($quickObj.rows) { $quickExperimentCount = @($quickObj.rows).Count }
+      } catch {
+        $quickRunStatus = "UNKNOWN"
+      }
+    }
+  }
   $null = Invoke-SafeRunStep -Label "P23-flake" -Exe "powershell" -CmdArgs @(
     "-ExecutionPolicy", "Bypass",
     "-File", $p23Script,
@@ -1034,11 +1049,19 @@ if ($RunP23) {
   ) -TimeoutSec 2400
 
   $latestP23Run = Get-LatestRunDir -RunsRootPath (Join-Path $p23Root "runs")
-  if (-not [string]::IsNullOrWhiteSpace($latestP23Run)) {
+  $runToPersist = $quickRunRoot
+  if ([string]::IsNullOrWhiteSpace($runToPersist)) { $runToPersist = $latestP23Run }
+  if (-not [string]::IsNullOrWhiteSpace($runToPersist)) {
     $destRunsRoot = Join-Path $p23Dir "runs"
     New-Item -ItemType Directory -Path $destRunsRoot -Force | Out-Null
-    $destRun = Join-Path $destRunsRoot (Split-Path -Leaf $latestP23Run)
-    Copy-Item -LiteralPath $latestP23Run -Destination $destRun -Recurse -Force
+    $destRun = Join-Path $destRunsRoot (Split-Path -Leaf $runToPersist)
+    Copy-Item -LiteralPath $runToPersist -Destination $destRun -Recurse -Force
+    foreach ($covName in @("coverage_summary.json", "coverage_summary.md", "coverage_table.csv")) {
+      $srcCov = Join-Path $runToPersist $covName
+      if (Test-Path $srcCov) {
+        Copy-Item -LiteralPath $srcCov -Destination (Join-Path $p23Dir $covName) -Force
+      }
+    }
   }
 
   $gateFunctional = [ordered]@{
@@ -1052,8 +1075,10 @@ if ($RunP23) {
   $gateExperiments = [ordered]@{
     schema = "p23_gate_experiments_v1"
     generated_at = (Get-Date).ToString("o")
-    quick_run_root = $latestP23Run
-    quick_status = "PASS"
+    quick_run_root = $quickRunRoot
+    quick_status = $quickRunStatus
+    quick_experiment_count = $quickExperimentCount
+    pass = ($quickRunStatus -eq "PASS")
   }
   $flakeReportRoot = Join-Path $p23Root "flake_report.json"
   $flakePass = $false
@@ -1091,7 +1116,7 @@ if ($RunP23) {
     functional = $gateFunctional
     experiments = $gateExperiments
     reliability = $gateReliability
-    status = $(if ($gateFunctional.pass -and $gateExperiments.quick_status -eq "PASS" -and $gateReliability.pass) { "PASS" } else { "FAIL" })
+    status = $(if ($gateFunctional.pass -and $gateExperiments.pass -and $gateReliability.pass) { "PASS" } else { "FAIL" })
   }
   $reportGatePath = Join-Path $p23Dir "report_p23_gate.json"
   Write-JsonFile -Path $reportGatePath -Object $reportGate
@@ -1102,7 +1127,7 @@ if ($RunP23) {
     "",
     "- timestamp: " + (Get-Date -Format "yyyy-MM-dd HH:mm:ss"),
     "- run_p22_status: " + $RunP22Status,
-    "- quick_run_root: " + $latestP23Run,
+    "- quick_run_root: " + $quickRunRoot,
     "- seed_policy_validation_pass: " + $seedValidationPass,
     "- flake_smoke_pass: " + $flakePass,
     "- gate_status: " + $reportGate.status
@@ -1114,6 +1139,12 @@ if ($RunP23) {
   }
   if (Test-Path (Join-Path $p23Root "flake_report.md")) {
     Copy-Item -LiteralPath (Join-Path $p23Root "flake_report.md") -Destination (Join-Path $p23Dir "flake_report.md") -Force
+  }
+  foreach ($name in @("champion.json", "candidate.json", "nightly_decision.json", "nightly_decision.md", "CHANGELOG_P23.md")) {
+    $src = Join-Path $p23Root $name
+    if (Test-Path $src) {
+      Copy-Item -LiteralPath $src -Destination (Join-Path $p23Dir $name) -Force
+    }
   }
 
   Write-Host ("[P23] artifact_dir=" + $p23Dir + " gate_status=" + $reportGate.status)
