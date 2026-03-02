@@ -22,12 +22,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import yaml
+try:  # pragma: no cover - optional dependency in local venv
+    import yaml  # type: ignore
+except Exception:  # pragma: no cover
+    yaml = None
 
 from trainer.experiments.champion import update_champion_candidate
 from trainer.experiments.matrix import build_matrix
 from trainer.experiments.metrics import aggregate_seed_metrics, is_success
 from trainer.experiments.report import write_comparison_report, write_summary_tables
+from trainer.experiments.seed_policy import (
+    materialize_nightly_seed_set,
+    materialize_seed_set,
+    read_seed_policy,
+    validate_seed_policy,
+)
 
 
 def now_iso() -> str:
@@ -135,7 +144,7 @@ def build_extra_random_seeds(
     return seeds
 
 
-def select_seeds(
+def _select_seeds_legacy(
     *,
     exp: dict[str, Any],
     cfg: dict[str, Any],
@@ -168,6 +177,72 @@ def select_seeds(
     if seed_limit is not None:
         max_seeds = min(max_seeds, int(seed_limit))
     return chosen[: max(1, max_seeds)]
+
+
+def select_seeds(
+    *,
+    exp: dict[str, Any],
+    cfg: dict[str, Any],
+    git_commit: str,
+    nightly: bool,
+    seed_limit: int | None,
+    run_id: str,
+    seed_policy: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if seed_policy is None:
+        legacy = _select_seeds_legacy(
+            exp=exp,
+            cfg=cfg,
+            git_commit=git_commit,
+            nightly=nightly,
+            seed_limit=seed_limit,
+        )
+        hash_v = hashlib.sha256(
+            json.dumps(legacy, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        return {
+            "schema": "p23_seeds_used_v1",
+            "generated_at": now_iso(),
+            "seed_policy_version": "legacy.p22",
+            "seed_set_name": str(exp.get("seed_set_name") or exp.get("seed_mode") or "regression_fixed"),
+            "seed_hash": hash_v,
+            "seed_count": len(legacy),
+            "seeds": legacy,
+            "metadata": {"source": "legacy_p22"},
+        }
+
+    explicit_single_seed_override = bool(exp.get("allow_single_seed_override"))
+    seed_set_name = str(exp.get("seed_set_name") or "contract_regression")
+    if nightly or str(exp.get("seed_mode") or "").lower() == "nightly":
+        seeds_payload = materialize_nightly_seed_set(
+            seed_policy,
+            git_commit=git_commit,
+            date_bucket=datetime.now().strftime("%Y%m%d"),
+            run_id=run_id,
+            extra_count_override=None,
+            explicit_single_seed_override=explicit_single_seed_override,
+        )
+    else:
+        seeds_payload = materialize_seed_set(
+            seed_policy,
+            seed_set_name,
+            explicit_single_seed_override=explicit_single_seed_override,
+        )
+
+    seeds = [str(s) for s in (seeds_payload.get("seeds") or [])]
+    if seed_limit is not None:
+        seeds = seeds[: max(1, int(seed_limit))]
+    if bool(seed_policy.get("disallow_single_seed_default")) and len(seeds) == 1 and not explicit_single_seed_override:
+        raise ValueError(
+            f"single seed default disallowed by seed policy (exp={exp.get('id')} set={seed_set_name})"
+        )
+    seeds_payload = dict(seeds_payload)
+    seeds_payload["seeds"] = seeds
+    seeds_payload["seed_count"] = len(seeds)
+    seeds_payload["seed_hash"] = hashlib.sha256(
+        json.dumps(seeds, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return seeds_payload
 
 
 def format_progress(
@@ -203,6 +278,8 @@ class RunContext:
     max_parallel: int
     resume: bool
     seed_limit: int | None
+    seed_policy: dict[str, Any] | None
+    seed_policy_config: str
 
 
 def _expand_command(command_tmpl: Any, context: dict[str, Any]) -> str | list[str]:
@@ -294,17 +371,20 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
     max_wall_time_min = int(budget.get("max_wall_time_minutes") or 60)
     max_wall_time_sec = max_wall_time_min * 60
 
-    seeds = select_seeds(
+    seeds_payload = select_seeds(
         exp=exp,
         cfg=ctx.config,
         git_commit=ctx.git_commit,
         nightly=ctx.nightly,
         seed_limit=ctx.seed_limit,
+        run_id=ctx.run_id,
+        seed_policy=ctx.seed_policy,
     )
-    write_json(exp_dir / "seeds_used.json", {"seeds": seeds, "count": len(seeds)})
+    seeds = [str(s) for s in (seeds_payload.get("seeds") or [])]
+    write_json(exp_dir / "seeds_used.json", seeds_payload)
 
     manifest = {
-        "schema": "p22_run_manifest_v1",
+        "schema": "p23_run_manifest_v1",
         "generated_at": now_iso(),
         "run_id": ctx.run_id,
         "exp_id": exp_id,
@@ -313,7 +393,11 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
         "platform": platform.platform(),
         "budget": copy.deepcopy(budget),
         "seed_mode": exp.get("seed_mode", "regression_fixed"),
-        "seeds": seeds,
+        "seed_set_name": seeds_payload.get("seed_set_name"),
+        "seeds_used": seeds,
+        "seed_policy_version": seeds_payload.get("seed_policy_version"),
+        "seed_hash": seeds_payload.get("seed_hash"),
+        "seed_policy_config": ctx.seed_policy_config,
         "experiment": exp,
     }
     write_json(exp_dir / "run_manifest.json", manifest)
@@ -635,7 +719,11 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
 
 
 def load_config(path: Path) -> dict[str, Any]:
-    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    text = path.read_text(encoding="utf-8")
+    if yaml is not None:
+        payload = yaml.safe_load(text)
+    else:
+        payload = json.loads(text)
     if not isinstance(payload, dict):
         raise ValueError("config file must be a mapping")
     return payload
@@ -667,6 +755,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--keep-intermediate", action="store_true")
     p.add_argument("--max-parallel", type=int, default=1)
     p.add_argument("--seed-limit", type=int, default=0)
+    p.add_argument("--seed-policy-config", default="")
     return p.parse_args()
 
 
@@ -678,6 +767,16 @@ def main() -> int:
     config_path = (repo_root / args.config).resolve()
     out_root = (repo_root / args.out_root).resolve()
     cfg = load_config(config_path)
+    seed_policy_config = str(args.seed_policy_config or cfg.get("seed_policy_config") or "").strip()
+    seed_policy: dict[str, Any] | None = None
+    if seed_policy_config:
+        seed_policy_path = (repo_root / seed_policy_config).resolve()
+        seed_policy = read_seed_policy(seed_policy_path)
+        validation = validate_seed_policy(seed_policy)
+        write_json(out_root / "seed_policy_validation.json", validation)
+        if not bool(validation.get("ok")):
+            raise SystemExit("seed policy validation failed")
+
     experiments = build_matrix(cfg)
     only_set = parse_csv_list(args.only)
     exclude_set = parse_csv_list(args.exclude)
@@ -691,6 +790,9 @@ def main() -> int:
 
     run_id, run_root = resolve_run_root(out_root, resume=bool(args.resume))
     git_commit = current_git_commit(repo_root)
+
+    if seed_policy is not None:
+        write_json(run_root / "seed_policy.json", seed_policy)
 
     seed_limit = int(args.seed_limit) if int(args.seed_limit) > 0 else None
     ctx = RunContext(
@@ -706,6 +808,8 @@ def main() -> int:
         max_parallel=max(1, int(args.max_parallel)),
         resume=bool(args.resume),
         seed_limit=seed_limit,
+        seed_policy=seed_policy,
+        seed_policy_config=seed_policy_config,
     )
 
     plan_payload = {
@@ -720,6 +824,8 @@ def main() -> int:
         "dry_run": ctx.dry_run,
         "resume": ctx.resume,
         "max_parallel": ctx.max_parallel,
+        "seed_policy_config": seed_policy_config,
+        "seed_policy_version": (seed_policy or {}).get("seed_policy_version") if seed_policy else "legacy.p22",
         "experiments": [e["id"] for e in experiments],
     }
     write_json(run_root / "run_plan.json", plan_payload)
@@ -768,4 +874,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
