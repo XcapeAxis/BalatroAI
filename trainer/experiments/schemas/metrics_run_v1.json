@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "P23 Metrics Run",
+  "type": "object",
+  "required": [
+    "seed",
+    "status",
+    "metrics"
+  ],
+  "properties": {
+    "seed": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "failed",
+        "timed_out",
+        "skipped"
+      ]
+    },
+    "stage": {
+      "type": "string"
+    },
+    "elapsed_sec": {
+      "type": "number"
+    },
+    "error": {
+      "type": "string"
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "avg_ante_reached": {
+          "type": "number"
+        },
+        "median_ante": {
+          "type": "number"
+        },
+        "win_rate": {
+          "type": "number"
+        }
+      }
+    }
+  }
+}
+
