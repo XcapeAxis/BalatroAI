@@ -7,13 +7,11 @@ if __package__ is None or __package__ == "":
     sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 import argparse
-import concurrent.futures
 import copy
 import hashlib
 import json
 import os
 import platform
-import random
 import subprocess
 import sys
 import time
@@ -75,22 +73,34 @@ def run_process(
 ) -> dict[str, Any]:
     start = time.time()
     shell = isinstance(command, str)
-    proc = subprocess.run(
-        command,
-        cwd=str(cwd),
-        shell=shell,
-        text=True,
-        capture_output=True,
-        timeout=timeout_sec,
-    )
-    elapsed = time.time() - start
-    return {
-        "returncode": int(proc.returncode),
-        "stdout": proc.stdout,
-        "stderr": proc.stderr,
-        "elapsed_sec": elapsed,
-        "command": command,
-    }
+    try:
+        proc = subprocess.run(
+            command,
+            cwd=str(cwd),
+            shell=shell,
+            text=True,
+            capture_output=True,
+            timeout=timeout_sec,
+        )
+        elapsed = time.time() - start
+        return {
+            "returncode": int(proc.returncode),
+            "stdout": proc.stdout,
+            "stderr": proc.stderr,
+            "elapsed_sec": elapsed,
+            "command": command,
+            "timed_out": False,
+        }
+    except subprocess.TimeoutExpired as exc:
+        elapsed = time.time() - start
+        return {
+            "returncode": 124,
+            "stdout": str(exc.stdout or ""),
+            "stderr": str(exc.stderr or ""),
+            "elapsed_sec": elapsed,
+            "command": command,
+            "timed_out": True,
+        }
 
 
 def parse_csv_list(text: str) -> set[str]:
@@ -247,10 +257,12 @@ def select_seeds(
 
 def format_progress(
     *,
+    run_id: str,
     exp_id: str,
     stage: str,
     status: str,
     elapsed_sec: float,
+    eta_sec: float | None = None,
     seed_index: int | None = None,
     seed_total: int | None = None,
     metric_snapshot: str = "",
@@ -258,9 +270,86 @@ def format_progress(
     seed_part = "-"
     if seed_index is not None and seed_total is not None:
         seed_part = f"{seed_index}/{seed_total}"
+    eta_part = "-"
+    if eta_sec is not None:
+        eta_part = f"{max(0.0, eta_sec):.1f}s"
+    metric_text = metric_snapshot if metric_snapshot else "-"
     return (
-        f"[P22] exp={exp_id} stage={stage} status={status} "
-        f"seed={seed_part} elapsed={elapsed_sec:.1f}s metric={metric_snapshot}"
+        f"{run_id:<15} | {exp_id:<24} | {stage:<10} | {seed_part:<8} | "
+        f"{elapsed_sec:>8.1f}s | {eta_part:>8} | {metric_text:<24} | {status}"
+    )
+
+
+def _update_live_snapshot(ctx: "RunContext") -> None:
+    status_counts: dict[str, int] = {}
+    for row in ctx.queue_state.values():
+        token = str(row.get("status") or "unknown")
+        status_counts[token] = status_counts.get(token, 0) + 1
+    payload = {
+        "schema": "p23_live_summary_v1",
+        "generated_at": now_iso(),
+        "run_id": ctx.run_id,
+        "mode": ctx.mode,
+        "elapsed_sec": time.time() - ctx.run_started_ts,
+        "status_counts": status_counts,
+        "rows": list(ctx.queue_state.values()),
+    }
+    write_json(ctx.live_summary_path, payload)
+
+
+def emit_progress(
+    ctx: "RunContext",
+    *,
+    exp_id: str,
+    stage: str,
+    status: str,
+    elapsed_sec: float,
+    seed_index: int | None = None,
+    seed_total: int | None = None,
+    metric_snapshot: str = "",
+    eta_sec: float | None = None,
+) -> None:
+    event = {
+        "ts": now_iso(),
+        "run_id": ctx.run_id,
+        "mode": ctx.mode,
+        "exp_id": exp_id,
+        "stage": stage,
+        "status": status,
+        "seed_index": seed_index,
+        "seed_total": seed_total,
+        "elapsed_sec": elapsed_sec,
+        "eta_sec": eta_sec,
+        "metric_snapshot": metric_snapshot,
+    }
+    append_jsonl(ctx.telemetry_path, event)
+    row = ctx.queue_state.get(exp_id) or {"exp_id": exp_id}
+    row.update(
+        {
+            "exp_id": exp_id,
+            "stage": stage,
+            "status": status,
+            "seed": (f"{seed_index}/{seed_total}" if seed_index and seed_total else "-"),
+            "elapsed_sec": elapsed_sec,
+            "eta_sec": eta_sec,
+            "metric_snapshot": metric_snapshot,
+            "updated_at": event["ts"],
+        }
+    )
+    ctx.queue_state[exp_id] = row
+    _update_live_snapshot(ctx)
+    print(
+        format_progress(
+            run_id=ctx.run_id,
+            exp_id=exp_id,
+            stage=stage,
+            status=status,
+            elapsed_sec=elapsed_sec,
+            eta_sec=eta_sec,
+            seed_index=seed_index,
+            seed_total=seed_total,
+            metric_snapshot=metric_snapshot,
+        )
     )
 
 
@@ -280,6 +369,11 @@ class RunContext:
     seed_limit: int | None
     seed_policy: dict[str, Any] | None
     seed_policy_config: str
+    mode: str
+    telemetry_path: Path
+    live_summary_path: Path
+    run_started_ts: float
+    queue_state: dict[str, dict[str, Any]]
 
 
 def _expand_command(command_tmpl: Any, context: dict[str, Any]) -> str | list[str]:
@@ -292,12 +386,16 @@ def _expand_command(command_tmpl: Any, context: dict[str, Any]) -> str | list[st
 
 def _run_stage_command(
     *,
+    ctx: RunContext,
     exp_id: str,
     stage: str,
     command_tmpl: Any,
     context: dict[str, Any],
     repo_root: Path,
     progress_path: Path,
+    timeout_sec: int | None,
+    max_retries: int,
+    started_ts: float,
 ) -> dict[str, Any]:
     command = _expand_command(command_tmpl, context)
     if not command:
@@ -312,64 +410,160 @@ def _run_stage_command(
                 "message": "empty_command",
             },
         )
+        emit_progress(
+            ctx,
+            exp_id=exp_id,
+            stage=stage,
+            status="skipped",
+            elapsed_sec=time.time() - started_ts,
+        )
         return payload
-    result = run_process(command, cwd=repo_root)
-    status = "ok" if result["returncode"] == 0 else "failed"
-    append_jsonl(
-        progress_path,
-        {
-            "ts": now_iso(),
-            "exp_id": exp_id,
-            "stage": stage,
-            "status": status,
-            "returncode": result["returncode"],
-            "elapsed_sec": result["elapsed_sec"],
-            "command": command,
-        },
-    )
+    attempts = 0
+    result: dict[str, Any] = {}
+    while attempts < max(1, max_retries):
+        attempts += 1
+        result = run_process(command, cwd=repo_root, timeout_sec=timeout_sec)
+        timed_out = bool(result.get("timed_out"))
+        status = "timed_out" if timed_out else ("ok" if result["returncode"] == 0 else "failed")
+        append_jsonl(
+            progress_path,
+            {
+                "ts": now_iso(),
+                "exp_id": exp_id,
+                "stage": stage,
+                "status": status,
+                "attempt": attempts,
+                "returncode": result["returncode"],
+                "elapsed_sec": result["elapsed_sec"],
+                "timeout_sec": timeout_sec,
+                "command": command,
+            },
+        )
+        emit_progress(
+            ctx,
+            exp_id=exp_id,
+            stage=stage,
+            status=status,
+            elapsed_sec=time.time() - started_ts,
+        )
+        if status == "ok":
+            break
+        if attempts >= max(1, max_retries):
+            break
+    timed_out = bool(result.get("timed_out"))
+    final_status = "timed_out" if timed_out else ("ok" if result.get("returncode", 1) == 0 else "failed")
     return {
-        "status": status,
-        "returncode": result["returncode"],
-        "elapsed_sec": result["elapsed_sec"],
-        "stdout_tail": (result["stdout"] or "")[-4000:],
-        "stderr_tail": (result["stderr"] or "")[-4000:],
+        "status": final_status,
+        "attempts": attempts,
+        "returncode": result.get("returncode"),
+        "elapsed_sec": result.get("elapsed_sec"),
+        "stdout_tail": str(result.get("stdout") or "")[-4000:],
+        "stderr_tail": str(result.get("stderr") or "")[-4000:],
         "command": command,
     }
 
 
-def _synthetic_eval_metric(exp_id: str, seed: str, bias: float) -> float:
+def _synthetic_eval_metrics(exp_id: str, seed: str, bias: float) -> dict[str, float]:
     digest = hashlib.sha256(f"{exp_id}|{seed}".encode("utf-8")).hexdigest()
-    frac = (int(digest[:8], 16) % 1000) / 10000.0
-    return 1.0 + bias + frac
+    frac_a = (int(digest[:8], 16) % 1000) / 1000.0
+    frac_b = (int(digest[8:16], 16) % 1000) / 1000.0
+    frac_c = (int(digest[16:24], 16) % 1000) / 1000.0
+
+    avg_ante = 3.0 + bias + (frac_a * 1.2)
+    median_ante = round(3.0 + bias + (frac_b * 1.0), 1)
+    win_rate = max(0.0, min(1.0, 0.25 + (frac_c * 0.45) + (bias * 0.05)))
+    score = avg_ante + (win_rate * 0.4)
+    return {
+        "score": score,
+        "avg_ante_reached": avg_ante,
+        "median_ante": median_ante,
+        "win_rate": win_rate,
+    }
 
 
 def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any]:
     exp_id = str(exp["id"])
     exp_dir = ctx.run_root / exp_id
     exp_dir.mkdir(parents=True, exist_ok=True)
-
     status_path = exp_dir / "status.json"
+    progress_path = exp_dir / "progress.jsonl"
+    stage_results: dict[str, Any] = {}
+    started = time.time()
+
+    budget = ctx.config.get("budget") or {}
+    max_wall_time_min = int(budget.get("max_wall_time_minutes") or 60)
+    max_exp_time_min = int(budget.get("max_per_experiment_minutes") or max_wall_time_min)
+    max_exp_time_sec = max(60, max_exp_time_min * 60)
+    max_stage_retries = max(1, int(budget.get("max_retries_per_stage") or 1))
+
+    def elapsed() -> float:
+        return time.time() - started
+
+    def over_budget() -> bool:
+        return elapsed() > max_exp_time_sec
+
+    def fail_row(*, status: str, reason: str, stage: str) -> dict[str, Any]:
+        payload = {
+            "status": status,
+            "reason": reason,
+            "stage": stage,
+            "elapsed_sec": elapsed(),
+            "seed_count": len(seeds),
+            "catastrophic_failure_count": 1,
+            "mean": 0.0,
+            "std": 0.0,
+            "avg_ante_reached": 0.0,
+            "median_ante": 0.0,
+            "win_rate": 0.0,
+        }
+        write_json(status_path, payload)
+        emit_progress(
+            ctx,
+            exp_id=exp_id,
+            stage=stage,
+            status=status,
+            elapsed_sec=elapsed(),
+            metric_snapshot=reason,
+        )
+        return {
+            "exp_id": exp_id,
+            "status": status,
+            "mean": payload["mean"],
+            "std": payload["std"],
+            "avg_ante_reached": payload["avg_ante_reached"],
+            "median_ante": payload["median_ante"],
+            "win_rate": payload["win_rate"],
+            "seed_count": payload["seed_count"],
+            "catastrophic_failure_count": payload["catastrophic_failure_count"],
+            "elapsed_sec": payload["elapsed_sec"],
+            "run_dir": str(exp_dir),
+        }
+
     if ctx.resume:
         old = read_json(status_path)
-        if old and str(old.get("status")) == "success":
+        if old and str(old.get("status")) in {"success", "passed", "dry_run"}:
+            emit_progress(
+                ctx,
+                exp_id=exp_id,
+                stage="resume",
+                status="skipped",
+                elapsed_sec=elapsed(),
+                metric_snapshot="already successful",
+            )
             return {
                 "exp_id": exp_id,
-                "status": "success",
+                "status": "passed",
                 "mean": old.get("mean"),
                 "std": old.get("std"),
+                "avg_ante_reached": old.get("avg_ante_reached", old.get("mean")),
+                "median_ante": old.get("median_ante"),
+                "win_rate": old.get("win_rate"),
                 "seed_count": old.get("seed_count"),
                 "catastrophic_failure_count": old.get("catastrophic_failure_count", 0),
                 "elapsed_sec": old.get("elapsed_sec", 0.0),
                 "run_dir": str(exp_dir),
                 "resumed": True,
             }
-
-    progress_path = exp_dir / "progress.jsonl"
-    stage_results: dict[str, Any] = {}
-    started = time.time()
-    budget = ctx.config.get("budget") or {}
-    max_wall_time_min = int(budget.get("max_wall_time_minutes") or 60)
-    max_wall_time_sec = max_wall_time_min * 60
 
     seeds_payload = select_seeds(
         exp=exp,
@@ -392,6 +586,7 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
         "python_version": detect_python_version(),
         "platform": platform.platform(),
         "budget": copy.deepcopy(budget),
+        "mode": ctx.mode,
         "seed_mode": exp.get("seed_mode", "regression_fixed"),
         "seed_set_name": seeds_payload.get("seed_set_name"),
         "seeds_used": seeds,
@@ -402,30 +597,36 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
     }
     write_json(exp_dir / "run_manifest.json", manifest)
 
-    print(format_progress(exp_id=exp_id, stage="init", status="start", elapsed_sec=0.0))
     append_jsonl(progress_path, {"ts": now_iso(), "exp_id": exp_id, "stage": "init", "status": "start"})
+    emit_progress(ctx, exp_id=exp_id, stage="init", status="running", elapsed_sec=0.0)
 
     if ctx.dry_run:
-        status = {
-            "status": "dry_run",
-            "exp_id": exp_id,
-            "seed_count": len(seeds),
-            "elapsed_sec": 0.0,
-        }
-        write_json(status_path, status)
-        return {
-            "exp_id": exp_id,
+        payload = {
             "status": "dry_run",
             "mean": 0.0,
             "std": 0.0,
+            "avg_ante_reached": 0.0,
+            "median_ante": 0.0,
+            "win_rate": 0.0,
+            "seed_count": len(seeds),
+            "catastrophic_failure_count": 0,
+            "elapsed_sec": 0.0,
+        }
+        write_json(status_path, payload)
+        emit_progress(ctx, exp_id=exp_id, stage="done", status="passed", elapsed_sec=0.0, metric_snapshot="dry_run")
+        return {
+            "exp_id": exp_id,
+            "status": "passed",
+            "mean": 0.0,
+            "std": 0.0,
+            "avg_ante_reached": 0.0,
+            "median_ante": 0.0,
+            "win_rate": 0.0,
             "seed_count": len(seeds),
             "catastrophic_failure_count": 0,
             "elapsed_sec": 0.0,
             "run_dir": str(exp_dir),
         }
-
-    def over_budget() -> bool:
-        return (time.time() - started) > max_wall_time_sec
 
     stages = exp.get("stages") or {}
     gate_flag = str(exp.get("gate_flag") or "RunFast")
@@ -435,150 +636,52 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
         "repo_root": str(ctx.repo_root),
     }
 
-    if bool(stages.get("sanity", True)):
-        compile_files = exp.get("sanity_compile") or ["trainer/train_rl.py", "trainer/eval_long_horizon.py"]
-        compile_cmd = ["python", "-B", "-m", "py_compile"] + [str(x) for x in compile_files]
-        stage_results["sanity"] = _run_stage_command(
+    stage_order = [
+        ("sanity", bool(stages.get("sanity", True))),
+        ("gate", bool(stages.get("gate", True))),
+        ("dataset", bool(stages.get("dataset"))),
+        ("train", bool(stages.get("train"))),
+    ]
+    for stage, enabled in stage_order:
+        if not enabled:
+            continue
+        if over_budget():
+            return fail_row(status="budget_cut", reason="per_experiment_budget_exceeded", stage=stage)
+        if stage == "sanity":
+            compile_files = exp.get("sanity_compile") or ["trainer/train_rl.py", "trainer/eval_long_horizon.py"]
+            cmd = ["python", "-B", "-m", "py_compile"] + [str(x) for x in compile_files]
+        elif stage == "gate":
+            cmd = [
+                "powershell",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts/run_regressions.ps1",
+                f"-{gate_flag}",
+            ]
+        elif stage == "dataset":
+            cmd = exp.get("dataset_command")
+        else:
+            cmd = exp.get("train_command")
+
+        stage_results[stage] = _run_stage_command(
+            ctx=ctx,
             exp_id=exp_id,
-            stage="sanity",
-            command_tmpl=compile_cmd,
+            stage=stage,
+            command_tmpl=cmd,
             context=context,
             repo_root=ctx.repo_root,
             progress_path=progress_path,
+            timeout_sec=max_exp_time_sec,
+            max_retries=max_stage_retries,
+            started_ts=started,
         )
-        print(
-            format_progress(
-                exp_id=exp_id,
-                stage="sanity",
-                status=stage_results["sanity"]["status"],
-                elapsed_sec=time.time() - started,
-            )
-        )
-        if stage_results["sanity"]["status"] != "ok":
-            write_json(status_path, {"status": "failed", "reason": "sanity_failed", **stage_results["sanity"]})
-            return {
-                "exp_id": exp_id,
-                "status": "failed",
-                "mean": 0.0,
-                "std": 0.0,
-                "seed_count": len(seeds),
-                "catastrophic_failure_count": 1,
-                "elapsed_sec": time.time() - started,
-                "run_dir": str(exp_dir),
-            }
+        token = str(stage_results[stage].get("status"))
+        if token not in {"ok", "skipped"}:
+            failure_status = "timed_out" if token == "timed_out" else "failed"
+            return fail_row(status=failure_status, reason=f"{stage}_failed", stage=stage)
 
-    if over_budget():
-        write_json(status_path, {"status": "failed", "reason": "budget_exceeded_before_gate"})
-        return {
-            "exp_id": exp_id,
-            "status": "failed",
-            "mean": 0.0,
-            "std": 0.0,
-            "seed_count": len(seeds),
-            "catastrophic_failure_count": 1,
-            "elapsed_sec": time.time() - started,
-            "run_dir": str(exp_dir),
-        }
-
-    if bool(stages.get("gate", True)):
-        gate_cmd = [
-            "powershell",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            "scripts/run_regressions.ps1",
-            f"-{gate_flag}",
-        ]
-        stage_results["gate"] = _run_stage_command(
-            exp_id=exp_id,
-            stage="gate",
-            command_tmpl=gate_cmd,
-            context=context,
-            repo_root=ctx.repo_root,
-            progress_path=progress_path,
-        )
-        print(
-            format_progress(
-                exp_id=exp_id,
-                stage="gate",
-                status=stage_results["gate"]["status"],
-                elapsed_sec=time.time() - started,
-            )
-        )
-        if stage_results["gate"]["status"] != "ok":
-            write_json(status_path, {"status": "failed", "reason": "gate_failed", **stage_results["gate"]})
-            return {
-                "exp_id": exp_id,
-                "status": "failed",
-                "mean": 0.0,
-                "std": 0.0,
-                "seed_count": len(seeds),
-                "catastrophic_failure_count": 1,
-                "elapsed_sec": time.time() - started,
-                "run_dir": str(exp_dir),
-            }
-
-    if bool(stages.get("dataset")):
-        stage_results["dataset"] = _run_stage_command(
-            exp_id=exp_id,
-            stage="dataset",
-            command_tmpl=exp.get("dataset_command"),
-            context=context,
-            repo_root=ctx.repo_root,
-            progress_path=progress_path,
-        )
-        print(
-            format_progress(
-                exp_id=exp_id,
-                stage="dataset",
-                status=stage_results["dataset"]["status"],
-                elapsed_sec=time.time() - started,
-            )
-        )
-        if stage_results["dataset"]["status"] != "ok":
-            write_json(status_path, {"status": "failed", "reason": "dataset_failed", **stage_results["dataset"]})
-            return {
-                "exp_id": exp_id,
-                "status": "failed",
-                "mean": 0.0,
-                "std": 0.0,
-                "seed_count": len(seeds),
-                "catastrophic_failure_count": 1,
-                "elapsed_sec": time.time() - started,
-                "run_dir": str(exp_dir),
-            }
-
-    if bool(stages.get("train")):
-        stage_results["train"] = _run_stage_command(
-            exp_id=exp_id,
-            stage="train",
-            command_tmpl=exp.get("train_command"),
-            context=context,
-            repo_root=ctx.repo_root,
-            progress_path=progress_path,
-        )
-        print(
-            format_progress(
-                exp_id=exp_id,
-                stage="train",
-                status=stage_results["train"]["status"],
-                elapsed_sec=time.time() - started,
-            )
-        )
-        if stage_results["train"]["status"] != "ok":
-            write_json(status_path, {"status": "failed", "reason": "train_failed", **stage_results["train"]})
-            return {
-                "exp_id": exp_id,
-                "status": "failed",
-                "mean": 0.0,
-                "std": 0.0,
-                "seed_count": len(seeds),
-                "catastrophic_failure_count": 1,
-                "elapsed_sec": time.time() - started,
-                "run_dir": str(exp_dir),
-            }
-
-    primary_metric = str((ctx.config.get("evaluation") or {}).get("primary_metric") or "score")
+    primary_metric = str((ctx.config.get("evaluation") or {}).get("primary_metric") or "avg_ante_reached")
     eval_cfg = exp.get("eval") or {}
     bias = float(eval_cfg.get("primary_metric_bias") or 0.0)
     seed_results: list[dict[str, Any]] = []
@@ -593,9 +696,19 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
                         "status": "failed",
                         "stage": "eval",
                         "error": "budget_exceeded",
-                        "elapsed_sec": time.time() - started,
+                        "elapsed_sec": elapsed(),
                         "metrics": {},
                     }
+                )
+                emit_progress(
+                    ctx,
+                    exp_id=exp_id,
+                    stage="eval",
+                    status="budget_cut",
+                    elapsed_sec=elapsed(),
+                    seed_index=seed_idx,
+                    seed_total=len(seeds),
+                    metric_snapshot="budget_exceeded",
                 )
                 break
 
@@ -603,24 +716,28 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
             seed_ctx["seed"] = seed
             seed_ctx["seed_index"] = seed_idx
             seed_ctx["seed_total"] = len(seeds)
+            metrics = _synthetic_eval_metrics(exp_id, seed, bias)
             if eval_cmd_tmpl:
                 result = _run_stage_command(
+                    ctx=ctx,
                     exp_id=exp_id,
                     stage="eval",
                     command_tmpl=eval_cmd_tmpl,
                     context=seed_ctx,
                     repo_root=ctx.repo_root,
                     progress_path=progress_path,
+                    timeout_sec=max_exp_time_sec,
+                    max_retries=max_stage_retries,
+                    started_ts=started,
                 )
                 if result["status"] == "ok":
-                    metric_value = _synthetic_eval_metric(exp_id, seed, bias)
                     seed_results.append(
                         {
                             "seed": seed,
                             "status": "ok",
                             "stage": "eval",
                             "elapsed_sec": result["elapsed_sec"],
-                            "metrics": {primary_metric: metric_value},
+                            "metrics": metrics,
                         }
                     )
                 else:
@@ -635,14 +752,13 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
                         }
                     )
             else:
-                metric_value = _synthetic_eval_metric(exp_id, seed, bias)
                 seed_results.append(
                     {
                         "seed": seed,
                         "status": "ok",
                         "stage": "eval",
                         "elapsed_sec": 0.0,
-                        "metrics": {primary_metric: metric_value},
+                        "metrics": metrics,
                     }
                 )
                 append_jsonl(
@@ -653,28 +769,32 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
                         "stage": "eval",
                         "seed": seed,
                         "status": "ok",
-                        "metric": metric_value,
+                        "metrics": metrics,
                     },
                 )
-            snap = seed_results[-1]["metrics"].get(primary_metric)
-            print(
-                format_progress(
-                    exp_id=exp_id,
-                    stage="eval",
-                    status=seed_results[-1]["status"],
-                    elapsed_sec=time.time() - started,
-                    seed_index=seed_idx,
-                    seed_total=len(seeds),
-                    metric_snapshot=f"{primary_metric}={snap}",
-                )
+            latest_metrics = seed_results[-1].get("metrics") or {}
+            snap = latest_metrics.get(primary_metric)
+            eta_sec = None
+            if seed_idx > 0:
+                eta_sec = ((elapsed() / seed_idx) * (len(seeds) - seed_idx))
+            emit_progress(
+                ctx,
+                exp_id=exp_id,
+                stage="eval",
+                status=str(seed_results[-1].get("status")),
+                elapsed_sec=elapsed(),
+                seed_index=seed_idx,
+                seed_total=len(seeds),
+                eta_sec=eta_sec,
+                metric_snapshot=f"{primary_metric}={snap}",
             )
 
     metric_summary = aggregate_seed_metrics(seed_results, primary_metric=primary_metric)
     success = is_success(metric_summary)
-    elapsed_total = time.time() - started
+    elapsed_total = elapsed()
 
     exp_summary = {
-        "schema": "p22_experiment_summary_v1",
+        "schema": "p23_experiment_summary_v1",
         "generated_at": now_iso(),
         "run_id": ctx.run_id,
         "exp_id": exp_id,
@@ -692,6 +812,9 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
             "status": "success" if success else "failed",
             "mean": metric_summary.get("mean"),
             "std": metric_summary.get("std"),
+            "avg_ante_reached": metric_summary.get("avg_ante_reached"),
+            "median_ante": metric_summary.get("median_ante"),
+            "win_rate": metric_summary.get("win_rate"),
             "seed_count": metric_summary.get("count"),
             "catastrophic_failure_count": metric_summary.get("catastrophic_failure_count"),
             "elapsed_sec": elapsed_total,
@@ -706,11 +829,23 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any]) -> dict[str, Any
                 except Exception:
                     pass
 
+    final_status = "passed" if success else "failed"
+    emit_progress(
+        ctx,
+        exp_id=exp_id,
+        stage="done",
+        status=final_status,
+        elapsed_sec=elapsed_total,
+        metric_snapshot=f"{primary_metric}={metric_summary.get('mean')}",
+    )
     return {
         "exp_id": exp_id,
-        "status": "success" if success else "failed",
+        "status": final_status,
         "mean": metric_summary.get("mean"),
         "std": metric_summary.get("std"),
+        "avg_ante_reached": metric_summary.get("avg_ante_reached"),
+        "median_ante": metric_summary.get("median_ante"),
+        "win_rate": metric_summary.get("win_rate"),
         "seed_count": metric_summary.get("count"),
         "catastrophic_failure_count": metric_summary.get("catastrophic_failure_count"),
         "elapsed_sec": elapsed_total,
@@ -743,10 +878,29 @@ def resolve_run_root(out_root: Path, resume: bool) -> tuple[str, Path]:
     return run_id, run_root
 
 
+def select_experiments_for_mode(
+    experiments: list[dict[str, Any]],
+    mode: str,
+) -> list[dict[str, Any]]:
+    mode = str(mode or "gate").lower()
+    if mode == "quick":
+        picked = [e for e in experiments if bool((e.get("modes") or {}).get("quick", False))]
+        return picked if picked else experiments[:3]
+    if mode == "milestone":
+        picked = [e for e in experiments if bool((e.get("modes") or {}).get("milestone", False))]
+        return picked if picked else experiments
+    if mode == "nightly":
+        picked = [e for e in experiments if bool((e.get("modes") or {}).get("nightly", True))]
+        return picked if picked else experiments
+    picked = [e for e in experiments if bool((e.get("modes") or {}).get("gate", True))]
+    return picked if picked else experiments
+
+
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="P22 experiment orchestrator.")
+    p = argparse.ArgumentParser(description="P23 experiment orchestrator.")
     p.add_argument("--config", default="configs/experiments/p22.yaml")
     p.add_argument("--out-root", default="docs/artifacts/p22")
+    p.add_argument("--mode", default="gate", choices=["quick", "gate", "nightly", "milestone"])
     p.add_argument("--resume", action="store_true")
     p.add_argument("--only", default="")
     p.add_argument("--exclude", default="")
@@ -754,6 +908,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--keep-intermediate", action="store_true")
     p.add_argument("--max-parallel", type=int, default=1)
+    p.add_argument("--max-experiments", type=int, default=0)
+    p.add_argument("--max-wall-time-minutes", type=int, default=0)
     p.add_argument("--seed-limit", type=int, default=0)
     p.add_argument("--seed-policy-config", default="")
     return p.parse_args()
@@ -763,6 +919,10 @@ def main() -> int:
     args = parse_args()
     repo_root = Path(__file__).resolve().parents[2]
     os.chdir(repo_root)
+
+    mode = str(args.mode or "gate").lower()
+    if bool(args.nightly):
+        mode = "nightly"
 
     config_path = (repo_root / args.config).resolve()
     out_root = (repo_root / args.out_root).resolve()
@@ -778,6 +938,7 @@ def main() -> int:
             raise SystemExit("seed policy validation failed")
 
     experiments = build_matrix(cfg)
+    experiments = select_experiments_for_mode(experiments, mode=mode)
     only_set = parse_csv_list(args.only)
     exclude_set = parse_csv_list(args.exclude)
 
@@ -788,6 +949,10 @@ def main() -> int:
     if not experiments:
         raise SystemExit("no experiments selected after filters")
 
+    budget_cfg = cfg.get("budget") if isinstance(cfg.get("budget"), dict) else {}
+    max_experiments = int(args.max_experiments) if int(args.max_experiments) > 0 else int(budget_cfg.get("max_experiments") or len(experiments))
+    experiments = experiments[: max(1, max_experiments)]
+
     run_id, run_root = resolve_run_root(out_root, resume=bool(args.resume))
     git_commit = current_git_commit(repo_root)
 
@@ -795,13 +960,26 @@ def main() -> int:
         write_json(run_root / "seed_policy.json", seed_policy)
 
     seed_limit = int(args.seed_limit) if int(args.seed_limit) > 0 else None
+    queue_state = {
+        str(exp["id"]): {
+            "exp_id": str(exp["id"]),
+            "stage": "queued",
+            "status": "queued",
+            "seed": "-",
+            "elapsed_sec": 0.0,
+            "eta_sec": None,
+            "metric_snapshot": "",
+            "updated_at": now_iso(),
+        }
+        for exp in experiments
+    }
     ctx = RunContext(
         repo_root=repo_root,
         out_root=out_root,
         run_root=run_root,
         run_id=run_id,
         config=cfg,
-        nightly=bool(args.nightly),
+        nightly=(mode == "nightly"),
         dry_run=bool(args.dry_run),
         keep_intermediate=bool(args.keep_intermediate),
         git_commit=git_commit,
@@ -810,12 +988,19 @@ def main() -> int:
         seed_limit=seed_limit,
         seed_policy=seed_policy,
         seed_policy_config=seed_policy_config,
+        mode=mode,
+        telemetry_path=run_root / "telemetry.jsonl",
+        live_summary_path=run_root / "live_summary_snapshot.json",
+        run_started_ts=time.time(),
+        queue_state=queue_state,
     )
+    _update_live_snapshot(ctx)
 
     plan_payload = {
-        "schema": "p22_run_plan_v1",
+        "schema": "p23_run_plan_v1",
         "generated_at": now_iso(),
         "run_id": run_id,
+        "mode": mode,
         "config_path": str(config_path),
         "out_root": str(out_root),
         "run_root": str(run_root),
@@ -824,51 +1009,85 @@ def main() -> int:
         "dry_run": ctx.dry_run,
         "resume": ctx.resume,
         "max_parallel": ctx.max_parallel,
+        "max_experiments": max_experiments,
         "seed_policy_config": seed_policy_config,
         "seed_policy_version": (seed_policy or {}).get("seed_policy_version") if seed_policy else "legacy.p22",
         "experiments": [e["id"] for e in experiments],
+        "budget": budget_cfg,
     }
     write_json(run_root / "run_plan.json", plan_payload)
 
     rows: list[dict[str, Any]] = []
-    if ctx.max_parallel <= 1:
-        for exp in experiments:
-            rows.append(run_single_experiment(ctx, exp))
-    else:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=ctx.max_parallel) as pool:
-            futures = [pool.submit(run_single_experiment, ctx, exp) for exp in experiments]
-            for fut in concurrent.futures.as_completed(futures):
-                rows.append(fut.result())
+    max_wall_minutes = int(args.max_wall_time_minutes) if int(args.max_wall_time_minutes) > 0 else int(budget_cfg.get("max_wall_time_minutes") or 120)
+    max_wall_sec = max(60, max_wall_minutes * 60)
+    for idx, exp in enumerate(experiments):
+        if (time.time() - ctx.run_started_ts) > max_wall_sec:
+            exp_id = str(exp["id"])
+            emit_progress(
+                ctx,
+                exp_id=exp_id,
+                stage="budget",
+                status="budget_cut",
+                elapsed_sec=time.time() - ctx.run_started_ts,
+                metric_snapshot="run_budget_exceeded",
+            )
+            rows.append(
+                {
+                    "exp_id": exp_id,
+                    "status": "budget_cut",
+                    "mean": 0.0,
+                    "std": 0.0,
+                    "avg_ante_reached": 0.0,
+                    "median_ante": 0.0,
+                    "win_rate": 0.0,
+                    "seed_count": 0,
+                    "catastrophic_failure_count": 1,
+                    "elapsed_sec": 0.0,
+                    "run_dir": str(run_root / exp_id),
+                }
+            )
+            continue
+        rows.append(run_single_experiment(ctx, exp))
 
-    primary_metric = str((cfg.get("evaluation") or {}).get("primary_metric") or "score")
-    rows_sorted = sorted(rows, key=lambda r: (str(r.get("status")) != "success", -(float(r.get("mean") or 0.0))))
+    primary_metric = str((cfg.get("evaluation") or {}).get("primary_metric") or "avg_ante_reached")
+    rows_sorted = sorted(rows, key=lambda r: (str(r.get("status")) != "passed", -(float(r.get("mean") or 0.0))))
 
     summary_paths = write_summary_tables(run_root, rows_sorted, primary_metric=primary_metric, run_id=run_id)
+    champion_rows = []
+    for row in rows_sorted:
+        token = str(row.get("status"))
+        copied = dict(row)
+        copied["status"] = "success" if token in {"passed", "dry_run"} else "failed"
+        champion_rows.append(copied)
     champion_update = update_champion_candidate(
         out_root,
         run_id=run_id,
-        ranked_rows=rows_sorted,
+        ranked_rows=champion_rows,
         primary_metric=primary_metric,
         evaluation_cfg=(cfg.get("evaluation") or {}),
     )
-    report_path = out_root / f"report_p22_{run_id}.md"
+    report_path = out_root / f"report_p23_{run_id}.md"
     write_comparison_report(report_path, rows_sorted, primary_metric=primary_metric, champion_update=champion_update)
 
     final_payload = {
-        "schema": "p22_report_v1",
+        "schema": "p23_report_v1",
         "generated_at": now_iso(),
         "run_id": run_id,
-        "status": "PASS" if all(str(r.get("status")) in {"success", "dry_run"} for r in rows_sorted) else "FAIL",
+        "mode": mode,
+        "status": "PASS" if all(str(r.get("status")) in {"passed", "dry_run", "skipped"} for r in rows_sorted) else "FAIL",
         "rows": rows_sorted,
         "summary_paths": summary_paths,
         "comparison_report": str(report_path),
         "champion_update": champion_update,
     }
-    write_json(run_root / "report_p22.json", final_payload)
+    write_json(run_root / "report_p23.json", final_payload)
+    _update_live_snapshot(ctx)
 
-    print(f"[P22] run_id={run_id} status={final_payload['status']}")
-    print(f"[P22] summary_json={summary_paths['json']}")
-    print(f"[P22] report_md={report_path}")
+    print(f"[P23] run_id={run_id} mode={mode} status={final_payload['status']}")
+    print(f"[P23] telemetry={ctx.telemetry_path}")
+    print(f"[P23] live_snapshot={ctx.live_summary_path}")
+    print(f"[P23] summary_json={summary_paths['json']}")
+    print(f"[P23] report_md={report_path}")
     return 0 if final_payload["status"] == "PASS" else 1
 
 

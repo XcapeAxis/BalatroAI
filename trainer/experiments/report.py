@@ -29,6 +29,9 @@ def write_summary_tables(
         "primary_metric",
         "mean",
         "std",
+        "avg_ante_reached",
+        "median_ante",
+        "win_rate",
         "seed_count",
         "catastrophic_failure_count",
         "elapsed_sec",
@@ -46,6 +49,9 @@ def write_summary_tables(
                     "primary_metric": primary_metric,
                     "mean": _safe_float(row.get("mean")),
                     "std": _safe_float(row.get("std")),
+                    "avg_ante_reached": _safe_float(row.get("avg_ante_reached")),
+                    "median_ante": _safe_float(row.get("median_ante")),
+                    "win_rate": _safe_float(row.get("win_rate")),
                     "seed_count": row.get("seed_count"),
                     "catastrophic_failure_count": row.get("catastrophic_failure_count"),
                     "elapsed_sec": _safe_float(row.get("elapsed_sec")),
@@ -56,18 +62,21 @@ def write_summary_tables(
     json_path.write_text(json.dumps(rows, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     md_lines = [
-        f"# P22 Summary ({run_id})",
+        f"# P23 Summary ({run_id})",
         "",
-        "| exp_id | status | mean | std | seeds | failures | elapsed_sec |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| exp_id | status | mean | std | avg_ante | median_ante | win_rate | seeds | failures | elapsed_sec |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
         md_lines.append(
-            "| {exp} | {status} | {mean} | {std} | {seeds} | {fails} | {elapsed} |".format(
+            "| {exp} | {status} | {mean} | {std} | {avg_ante} | {median_ante} | {win_rate} | {seeds} | {fails} | {elapsed} |".format(
                 exp=row.get("exp_id"),
                 status=row.get("status"),
                 mean=_safe_float(row.get("mean")),
                 std=_safe_float(row.get("std")),
+                avg_ante=_safe_float(row.get("avg_ante_reached")),
+                median_ante=_safe_float(row.get("median_ante")),
+                win_rate=_safe_float(row.get("win_rate")),
                 seeds=row.get("seed_count"),
                 fails=row.get("catastrophic_failure_count"),
                 elapsed=_safe_float(row.get("elapsed_sec")),
@@ -89,7 +98,7 @@ def write_comparison_report(
     champion_update: dict[str, Any],
 ) -> None:
     lines = [
-        "# P22 Experiment Comparison Report",
+        "# P23 Experiment Comparison Report",
         "",
         f"- primary_metric: `{primary_metric}`",
         f"- experiments: `{len(rows)}`",
@@ -100,6 +109,9 @@ def write_comparison_report(
         lines.append(
             f"{idx}. `{row.get('exp_id')}` status={row.get('status')} "
             f"mean={_safe_float(row.get('mean'))} std={_safe_float(row.get('std'))} "
+            f"avg_ante={_safe_float(row.get('avg_ante_reached'))} "
+            f"median_ante={_safe_float(row.get('median_ante'))} "
+            f"win_rate={_safe_float(row.get('win_rate'))} "
             f"failures={row.get('catastrophic_failure_count')}"
         )
     lines += [
@@ -111,4 +123,3 @@ def write_comparison_report(
         f"- candidate_path: `{champion_update.get('candidate_path')}`",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-

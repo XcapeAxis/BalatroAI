@@ -7,6 +7,9 @@ from typing import Any
 
 def aggregate_seed_metrics(seed_results: list[dict[str, Any]], primary_metric: str) -> dict[str, Any]:
     values: list[float] = []
+    avg_ante_values: list[float] = []
+    median_ante_values: list[float] = []
+    win_rate_values: list[float] = []
     catastrophic_failures: list[dict[str, Any]] = []
     per_seed_rows: list[dict[str, Any]] = []
 
@@ -18,11 +21,23 @@ def aggregate_seed_metrics(seed_results: list[dict[str, Any]], primary_metric: s
         numeric = value if isinstance(value, (int, float)) else None
         if numeric is not None:
             values.append(float(numeric))
+        avg_ante_v = metrics.get("avg_ante_reached")
+        if isinstance(avg_ante_v, (int, float)):
+            avg_ante_values.append(float(avg_ante_v))
+        median_ante_v = metrics.get("median_ante")
+        if isinstance(median_ante_v, (int, float)):
+            median_ante_values.append(float(median_ante_v))
+        win_rate_v = metrics.get("win_rate")
+        if isinstance(win_rate_v, (int, float)):
+            win_rate_values.append(float(win_rate_v))
 
         out = {
             "seed": seed,
             "status": status,
             "primary_metric": numeric,
+            "avg_ante_reached": avg_ante_v if isinstance(avg_ante_v, (int, float)) else None,
+            "median_ante": median_ante_v if isinstance(median_ante_v, (int, float)) else None,
+            "win_rate": win_rate_v if isinstance(win_rate_v, (int, float)) else None,
             "stage": row.get("stage"),
             "error": row.get("error"),
             "elapsed_sec": row.get("elapsed_sec"),
@@ -40,6 +55,9 @@ def aggregate_seed_metrics(seed_results: list[dict[str, Any]], primary_metric: s
 
     mean_v = statistics.mean(values) if values else math.nan
     std_v = statistics.pstdev(values) if len(values) >= 2 else 0.0
+    avg_ante_mean = statistics.mean(avg_ante_values) if avg_ante_values else math.nan
+    median_ante_mean = statistics.mean(median_ante_values) if median_ante_values else math.nan
+    win_rate_mean = statistics.mean(win_rate_values) if win_rate_values else math.nan
 
     return {
         "primary_metric": primary_metric,
@@ -47,6 +65,9 @@ def aggregate_seed_metrics(seed_results: list[dict[str, Any]], primary_metric: s
         "count_valid_metric": len(values),
         "mean": mean_v,
         "std": std_v,
+        "avg_ante_reached": avg_ante_mean,
+        "median_ante": median_ante_mean,
+        "win_rate": win_rate_mean,
         "catastrophic_failure_count": len(catastrophic_failures),
         "catastrophic_failures": catastrophic_failures,
         "per_seed": per_seed_rows,
@@ -55,4 +76,3 @@ def aggregate_seed_metrics(seed_results: list[dict[str, Any]], primary_metric: s
 
 def is_success(metric_summary: dict[str, Any]) -> bool:
     return int(metric_summary.get("catastrophic_failure_count") or 0) == 0
-
