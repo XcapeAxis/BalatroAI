@@ -20,23 +20,8 @@ $PSNativeCommandUseErrorActionPreference = $false
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $ProjectRoot
 
-function Test-HasYaml([string]$PythonExe) {
-  try {
-    & $PythonExe -c "import yaml" *> $null
-    return ($LASTEXITCODE -eq 0)
-  } catch {
-    return $false
-  }
-}
-
 $py = Join-Path $ProjectRoot ".venv_trainer\Scripts\python.exe"
 if (-not (Test-Path $py)) { $py = "python" }
-if (-not (Test-HasYaml -PythonExe $py)) {
-  $fallback = "python"
-  if (Test-HasYaml -PythonExe $fallback) {
-    $py = $fallback
-  }
-}
 
 $env:PYTHONUTF8 = "1"
 
@@ -58,7 +43,7 @@ if (-not [string]::IsNullOrWhiteSpace($Exclude)) { $args += @("--exclude", $Excl
 if ($SeedLimit -gt 0) { $args += @("--seed-limit", "$SeedLimit") }
 
 if ($Quick) {
-  if (-not ($args -contains "--only")) { $args += @("--only", "quick_baseline,quick_candidate") }
+  if (-not ($args -contains "--only")) { $args += @("--only", "quick_baseline,quick_candidate,quick_selfsup_pretrain") }
   if ($SeedLimit -le 0) { $args += @("--seed-limit", "2") }
 }
 

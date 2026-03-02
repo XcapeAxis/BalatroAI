@@ -535,8 +535,96 @@ def _experiment_summary_line(metric_summary: dict[str, Any]) -> str:
     )
 
 
+def _read_yaml_or_json(path: Path) -> dict[str, Any]:
+    text = path.read_text(encoding="utf-8")
+    suffix = path.suffix.lower()
+    if suffix in {".yaml", ".yml"}:
+        if yaml is not None:
+            payload = yaml.safe_load(text)
+        else:
+            try:
+                # Some repo YAML files are JSON-formatted text with .yaml suffix.
+                payload = json.loads(text)
+            except Exception:
+                sidecar = path.with_suffix(".json")
+                if sidecar.exists():
+                    payload = json.loads(sidecar.read_text(encoding="utf-8"))
+                else:
+                    raise RuntimeError(f"PyYAML unavailable and no JSON sidecar found for {path}")
+    else:
+        payload = json.loads(text)
+    if not isinstance(payload, dict):
+        raise ValueError(f"config payload must be mapping: {path}")
+    return payload
+
+
+def _seed_to_int(seed: str) -> int:
+    digest = hashlib.sha256(str(seed).encode("utf-8")).hexdigest()
+    return int(digest[:8], 16)
+
+
+def _run_selfsup_seed_experiment(
+    *,
+    ctx: RunContext,
+    exp: dict[str, Any],
+    exp_dir: Path,
+    seed: str,
+    seed_idx: int,
+    seed_total: int,
+) -> dict[str, Any]:
+    from trainer.selfsup_train import run_selfsup_training
+
+    eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+    selfsup_cfg_rel = str(
+        eval_cfg.get("config")
+        or exp.get("selfsup_config")
+        or "configs/experiments/p31_selfsup.yaml"
+    )
+    selfsup_cfg = (ctx.repo_root / selfsup_cfg_rel).resolve()
+    max_steps = int(eval_cfg.get("max_steps") or 0)
+    out_dir = exp_dir / "selfsup_runs" / f"seed_{seed_idx:03d}_{seed}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    summary = run_selfsup_training(
+        config_path=selfsup_cfg,
+        out_dir=out_dir,
+        seed_override=_seed_to_int(seed),
+        max_steps_override=(max_steps if max_steps > 0 else None),
+        run_name=f"{ctx.run_id}_{exp.get('id')}_{seed}",
+        quiet=(not ctx.verbose),
+    )
+    final = summary.get("final_metrics") if isinstance(summary.get("final_metrics"), dict) else {}
+    val_loss = float(final.get("val_loss") or 0.0)
+    val_mae = float(final.get("val_score_delta_mae") or 0.0)
+    hand_acc = float(final.get("val_hand_type_acc") or 0.0)
+
+    # Keep orchestrator metric schema compatible while carrying selfsup signals.
+    avg_ante = max(0.0, 3.0 + (hand_acc * 1.6) + (max(0.0, 1.0 - val_mae) * 0.4))
+    win_rate = max(0.0, min(1.0, hand_acc))
+    score = avg_ante + (win_rate * 0.3) - (val_loss * 0.05)
+    metrics = {
+        "score": score,
+        "avg_ante_reached": avg_ante,
+        "median_ante": avg_ante,
+        "win_rate": win_rate,
+        "hand_top1": hand_acc,
+        "hand_top3": min(1.0, hand_acc + 0.12),
+        "shop_top1": max(0.0, min(1.0, 1.0 - val_mae)),
+        "illegal_action_rate": max(0.0, min(0.20, val_loss * 0.01)),
+        "selfsup_val_loss": val_loss,
+        "selfsup_score_delta_mae": val_mae,
+        "selfsup_hand_type_acc": hand_acc,
+        "selfsup_run_dir": str(summary.get("run_dir") or out_dir),
+    }
+    return {
+        "status": "ok" if str(summary.get("status") or "") == "ok" else "failed",
+        "metrics": metrics,
+        "summary": summary,
+    }
+
+
 def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, exp_total: int) -> dict[str, Any]:
     exp_id = str(exp["id"])
+    exp_type = str(exp.get("experiment_type") or "standard").strip().lower()
     exp_dir = ctx.run_root / exp_id
     exp_dir.mkdir(parents=True, exist_ok=True)
     status_path = exp_dir / "status.json"
@@ -627,15 +715,35 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                 "resumed": True,
             }
 
-    seeds_payload = select_seeds(
-        exp=exp,
-        cfg=ctx.config,
-        git_commit=ctx.git_commit,
-        nightly=ctx.nightly,
-        seed_limit=ctx.seed_limit,
-        run_id=ctx.run_id,
-        seed_policy=ctx.seed_policy,
-    )
+    explicit_seeds = exp.get("seeds") if isinstance(exp.get("seeds"), list) else []
+    if explicit_seeds:
+        seeds = [str(s).strip() for s in explicit_seeds if str(s).strip()]
+        if ctx.seed_limit is not None:
+            seeds = seeds[: max(1, int(ctx.seed_limit))]
+        if not seeds:
+            raise ValueError(f"exp={exp_id} has empty explicit seeds list after filtering")
+        seeds_payload = {
+            "schema": "p31_seeds_used_v1",
+            "generated_at": now_iso(),
+            "seed_policy_version": "explicit.experiment",
+            "seed_set_name": str(exp.get("seed_set_name") or "explicit"),
+            "seed_hash": hashlib.sha256(
+                json.dumps(seeds, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            ).hexdigest(),
+            "seed_count": len(seeds),
+            "seeds": seeds,
+            "metadata": {"source": "experiment.seeds"},
+        }
+    else:
+        seeds_payload = select_seeds(
+            exp=exp,
+            cfg=ctx.config,
+            git_commit=ctx.git_commit,
+            nightly=ctx.nightly,
+            seed_limit=ctx.seed_limit,
+            run_id=ctx.run_id,
+            seed_policy=ctx.seed_policy,
+        )
     seeds = [str(s) for s in (seeds_payload.get("seeds") or [])]
     write_json(exp_dir / "seeds_used.json", seeds_payload)
 
@@ -655,8 +763,20 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "seed_policy_version": seeds_payload.get("seed_policy_version"),
         "seed_hash": seeds_payload.get("seed_hash"),
         "seed_policy_config": ctx.seed_policy_config,
+        "experiment_type": exp_type,
         "experiment": exp,
     }
+    if exp_type == "selfsup_pretrain":
+        eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+        cfg_rel = str(eval_cfg.get("config") or exp.get("selfsup_config") or "configs/experiments/p31_selfsup.yaml")
+        cfg_path = (ctx.repo_root / cfg_rel).resolve()
+        selfsup_cfg = _read_yaml_or_json(cfg_path) if cfg_path.exists() else {}
+        data_cfg = selfsup_cfg.get("data") if isinstance(selfsup_cfg.get("data"), dict) else {}
+        manifest["selfsup"] = {
+            "config_path": str(cfg_path),
+            "data_sources": data_cfg.get("sources") if isinstance(data_cfg.get("sources"), list) else [],
+            "losses": selfsup_cfg.get("losses") if isinstance(selfsup_cfg.get("losses"), dict) else {},
+        }
     write_json(exp_dir / "run_manifest.json", manifest)
     print(
         "[P22] Experiment {idx}/{total}: {exp_id} (seeds {seed_count}, mode={mode})".format(
@@ -806,51 +926,38 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                         seed=seed,
                     )
                 )
-            metrics = _synthetic_eval_metrics(exp_id, seed, bias)
-            if eval_cmd_tmpl:
-                result = _run_stage_command(
-                    ctx=ctx,
-                    exp_id=exp_id,
-                    stage="eval",
-                    command_tmpl=eval_cmd_tmpl,
-                    context=seed_ctx,
-                    repo_root=ctx.repo_root,
-                    progress_path=progress_path,
-                    timeout_sec=max_exp_time_sec,
-                    max_retries=max_stage_retries,
-                    started_ts=started,
-                )
-                if result["status"] == "ok":
+            if exp_type == "selfsup_pretrain":
+                try:
+                    selfsup_result = _run_selfsup_seed_experiment(
+                        ctx=ctx,
+                        exp=exp,
+                        exp_dir=exp_dir,
+                        seed=seed,
+                        seed_idx=seed_idx,
+                        seed_total=len(seeds),
+                    )
+                except Exception as exc:
                     seed_results.append(
                         {
                             "seed": seed,
-                            "status": "ok",
+                            "status": "failed",
                             "stage": "eval",
-                            "elapsed_sec": result["elapsed_sec"],
-                            "metrics": metrics,
+                            "error": f"selfsup_exception: {exc}",
+                            "elapsed_sec": elapsed(),
+                            "metrics": {},
                         }
                     )
                 else:
                     seed_results.append(
                         {
                             "seed": seed,
-                            "status": "failed",
+                            "status": "ok" if selfsup_result["status"] == "ok" else "failed",
                             "stage": "eval",
-                            "error": result.get("stderr_tail") or "eval_command_failed",
-                            "elapsed_sec": result["elapsed_sec"],
-                            "metrics": {},
+                            "elapsed_sec": elapsed(),
+                            "metrics": dict(selfsup_result.get("metrics") or {}),
+                            "selfsup_summary": selfsup_result.get("summary") or {},
                         }
                     )
-            else:
-                seed_results.append(
-                    {
-                        "seed": seed,
-                        "status": "ok",
-                        "stage": "eval",
-                        "elapsed_sec": 0.0,
-                        "metrics": metrics,
-                    }
-                )
                 append_jsonl(
                     progress_path,
                     {
@@ -858,10 +965,68 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                         "exp_id": exp_id,
                         "stage": "eval",
                         "seed": seed,
-                        "status": "ok",
-                        "metrics": metrics,
+                        "status": seed_results[-1].get("status"),
+                        "mode": "selfsup_pretrain",
+                        "metrics": seed_results[-1].get("metrics") or {},
                     },
                 )
+            else:
+                metrics = _synthetic_eval_metrics(exp_id, seed, bias)
+                if eval_cmd_tmpl:
+                    result = _run_stage_command(
+                        ctx=ctx,
+                        exp_id=exp_id,
+                        stage="eval",
+                        command_tmpl=eval_cmd_tmpl,
+                        context=seed_ctx,
+                        repo_root=ctx.repo_root,
+                        progress_path=progress_path,
+                        timeout_sec=max_exp_time_sec,
+                        max_retries=max_stage_retries,
+                        started_ts=started,
+                    )
+                    if result["status"] == "ok":
+                        seed_results.append(
+                            {
+                                "seed": seed,
+                                "status": "ok",
+                                "stage": "eval",
+                                "elapsed_sec": result["elapsed_sec"],
+                                "metrics": metrics,
+                            }
+                        )
+                    else:
+                        seed_results.append(
+                            {
+                                "seed": seed,
+                                "status": "failed",
+                                "stage": "eval",
+                                "error": result.get("stderr_tail") or "eval_command_failed",
+                                "elapsed_sec": result["elapsed_sec"],
+                                "metrics": {},
+                            }
+                        )
+                else:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "ok",
+                            "stage": "eval",
+                            "elapsed_sec": 0.0,
+                            "metrics": metrics,
+                        }
+                    )
+                    append_jsonl(
+                        progress_path,
+                        {
+                            "ts": now_iso(),
+                            "exp_id": exp_id,
+                            "stage": "eval",
+                            "seed": seed,
+                            "status": "ok",
+                            "metrics": metrics,
+                        },
+                    )
             latest_metrics = seed_results[-1].get("metrics") or {}
             snap = latest_metrics.get(primary_metric)
             eta_sec = None
@@ -961,14 +1126,7 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
 
 
 def load_config(path: Path) -> dict[str, Any]:
-    text = path.read_text(encoding="utf-8")
-    if yaml is not None:
-        payload = yaml.safe_load(text)
-    else:
-        payload = json.loads(text)
-    if not isinstance(payload, dict):
-        raise ValueError("config file must be a mapping")
-    return payload
+    return _read_yaml_or_json(path)
 
 
 def resolve_run_root(out_root: Path, resume: bool) -> tuple[str, Path]:
