@@ -33,6 +33,7 @@ param(
   [switch]$RunP22Full,
   [switch]$RunP23,
   [switch]$RunP24,
+  [switch]$RunP25,
   [switch]$RequireMainBranch,
   [string]$P21Timestamp = ""
 )
@@ -61,6 +62,11 @@ if ($RunP20 -or $RunPerfGateV5) { $RunP19 = $true }
 if ($RunP22Full) { $RunP22 = $true }
 if ($RunP23) { $RunP22 = $true }
 if ($RunP24) {
+  $RunP23 = $true
+  $RunP22 = $true
+}
+if ($RunP25) {
+  $RunP24 = $true
   $RunP23 = $true
   $RunP22 = $true
 }
@@ -150,6 +156,9 @@ $RunP22LatestReport = ""
 $RunP23Status = "SKIPPED"
 $RunP23ArtifactDir = ""
 $RunP23GateReport = ""
+$RunP24Status = "SKIPPED"
+$RunP24ArtifactDir = ""
+$RunP24GateReport = ""
 
 function Test-Health([string]$Url, [int]$TimeoutSec = 5) {
   try {
@@ -1397,8 +1406,162 @@ if ($RunP24) {
   $coverageStatusLines -join "`n" | Out-File -LiteralPath $coverageStatusPath -Encoding UTF8
 
   Write-Host ("[P24] artifact_dir=" + $p24Dir + " gate_status=" + $reportGate.status)
+  $RunP24Status = [string]$reportGate.status
+  $RunP24ArtifactDir = $p24Dir
+  $RunP24GateReport = $reportGatePath
   if ($reportGate.status -ne "PASS") {
     throw "[P24] gate failed; inspect gate_functional/gate_campaign/gate_reliability/gate_ops"
+  }
+}
+
+if ($RunP25) {
+  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $p25Root = Join-Path $ProjectRoot "docs/artifacts/p25"
+  if (-not (Test-Path $p25Root)) { New-Item -ItemType Directory -Path $p25Root -Force | Out-Null }
+  $p25Dir = Join-Path $p25Root $stamp
+  New-Item -ItemType Directory -Path $p25Dir -Force | Out-Null
+
+  $baselineSummary = [ordered]@{
+    schema = "p25_baseline_summary_v1"
+    generated_at = (Get-Date).ToString("o")
+    baseline_gate = "RunP24"
+    run_p24_status = $RunP24Status
+    run_p24_artifact_dir = $RunP24ArtifactDir
+    run_p24_gate_report = $RunP24GateReport
+  }
+  $baselineSummaryPath = Join-Path $p25Dir "baseline_summary.json"
+  Write-JsonFile -Path $baselineSummaryPath -Object $baselineSummary
+  $baselineMd = @(
+    "# P25 Baseline Summary",
+    "",
+    "- baseline_gate: RunP24",
+    "- run_p24_status: $RunP24Status",
+    "- run_p24_artifact_dir: $RunP24ArtifactDir",
+    "- run_p24_gate_report: $RunP24GateReport"
+  )
+  $baselineMdPath = Join-Path $p25Dir "baseline_summary.md"
+  $baselineMd -join "`n" | Out-File -LiteralPath $baselineMdPath -Encoding UTF8
+
+  $statusScript = Join-Path $ProjectRoot "scripts/generate_readme_status.ps1"
+  if (-not (Test-Path $statusScript)) { throw "[P25] missing script: $statusScript" }
+  $null = Invoke-SafeRunStep -Label "P25-readme-status" -Exe "powershell" -CmdArgs @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $statusScript
+  ) -TimeoutSec 300
+  $statusJsonPath = Join-Path $ProjectRoot "docs/generated/README_STATUS.json"
+  $statusMdPath = Join-Path $ProjectRoot "docs/generated/README_STATUS.md"
+  $statusObj = $null
+  if (Test-Path $statusJsonPath) {
+    try { $statusObj = Get-Content -LiteralPath $statusJsonPath -Raw | ConvertFrom-Json } catch { $statusObj = $null }
+  }
+  $statusPass = ($statusObj -ne $null)
+  $statusSummary = [ordered]@{
+    schema = "p25_readme_status_generation_v1"
+    generated_at = (Get-Date).ToString("o")
+    pass = $statusPass
+    status_json = $statusJsonPath
+    status_md = $statusMdPath
+    highest_supported_gate = $(if ($statusObj) { [string]$statusObj.highest_supported_gate } else { "" })
+  }
+  Write-JsonFile -Path (Join-Path $p25Dir "readme_status_generation.json") -Object $statusSummary
+  if (Test-Path $statusJsonPath) { Copy-Item -LiteralPath $statusJsonPath -Destination (Join-Path $p25Dir "README_STATUS.json") -Force }
+  if (Test-Path $statusMdPath) { Copy-Item -LiteralPath $statusMdPath -Destination (Join-Path $p25Dir "README_STATUS.md") -Force }
+
+  $lintScript = Join-Path $ProjectRoot "scripts/lint_readme_p25.ps1"
+  if (-not (Test-Path $lintScript)) { throw "[P25] missing script: $lintScript" }
+  $null = Invoke-SafeRunStep -Label "P25-readme-lint" -Exe "powershell" -CmdArgs @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $lintScript
+  ) -TimeoutSec 300
+  $lintReportPath = Join-Path $ProjectRoot "docs/generated/readme_lint_report.json"
+  if (-not (Test-Path $lintReportPath)) { throw "[P25] missing lint report: $lintReportPath" }
+  $lintReport = Get-Content -LiteralPath $lintReportPath -Raw | ConvertFrom-Json
+  $lintPass = [bool]$lintReport.pass
+  Copy-Item -LiteralPath $lintReportPath -Destination (Join-Path $p25Dir "readme_lint_report.json") -Force
+
+  $quickSmokeScript = Join-Path $ProjectRoot "scripts/run_p23.ps1"
+  $quickSmokeArgs = @()
+  if (Test-Path $quickSmokeScript) {
+    $quickSmokeArgs = @("-ExecutionPolicy", "Bypass", "-File", $quickSmokeScript, "-DryRun")
+  } else {
+    $fallbackQuick = Join-Path $ProjectRoot "scripts/run_p22.ps1"
+    if (-not (Test-Path $fallbackQuick)) { throw "[P25] missing quick-start smoke scripts (run_p23/run_p22)" }
+    $quickSmokeArgs = @("-ExecutionPolicy", "Bypass", "-File", $fallbackQuick, "-DryRun")
+  }
+  $null = Invoke-SafeRunStep -Label "P25-quickstart-smoke" -Exe "powershell" -CmdArgs $quickSmokeArgs -TimeoutSec 1200
+  $quickSmoke = [ordered]@{
+    schema = "p25_quickstart_smoke_v1"
+    generated_at = (Get-Date).ToString("o")
+    command = "powershell " + ($quickSmokeArgs -join " ")
+    pass = $true
+  }
+  Write-JsonFile -Path (Join-Path $p25Dir "quickstart_smoke.json") -Object $quickSmoke
+
+  $readmePath = Join-Path $ProjectRoot "README.md"
+  $readmeText = if (Test-Path $readmePath) { Get-Content -LiteralPath $readmePath -Raw } else { "" }
+  $reproDocPath = Join-Path $ProjectRoot "docs/REPRODUCIBILITY_P25.md"
+  $assetsRoot = Join-Path $ProjectRoot "docs/assets/readme"
+  $assetTargets = @("sample_run_log.txt", "sample_summary_table.md", "architecture_dataflow.mmd")
+  $assetCount = 0
+  foreach ($assetName in $assetTargets) {
+    if (Test-Path (Join-Path $assetsRoot $assetName)) { $assetCount += 1 }
+  }
+  $readmeHasReproLink = [regex]::IsMatch($readmeText, "\(docs/REPRODUCIBILITY_P25\.md\)")
+
+  $functionalPass = (($RunP24Status -eq "PASS") -and $quickSmoke.pass)
+  $docsPass = ($lintPass -and $statusPass -and (Test-Path $reproDocPath) -and $readmeHasReproLink -and ($assetCount -ge 3))
+
+  $gateFunctional = [ordered]@{
+    schema = "p25_gate_functional_v1"
+    generated_at = (Get-Date).ToString("o")
+    baseline_gate = "RunP24"
+    baseline_status = $RunP24Status
+    baseline_artifact_dir = $RunP24ArtifactDir
+    baseline_gate_report = $RunP24GateReport
+    quickstart_smoke_pass = $quickSmoke.pass
+    pass = $functionalPass
+  }
+  $gateDocs = [ordered]@{
+    schema = "p25_gate_docs_v1"
+    generated_at = (Get-Date).ToString("o")
+    readme_lint_pass = $lintPass
+    readme_status_generation_pass = $statusPass
+    reproducibility_doc_exists = (Test-Path $reproDocPath)
+    readme_has_repro_link = $readmeHasReproLink
+    readme_assets_count = $assetCount
+    pass = $docsPass
+  }
+  Write-JsonFile -Path (Join-Path $p25Dir "gate_functional.json") -Object $gateFunctional
+  Write-JsonFile -Path (Join-Path $p25Dir "gate_docs.json") -Object $gateDocs
+
+  $reportGate = [ordered]@{
+    schema = "p25_report_gate_v1"
+    generated_at = (Get-Date).ToString("o")
+    functional = $gateFunctional
+    docs = $gateDocs
+    status = $(if ($functionalPass -and $docsPass) { "PASS" } else { "FAIL" })
+  }
+  $reportGatePath = Join-Path $p25Dir "report_p25_gate.json"
+  Write-JsonFile -Path $reportGatePath -Object $reportGate
+
+  $coverageStatusPath = Join-Path $ProjectRoot "docs/COVERAGE_P25_STATUS.md"
+  $coverageStatusLines = @(
+    "# COVERAGE P25 STATUS",
+    "",
+    "- timestamp: " + (Get-Date -Format "yyyy-MM-dd HH:mm:ss"),
+    "- baseline_gate: RunP24",
+    "- baseline_status: " + $RunP24Status,
+    "- readme_lint_pass: " + $lintPass,
+    "- readme_status_generation_pass: " + $statusPass,
+    "- quickstart_smoke_pass: " + $quickSmoke.pass,
+    "- docs_assets_count: " + $assetCount,
+    "- gate_status: " + $reportGate.status
+  )
+  $coverageStatusLines -join "`n" | Out-File -LiteralPath $coverageStatusPath -Encoding UTF8
+
+  Write-Host ("[P25] artifact_dir=" + $p25Dir + " gate_status=" + $reportGate.status)
+  if ($reportGate.status -ne "PASS") {
+    throw "[P25] gate failed; inspect gate_functional/gate_docs/report_p25_gate"
   }
 }
 
