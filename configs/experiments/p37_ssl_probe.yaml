@@ -1,0 +1,35 @@
+schema: p37_ssl_probe_config_v1
+
+data:
+  dataset_path: docs/artifacts/p37/ssl_datasets/latest/dataset.jsonl
+  sources:
+    - type: oracle
+      path: sim/tests/fixtures_runtime/oracle_p0_v6_regression
+    - type: real
+      path: docs/artifacts/p32
+  max_episodes: 10
+  min_episode_length: 2
+  window_size: 2
+  max_samples: 360
+  train_ratio: 0.8
+
+model:
+  latent_dim: 64
+  hidden_dim: 128
+  dropout: 0.1
+
+training:
+  seed: 3702
+  batch_size: 32
+  device: auto
+
+ssl_pretrain:
+  config: configs/experiments/p37_ssl_pretrain.yaml
+
+probe:
+  epochs: 8
+  lr: 0.01
+  weight_decay: 0.00001
+
+output:
+  artifacts_root: docs/artifacts/p37/ssl_probe

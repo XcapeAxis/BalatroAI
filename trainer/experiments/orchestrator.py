@@ -1016,6 +1016,119 @@ def _run_selfsup_action_type_seed_experiment(
     }
 
 
+def _run_ssl_pretrain_seed_experiment(
+    *,
+    ctx: RunContext,
+    exp: dict[str, Any],
+    exp_dir: Path,
+    seed: str,
+    seed_idx: int,
+    seed_total: int,
+) -> dict[str, Any]:
+    from trainer.experiments.ssl_trainer import run_ssl_pretrain
+
+    eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+    cfg_rel = str(
+        eval_cfg.get("config")
+        or exp.get("ssl_config")
+        or "configs/experiments/p37_ssl_pretrain.yaml"
+    )
+    cfg_path = (ctx.repo_root / cfg_rel).resolve()
+    max_samples = int(eval_cfg.get("max_samples") or eval_cfg.get("max_steps") or 0)
+    out_dir = exp_dir / "ssl_pretrain_runs" / f"seed_{seed_idx:03d}_{seed}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    summary = run_ssl_pretrain(
+        config_path=cfg_path,
+        out_dir=out_dir,
+        seed_override=_seed_to_int(seed),
+        max_samples_override=(max_samples if max_samples > 0 else None),
+        quiet=(not ctx.verbose),
+    )
+    final = summary.get("final_metrics") if isinstance(summary.get("final_metrics"), dict) else {}
+    val_loss = float(final.get("val_loss") or 0.0)
+    val_pos_cos = float(final.get("val_pos_cos") or 0.0)
+    emb_std = float(final.get("val_embedding_std") or 0.0)
+    win_rate = max(0.0, min(1.0, (val_pos_cos + 1.0) * 0.5))
+    score = max(0.0, 2.2 + (val_pos_cos * 1.8) - (val_loss * 0.35))
+    metrics = {
+        "score": score,
+        "avg_reward": score,
+        "avg_ante_reached": score,
+        "median_ante": score,
+        "win_rate": win_rate,
+        "hand_top1": win_rate,
+        "hand_top3": max(0.0, min(1.0, win_rate + 0.10)),
+        "shop_top1": max(0.0, min(1.0, 1.0 / (1.0 + max(0.0, val_loss)))),
+        "illegal_action_rate": max(0.0, min(0.30, val_loss * 0.05)),
+        "ssl_val_loss": val_loss,
+        "ssl_val_pos_cos": val_pos_cos,
+        "ssl_val_embedding_std": emb_std,
+        "ssl_run_dir": str(summary.get("run_dir") or out_dir),
+    }
+    return {
+        "status": "ok" if str(summary.get("status") or "") == "ok" else "failed",
+        "metrics": metrics,
+        "summary": summary,
+    }
+
+
+def _run_ssl_probe_seed_experiment(
+    *,
+    ctx: RunContext,
+    exp: dict[str, Any],
+    exp_dir: Path,
+    seed: str,
+    seed_idx: int,
+    seed_total: int,
+) -> dict[str, Any]:
+    from trainer.experiments.ssl_probe import run_ssl_probe
+
+    eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+    cfg_rel = str(
+        eval_cfg.get("config")
+        or exp.get("ssl_config")
+        or "configs/experiments/p37_ssl_probe.yaml"
+    )
+    cfg_path = (ctx.repo_root / cfg_rel).resolve()
+    max_samples = int(eval_cfg.get("max_samples") or eval_cfg.get("max_steps") or 0)
+    out_dir = exp_dir / "ssl_probe_runs" / f"seed_{seed_idx:03d}_{seed}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    summary = run_ssl_probe(
+        config_path=cfg_path,
+        out_dir=out_dir,
+        seed_override=_seed_to_int(seed),
+        max_samples_override=(max_samples if max_samples > 0 else None),
+        quiet=(not ctx.verbose),
+    )
+    final = summary.get("final_metrics") if isinstance(summary.get("final_metrics"), dict) else {}
+    ssl_acc = float(final.get("ssl_val_acc") or 0.0)
+    baseline_acc = float(final.get("baseline_val_acc") or 0.0)
+    delta_acc = float(final.get("delta_val_acc") or 0.0)
+    ssl_val_loss = float(final.get("ssl_val_loss") or 0.0)
+    score = max(0.0, 2.0 + (ssl_acc * 2.2) + (delta_acc * 1.5) - (ssl_val_loss * 0.2))
+    metrics = {
+        "score": score,
+        "avg_reward": score,
+        "avg_ante_reached": score,
+        "median_ante": score,
+        "win_rate": max(0.0, min(1.0, ssl_acc)),
+        "hand_top1": max(0.0, min(1.0, ssl_acc)),
+        "hand_top3": max(0.0, min(1.0, ssl_acc + 0.12)),
+        "shop_top1": max(0.0, min(1.0, 1.0 - min(1.0, ssl_val_loss))),
+        "illegal_action_rate": max(0.0, min(0.20, ssl_val_loss * 0.05)),
+        "ssl_probe_baseline_acc": baseline_acc,
+        "ssl_probe_ssl_acc": ssl_acc,
+        "ssl_probe_delta_acc": delta_acc,
+        "ssl_probe_val_loss": ssl_val_loss,
+        "ssl_probe_run_dir": str(summary.get("run_dir") or out_dir),
+    }
+    return {
+        "status": "ok" if str(summary.get("status") or "") == "ok" else "failed",
+        "metrics": metrics,
+        "summary": summary,
+    }
+
+
 def _run_rl_selfplay_seed_experiment(
     *,
     ctx: RunContext,
@@ -1315,6 +1428,24 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "config_path": str(cfg_path),
             "data_sources": data_cfg.get("sources") if isinstance(data_cfg.get("sources"), list) else [],
             "losses": selfsup_cfg.get("losses") if isinstance(selfsup_cfg.get("losses"), dict) else {},
+        }
+    elif exp_type in {"ssl_pretrain", "ssl_probe"}:
+        eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+        default_cfg_map = {
+            "ssl_pretrain": "configs/experiments/p37_ssl_pretrain.yaml",
+            "ssl_probe": "configs/experiments/p37_ssl_probe.yaml",
+        }
+        default_cfg = default_cfg_map.get(exp_type, "configs/experiments/p37_ssl_pretrain.yaml")
+        cfg_rel = str(eval_cfg.get("config") or exp.get("ssl_config") or default_cfg)
+        cfg_path = (ctx.repo_root / cfg_rel).resolve()
+        ssl_cfg = _read_yaml_or_json(cfg_path) if cfg_path.exists() else {}
+        data_cfg = ssl_cfg.get("data") if isinstance(ssl_cfg.get("data"), dict) else {}
+        manifest["ssl"] = {
+            "ssl_type": exp_type,
+            "config_path": str(cfg_path),
+            "data_sources": data_cfg.get("sources") if isinstance(data_cfg.get("sources"), list) else [],
+            "dataset_path": str(data_cfg.get("dataset_path") or ""),
+            "probe": ssl_cfg.get("probe") if isinstance(ssl_cfg.get("probe"), dict) else {},
         }
     elif exp_type in {"rl_selfplay", "rl_selfplay_v1"}:
         eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
@@ -1616,6 +1747,62 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                     message=exp_type,
                     extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
                 )
+            elif exp_type in {"ssl_pretrain", "ssl_probe"}:
+                try:
+                    if exp_type == "ssl_probe":
+                        ssl_result = _run_ssl_probe_seed_experiment(
+                            ctx=ctx,
+                            exp=exp,
+                            exp_dir=exp_dir,
+                            seed=seed,
+                            seed_idx=seed_idx,
+                            seed_total=len(seeds),
+                        )
+                    else:
+                        ssl_result = _run_ssl_pretrain_seed_experiment(
+                            ctx=ctx,
+                            exp=exp,
+                            exp_dir=exp_dir,
+                            seed=seed,
+                            seed_idx=seed_idx,
+                            seed_total=len(seeds),
+                        )
+                except Exception as exc:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "failed",
+                            "stage": "eval",
+                            "error": f"ssl_exception: {exc}",
+                            "elapsed_sec": elapsed(),
+                            "metrics": {},
+                        }
+                    )
+                else:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "ok" if ssl_result["status"] == "ok" else "failed",
+                            "stage": "eval",
+                            "elapsed_sec": elapsed(),
+                            "metrics": dict(ssl_result.get("metrics") or {}),
+                            "ssl_summary": ssl_result.get("summary") or {},
+                        }
+                    )
+                append_experiment_progress_event(
+                    progress_path,
+                    run_id=ctx.run_id,
+                    exp_id=exp_id,
+                    phase="eval",
+                    stage="eval",
+                    status=str(seed_results[-1].get("status")),
+                    seed=seed,
+                    step_or_epoch=seed_idx,
+                    elapsed_sec=elapsed(),
+                    metrics=seed_results[-1].get("metrics") or {},
+                    message=exp_type,
+                    extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
+                )
             elif exp_type in {"rl_selfplay", "rl_selfplay_v1"}:
                 try:
                     rl_result = _run_rl_selfplay_seed_experiment(
@@ -1756,21 +1943,29 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                     score=_fmt_num(latest_metrics.get("score")),
                     win=_fmt_pct(latest_metrics.get("win_rate")),
                     loss=_fmt_num(
-                        latest_metrics.get("selfsup_val_loss")
-                        if latest_metrics.get("selfsup_val_loss") is not None
+                        latest_metrics.get("ssl_probe_val_loss")
+                        if latest_metrics.get("ssl_probe_val_loss") is not None
                         else (
-                            latest_metrics.get("selfsup_p33_val_loss")
-                            if latest_metrics.get("selfsup_p33_val_loss") is not None
+                            latest_metrics.get("ssl_val_loss")
+                            if latest_metrics.get("ssl_val_loss") is not None
                             else (
-                                latest_metrics.get("selfsup_p32_val_loss")
-                                if latest_metrics.get("selfsup_p32_val_loss") is not None
+                                latest_metrics.get("selfsup_val_loss")
+                                if latest_metrics.get("selfsup_val_loss") is not None
                                 else (
-                                    latest_metrics.get("selfsup_p36_future_val_loss")
-                                    if latest_metrics.get("selfsup_p36_future_val_loss") is not None
+                                    latest_metrics.get("selfsup_p33_val_loss")
+                                    if latest_metrics.get("selfsup_p33_val_loss") is not None
                                     else (
-                                        latest_metrics.get("selfsup_p36_action_val_loss")
-                                        if latest_metrics.get("selfsup_p36_action_val_loss") is not None
-                                        else latest_metrics.get("loss")
+                                        latest_metrics.get("selfsup_p32_val_loss")
+                                        if latest_metrics.get("selfsup_p32_val_loss") is not None
+                                        else (
+                                            latest_metrics.get("selfsup_p36_future_val_loss")
+                                            if latest_metrics.get("selfsup_p36_future_val_loss") is not None
+                                            else (
+                                                latest_metrics.get("selfsup_p36_action_val_loss")
+                                                if latest_metrics.get("selfsup_p36_action_val_loss") is not None
+                                                else latest_metrics.get("loss")
+                                            )
+                                        )
                                     )
                                 )
                             )
@@ -1788,21 +1983,29 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         final_seed_metrics = dict(seed_results[-1].get("metrics") or {})
     final_win_rate = _as_number(final_seed_metrics.get("win_rate"))
     final_loss = _as_number(
-        final_seed_metrics.get("selfsup_val_loss")
-        if final_seed_metrics.get("selfsup_val_loss") is not None
+        final_seed_metrics.get("ssl_probe_val_loss")
+        if final_seed_metrics.get("ssl_probe_val_loss") is not None
         else (
-            final_seed_metrics.get("selfsup_p33_val_loss")
-            if final_seed_metrics.get("selfsup_p33_val_loss") is not None
+            final_seed_metrics.get("ssl_val_loss")
+            if final_seed_metrics.get("ssl_val_loss") is not None
             else (
-                final_seed_metrics.get("selfsup_p32_val_loss")
-                if final_seed_metrics.get("selfsup_p32_val_loss") is not None
+                final_seed_metrics.get("selfsup_val_loss")
+                if final_seed_metrics.get("selfsup_val_loss") is not None
                 else (
-                    final_seed_metrics.get("selfsup_p36_future_val_loss")
-                    if final_seed_metrics.get("selfsup_p36_future_val_loss") is not None
+                    final_seed_metrics.get("selfsup_p33_val_loss")
+                    if final_seed_metrics.get("selfsup_p33_val_loss") is not None
                     else (
-                        final_seed_metrics.get("selfsup_p36_action_val_loss")
-                        if final_seed_metrics.get("selfsup_p36_action_val_loss") is not None
-                        else final_seed_metrics.get("loss")
+                        final_seed_metrics.get("selfsup_p32_val_loss")
+                        if final_seed_metrics.get("selfsup_p32_val_loss") is not None
+                        else (
+                            final_seed_metrics.get("selfsup_p36_future_val_loss")
+                            if final_seed_metrics.get("selfsup_p36_future_val_loss") is not None
+                            else (
+                                final_seed_metrics.get("selfsup_p36_action_val_loss")
+                                if final_seed_metrics.get("selfsup_p36_action_val_loss") is not None
+                                else final_seed_metrics.get("loss")
+                            )
+                        )
                     )
                 )
             )

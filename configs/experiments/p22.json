@@ -50,6 +50,42 @@
     "nightly_extra_random": 4
   },
   "experiment_groups": {
+    "ssl_pretrain_v1": {
+      "description": "P37 SSL state encoder pretraining + probe",
+      "variants": [
+        {
+          "id": "quick_ssl_pretrain_v1",
+          "algo": "ssl_contrastive",
+          "epochs": 2,
+          "seeds": [
+            "AAAAAAA",
+            "BBBBBBB",
+            "CCCCCCC"
+          ]
+        },
+        {
+          "id": "quick_ssl_probe_v1",
+          "algo": "ssl_linear_probe",
+          "epochs": 8,
+          "seeds": [
+            "AAAAAAA",
+            "BBBBBBB",
+            "CCCCCCC"
+          ]
+        },
+        {
+          "id": "ssl_pretrain_medium_v1",
+          "algo": "ssl_contrastive",
+          "epochs": 4,
+          "seeds": [
+            "AAAAAAA",
+            "BBBBBBB",
+            "CCCCCCC",
+            "DDDDDDD"
+          ]
+        }
+      ]
+    },
     "rl_selfplay_v1": {
       "description": "RL self-play skeleton",
       "variants": [
@@ -263,6 +299,119 @@
         "mode": "selfsup_action_type",
         "config": "configs/experiments/p36_selfsup_action_type.yaml",
         "max_samples": 220
+      }
+    },
+    {
+      "id": "quick_ssl_pretrain_v1",
+      "name": "quick_ssl_pretrain_v1",
+      "backend": "sim",
+      "policy": "ssl_p37",
+      "experiment_type": "ssl_pretrain",
+      "seed_mode": "regression_fixed",
+      "seed_set_name": "contract_regression",
+      "seeds": [
+        "AAAAAAA",
+        "BBBBBBB",
+        "CCCCCCC"
+      ],
+      "gate_flag": "RunFast",
+      "modes": {
+        "quick": true,
+        "gate": true,
+        "nightly": true
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "sanity_compile": [
+        "trainer/experiments/ssl_dataset.py",
+        "trainer/experiments/ssl_trainer.py",
+        "trainer/models/ssl_state_encoder.py"
+      ],
+      "eval": {
+        "mode": "ssl_pretrain",
+        "config": "configs/experiments/p37_ssl_pretrain.yaml",
+        "max_samples": 240
+      }
+    },
+    {
+      "id": "quick_ssl_probe_v1",
+      "name": "quick_ssl_probe_v1",
+      "backend": "sim",
+      "policy": "ssl_probe_p37",
+      "experiment_type": "ssl_probe",
+      "seed_mode": "regression_fixed",
+      "seed_set_name": "contract_regression",
+      "seeds": [
+        "AAAAAAA",
+        "BBBBBBB",
+        "CCCCCCC"
+      ],
+      "gate_flag": "RunFast",
+      "modes": {
+        "quick": true,
+        "gate": true,
+        "nightly": true
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "sanity_compile": [
+        "trainer/experiments/ssl_dataset.py",
+        "trainer/experiments/ssl_trainer.py",
+        "trainer/experiments/ssl_probe.py",
+        "trainer/models/ssl_state_encoder.py"
+      ],
+      "eval": {
+        "mode": "ssl_probe",
+        "config": "configs/experiments/p37_ssl_probe.yaml",
+        "max_samples": 200
+      }
+    },
+    {
+      "id": "ssl_pretrain_medium_v1",
+      "name": "ssl_pretrain_medium_v1",
+      "backend": "sim",
+      "policy": "ssl_p37",
+      "experiment_type": "ssl_pretrain",
+      "seed_mode": "regression_fixed",
+      "seed_set_name": "contract_regression",
+      "seeds": [
+        "AAAAAAA",
+        "BBBBBBB",
+        "CCCCCCC",
+        "DDDDDDD"
+      ],
+      "gate_flag": "RunFast",
+      "modes": {
+        "quick": false,
+        "gate": true,
+        "nightly": true
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "sanity_compile": [
+        "trainer/experiments/ssl_dataset.py",
+        "trainer/experiments/ssl_trainer.py",
+        "trainer/models/ssl_state_encoder.py"
+      ],
+      "eval": {
+        "mode": "ssl_pretrain",
+        "config": "configs/experiments/p37_ssl_pretrain.yaml",
+        "max_samples": 640
       }
     },
     {
