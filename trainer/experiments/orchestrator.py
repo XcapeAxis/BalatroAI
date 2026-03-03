@@ -1016,6 +1016,114 @@ def _run_selfsup_action_type_seed_experiment(
     }
 
 
+def _run_rl_selfplay_seed_experiment(
+    *,
+    ctx: RunContext,
+    exp: dict[str, Any],
+    exp_dir: Path,
+    seed: str,
+    seed_idx: int,
+    seed_total: int,
+    progress_path: Path,
+    started_ts: float,
+    run_id: str,
+    exp_id: str,
+) -> dict[str, Any]:
+    from trainer.rl.ppo_skeleton import run_ppo_skeleton
+
+    eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+    algo = str(exp.get("algo") or eval_cfg.get("algo") or "ppo").strip().lower()
+    if algo not in {"ppo", "ppo_skeleton"}:
+        raise ValueError(f"unsupported RL algo for p37 skeleton: {algo}")
+
+    episodes = int(eval_cfg.get("episodes") or exp.get("episodes") or 10)
+    max_steps = int(eval_cfg.get("max_steps_per_episode") or exp.get("max_steps_per_episode") or 320)
+    lr = float(eval_cfg.get("lr") or exp.get("lr") or 1e-3)
+    gamma = float(eval_cfg.get("gamma") or exp.get("gamma") or 0.99)
+    entropy_coef = float(eval_cfg.get("entropy_coef") or exp.get("entropy_coef") or 0.01)
+    value_coef = float(eval_cfg.get("value_coef") or exp.get("value_coef") or 0.5)
+    reward_mode = str(eval_cfg.get("reward_mode") or exp.get("reward_mode") or "score_delta")
+
+    out_dir = exp_dir / "rl_selfplay_runs" / f"seed_{seed_idx:03d}_{seed}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    summary = run_ppo_skeleton(
+        episodes=max(1, episodes),
+        seed=seed,
+        gamma=gamma,
+        lr=lr,
+        entropy_coef=entropy_coef,
+        value_coef=value_coef,
+        backend=str(exp.get("backend") or "sim"),
+        max_steps_per_episode=max(1, max_steps),
+        reward_mode=reward_mode,
+        out_dir=out_dir,
+        run_id=f"{run_id}_{exp_id}_{seed}",
+        quiet=(not ctx.verbose),
+    )
+    metrics = summary.get("metrics") if isinstance(summary.get("metrics"), dict) else {}
+    episode_rows = summary.get("episodes") if isinstance(summary.get("episodes"), list) else []
+
+    for row in episode_rows:
+        if not isinstance(row, dict):
+            continue
+        ep_idx = int(row.get("episode_idx") or 0)
+        ep_reward = float(row.get("total_reward") or 0.0)
+        ep_len = int(row.get("length") or 0)
+        ep_wall = float(row.get("wall_time") or 0.0)
+        append_experiment_progress_event(
+            progress_path,
+            run_id=run_id,
+            exp_id=exp_id,
+            phase="eval",
+            stage="episode",
+            status="ok",
+            seed=seed,
+            step_or_epoch=ep_idx,
+            elapsed_sec=time.time() - started_ts,
+            wall_time_sec=ep_wall,
+            metrics={
+                "total_reward": ep_reward,
+                "episode_length": ep_len,
+            },
+            message="rl_selfplay_episode",
+            extra={
+                "episode_idx": ep_idx,
+                "seed_index": seed_idx,
+                "seed_total": seed_total,
+            },
+        )
+
+    avg_reward = float(metrics.get("avg_reward") or 0.0)
+    std_reward = float(metrics.get("std_reward") or 0.0)
+    best_reward = float(metrics.get("best_episode_reward") or 0.0)
+    avg_len = float(metrics.get("episode_length") or 0.0)
+    loss = float(metrics.get("loss") or 0.0)
+    win_rate = 1.0 if avg_reward > 0 else 0.0
+
+    converted = {
+        "score": avg_reward,
+        "avg_reward": avg_reward,
+        "std_reward": std_reward,
+        "best_episode_reward": best_reward,
+        "episode_length": avg_len,
+        "avg_ante_reached": avg_reward,
+        "median_ante": avg_reward,
+        "win_rate": win_rate,
+        "hand_top1": 0.0,
+        "hand_top3": 0.0,
+        "shop_top1": 0.0,
+        "illegal_action_rate": 0.0,
+        "loss": loss,
+        "rl_run_dir": str(summary.get("run_dir") or out_dir),
+        "rl_algo": algo,
+    }
+    return {
+        "status": "ok" if str(summary.get("status") or "") == "ok" else "failed",
+        "metrics": converted,
+        "summary": summary,
+    }
+
+
 def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, exp_total: int) -> dict[str, Any]:
     exp_id = str(exp["id"])
     exp_type = str(exp.get("experiment_type") or "standard").strip().lower()
@@ -1055,6 +1163,9 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "catastrophic_failure_count": 1,
             "mean": 0.0,
             "std": 0.0,
+            "avg_reward": 0.0,
+            "reward_std": 0.0,
+            "best_episode_reward": 0.0,
             "avg_ante_reached": 0.0,
             "median_ante": 0.0,
             "win_rate": 0.0,
@@ -1084,6 +1195,9 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "status": status,
             "mean": payload["mean"],
             "std": payload["std"],
+            "avg_reward": payload["avg_reward"],
+            "reward_std": payload["reward_std"],
+            "best_episode_reward": payload["best_episode_reward"],
             "avg_ante_reached": payload["avg_ante_reached"],
             "median_ante": payload["median_ante"],
             "win_rate": payload["win_rate"],
@@ -1118,6 +1232,9 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                 "status": "passed",
                 "mean": old.get("mean"),
                 "std": old.get("std"),
+                "avg_reward": old.get("avg_reward", old.get("mean")),
+                "reward_std": old.get("reward_std", old.get("std")),
+                "best_episode_reward": old.get("best_episode_reward"),
                 "avg_ante_reached": old.get("avg_ante_reached", old.get("mean")),
                 "median_ante": old.get("median_ante"),
                 "win_rate": old.get("win_rate"),
@@ -1199,6 +1316,18 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "data_sources": data_cfg.get("sources") if isinstance(data_cfg.get("sources"), list) else [],
             "losses": selfsup_cfg.get("losses") if isinstance(selfsup_cfg.get("losses"), dict) else {},
         }
+    elif exp_type in {"rl_selfplay", "rl_selfplay_v1"}:
+        eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+        manifest["rl"] = {
+            "algo": str(exp.get("algo") or eval_cfg.get("algo") or "ppo"),
+            "episodes": int(eval_cfg.get("episodes") or exp.get("episodes") or 10),
+            "gamma": float(eval_cfg.get("gamma") or exp.get("gamma") or 0.99),
+            "lr": float(eval_cfg.get("lr") or exp.get("lr") or 1e-3),
+            "max_steps_per_episode": int(
+                eval_cfg.get("max_steps_per_episode") or exp.get("max_steps_per_episode") or 320
+            ),
+            "reward_mode": str(eval_cfg.get("reward_mode") or exp.get("reward_mode") or "score_delta"),
+        }
     write_json(exp_dir / "run_manifest.json", manifest)
     print(
         "[P22] Experiment {idx}/{total}: {exp_id} (seeds {seed_count}, mode={mode})".format(
@@ -1236,6 +1365,9 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "status": "dry_run",
             "mean": 0.0,
             "std": 0.0,
+            "avg_reward": 0.0,
+            "reward_std": 0.0,
+            "best_episode_reward": 0.0,
             "avg_ante_reached": 0.0,
             "median_ante": 0.0,
             "win_rate": 0.0,
@@ -1269,6 +1401,9 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "status": "passed",
             "mean": 0.0,
             "std": 0.0,
+            "avg_reward": 0.0,
+            "reward_std": 0.0,
+            "best_episode_reward": 0.0,
             "avg_ante_reached": 0.0,
             "median_ante": 0.0,
             "win_rate": 0.0,
@@ -1481,6 +1616,56 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                     message=exp_type,
                     extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
                 )
+            elif exp_type in {"rl_selfplay", "rl_selfplay_v1"}:
+                try:
+                    rl_result = _run_rl_selfplay_seed_experiment(
+                        ctx=ctx,
+                        exp=exp,
+                        exp_dir=exp_dir,
+                        seed=seed,
+                        seed_idx=seed_idx,
+                        seed_total=len(seeds),
+                        progress_path=progress_path,
+                        started_ts=started,
+                        run_id=ctx.run_id,
+                        exp_id=exp_id,
+                    )
+                except Exception as exc:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "failed",
+                            "stage": "eval",
+                            "error": f"rl_selfplay_exception: {exc}",
+                            "elapsed_sec": elapsed(),
+                            "metrics": {},
+                        }
+                    )
+                else:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "ok" if rl_result["status"] == "ok" else "failed",
+                            "stage": "eval",
+                            "elapsed_sec": elapsed(),
+                            "metrics": dict(rl_result.get("metrics") or {}),
+                            "rl_summary": rl_result.get("summary") or {},
+                        }
+                    )
+                append_experiment_progress_event(
+                    progress_path,
+                    run_id=ctx.run_id,
+                    exp_id=exp_id,
+                    phase="eval",
+                    stage="eval",
+                    status=str(seed_results[-1].get("status")),
+                    seed=seed,
+                    step_or_epoch=seed_idx,
+                    elapsed_sec=elapsed(),
+                    metrics=seed_results[-1].get("metrics") or {},
+                    message=exp_type,
+                    extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
+                )
             else:
                 metrics = _synthetic_eval_metrics(exp_id, seed, bias)
                 if eval_cmd_tmpl:
@@ -1582,7 +1767,11 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                                 else (
                                     latest_metrics.get("selfsup_p36_future_val_loss")
                                     if latest_metrics.get("selfsup_p36_future_val_loss") is not None
-                                    else latest_metrics.get("selfsup_p36_action_val_loss")
+                                    else (
+                                        latest_metrics.get("selfsup_p36_action_val_loss")
+                                        if latest_metrics.get("selfsup_p36_action_val_loss") is not None
+                                        else latest_metrics.get("loss")
+                                    )
                                 )
                             )
                         )
@@ -1610,7 +1799,11 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                 else (
                     final_seed_metrics.get("selfsup_p36_future_val_loss")
                     if final_seed_metrics.get("selfsup_p36_future_val_loss") is not None
-                    else final_seed_metrics.get("selfsup_p36_action_val_loss")
+                    else (
+                        final_seed_metrics.get("selfsup_p36_action_val_loss")
+                        if final_seed_metrics.get("selfsup_p36_action_val_loss") is not None
+                        else final_seed_metrics.get("loss")
+                    )
                 )
             )
         )
@@ -1639,6 +1832,9 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "status": "success" if success else "failed",
             "mean": metric_summary.get("mean"),
             "std": metric_summary.get("std"),
+            "avg_reward": metric_summary.get("avg_reward", metric_summary.get("mean")),
+            "reward_std": metric_summary.get("reward_std", metric_summary.get("std")),
+            "best_episode_reward": metric_summary.get("best_episode_reward"),
             "avg_ante_reached": metric_summary.get("avg_ante_reached"),
             "median_ante": metric_summary.get("median_ante"),
             "win_rate": metric_summary.get("win_rate"),
@@ -1654,6 +1850,23 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "seeds_used": list(seeds),
             "final_metrics": final_seed_metrics,
             "final_win_rate": final_win_rate,
+            "final_loss": final_loss,
+        },
+    )
+    write_json(
+        exp_dir / "metrics.json",
+        {
+            "schema": "p37_orchestrator_metrics_v1",
+            "generated_at": now_iso(),
+            "run_id": ctx.run_id,
+            "exp_id": exp_id,
+            "status": "success" if success else "failed",
+            "avg_reward": metric_summary.get("avg_reward", metric_summary.get("mean")),
+            "reward_std": metric_summary.get("reward_std", metric_summary.get("std")),
+            "best_episode_reward": metric_summary.get("best_episode_reward"),
+            "seed_count": metric_summary.get("count"),
+            "seeds": list(seeds),
+            "final_metrics": final_seed_metrics,
             "final_loss": final_loss,
         },
     )
@@ -1696,6 +1909,9 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "status": final_status,
         "mean": metric_summary.get("mean"),
         "std": metric_summary.get("std"),
+        "avg_reward": metric_summary.get("avg_reward", metric_summary.get("mean")),
+        "reward_std": metric_summary.get("reward_std", metric_summary.get("std")),
+        "best_episode_reward": metric_summary.get("best_episode_reward"),
         "avg_ante_reached": metric_summary.get("avg_ante_reached"),
         "median_ante": metric_summary.get("median_ante"),
         "win_rate": metric_summary.get("win_rate"),
@@ -1933,6 +2149,9 @@ def main() -> int:
                     "status": "budget_cut",
                     "mean": 0.0,
                     "std": 0.0,
+                    "avg_reward": 0.0,
+                    "reward_std": 0.0,
+                    "best_episode_reward": 0.0,
                     "avg_ante_reached": 0.0,
                     "median_ante": 0.0,
                     "win_rate": 0.0,

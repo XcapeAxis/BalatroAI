@@ -7,6 +7,8 @@ from typing import Any
 
 def aggregate_seed_metrics(seed_results: list[dict[str, Any]], primary_metric: str) -> dict[str, Any]:
     values: list[float] = []
+    reward_values: list[float] = []
+    best_episode_values: list[float] = []
     avg_ante_values: list[float] = []
     median_ante_values: list[float] = []
     win_rate_values: list[float] = []
@@ -25,6 +27,14 @@ def aggregate_seed_metrics(seed_results: list[dict[str, Any]], primary_metric: s
         numeric = value if isinstance(value, (int, float)) else None
         if numeric is not None:
             values.append(float(numeric))
+        avg_reward_v = metrics.get("avg_reward")
+        if isinstance(avg_reward_v, (int, float)):
+            reward_values.append(float(avg_reward_v))
+        elif numeric is not None:
+            reward_values.append(float(numeric))
+        best_reward_v = metrics.get("best_episode_reward")
+        if isinstance(best_reward_v, (int, float)):
+            best_episode_values.append(float(best_reward_v))
         avg_ante_v = metrics.get("avg_ante_reached")
         if isinstance(avg_ante_v, (int, float)):
             avg_ante_values.append(float(avg_ante_v))
@@ -75,6 +85,9 @@ def aggregate_seed_metrics(seed_results: list[dict[str, Any]], primary_metric: s
 
     mean_v = statistics.mean(values) if values else math.nan
     std_v = statistics.pstdev(values) if len(values) >= 2 else 0.0
+    reward_mean = statistics.mean(reward_values) if reward_values else mean_v
+    reward_std = statistics.pstdev(reward_values) if len(reward_values) >= 2 else (std_v if reward_values else 0.0)
+    best_episode_reward = max(best_episode_values) if best_episode_values else math.nan
     avg_ante_mean = statistics.mean(avg_ante_values) if avg_ante_values else math.nan
     median_ante_mean = statistics.mean(median_ante_values) if median_ante_values else math.nan
     win_rate_mean = statistics.mean(win_rate_values) if win_rate_values else math.nan
@@ -89,6 +102,9 @@ def aggregate_seed_metrics(seed_results: list[dict[str, Any]], primary_metric: s
         "count_valid_metric": len(values),
         "mean": mean_v,
         "std": std_v,
+        "avg_reward": reward_mean,
+        "reward_std": reward_std,
+        "best_episode_reward": best_episode_reward,
         "avg_ante_reached": avg_ante_mean,
         "median_ante": median_ante_mean,
         "win_rate": win_rate_mean,

@@ -45,6 +45,24 @@ seed_policy:
     - FFFFFFF
   nightly_extra_random: 4
 
+experiment_groups:
+  rl_selfplay_v1:
+    description: "RL self-play skeleton"
+    variants:
+      - id: rl_ppo_smoke
+        algo: ppo
+        episodes: 10
+        seeds:
+          - AAAAAAA
+          - BBBBBBB
+      - id: rl_ppo_medium
+        algo: ppo
+        episodes: 50
+        seeds:
+          - AAAAAAA
+          - BBBBBBB
+          - CCCCCCC
+
 matrix:
   - id: quick_baseline
     name: quick_baseline
@@ -204,6 +222,83 @@ matrix:
       mode: selfsup_action_type
       config: configs/experiments/p36_selfsup_action_type.yaml
       max_samples: 220
+
+  - id: rl_ppo_smoke
+    name: rl_ppo_smoke
+    backend: sim
+    policy: rl_ppo
+    experiment_type: rl_selfplay
+    algo: ppo
+    episodes: 10
+    seed_mode: regression_fixed
+    seed_set_name: contract_regression
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+    gate_flag: RunFast
+    modes:
+      quick: true
+      gate: true
+      nightly: true
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/rl/env.py
+      - trainer/rl/selfplay.py
+      - trainer/rl/rollout_buffer.py
+      - trainer/rl/ppo_skeleton.py
+      - trainer/models/rl_policy.py
+      - trainer/models/rl_value.py
+    eval:
+      mode: rl_selfplay
+      algo: ppo
+      episodes: 10
+      max_steps_per_episode: 220
+      gamma: 0.99
+      lr: 0.001
+
+  - id: rl_ppo_medium
+    name: rl_ppo_medium
+    backend: sim
+    policy: rl_ppo
+    experiment_type: rl_selfplay
+    algo: ppo
+    episodes: 50
+    seed_mode: regression_fixed
+    seed_set_name: contract_regression
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+      - CCCCCCC
+    gate_flag: RunFast
+    modes:
+      quick: false
+      gate: true
+      nightly: true
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/rl/env.py
+      - trainer/rl/selfplay.py
+      - trainer/rl/rollout_buffer.py
+      - trainer/rl/ppo_skeleton.py
+      - trainer/models/rl_policy.py
+      - trainer/models/rl_value.py
+    eval:
+      mode: rl_selfplay
+      algo: ppo
+      episodes: 50
+      max_steps_per_episode: 320
+      gamma: 0.99
+      lr: 0.001
 
 evaluation:
   primary_metric: score
