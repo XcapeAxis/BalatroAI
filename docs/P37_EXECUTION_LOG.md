@@ -133,3 +133,29 @@
   - T5 acceptance satisfied (README quick commands present, roadmap/status docs aligned to P37 gate additions).
 - Next:
   - Execute T6 full regression gate, cleanup, final git sync and branch hygiene closure.
+
+## T6 Final Gate / Cleanup / Git Sync
+- Commands:
+  - `powershell -ExecutionPolicy Bypass -File scripts/run_regressions.ps1 -RunP37`
+  - `powershell -ExecutionPolicy Bypass -File scripts/cleanup.ps1`
+  - `git status --short --untracked-files=all`
+  - `powershell -ExecutionPolicy Bypass -File scripts/git_sync.ps1 -DryRun:$false` (executed twice)
+  - `git branch --format='%(refname:short)'`
+- Results:
+  - Full gate pass:
+    - P32 gate status: `PASS`
+    - P37 gate status: `PASS`
+    - artifact: `docs/artifacts/p37/20260304-014200/report_p37.json` (`diff_fail=0`)
+  - Cleanup executed:
+    - stopped runtime processes (`Balatro`, `balatrobot`, `uvx`)
+    - cleaned runtime folders/logs per script policy
+  - `git status` reached clean after staging/commits.
+  - `git_sync` non-dry-run executed with built-in retries; remote fetch failed with repeated GitHub `502`:
+    - `docs/artifacts/git_sync/git_sync_20260304-014630.json`
+    - `docs/artifacts/git_sync/git_sync_20260304-014729.json`
+  - local branch hygiene check: only `main` remains.
+- Self-check:
+  - T6 gate + cleanup acceptance satisfied.
+  - git sync attempted and report artifacts generated; remote 5xx failure captured as required.
+- Next:
+  - finalize commit summary and handoff.
