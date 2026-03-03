@@ -492,6 +492,86 @@ matrix:
       max_steps: 300
       scope: p37_action_fidelity_core
 
+  - id: p39_policy_arena_smoke
+    name: p39_policy_arena_smoke
+    backend: sim
+    policy: policy_arena
+    experiment_type: policy_arena
+    seed_mode: regression_fixed
+    seed_set_name: contract_regression
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+      - CCCCCCC
+    gate_flag: RunP22
+    modes:
+      quick: true
+      gate: true
+      nightly: true
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/policy_arena/policy_adapter.py
+      - trainer/policy_arena/arena_runner.py
+      - trainer/policy_arena/arena_metrics.py
+      - trainer/policy_arena/champion_rules.py
+    eval:
+      mode: long_episode
+      policies:
+        - heuristic_baseline
+        - search_expert
+        - model_policy
+      candidate_policy: search_expert
+      champion_policy: heuristic_baseline
+      episodes_per_seed: 1
+      max_steps: 140
+      enable_champion_rules: true
+
+  - id: p39_policy_arena_nightly
+    name: p39_policy_arena_nightly
+    backend: sim
+    policy: policy_arena
+    experiment_type: policy_arena
+    seed_mode: nightly
+    seed_set_name: eval_default
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+      - CCCCCCC
+      - DDDDDDD
+      - EEEEEEE
+    gate_flag: RunP22
+    modes:
+      quick: false
+      gate: false
+      nightly: true
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/policy_arena/policy_adapter.py
+      - trainer/policy_arena/arena_runner.py
+      - trainer/policy_arena/arena_metrics.py
+      - trainer/policy_arena/champion_rules.py
+    eval:
+      mode: long_episode
+      policies:
+        - heuristic_baseline
+        - search_expert
+        - model_policy
+      candidate_policy: search_expert
+      champion_policy: heuristic_baseline
+      episodes_per_seed: 4
+      max_steps: 240
+      enable_champion_rules: true
+
 evaluation:
   primary_metric: score
   gates:

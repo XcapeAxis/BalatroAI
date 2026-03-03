@@ -1291,6 +1291,246 @@ def _append_p38_orchestrator_summary(ctx: RunContext, payload: dict[str, Any]) -
     )
 
 
+def _normalize_text_list(raw: Any) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    if isinstance(raw, str):
+        values = [x.strip() for x in raw.split(",")]
+    elif isinstance(raw, list):
+        values = [str(x).strip() for x in raw]
+    else:
+        values = []
+    for value in values:
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        out.append(value)
+    return out
+
+
+def _read_json_list(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    try:
+        obj = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    if not isinstance(obj, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for item in obj:
+        if isinstance(item, dict):
+            out.append(item)
+    return out
+
+
+def _append_p39_orchestrator_summary(ctx: RunContext, payload: dict[str, Any]) -> None:
+    path = ctx.run_root / "p39_summary.json"
+    existing = read_json(path)
+    rows: list[dict[str, Any]] = []
+    if isinstance(existing, dict):
+        raw_rows = existing.get("rows")
+        if isinstance(raw_rows, list):
+            for item in raw_rows:
+                if isinstance(item, dict):
+                    rows.append(item)
+    rows.append(payload)
+    write_json(
+        path,
+        {
+            "schema": "p39_orchestrator_summary_v1",
+            "generated_at": now_iso(),
+            "run_id": ctx.run_id,
+            "rows": rows,
+        },
+    )
+
+
+def _pick_arena_focus_row(summary_rows: list[dict[str, Any]], focus_policy: str) -> dict[str, Any] | None:
+    token = str(focus_policy or "").strip().lower()
+    if token:
+        for row in summary_rows:
+            if str(row.get("policy_id") or "").strip().lower() == token:
+                return row
+    if summary_rows:
+        return summary_rows[0]
+    return None
+
+
+def _run_policy_arena_seed_experiment(
+    *,
+    ctx: RunContext,
+    exp: dict[str, Any],
+    exp_dir: Path,
+    seed: str,
+    seed_idx: int,
+    seed_total: int,
+) -> dict[str, Any]:
+    eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+    mode = str(eval_cfg.get("mode") or exp.get("mode") or "long_episode")
+    backend = str(eval_cfg.get("backend") or exp.get("backend") or "sim")
+    episodes = int(eval_cfg.get("episodes_per_seed") or exp.get("episodes_per_seed") or exp.get("episodes") or 1)
+    max_steps = int(eval_cfg.get("max_steps") or exp.get("max_steps") or 160)
+    model_path = str(eval_cfg.get("model_path") or exp.get("model_path") or "")
+    skip_unavailable = bool(eval_cfg.get("skip_unavailable") or exp.get("skip_unavailable") or False)
+    policies = _normalize_text_list(eval_cfg.get("policies") or exp.get("policies") or "heuristic_baseline,search_expert,model_policy")
+    if not policies:
+        policies = ["heuristic_baseline", "search_expert", "model_policy"]
+
+    out_dir = exp_dir / "policy_arena_runs" / f"seed_{seed_idx:03d}_{seed}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    arena_root = out_dir / "arena_runs"
+    arena_run_id = f"seed_{seed_idx:03d}_{seed}"
+    arena_cmd = [
+        sys.executable,
+        "-B",
+        "-m",
+        "trainer.policy_arena.arena_runner",
+        "--out-dir",
+        str(arena_root),
+        "--run-id",
+        arena_run_id,
+        "--backend",
+        backend,
+        "--mode",
+        mode,
+        "--policies",
+        ",".join(policies),
+        "--seeds",
+        seed,
+        "--episodes-per-seed",
+        str(max(1, episodes)),
+        "--max-steps",
+        str(max(1, max_steps)),
+    ]
+    if model_path:
+        arena_cmd.extend(["--model-path", model_path])
+    if skip_unavailable:
+        arena_cmd.append("--skip-unavailable")
+
+    timeout_sec = max(600, max_steps * max(1, episodes) * max(1, len(policies)) * 2)
+    arena_result = run_process(arena_cmd, cwd=ctx.repo_root, timeout_sec=timeout_sec)
+
+    run_dir = arena_root / arena_run_id
+    manifest_path = run_dir / "run_manifest.json"
+    summary_path = run_dir / "summary_table.json"
+    bucket_path = run_dir / "bucket_metrics.json"
+    warnings_path = run_dir / "warnings.log"
+
+    manifest = read_json(manifest_path) or {}
+    summary_rows = _read_json_list(summary_path)
+    focus_policy = str(eval_cfg.get("focus_policy") or eval_cfg.get("candidate_policy") or policies[0])
+    focus_row = _pick_arena_focus_row(summary_rows, focus_policy)
+
+    champion_rules_enabled = bool(eval_cfg.get("enable_champion_rules") or exp.get("enable_champion_rules") or False)
+    champion_result = {"returncode": 0, "stdout": "", "stderr": "", "command": []}
+    champion_payload: dict[str, Any] | None = None
+    if champion_rules_enabled and summary_path.exists():
+        champion_out = out_dir / "champion_eval"
+        champion_cmd = [
+            sys.executable,
+            "-B",
+            "-m",
+            "trainer.policy_arena.champion_rules",
+            "--summary-json",
+            str(summary_path),
+            "--out-dir",
+            str(champion_out),
+        ]
+        champion_json_path = str(eval_cfg.get("champion_json") or exp.get("champion_json") or "").strip()
+        if champion_json_path:
+            champion_cmd.extend(["--champion-json", champion_json_path])
+        candidate_policy = str(eval_cfg.get("candidate_policy") or "").strip()
+        if candidate_policy:
+            champion_cmd.extend(["--candidate-policy", candidate_policy])
+        champion_policy = str(eval_cfg.get("champion_policy") or "").strip()
+        if champion_policy:
+            champion_cmd.extend(["--champion-policy", champion_policy])
+        champion_result = run_process(champion_cmd, cwd=ctx.repo_root, timeout_sec=300)
+        try:
+            lines = [ln for ln in str(champion_result.get("stdout") or "").splitlines() if ln.strip()]
+            if lines:
+                last = json.loads(lines[-1])
+                if isinstance(last, dict):
+                    json_path = Path(str(last.get("json") or ""))
+                    if json_path.exists():
+                        champion_payload = read_json(json_path) or {}
+        except Exception:
+            champion_payload = None
+
+    mean_score = 0.0
+    mean_rounds = 0.0
+    win_rate = 0.0
+    invalid_rate = 0.0
+    p90_score = 0.0
+    episodes_total = int(manifest.get("episode_total") or 0)
+    if isinstance(focus_row, dict):
+        mean_score = float(focus_row.get("mean_total_score") or 0.0)
+        mean_rounds = float(focus_row.get("mean_rounds_survived") or 0.0)
+        win_rate = float(focus_row.get("win_rate") or 0.0)
+        invalid_rate = float(focus_row.get("invalid_action_rate") or 0.0)
+        p90_score = float(focus_row.get("p90_total_score") or mean_score)
+        episodes_total = int(focus_row.get("episodes") or episodes_total)
+
+    metrics = {
+        "score": mean_score,
+        "avg_reward": mean_score,
+        "best_episode_reward": p90_score,
+        "avg_ante_reached": mean_rounds,
+        "median_ante": mean_rounds,
+        "win_rate": win_rate,
+        "hand_top1": 0.0,
+        "hand_top3": 0.0,
+        "shop_top1": max(0.0, 1.0 - min(1.0, invalid_rate)),
+        "illegal_action_rate": invalid_rate,
+        "p39_mean_total_score": mean_score,
+        "p39_mean_rounds_survived": mean_rounds,
+        "p39_invalid_action_rate": invalid_rate,
+        "p39_episodes": episodes_total,
+        "p39_focus_policy": str(focus_row.get("policy_id")) if isinstance(focus_row, dict) else "",
+        "p39_run_dir": str(run_dir),
+        "p39_summary_path": str(summary_path),
+        "p39_bucket_path": str(bucket_path),
+        "p39_warnings_path": str(warnings_path),
+    }
+
+    summary_payload = {
+        "schema": "p39_orchestrator_seed_summary_v1",
+        "generated_at": now_iso(),
+        "exp_id": str(exp.get("id") or ""),
+        "seed": seed,
+        "seed_index": seed_idx,
+        "seed_total": seed_total,
+        "policies": policies,
+        "focus_policy": focus_policy,
+        "arena_returncode": int(arena_result.get("returncode") or 0),
+        "champion_rules_returncode": int(champion_result.get("returncode") or 0),
+        "run_dir": str(run_dir),
+        "summary_path": str(summary_path),
+        "bucket_path": str(bucket_path),
+        "warnings_path": str(warnings_path),
+        "metrics": metrics,
+        "champion_decision": champion_payload if isinstance(champion_payload, dict) else {},
+    }
+    _append_p39_orchestrator_summary(ctx, summary_payload)
+
+    status = "ok"
+    if int(arena_result.get("returncode") or 0) != 0:
+        status = "failed"
+    if not isinstance(focus_row, dict):
+        status = "failed"
+
+    return {
+        "status": status,
+        "metrics": metrics,
+        "summary": {
+            "arena": arena_result,
+            "champion_rules": champion_result,
+            "payload": summary_payload,
+        },
+    }
+
+
 def _run_long_consistency_seed_experiment(
     *,
     ctx: RunContext,
@@ -1664,6 +1904,25 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "episodes": int(eval_cfg.get("episodes") or exp.get("episodes") or 5),
             "max_steps": int(eval_cfg.get("max_steps") or exp.get("max_steps") or 240),
             "scope": str(eval_cfg.get("scope") or exp.get("scope") or "p37_action_fidelity_core"),
+        }
+    elif exp_type in {"policy_arena", "policy_arena_v1", "arena"}:
+        eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+        manifest["policy_arena"] = {
+            "backend": str(eval_cfg.get("backend") or exp.get("backend") or "sim"),
+            "mode": str(eval_cfg.get("mode") or exp.get("mode") or "long_episode"),
+            "policies": _normalize_text_list(
+                eval_cfg.get("policies") or exp.get("policies") or "heuristic_baseline,search_expert,model_policy"
+            ),
+            "episodes_per_seed": int(
+                eval_cfg.get("episodes_per_seed") or exp.get("episodes_per_seed") or exp.get("episodes") or 1
+            ),
+            "max_steps": int(eval_cfg.get("max_steps") or exp.get("max_steps") or 160),
+            "enable_champion_rules": bool(
+                eval_cfg.get("enable_champion_rules") or exp.get("enable_champion_rules") or False
+            ),
+            "candidate_policy": str(eval_cfg.get("candidate_policy") or ""),
+            "champion_policy": str(eval_cfg.get("champion_policy") or ""),
+            "focus_policy": str(eval_cfg.get("focus_policy") or eval_cfg.get("candidate_policy") or ""),
         }
     write_json(exp_dir / "run_manifest.json", manifest)
     print(
@@ -2089,6 +2348,52 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                             "elapsed_sec": elapsed(),
                             "metrics": dict(long_result.get("metrics") or {}),
                             "long_summary": long_result.get("summary") or {},
+                        }
+                    )
+                append_experiment_progress_event(
+                    progress_path,
+                    run_id=ctx.run_id,
+                    exp_id=exp_id,
+                    phase="eval",
+                    stage="eval",
+                    status=str(seed_results[-1].get("status")),
+                    seed=seed,
+                    step_or_epoch=seed_idx,
+                    elapsed_sec=elapsed(),
+                    metrics=seed_results[-1].get("metrics") or {},
+                    message=exp_type,
+                    extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
+                )
+            elif exp_type in {"policy_arena", "policy_arena_v1", "arena"}:
+                try:
+                    arena_result = _run_policy_arena_seed_experiment(
+                        ctx=ctx,
+                        exp=exp,
+                        exp_dir=exp_dir,
+                        seed=seed,
+                        seed_idx=seed_idx,
+                        seed_total=len(seeds),
+                    )
+                except Exception as exc:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "failed",
+                            "stage": "eval",
+                            "error": f"policy_arena_exception: {exc}",
+                            "elapsed_sec": elapsed(),
+                            "metrics": {},
+                        }
+                    )
+                else:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "ok" if arena_result["status"] == "ok" else "failed",
+                            "stage": "eval",
+                            "elapsed_sec": elapsed(),
+                            "metrics": dict(arena_result.get("metrics") or {}),
+                            "policy_arena_summary": arena_result.get("summary") or {},
                         }
                     )
                 append_experiment_progress_event(
