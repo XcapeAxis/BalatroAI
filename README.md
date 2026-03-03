@@ -5,11 +5,11 @@
 
 <!-- BADGES:START -->
 [![Latest Gate](https://img.shields.io/badge/Latest_Gate-RunP29_PASS-2EA44F)](scripts/run_regressions.ps1)
-[![Workflow](https://img.shields.io/badge/Workflow-mainline-only-2EA44F)](scripts/git_sync.ps1)
+[![Workflow](https://img.shields.io/badge/Workflow-mainline--only-2EA44F)](scripts/git_sync.ps1)
 [![Seed Governance](https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16)](configs/experiments/seeds_p23.yaml)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Trend Warehouse](https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16)](docs/TREND_WAREHOUSE_P26.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15-P31-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P31-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -197,8 +197,8 @@ P31 self-supervised backbone reproducibility:
 - branch: main
 - latest_gate: RunP29 (PASS)
 - recent_trend_signal: regression
-- trend_warehouse_last_updated: 2026-03-02T15:47:52.205655+00:00
-- trend_rows_count: 18800
+- trend_warehouse_last_updated: 2026-03-02T17:16:27.519440+00:00
+- trend_rows_count: 20115
 - champion: quick_risk_aware (champion)
 - candidate: quick_hybrid (decision: hold)
 - docs_coverage: P15-P31
@@ -336,3 +336,4 @@ Planned:
 
 - License: currently not specified by a top-level `LICENSE` file.
 - Contributions: use mainline-only workflow and run gates before proposing changes.
+

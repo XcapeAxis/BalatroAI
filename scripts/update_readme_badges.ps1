@@ -31,7 +31,10 @@ function Read-Json([string]$Path) {
 
 function Encode-BadgeToken([string]$Token) {
   if ([string]::IsNullOrWhiteSpace($Token)) { return "" }
-  $encoded = [System.Uri]::EscapeDataString($Token)
+  # Shields badge path parser treats '-' as a segment separator.
+  # Use the documented escape form '--' for literal hyphens in label/message.
+  $escapedForShields = $Token.Replace("-", "--")
+  $encoded = [System.Uri]::EscapeDataString($escapedForShields)
   return $encoded.Replace("%20", "_")
 }
 
