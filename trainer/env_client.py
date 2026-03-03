@@ -275,6 +275,88 @@ def _is_unknown_method_error(exc: Exception) -> bool:
     return "unknown method" in text
 
 
+def _canonical_action_type(raw_action_type: Any) -> str:
+    action_type = str(raw_action_type or "WAIT").upper()
+    aliases = {
+        "REROLL": "SHOP_REROLL",
+        "BUY": "SHOP_BUY",
+        "PACK": "PACK_OPEN",
+        "USE": "CONSUMABLE_USE",
+        "SWAP_HAND_CARDS": "SWAP_HAND_CARD",
+        "SWAP_JOKERS": "SWAP_JOKER",
+    }
+    return aliases.get(action_type, action_type)
+
+
+def _read_index_base(action: dict[str, Any]) -> int:
+    params = action.get("params") if isinstance(action.get("params"), dict) else {}
+    candidate = action.get("index_base", params.get("index_base", 0))
+    try:
+        base = int(candidate)
+    except Exception:
+        base = 0
+    return 1 if base == 1 else 0
+
+
+def _normalize_action_index(value: Any, *, index_base: int, default: int = 0) -> int:
+    try:
+        idx = int(value)
+    except Exception:
+        idx = int(default)
+    return max(0, idx - int(index_base))
+
+
+def _move_permutation(size: int, src: int, dst: int) -> list[int]:
+    if src < 0 or dst < 0 or src >= size or dst >= size:
+        raise ValueError("move indices out of range")
+    perm = list(range(size))
+    moved = perm.pop(src)
+    perm.insert(dst, moved)
+    return perm
+
+
+def _extract_shop_params(action: dict[str, Any]) -> dict[str, Any]:
+    params = action.get("params") if isinstance(action.get("params"), dict) else {}
+    merged = dict(params)
+    for key in (
+        "index_base",
+        "card",
+        "pack",
+        "voucher",
+        "joker",
+        "consumable",
+        "shop_index",
+        "pack_index",
+        "choice_index",
+        "voucher_index",
+        "consumable_index",
+        "joker_index",
+        "cards",
+        "hand_indices",
+        "targets",
+        "skip",
+        "target_side",
+        "kind",
+        "key",
+    ):
+        if key in action and key not in merged:
+            merged[key] = action[key]
+    try:
+        base_raw = int(merged.get("index_base", _read_index_base(action)) or 0)
+    except Exception:
+        base_raw = 0
+    index_base = 1 if base_raw == 1 else 0
+    for key in ("card", "pack", "voucher", "joker", "consumable", "shop_index", "pack_index", "choice_index", "voucher_index", "consumable_index", "joker_index"):
+        if key in merged:
+            merged[key] = _normalize_action_index(merged.get(key), index_base=index_base, default=0)
+    for key in ("cards", "hand_indices", "targets"):
+        raw = merged.get(key)
+        if isinstance(raw, list):
+            merged[key] = [_normalize_action_index(v, index_base=index_base, default=0) for v in raw]
+    merged["index_base"] = 0
+    return merged
+
+
 @dataclass
 class RealBackend:
     base_url: str
@@ -308,12 +390,12 @@ class RealBackend:
             raise ValueError("action must be dict")
 
         before = self.get_state()
-        action_type = str(action.get("action_type") or "WAIT").upper()
+        action_type = _canonical_action_type(action.get("action_type"))
         degraded_reason = ""
 
         if action_type == "AUTO":
             action = _phase_default_action(before, self.seed)
-            action_type = str(action.get("action_type") or "WAIT").upper()
+            action_type = _canonical_action_type(action.get("action_type"))
 
         if action_type in {PLAY, DISCARD}:
             indices = [int(x) for x in (action.get("indices") or [])]
@@ -346,39 +428,27 @@ class RealBackend:
             _call_method(self.base_url, "skip", {}, timeout=self.timeout_sec)
             after = self.get_state()
 
-        elif action_type == "REROLL":
+        elif action_type == "SHOP_REROLL":
             _call_method(self.base_url, "reroll", {}, timeout=self.timeout_sec)
             after = self.get_state()
 
-        elif action_type == "BUY":
-            params = action.get("params") if isinstance(action.get("params"), dict) else {}
-            if not params:
-                for key in ("card", "pack", "voucher"):
-                    if key in action:
-                        params[key] = action[key]
+        elif action_type == "SHOP_BUY":
+            params = _extract_shop_params(action)
             _call_method(self.base_url, "buy", params, timeout=self.timeout_sec)
             after = self.get_state()
 
         elif action_type == "SELL":
-            params = action.get("params") if isinstance(action.get("params"), dict) else {}
-            if not params and "joker" in action:
-                params["joker"] = action["joker"]
+            params = _extract_shop_params(action)
             _call_method(self.base_url, "sell", params, timeout=self.timeout_sec)
             after = self.get_state()
 
-        elif action_type == "PACK":
-            params = action.get("params") if isinstance(action.get("params"), dict) else {}
-            if not params:
-                for key in ("card", "skip"):
-                    if key in action:
-                        params[key] = action[key]
+        elif action_type == "PACK_OPEN":
+            params = _extract_shop_params(action)
             _call_method(self.base_url, "pack", params, timeout=self.timeout_sec)
             after = self.get_state()
 
-        elif action_type == "USE":
-            params = action.get("params") if isinstance(action.get("params"), dict) else {}
-            if not params and "consumable" in action:
-                params["consumable"] = action["consumable"]
+        elif action_type == "CONSUMABLE_USE":
+            params = _extract_shop_params(action)
             _call_method(self.base_url, "use", params, timeout=self.timeout_sec)
             after = self.get_state()
 
@@ -414,34 +484,80 @@ class RealBackend:
                     self.logger.warning("REORDER_JOKERS degraded: reorder_jokers RPC unavailable, keeping real state unchanged.")
             after = self.get_state()
 
-        elif action_type == "SWAP_HAND_CARDS":
+        elif action_type == "MOVE_HAND_CARD":
             params = action.get("params") if isinstance(action.get("params"), dict) else {}
-            i = int(action.get("i", params.get("i", 0)))
-            j = int(action.get("j", params.get("j", 0)))
+            index_base = _read_index_base(action)
+            hand_cards = (before.get("hand") or {}).get("cards") if isinstance(before.get("hand"), dict) else []
+            src_raw = action.get("src_index", action.get("from_index", params.get("src_index", params.get("from_index", 0))))
+            dst_raw = action.get("dst_index", action.get("to_index", params.get("dst_index", params.get("to_index", 0))))
+            src = _normalize_action_index(src_raw, index_base=index_base, default=0)
+            dst = _normalize_action_index(dst_raw, index_base=index_base, default=0)
+            permutation = _move_permutation(len(hand_cards or []), src, dst)
+            try:
+                _call_method(self.base_url, "reorder_hand", {"permutation": permutation}, timeout=self.timeout_sec)
+            except RPCError as exc:
+                if not _is_unknown_method_error(exc):
+                    raise
+                degraded_reason = "move_hand_card_reorder_rpc_unavailable"
+                if self.logger is not None:
+                    self.logger.warning("MOVE_HAND_CARD degraded: reorder_hand RPC unavailable, keeping real state unchanged.")
+            after = self.get_state()
+
+        elif action_type == "MOVE_JOKER":
+            params = action.get("params") if isinstance(action.get("params"), dict) else {}
+            index_base = _read_index_base(action)
+            jokers_raw = before.get("jokers")
+            if isinstance(jokers_raw, dict):
+                jokers = jokers_raw.get("cards") if isinstance(jokers_raw.get("cards"), list) else []
+            elif isinstance(jokers_raw, list):
+                jokers = jokers_raw
+            else:
+                jokers = []
+            src_raw = action.get("src_index", action.get("from_index", params.get("src_index", params.get("from_index", 0))))
+            dst_raw = action.get("dst_index", action.get("to_index", params.get("dst_index", params.get("to_index", 0))))
+            src = _normalize_action_index(src_raw, index_base=index_base, default=0)
+            dst = _normalize_action_index(dst_raw, index_base=index_base, default=0)
+            permutation = _move_permutation(len(jokers), src, dst)
+            try:
+                _call_method(self.base_url, "reorder_jokers", {"permutation": permutation}, timeout=self.timeout_sec)
+            except RPCError as exc:
+                if not _is_unknown_method_error(exc):
+                    raise
+                degraded_reason = "move_joker_reorder_rpc_unavailable"
+                if self.logger is not None:
+                    self.logger.warning("MOVE_JOKER degraded: reorder_jokers RPC unavailable, keeping real state unchanged.")
+            after = self.get_state()
+
+        elif action_type == "SWAP_HAND_CARD":
+            params = action.get("params") if isinstance(action.get("params"), dict) else {}
+            index_base = _read_index_base(action)
+            i = _normalize_action_index(action.get("i", params.get("i", 0)), index_base=index_base, default=0)
+            j = _normalize_action_index(action.get("j", params.get("j", 0)), index_base=index_base, default=0)
             rpc_params = {"i": i, "j": j}
             try:
                 _call_method(self.base_url, "swap_hand_cards", rpc_params, timeout=self.timeout_sec)
             except RPCError as exc:
                 if not _is_unknown_method_error(exc):
                     raise
-                degraded_reason = "swap_hand_cards_rpc_unavailable"
+                degraded_reason = "swap_hand_card_rpc_unavailable"
                 if self.logger is not None:
-                    self.logger.warning("SWAP_HAND_CARDS degraded: swap_hand_cards RPC unavailable, keeping real state unchanged.")
+                    self.logger.warning("SWAP_HAND_CARD degraded: swap_hand_cards RPC unavailable, keeping real state unchanged.")
             after = self.get_state()
 
-        elif action_type == "SWAP_JOKERS":
+        elif action_type == "SWAP_JOKER":
             params = action.get("params") if isinstance(action.get("params"), dict) else {}
-            i = int(action.get("i", params.get("i", 0)))
-            j = int(action.get("j", params.get("j", 0)))
+            index_base = _read_index_base(action)
+            i = _normalize_action_index(action.get("i", params.get("i", 0)), index_base=index_base, default=0)
+            j = _normalize_action_index(action.get("j", params.get("j", 0)), index_base=index_base, default=0)
             rpc_params = {"i": i, "j": j}
             try:
                 _call_method(self.base_url, "swap_jokers", rpc_params, timeout=self.timeout_sec)
             except RPCError as exc:
                 if not _is_unknown_method_error(exc):
                     raise
-                degraded_reason = "swap_jokers_rpc_unavailable"
+                degraded_reason = "swap_joker_rpc_unavailable"
                 if self.logger is not None:
-                    self.logger.warning("SWAP_JOKERS degraded: swap_jokers RPC unavailable, keeping real state unchanged.")
+                    self.logger.warning("SWAP_JOKER degraded: swap_jokers RPC unavailable, keeping real state unchanged.")
             after = self.get_state()
 
         elif action_type == "WAIT":

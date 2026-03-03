@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from trainer import action_space_shop
-from trainer.actions.replay import ActionReplayer
+from trainer.actions.replay import ActionReplayer, normalize_high_level_action
 from trainer.env_client import create_backend
 from trainer.infer_assistant_real import _heuristic_hand_rankings, _heuristic_shop_rankings
 from trainer.real_observer import build_observation
@@ -148,6 +148,83 @@ def _choose_safe_action(state: dict[str, Any], suggestions: list[dict[str, Any]]
     return None
 
 
+def _occurrence_tokens(keys: list[str]) -> list[str]:
+    counts: dict[str, int] = {}
+    tokens: list[str] = []
+    for raw in keys:
+        key = str(raw or "").strip().lower()
+        if not key:
+            key = "__empty__"
+        seen = int(counts.get(key) or 0)
+        counts[key] = seen + 1
+        tokens.append(f"{key}#{seen}")
+    return tokens
+
+
+def _compute_move_sequence(before: list[str], after: list[str]) -> list[tuple[int, int]] | None:
+    if len(before) != len(after):
+        return None
+    if sorted(before) != sorted(after):
+        return None
+    if before == after:
+        return []
+    working = list(before)
+    moves: list[tuple[int, int]] = []
+    for dst, token in enumerate(after):
+        if working[dst] == token:
+            continue
+        try:
+            src = working.index(token, dst + 1)
+        except ValueError:
+            return None
+        moved = working.pop(src)
+        working.insert(dst, moved)
+        moves.append((int(src), int(dst)))
+    return moves if working == after else None
+
+
+def _infer_observation_position_actions(prev_obs: dict[str, Any] | None, cur_obs: dict[str, Any], phase: str) -> list[dict[str, Any]]:
+    if not isinstance(prev_obs, dict):
+        return []
+    out: list[dict[str, Any]] = []
+
+    prev_hand = [str(c.get("key") or "") for c in (prev_obs.get("hand", {}).get("cards") or []) if isinstance(c, dict)]
+    cur_hand = [str(c.get("key") or "") for c in (cur_obs.get("hand", {}).get("cards") or []) if isinstance(c, dict)]
+    hand_moves = _compute_move_sequence(_occurrence_tokens(prev_hand), _occurrence_tokens(cur_hand))
+    if hand_moves:
+        for src, dst in hand_moves:
+            out.append(
+                {
+                    "schema_version": "action_v1",
+                    "phase": phase,
+                    "action_type": "MOVE_HAND_CARD",
+                    "src_index": int(src),
+                    "dst_index": int(dst),
+                    "index_base": 0,
+                    "params": {"index_base": 0},
+                }
+            )
+
+    prev_jokers = [str(c.get("key") or "") for c in (prev_obs.get("jokers", {}).get("cards") or []) if isinstance(c, dict)]
+    cur_jokers = [str(c.get("key") or "") for c in (cur_obs.get("jokers", {}).get("cards") or []) if isinstance(c, dict)]
+    joker_moves = _compute_move_sequence(_occurrence_tokens(prev_jokers), _occurrence_tokens(cur_jokers))
+    if joker_moves:
+        for src, dst in joker_moves:
+            out.append(
+                {
+                    "schema_version": "action_v1",
+                    "phase": phase,
+                    "action_type": "MOVE_JOKER",
+                    "src_index": int(src),
+                    "dst_index": int(dst),
+                    "index_base": 0,
+                    "params": {"index_base": 0},
+                }
+            )
+
+    return out
+
+
 def main() -> int:
     args = _parse_args()
     logger = setup_logger("trainer.record_real_session")
@@ -197,6 +274,8 @@ def main() -> int:
     changed_steps = 0
     last_exec_ts = 0.0
     hard_error = False
+    prev_after_obs: dict[str, Any] | None = None
+    prev_after_state: dict[str, Any] | None = None
 
     try:
         for step_idx in range(max(1, int(args.steps))):
@@ -223,6 +302,7 @@ def main() -> int:
             obs = build_observation(before_state)
             phase = str(obs.get("phase") or "UNKNOWN")
             phase_counter[phase] += 1
+            external_inferred_actions = _infer_observation_position_actions(prev_after_obs, obs, phase=phase)
 
             hand_keys = [str(c.get("key") or "") for c in (obs.get("hand", {}).get("cards") or [])]
             shop_cards = obs.get("shop", {}).get("shop", {}).get("cards") or []
@@ -292,6 +372,7 @@ def main() -> int:
             if after_hash != before_hash:
                 changed_steps += 1
 
+            action_normalized = normalize_high_level_action(action_sent, phase=phase) if isinstance(action_sent, dict) else None
             row = {
                 "ts": timestamp(),
                 "step_idx": step_idx,
@@ -305,7 +386,11 @@ def main() -> int:
                 "shop_offers": shop_offers,
                 "model_suggestions_topk": suggestions,
                 "action_sent": action_sent,
+                "action_normalized": action_normalized,
                 "action_result": action_result,
+                "action_source": str((action_result or {}).get("source") or ""),
+                "external_state_changed": bool(len(external_inferred_actions) > 0),
+                "external_inferred_actions": external_inferred_actions,
                 "state_hash_before": before_hash,
                 "state_hash_after": after_hash,
                 "state_changed": bool(after_hash != before_hash),
@@ -314,6 +399,9 @@ def main() -> int:
             if args.include_raw or args.execute:
                 row["gamestate_raw_before"] = before_state
                 row["gamestate_raw_after"] = after_state
+                if isinstance(prev_after_state, dict) and len(external_inferred_actions) > 0:
+                    row["external_raw_before"] = prev_after_state
+                    row["external_raw_after"] = before_state
 
             _write_jsonl(out_path, row)
             written += 1
@@ -326,6 +414,8 @@ def main() -> int:
                 json.dumps(action_sent, ensure_ascii=False) if action_sent else "-",
                 bool(after_hash != before_hash),
             )
+            prev_after_obs = after_obs
+            prev_after_state = after_state
             if hard_error:
                 break
             if step_idx + 1 < int(args.steps):

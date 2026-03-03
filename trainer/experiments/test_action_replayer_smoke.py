@@ -109,16 +109,24 @@ def _is_action_compatible(state: dict[str, Any], action: dict[str, Any]) -> bool
             return len(action.get("permutation") or []) == hand_n and hand_n > 0
         idxs = action.get("indices") or []
         return bool(idxs) and all(isinstance(x, int) and 0 <= x < hand_n for x in idxs)
-    if action_type == "SWAP_HAND_CARDS":
+    if action_type == "SWAP_HAND_CARD":
         i = int(action.get("i", -1))
         j = int(action.get("j", -1))
         return hand_n > 1 and 0 <= i < hand_n and 0 <= j < hand_n and i != j
     if action_type == "REORDER_JOKERS":
         return len(action.get("permutation") or []) == joker_n and joker_n > 0
-    if action_type == "SWAP_JOKERS":
+    if action_type == "SWAP_JOKER":
         i = int(action.get("i", -1))
         j = int(action.get("j", -1))
         return joker_n > 1 and 0 <= i < joker_n and 0 <= j < joker_n and i != j
+    if action_type == "MOVE_HAND_CARD":
+        src = int(action.get("src_index", -1))
+        dst = int(action.get("dst_index", -1))
+        return hand_n > 0 and 0 <= src < hand_n and 0 <= dst < hand_n
+    if action_type == "MOVE_JOKER":
+        src = int(action.get("src_index", -1))
+        dst = int(action.get("dst_index", -1))
+        return joker_n > 0 and 0 <= src < joker_n and 0 <= dst < joker_n
     return True
 
 

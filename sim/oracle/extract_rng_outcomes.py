@@ -8,7 +8,14 @@ from sim.oracle.extract_rng_events import extract_rng_events
 def _action_type(action: dict[str, Any] | None) -> str:
     if not isinstance(action, dict):
         return ""
-    return str(action.get("action_type") or "").strip().upper()
+    raw = str(action.get("action_type") or "").strip().upper()
+    aliases = {
+        "REROLL": "SHOP_REROLL",
+        "BUY": "SHOP_BUY",
+        "PACK": "PACK_OPEN",
+        "USE": "CONSUMABLE_USE",
+    }
+    return aliases.get(raw, raw)
 
 
 def _round_chips(state: dict[str, Any] | None) -> float:
@@ -85,10 +92,10 @@ def extract_rng_outcomes(
     at = _action_type(action)
     money_delta = _money(cur_state) - _money(prev_state)
     score_delta = _round_chips(cur_state) - _round_chips(prev_state)
-    scope = "shop" if at in {"BUY", "SELL", "REROLL", "PACK", "USE"} else "hand"
+    scope = "shop" if at in {"SHOP_BUY", "SELL", "SHOP_REROLL", "PACK_OPEN", "CONSUMABLE_USE"} else "hand"
 
     # Explicit economy token for P11 scope/diff.
-    if at in {"BUY", "SELL", "REROLL", "PACK", "USE", "CASH_OUT", "NEXT_ROUND"} or abs(money_delta) > 1e-9:
+    if at in {"SHOP_BUY", "SELL", "SHOP_REROLL", "PACK_OPEN", "CONSUMABLE_USE", "CASH_OUT", "NEXT_ROUND"} or abs(money_delta) > 1e-9:
         outcomes.append(
             {
                 "type": "econ_delta",
@@ -100,7 +107,7 @@ def extract_rng_outcomes(
         )
 
     # Shop reroll token with stable offer-key signature.
-    if at == "REROLL":
+    if at == "SHOP_REROLL":
         outcomes.append(
             {
                 "type": "shop_roll",

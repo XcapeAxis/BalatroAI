@@ -7,6 +7,7 @@ if __package__ is None or __package__ == "":
     sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import argparse
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -18,9 +19,11 @@ from sim.core.hashing import (
     state_hash_hand_core,
     state_hash_p14_real_action_observed_core,
     state_hash_p32_real_action_position_observed_core,
+    state_hash_p37_action_fidelity_core,
 )
 from sim.core.score_observed import compute_score_observed
 from sim.oracle.canonicalize_real import canonicalize_real_state
+from sim.oracle.extract_rng_outcomes import extract_rng_outcomes
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -77,10 +80,23 @@ def _raw_after(row: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-def _rng_replay(row: dict[str, Any]) -> dict[str, Any]:
+def _rng_replay(
+    row: dict[str, Any],
+    *,
+    raw_before: dict[str, Any] | None = None,
+    raw_after: dict[str, Any] | None = None,
+    action: dict[str, Any] | None = None,
+    step_id: int = 0,
+) -> dict[str, Any]:
     outcomes = row.get("outcome_tokens")
     if not isinstance(outcomes, list):
         outcomes = []
+    if not outcomes and isinstance(raw_before, dict) and isinstance(raw_after, dict):
+        try:
+            inferred = extract_rng_outcomes(raw_before, raw_after, action=action, step_id=int(step_id))
+            outcomes = [dict(x) for x in inferred if isinstance(x, dict)]
+        except Exception:
+            outcomes = []
     return {
         "enabled": len(outcomes) > 0,
         "source": "real_recording",
@@ -126,6 +142,149 @@ def _ordered_joker_tokens(canonical_state: dict[str, Any]) -> list[str]:
     return tokens
 
 
+def _is_position_only_change(
+    *,
+    canonical_before: dict[str, Any],
+    canonical_after: dict[str, Any],
+    raw_before: dict[str, Any],
+    raw_after: dict[str, Any],
+) -> bool:
+    before_round = canonical_before.get("round") if isinstance(canonical_before.get("round"), dict) else {}
+    after_round = canonical_after.get("round") if isinstance(canonical_after.get("round"), dict) else {}
+    before_econ = canonical_before.get("economy") if isinstance(canonical_before.get("economy"), dict) else {}
+    after_econ = canonical_after.get("economy") if isinstance(canonical_after.get("economy"), dict) else {}
+    observed = compute_score_observed(raw_before, raw_after)
+
+    delta = float(observed.get("delta") or 0.0)
+    if abs(delta) > 1e-9:
+        return False
+    if int(before_round.get("hands_left") or 0) != int(after_round.get("hands_left") or 0):
+        return False
+    if int(before_round.get("discards_left") or 0) != int(after_round.get("discards_left") or 0):
+        return False
+    if str(before_round.get("blind") or "").strip().lower() != str(after_round.get("blind") or "").strip().lower():
+        return False
+    if float(before_econ.get("money") or 0.0) != float(after_econ.get("money") or 0.0):
+        return False
+    return True
+
+
+def _compute_move_sequence(before: list[str], after: list[str]) -> list[tuple[int, int]] | None:
+    if not before or not after or len(before) != len(after):
+        return None
+    if sorted(before) != sorted(after):
+        return None
+    if before == after:
+        return []
+
+    working = list(before)
+    moves: list[tuple[int, int]] = []
+    for dst, token in enumerate(after):
+        if working[dst] == token:
+            continue
+        try:
+            src = working.index(token, dst + 1)
+        except ValueError:
+            return None
+        moved = working.pop(src)
+        working.insert(dst, moved)
+        moves.append((int(src), int(dst)))
+    if working != after:
+        return None
+    return moves
+
+
+def _apply_move_to_canonical_state(canonical_state: dict[str, Any], *, action_type: str, src: int, dst: int) -> dict[str, Any]:
+    next_state = copy.deepcopy(canonical_state)
+    if action_type == "MOVE_HAND_CARD":
+        zones = next_state.get("zones") if isinstance(next_state.get("zones"), dict) else {}
+        hand = zones.get("hand") if isinstance(zones.get("hand"), list) else []
+        moved = list(hand)
+        card = moved.pop(src)
+        moved.insert(dst, card)
+        zones["hand"] = moved
+        next_state["zones"] = zones
+        return next_state
+
+    jokers = next_state.get("jokers") if isinstance(next_state.get("jokers"), list) else []
+    moved = list(jokers)
+    card = moved.pop(src)
+    moved.insert(dst, card)
+    next_state["jokers"] = moved
+    return next_state
+
+
+def _infer_position_action_sequence(
+    raw_before: dict[str, Any],
+    raw_after: dict[str, Any],
+    *,
+    row: dict[str, Any],
+    seed: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]] | None:
+    canonical_before = canonicalize_real_state(raw_before, seed=seed, rng_events=[], rng_cursor=0)
+    canonical_after = canonicalize_real_state(raw_after, seed=seed, rng_events=[], rng_cursor=0)
+    if not _is_position_only_change(
+        canonical_before=canonical_before,
+        canonical_after=canonical_after,
+        raw_before=raw_before,
+        raw_after=raw_after,
+    ):
+        return None
+
+    hand_before = _ordered_hand_tokens(canonical_before)
+    hand_after = _ordered_hand_tokens(canonical_after)
+    joker_before = _ordered_joker_tokens(canonical_before)
+    joker_after = _ordered_joker_tokens(canonical_after)
+
+    hand_moves = _compute_move_sequence(hand_before, hand_after)
+    joker_moves = _compute_move_sequence(joker_before, joker_after)
+    if hand_moves is None or joker_moves is None:
+        return None
+    if not hand_moves and not joker_moves:
+        return None
+
+    phase = _phase_for_action(canonical_before, row)
+    actions: list[dict[str, Any]] = []
+    states: list[dict[str, Any]] = []
+    current = copy.deepcopy(canonical_before)
+
+    for src, dst in hand_moves:
+        actions.append(
+            {
+                "schema_version": "action_v1",
+                "phase": phase,
+                "action_type": "MOVE_HAND_CARD",
+                "src_index": int(src),
+                "dst_index": int(dst),
+                "index_base": 0,
+                "params": {"index_base": 0},
+            }
+        )
+        current = _apply_move_to_canonical_state(current, action_type="MOVE_HAND_CARD", src=src, dst=dst)
+        states.append(copy.deepcopy(current))
+
+    for src, dst in joker_moves:
+        actions.append(
+            {
+                "schema_version": "action_v1",
+                "phase": phase,
+                "action_type": "MOVE_JOKER",
+                "src_index": int(src),
+                "dst_index": int(dst),
+                "index_base": 0,
+                "params": {"index_base": 0},
+            }
+        )
+        current = _apply_move_to_canonical_state(current, action_type="MOVE_JOKER", src=src, dst=dst)
+        states.append(copy.deepcopy(current))
+
+    if _ordered_hand_tokens(current) != hand_after:
+        return None
+    if _ordered_joker_tokens(current) != joker_after:
+        return None
+    return actions, states
+
+
 def _infer_reorder_or_swap(
     *,
     before: list[str],
@@ -165,23 +324,12 @@ def _infer_reorder_or_swap(
 def _infer_position_action(raw_before: dict[str, Any], raw_after: dict[str, Any], row: dict[str, Any], seed: str) -> dict[str, Any] | None:
     canonical_before = canonicalize_real_state(raw_before, seed=seed, rng_events=[], rng_cursor=0)
     canonical_after = canonicalize_real_state(raw_after, seed=seed, rng_events=[], rng_cursor=0)
-
-    before_round = canonical_before.get("round") if isinstance(canonical_before.get("round"), dict) else {}
-    after_round = canonical_after.get("round") if isinstance(canonical_after.get("round"), dict) else {}
-    before_econ = canonical_before.get("economy") if isinstance(canonical_before.get("economy"), dict) else {}
-    after_econ = canonical_after.get("economy") if isinstance(canonical_after.get("economy"), dict) else {}
-    observed = compute_score_observed(raw_before, raw_after)
-
-    delta = float(observed.get("delta") or 0.0)
-    if abs(delta) > 1e-9:
-        return None
-    if int(before_round.get("hands_left") or 0) != int(after_round.get("hands_left") or 0):
-        return None
-    if int(before_round.get("discards_left") or 0) != int(after_round.get("discards_left") or 0):
-        return None
-    if str(before_round.get("blind") or "").strip().lower() != str(after_round.get("blind") or "").strip().lower():
-        return None
-    if float(before_econ.get("money") or 0.0) != float(after_econ.get("money") or 0.0):
+    if not _is_position_only_change(
+        canonical_before=canonical_before,
+        canonical_after=canonical_after,
+        raw_before=raw_before,
+        raw_after=raw_after,
+    ):
         return None
 
     hand_before = _ordered_hand_tokens(canonical_before)
@@ -272,6 +420,50 @@ def main() -> int:
             )
             continue
 
+        external_before = row.get("external_raw_before")
+        external_after = row.get("external_raw_after")
+        external_inferred_actions = row.get("external_inferred_actions")
+        if isinstance(external_before, dict) and isinstance(external_after, dict) and isinstance(external_inferred_actions, list) and external_inferred_actions:
+            external_seq = _infer_position_action_sequence(external_before, external_after, row=row, seed=args.seed)
+            if external_seq is not None:
+                ext_actions_raw, ext_states = external_seq
+                ext_score_observed = compute_score_observed(external_before, external_after)
+                inferred_action_count += len(ext_actions_raw)
+                for ext_frame_idx, (ext_action_raw, ext_state) in enumerate(zip(ext_actions_raw, ext_states)):
+                    ext_action = normalize_high_level_action(ext_action_raw, phase=_phase_for_action(ext_state, row))
+                    ext_rng = {"enabled": False, "source": "external_inferred_sequence", "outcomes": []}
+                    ext_action["rng_replay"] = dict(ext_rng)
+                    ext_state_obs = dict(ext_state)
+                    ext_state_obs["score_observed"] = dict(ext_score_observed)
+                    ext_state_obs["rng_replay"] = dict(ext_rng)
+                    ext_state_obs["_last_action_type"] = str(ext_action.get("action_type") or "").upper()
+                    action_trace.append(ext_action)
+                    oracle_trace.append(
+                        {
+                            "schema_version": "trace_v1",
+                            "step_id": len(action_trace) - 1,
+                            "phase": str(ext_state.get("phase") or phase),
+                            "action": ext_action,
+                            "state_hash_full": state_hash_full(ext_state),
+                            "state_hash_hand_core": state_hash_hand_core(ext_state),
+                            "state_hash_p14_real_action_observed_core": state_hash_p14_real_action_observed_core(ext_state_obs),
+                            "state_hash_p32_real_action_position_observed_core": state_hash_p32_real_action_position_observed_core(ext_state_obs),
+                            "state_hash_p37_action_fidelity_core": state_hash_p37_action_fidelity_core(ext_state_obs),
+                            "reward": 0.0,
+                            "done": False,
+                            "score_observed": ext_score_observed,
+                            "rng_replay": ext_rng,
+                            "canonical_state_snapshot": ext_state,
+                            "info": {
+                                "source": "real_trace_to_fixture",
+                                "session_step_idx": row.get("step_idx", i),
+                                "session_frame_idx": int(ext_frame_idx),
+                                "mode": row.get("mode"),
+                                "action_source": "external_inferred_sequence",
+                            },
+                        }
+                    )
+
         state_changed = bool(row.get("state_changed", True))
         if not state_changed:
             skipped_actions.append(
@@ -282,64 +474,116 @@ def main() -> int:
             )
             continue
 
-        action = row.get("action_sent")
-        action_source = "action_sent"
-        if not isinstance(action, dict):
-            action = row.get("executed_action")
-            action_source = "executed_action"
-
-        if not isinstance(action, dict):
-            inferred = _infer_position_action(raw_before, raw_after, row=row, seed=args.seed)
-            if isinstance(inferred, dict):
-                action = inferred
-                action_source = "inferred_position_action"
-                inferred_action_count += 1
-            else:
-                skipped_actions.append(
-                    {
-                        "step_idx": row.get("step_idx", i),
-                        "reason": "missing_action_and_no_inference",
-                    }
-                )
-                continue
-        else:
-            explicit_action_count += 1
-
         score_observed = compute_score_observed(raw_before, raw_after)
         canonical_after = canonicalize_real_state(raw_after, seed=args.seed, rng_events=[], rng_cursor=0)
-        canonical_after_obs = dict(canonical_after)
-        canonical_after_obs["score_observed"] = dict(score_observed)
-        rng_replay = _rng_replay(row)
-        canonical_after_obs["rng_replay"] = rng_replay
 
-        action_for_trace = normalize_high_level_action(action, phase=_phase_for_action(canonical_after, row))
-        if not isinstance(action_for_trace.get("rng_replay"), dict):
-            action_for_trace["rng_replay"] = dict(rng_replay)
-
-        action_trace.append(action_for_trace)
-        oracle_trace.append(
-            {
-                "schema_version": "trace_v1",
-                "step_id": len(action_trace) - 1,
-                "phase": str(canonical_after.get("phase") or phase),
-                "action": action_for_trace,
-                "state_hash_full": state_hash_full(canonical_after),
-                "state_hash_hand_core": state_hash_hand_core(canonical_after),
-                "state_hash_p14_real_action_observed_core": state_hash_p14_real_action_observed_core(canonical_after_obs),
-                "state_hash_p32_real_action_position_observed_core": state_hash_p32_real_action_position_observed_core(canonical_after_obs),
-                "reward": float((row.get("action_result") or {}).get("reward") or 0.0),
-                "done": bool((row.get("action_result") or {}).get("done") or False),
-                "score_observed": score_observed,
-                "rng_replay": rng_replay,
-                "canonical_state_snapshot": canonical_after,
-                "info": {
-                    "source": "real_trace_to_fixture",
-                    "session_step_idx": row.get("step_idx", i),
-                    "mode": row.get("mode"),
-                    "action_source": action_source,
-                },
-            }
+        action_result = row.get("action_result") if isinstance(row.get("action_result"), dict) else {}
+        explicit_action = row.get("action_sent")
+        action_source = "action_sent"
+        if not isinstance(explicit_action, dict):
+            explicit_action = row.get("executed_action")
+            action_source = "executed_action"
+        rng_replay = _rng_replay(
+            row,
+            raw_before=raw_before,
+            raw_after=raw_after,
+            action=explicit_action if isinstance(explicit_action, dict) else None,
+            step_id=int(row.get("step_idx", i) or 0),
         )
+
+        action_frames: list[dict[str, Any]] = []
+        if isinstance(explicit_action, dict):
+            explicit_action_count += 1
+            action_for_trace = normalize_high_level_action(explicit_action, phase=_phase_for_action(canonical_after, row))
+            if not isinstance(action_for_trace.get("rng_replay"), dict):
+                action_for_trace["rng_replay"] = dict(rng_replay)
+            action_frames.append(
+                {
+                    "action_source": action_source,
+                    "action": action_for_trace,
+                    "canonical_state": canonical_after,
+                    "rng_replay": dict(action_for_trace.get("rng_replay") or rng_replay),
+                    "reward": float(action_result.get("reward") or 0.0),
+                    "done": bool(action_result.get("done") or False),
+                }
+            )
+        else:
+            inferred_sequence = _infer_position_action_sequence(raw_before, raw_after, row=row, seed=args.seed)
+            if inferred_sequence is not None:
+                inferred_actions_raw, inferred_states = inferred_sequence
+                inferred_action_count += len(inferred_actions_raw)
+                for action_seq_raw, seq_state in zip(inferred_actions_raw, inferred_states):
+                    seq_action = normalize_high_level_action(action_seq_raw, phase=_phase_for_action(seq_state, row))
+                    seq_action["rng_replay"] = {"enabled": False, "source": "inferred_position_sequence", "outcomes": []}
+                    action_frames.append(
+                        {
+                            "action_source": "inferred_position_sequence",
+                            "action": seq_action,
+                            "canonical_state": seq_state,
+                            "rng_replay": {"enabled": False, "source": "inferred_position_sequence", "outcomes": []},
+                            "reward": 0.0,
+                            "done": False,
+                        }
+                    )
+            else:
+                inferred = _infer_position_action(raw_before, raw_after, row=row, seed=args.seed)
+                if isinstance(inferred, dict):
+                    inferred_action_count += 1
+                    action_for_trace = normalize_high_level_action(inferred, phase=_phase_for_action(canonical_after, row))
+                    action_for_trace["rng_replay"] = {"enabled": False, "source": "inferred_position_action", "outcomes": []}
+                    action_frames.append(
+                        {
+                            "action_source": "inferred_position_action",
+                            "action": action_for_trace,
+                            "canonical_state": canonical_after,
+                            "rng_replay": {"enabled": False, "source": "inferred_position_action", "outcomes": []},
+                            "reward": 0.0,
+                            "done": False,
+                        }
+                    )
+                else:
+                    skipped_actions.append(
+                        {
+                            "step_idx": row.get("step_idx", i),
+                            "reason": "missing_action_and_no_inference",
+                        }
+                    )
+                    continue
+
+        for frame_idx, frame in enumerate(action_frames):
+            canonical_state = frame["canonical_state"]
+            action_for_trace = dict(frame["action"])
+            canonical_after_obs = dict(canonical_state)
+            canonical_after_obs["score_observed"] = dict(score_observed)
+            canonical_after_obs["rng_replay"] = dict(frame["rng_replay"])
+            canonical_after_obs["_last_action_type"] = str(action_for_trace.get("action_type") or "").upper()
+
+            action_trace.append(action_for_trace)
+            oracle_trace.append(
+                {
+                    "schema_version": "trace_v1",
+                    "step_id": len(action_trace) - 1,
+                    "phase": str(canonical_state.get("phase") or phase),
+                    "action": action_for_trace,
+                    "state_hash_full": state_hash_full(canonical_state),
+                    "state_hash_hand_core": state_hash_hand_core(canonical_state),
+                    "state_hash_p14_real_action_observed_core": state_hash_p14_real_action_observed_core(canonical_after_obs),
+                    "state_hash_p32_real_action_position_observed_core": state_hash_p32_real_action_position_observed_core(canonical_after_obs),
+                    "state_hash_p37_action_fidelity_core": state_hash_p37_action_fidelity_core(canonical_after_obs),
+                    "reward": float(frame["reward"]),
+                    "done": bool(frame["done"]),
+                    "score_observed": score_observed,
+                    "rng_replay": frame["rng_replay"],
+                    "canonical_state_snapshot": canonical_state,
+                    "info": {
+                        "source": "real_trace_to_fixture",
+                        "session_step_idx": row.get("step_idx", i),
+                        "session_frame_idx": int(frame_idx),
+                        "mode": row.get("mode"),
+                        "action_source": frame["action_source"],
+                    },
+                }
+            )
 
     _write_jsonl(out_dir / "state_trace.jsonl", state_trace)
     _write_jsonl(out_dir / "oracle_trace_real.jsonl", oracle_trace)

@@ -31,6 +31,7 @@ from sim.core.hashing import (
     state_hash_p11_prob_econ_observed_core,
     state_hash_p14_real_action_observed_core,
     state_hash_p32_real_action_position_observed_core,
+    state_hash_p37_action_fidelity_core,
     state_hash_rng_events_core,
     state_hash_score_core,
     state_hash_zones_core,
@@ -103,14 +104,80 @@ def phase_default_action(state: dict[str, Any], seed: str) -> dict[str, Any]:
 
 
 def _index_offset(action: dict[str, Any]) -> int:
-    params = action.get("params")
-    if not isinstance(params, dict):
-        return 0
+    params = action.get("params") if isinstance(action.get("params"), dict) else {}
     try:
-        value = int(params.get("index_base", 0))
+        value = int(action.get("index_base", params.get("index_base", 0)))
     except Exception:
         return 0
     return 1 if value == 1 else 0
+
+
+def _normalize_action_index(value: Any, *, index_base: int, default: int = 0) -> int:
+    try:
+        idx = int(value)
+    except Exception:
+        idx = int(default)
+    return max(0, idx - int(index_base))
+
+
+def _canonical_action_type(raw_action_type: Any) -> str:
+    action_type = str(raw_action_type or "WAIT").upper()
+    aliases = {
+        "REROLL": "SHOP_REROLL",
+        "BUY": "SHOP_BUY",
+        "PACK": "PACK_OPEN",
+        "USE": "CONSUMABLE_USE",
+        "SWAP_HAND_CARDS": "SWAP_HAND_CARD",
+        "SWAP_JOKERS": "SWAP_JOKER",
+    }
+    return aliases.get(action_type, action_type)
+
+
+def _move_permutation(size: int, src: int, dst: int) -> list[int]:
+    if src < 0 or dst < 0 or src >= size or dst >= size:
+        raise ValueError("move indices out of range")
+    perm = list(range(size))
+    moved = perm.pop(src)
+    perm.insert(dst, moved)
+    return perm
+
+
+def _extract_shop_params(action: dict[str, Any]) -> dict[str, Any]:
+    params = action.get("params") if isinstance(action.get("params"), dict) else {}
+    merged = dict(params)
+    for key in (
+        "index_base",
+        "card",
+        "pack",
+        "voucher",
+        "joker",
+        "consumable",
+        "shop_index",
+        "pack_index",
+        "choice_index",
+        "voucher_index",
+        "consumable_index",
+        "joker_index",
+        "cards",
+        "hand_indices",
+        "targets",
+        "skip",
+        "target_side",
+        "kind",
+        "key",
+    ):
+        if key in action and key not in merged:
+            merged[key] = action[key]
+    index_base = _index_offset(action)
+    for key in ("card", "pack", "voucher", "joker", "consumable", "shop_index", "pack_index", "choice_index", "voucher_index", "consumable_index", "joker_index"):
+        if key in merged:
+            merged[key] = _normalize_action_index(merged.get(key), index_base=index_base, default=0)
+    for key in ("cards", "hand_indices", "targets"):
+        raw = merged.get(key)
+        if isinstance(raw, list):
+            merged[key] = [_normalize_action_index(v, index_base=index_base, default=0) for v in raw]
+    merged["index_base"] = 0
+    return merged
 
 
 def _action_indices_for_rpc(action: dict[str, Any]) -> list[int]:
@@ -120,7 +187,7 @@ def _action_indices_for_rpc(action: dict[str, Any]) -> list[int]:
 
 
 def apply_action(base_url: str, action: dict[str, Any], timeout_sec: float, wait_sleep: float, seed: str) -> dict[str, Any]:
-    action_type = str(action.get("action_type") or "WAIT").upper()
+    action_type = _canonical_action_type(action.get("action_type"))
     params = action.get("params") if isinstance(action.get("params"), dict) else {}
 
     if action_type == "PLAY":
@@ -149,16 +216,16 @@ def apply_action(base_url: str, action: dict[str, Any], timeout_sec: float, wait
         _call_method(base_url, "menu", {}, timeout=timeout_sec)
     elif action_type == "SKIP":
         _call_method(base_url, "skip", {}, timeout=timeout_sec)
-    elif action_type == "REROLL":
+    elif action_type == "SHOP_REROLL":
         _call_method(base_url, "reroll", {}, timeout=timeout_sec)
-    elif action_type == "BUY":
-        _call_method(base_url, "buy", params, timeout=timeout_sec)
-    elif action_type == "PACK":
-        _call_method(base_url, "pack", params, timeout=timeout_sec)
+    elif action_type == "SHOP_BUY":
+        _call_method(base_url, "buy", _extract_shop_params(action), timeout=timeout_sec)
+    elif action_type == "PACK_OPEN":
+        _call_method(base_url, "pack", _extract_shop_params(action), timeout=timeout_sec)
     elif action_type == "SELL":
-        _call_method(base_url, "sell", params, timeout=timeout_sec)
-    elif action_type == "USE":
-        _call_method(base_url, "use", params, timeout=timeout_sec)
+        _call_method(base_url, "sell", _extract_shop_params(action), timeout=timeout_sec)
+    elif action_type == "CONSUMABLE_USE":
+        _call_method(base_url, "use", _extract_shop_params(action), timeout=timeout_sec)
     elif action_type == "REORDER_HAND":
         permutation = action.get("permutation")
         if not isinstance(permutation, list):
@@ -181,18 +248,50 @@ def apply_action(base_url: str, action: dict[str, Any], timeout_sec: float, wait
             if "unknown method" not in str(exc).lower():
                 raise
             time.sleep(max(0.0, float(wait_sleep)))
-    elif action_type == "SWAP_HAND_CARDS":
-        i = int(action.get("i", params.get("i", 0)))
-        j = int(action.get("j", params.get("j", 0)))
+    elif action_type == "MOVE_HAND_CARD":
+        state = get_state(base_url, timeout=timeout_sec)
+        hand_cards = (state.get("hand") or {}).get("cards") if isinstance(state.get("hand"), dict) else []
+        index_base = _index_offset(action)
+        src_raw = action.get("src_index", action.get("from_index", params.get("src_index", params.get("from_index", 0))))
+        dst_raw = action.get("dst_index", action.get("to_index", params.get("dst_index", params.get("to_index", 0))))
+        src = _normalize_action_index(src_raw, index_base=index_base, default=0)
+        dst = _normalize_action_index(dst_raw, index_base=index_base, default=0)
+        permutation = _move_permutation(len(hand_cards or []), src, dst)
+        try:
+            _call_method(base_url, "reorder_hand", {"permutation": permutation}, timeout=timeout_sec)
+        except RPCError as exc:
+            if "unknown method" not in str(exc).lower():
+                raise
+            time.sleep(max(0.0, float(wait_sleep)))
+    elif action_type == "MOVE_JOKER":
+        state = get_state(base_url, timeout=timeout_sec)
+        jokers = state.get("jokers") if isinstance(state.get("jokers"), list) else []
+        index_base = _index_offset(action)
+        src_raw = action.get("src_index", action.get("from_index", params.get("src_index", params.get("from_index", 0))))
+        dst_raw = action.get("dst_index", action.get("to_index", params.get("dst_index", params.get("to_index", 0))))
+        src = _normalize_action_index(src_raw, index_base=index_base, default=0)
+        dst = _normalize_action_index(dst_raw, index_base=index_base, default=0)
+        permutation = _move_permutation(len(jokers), src, dst)
+        try:
+            _call_method(base_url, "reorder_jokers", {"permutation": permutation}, timeout=timeout_sec)
+        except RPCError as exc:
+            if "unknown method" not in str(exc).lower():
+                raise
+            time.sleep(max(0.0, float(wait_sleep)))
+    elif action_type == "SWAP_HAND_CARD":
+        index_base = _index_offset(action)
+        i = _normalize_action_index(action.get("i", params.get("i", 0)), index_base=index_base, default=0)
+        j = _normalize_action_index(action.get("j", params.get("j", 0)), index_base=index_base, default=0)
         try:
             _call_method(base_url, "swap_hand_cards", {"i": i, "j": j}, timeout=timeout_sec)
         except RPCError as exc:
             if "unknown method" not in str(exc).lower():
                 raise
             time.sleep(max(0.0, float(wait_sleep)))
-    elif action_type == "SWAP_JOKERS":
-        i = int(action.get("i", params.get("i", 0)))
-        j = int(action.get("j", params.get("j", 0)))
+    elif action_type == "SWAP_JOKER":
+        index_base = _index_offset(action)
+        i = _normalize_action_index(action.get("i", params.get("i", 0)), index_base=index_base, default=0)
+        j = _normalize_action_index(action.get("j", params.get("j", 0)), index_base=index_base, default=0)
         try:
             _call_method(base_url, "swap_jokers", {"i": i, "j": j}, timeout=timeout_sec)
         except RPCError as exc:
@@ -305,6 +404,7 @@ def main() -> int:
                 canonical_with_observed = dict(canonical)
                 canonical_with_observed["score_observed"] = dict(score_observed)
                 canonical_with_observed["rng_replay"] = dict(rng_replay)
+                canonical_with_observed["_last_action_type"] = str(executed_action.get("action_type") or "").upper()
                 rules = canonical_with_observed.get("rules") if isinstance(canonical_with_observed.get("rules"), dict) else {}
                 if str(executed_action.get("action_type") or "").upper() == "START":
                     current_stake = str(executed_action.get("stake") or current_stake or "white").strip().lower() or "white"
@@ -345,6 +445,7 @@ def main() -> int:
                     "state_hash_p11_prob_econ_observed_core": state_hash_p11_prob_econ_observed_core(canonical_with_observed),
                     "state_hash_p14_real_action_observed_core": state_hash_p14_real_action_observed_core(canonical_with_observed),
                     "state_hash_p32_real_action_position_observed_core": state_hash_p32_real_action_position_observed_core(canonical_with_observed),
+                    "state_hash_p37_action_fidelity_core": state_hash_p37_action_fidelity_core(canonical_with_observed),
                     "state_hash_zones_core": state_hash_zones_core(canonical),
                     "state_hash_zones_counts_core": state_hash_zones_counts_core(canonical),
                     "state_hash_economy_core": state_hash_economy_core(canonical),

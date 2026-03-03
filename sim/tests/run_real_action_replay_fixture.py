@@ -16,11 +16,13 @@ from sim.core.engine import SimEnv
 from sim.core.hashing import (
     hand_core_projection,
     p32_real_action_position_observed_core_projection,
+    p37_action_fidelity_core_projection,
     p14_real_action_observed_core_projection,
     state_hash_full,
     state_hash_hand_core,
     state_hash_p14_real_action_observed_core,
     state_hash_p32_real_action_position_observed_core,
+    state_hash_p37_action_fidelity_core,
 )
 from sim.core.score_observed import compute_score_observed
 from sim.oracle.extract_rng_events import extract_rng_events
@@ -29,6 +31,7 @@ from sim.oracle.extract_rng_events import extract_rng_events
 SCOPE_TO_HASH_KEY = {
     "p14_real_action_observed_core": "state_hash_p14_real_action_observed_core",
     "p32_real_action_position_observed_core": "state_hash_p32_real_action_position_observed_core",
+    "p37_action_fidelity_core": "state_hash_p37_action_fidelity_core",
     "hand_core": "state_hash_hand_core",
     "full": "state_hash_full",
 }
@@ -39,7 +42,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--fixture-dir", required=True)
     parser.add_argument(
         "--scope",
-        choices=["p14_real_action_observed_core", "p32_real_action_position_observed_core", "hand_core", "full"],
+        choices=["p14_real_action_observed_core", "p32_real_action_position_observed_core", "p37_action_fidelity_core", "hand_core", "full"],
         default="p14_real_action_observed_core",
     )
     parser.add_argument("--out", required=True, help="Replay report json path.")
@@ -151,6 +154,8 @@ def _projection(scope: str, state: dict[str, Any]) -> Any:
         return p14_real_action_observed_core_projection(state)
     if scope == "p32_real_action_position_observed_core":
         return p32_real_action_position_observed_core_projection(state)
+    if scope == "p37_action_fidelity_core":
+        return p37_action_fidelity_core_projection(state)
     if scope == "hand_core":
         return hand_core_projection(state)
     return state
@@ -239,6 +244,7 @@ def main() -> int:
         score_observed = compute_score_observed(state, next_state)
         canonical_obs = dict(canonical)
         canonical_obs["score_observed"] = dict(score_observed)
+        canonical_obs["_last_action_type"] = str(action_dict.get("action_type") or "").upper()
         if isinstance(action_dict.get("rng_replay"), dict):
             canonical_obs["rng_replay"] = dict(action_dict.get("rng_replay") or {})
 
@@ -251,6 +257,7 @@ def main() -> int:
             "state_hash_hand_core": state_hash_hand_core(canonical),
             "state_hash_p14_real_action_observed_core": state_hash_p14_real_action_observed_core(canonical_obs),
             "state_hash_p32_real_action_position_observed_core": state_hash_p32_real_action_position_observed_core(canonical_obs),
+            "state_hash_p37_action_fidelity_core": state_hash_p37_action_fidelity_core(canonical_obs),
             "reward": float(reward),
             "done": bool(done),
             "score_observed": score_observed,

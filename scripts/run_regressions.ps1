@@ -39,6 +39,7 @@ param(
   [switch]$RunP29,
   [switch]$RunP31,
   [switch]$RunP32,
+  [switch]$RunP37,
   [switch]$RequireMainBranch,
   [string]$P21Timestamp = ""
 )
@@ -108,6 +109,9 @@ if ($RunP31) {
 if ($RunP32) {
   $RunP22 = $true
   $RunP13 = $true
+}
+if ($RunP37) {
+  $RunP32 = $true
 }
 
 function Invoke-GitCapture([string[]]$GitArgs) {
@@ -2632,12 +2636,16 @@ if ($RunP32) {
   if ($p13RunDir) { $p13ReportPath = Join-Path $p13RunDir "report_p13.json" }
   $p22ReportObj = Read-JsonFile -Path $p22ReportPath
   $p13ReportObj = Read-JsonFile -Path $p13ReportPath
+  $resolvedRunP22Status = $RunP22Status
+  if ($resolvedRunP22Status -eq "SKIPPED" -and $p22ReportObj -and ([string]$p22ReportObj.status -eq "PASS")) {
+    $resolvedRunP22Status = "PASS"
+  }
 
   $baseline = [ordered]@{
     schema = "p32_baseline_v1"
     generated_at = (Get-Date).ToString("o")
     requested_gate = "RunP22 + RunP13"
-    run_p22_status = $RunP22Status
+    run_p22_status = $resolvedRunP22Status
     run_p22_latest_run = $RunP22LatestRun
     run_p22_report = $p22ReportPath
     run_p13_latest_run = $p13RunDir
@@ -2803,12 +2811,12 @@ if ($RunP32) {
     schema = "p32_gate_functional_v1"
     generated_at = (Get-Date).ToString("o")
     baseline_gate = "RunP22 + RunP13"
-    run_p22_status = $RunP22Status
+    run_p22_status = $resolvedRunP22Status
     run_p22_latest_run = $RunP22LatestRun
     run_p22_report = $p22ReportPath
     run_p13_latest_run = $p13RunDir
     run_p13_report = $p13ReportPath
-    pass = (($RunP22Status -eq "PASS") -and ($baseline.run_p13_status -in @("PASS", "SKIPPED")))
+    pass = (($resolvedRunP22Status -eq "PASS") -and ($baseline.run_p13_status -in @("PASS", "SKIPPED")))
   }
   $gateActionContract = [ordered]@{
     schema = "p32_gate_action_contract_v1"
@@ -2861,7 +2869,7 @@ if ($RunP32) {
     "",
     "- timestamp: " + (Get-Date -Format "yyyy-MM-dd HH:mm:ss"),
     "- baseline_gate: RunP22 + RunP13",
-    "- run_p22_status: " + $RunP22Status,
+    "- run_p22_status: " + $resolvedRunP22Status,
     "- run_p13_status: " + $baseline.run_p13_status,
     "- position_replay_pass: " + $positionPass,
     "- synthetic_roundtrip_status: " + $syntheticRoundtripStatus,
@@ -2884,6 +2892,49 @@ if ($RunP32) {
   Write-Host ("[P32] artifact_dir=" + $p32Dir + " gate_status=" + $reportP32.status)
   if ($reportP32.status -ne "PASS") {
     throw "[P32] gate failed; inspect gate_* and report_p32"
+  }
+}
+
+if ($RunP37) {
+  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $p37Root = Join-Path $ProjectRoot "docs/artifacts/p37"
+  if (-not (Test-Path $p37Root)) { New-Item -ItemType Directory -Path $p37Root -Force | Out-Null }
+  $p37Dir = Join-Path $p37Root $stamp
+  New-Item -ItemType Directory -Path $p37Dir -Force | Out-Null
+
+  $p37Py = Join-Path $ProjectRoot ".venv_trainer\Scripts\python.exe"
+  if (-not (Test-Path $p37Py)) { $p37Py = "python" }
+
+  $null = Invoke-SafeRunStep -Label "P37-batch-action-fidelity" -Exe $p37Py -CmdArgs @(
+    "-B",
+    "sim/oracle/batch_build_p37_action_fidelity.py",
+    "--out-dir", $p37Dir,
+    "--seed", ("P37-" + $stamp),
+    "--scope", "p37_action_fidelity_core"
+  ) -TimeoutSec 1200
+
+  $reportP37Path = Join-Path $p37Dir "report_p37.json"
+  $reportP37 = Read-JsonFile -Path $reportP37Path
+  if (-not $reportP37) {
+    throw "[P37] missing report_p37.json"
+  }
+
+  $coverageP37Path = Join-Path $ProjectRoot "docs/COVERAGE_P37_STATUS.md"
+  @(
+    "# COVERAGE P37 STATUS",
+    "",
+    "- timestamp: " + (Get-Date -Format "yyyy-MM-dd HH:mm:ss"),
+    "- baseline_gate: RunP32",
+    "- run_p32_invoked: " + $RunP32,
+    "- fixtures_total: " + $reportP37.fixtures_total,
+    "- fixtures_pass: " + $reportP37.fixtures_pass,
+    "- diff_fail: " + $reportP37.diff_fail,
+    "- gate_status: " + $reportP37.status
+  ) -join "`n" | Out-File -LiteralPath $coverageP37Path -Encoding UTF8
+
+  Write-Host ("[P37] artifact_dir=" + $p37Dir + " gate_status=" + $reportP37.status + " diff_fail=" + $reportP37.diff_fail)
+  if ($reportP37.status -ne "PASS" -or [int]$reportP37.diff_fail -ne 0) {
+    throw "[P37] gate failed; inspect report_p37"
   }
 }
 

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from trainer import action_space_shop
-from trainer.actions.replay import ActionReplayer
+from trainer.actions.replay import ActionReplayer, normalize_high_level_action
 from trainer.env_client import create_backend
 from trainer.infer_assistant_real import _heuristic_hand_rankings, _heuristic_shop_rankings
 from trainer.real_observer import build_observation
@@ -37,6 +37,7 @@ def _projection(state: dict[str, Any]) -> dict[str, Any]:
         "phase": obs.get("phase"),
         "resources": obs.get("resources"),
         "hand_keys": [str(c.get("key") or "") for c in (obs.get("hand", {}).get("cards") or [])],
+        "joker_keys": [str(c.get("key") or "") for c in (obs.get("jokers", {}).get("cards") or [])],
         "shop_keys": [str(c.get("key") or "") for c in (obs.get("shop", {}).get("shop", {}).get("cards") or [])],
         "voucher_keys": [str(c.get("key") or "") for c in (obs.get("shop", {}).get("vouchers", {}).get("cards") or [])],
         "pack_keys": [str(c.get("key") or "") for c in (obs.get("shop", {}).get("packs", {}).get("cards") or [])],
@@ -65,6 +66,81 @@ def _write_jsonl(path: Path, row: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def _occurrence_tokens(keys: list[str]) -> list[str]:
+    counts: dict[str, int] = {}
+    tokens: list[str] = []
+    for raw in keys:
+        key = str(raw or "").strip().lower()
+        if not key:
+            key = "__empty__"
+        seen = int(counts.get(key) or 0)
+        counts[key] = seen + 1
+        tokens.append(f"{key}#{seen}")
+    return tokens
+
+
+def _compute_move_sequence(before: list[str], after: list[str]) -> list[tuple[int, int]] | None:
+    if len(before) != len(after):
+        return None
+    if sorted(before) != sorted(after):
+        return None
+    if before == after:
+        return []
+    working = list(before)
+    moves: list[tuple[int, int]] = []
+    for dst, token in enumerate(after):
+        if working[dst] == token:
+            continue
+        try:
+            src = working.index(token, dst + 1)
+        except ValueError:
+            return None
+        moved = working.pop(src)
+        working.insert(dst, moved)
+        moves.append((int(src), int(dst)))
+    return moves if working == after else None
+
+
+def _infer_observation_position_actions(prev_projection: dict[str, Any] | None, cur_projection: dict[str, Any], phase: str) -> list[dict[str, Any]]:
+    if not isinstance(prev_projection, dict):
+        return []
+    out: list[dict[str, Any]] = []
+    prev_hand = [str(x or "") for x in (prev_projection.get("hand_keys") or []) if isinstance(x, str)]
+    cur_hand = [str(x or "") for x in (cur_projection.get("hand_keys") or []) if isinstance(x, str)]
+    hand_moves = _compute_move_sequence(_occurrence_tokens(prev_hand), _occurrence_tokens(cur_hand))
+    if hand_moves:
+        for src, dst in hand_moves:
+            out.append(
+                {
+                    "schema_version": "action_v1",
+                    "phase": phase,
+                    "action_type": "MOVE_HAND_CARD",
+                    "src_index": int(src),
+                    "dst_index": int(dst),
+                    "index_base": 0,
+                    "params": {"index_base": 0},
+                }
+            )
+
+    prev_jokers = [str(x or "") for x in (prev_projection.get("joker_keys") or []) if isinstance(x, str)]
+    cur_jokers = [str(x or "") for x in (cur_projection.get("joker_keys") or []) if isinstance(x, str)]
+    joker_moves = _compute_move_sequence(_occurrence_tokens(prev_jokers), _occurrence_tokens(cur_jokers))
+    if joker_moves:
+        for src, dst in joker_moves:
+            out.append(
+                {
+                    "schema_version": "action_v1",
+                    "phase": phase,
+                    "action_type": "MOVE_JOKER",
+                    "src_index": int(src),
+                    "dst_index": int(dst),
+                    "index_base": 0,
+                    "params": {"index_base": 0},
+                }
+            )
+    return out
 
 
 def _parse_args() -> argparse.Namespace:
@@ -145,6 +221,7 @@ def main() -> int:
     scripted_cursor = 0
     loop = bool(args.loop and not args.once)
     rows = 0
+    prev_after_projection: dict[str, Any] | None = None
 
     try:
         while True:
@@ -160,15 +237,23 @@ def main() -> int:
                 top_action = dict(scripted_actions[scripted_cursor])
                 scripted_cursor += 1
                 action_source = "scripted_action_trace"
+            phase = str(before.get("state") or "UNKNOWN")
+            before_projection = _projection(before)
+            external_inferred_actions = _infer_observation_position_actions(prev_after_projection, before_projection, phase=phase)
+            action_normalized = normalize_high_level_action(top_action, phase=phase) if isinstance(top_action, dict) else None
             row: dict[str, Any] = {
                 "timestamp": timestamp(),
                 "mode": ex.mode,
                 "base_url": args.base_url,
-                "phase": str(before.get("state") or "UNKNOWN"),
-                "before": _projection(before),
+                "phase": phase,
+                "before": before_projection,
                 "topk": ranked,
                 "action_source": action_source,
+                "action_normalized": action_normalized,
+                "external_state_changed": bool(len(external_inferred_actions) > 0),
+                "external_inferred_actions": external_inferred_actions,
             }
+            current_after_projection = before_projection
 
             if ex.execute_enabled and top_action is not None:
                 now = time.time()
@@ -187,6 +272,7 @@ def main() -> int:
                         row["executed"] = True
                         row["action"] = top_action
                         row["after"] = _projection(after)
+                        current_after_projection = row["after"]
                         row["reward"] = float(reward)
                         row["done"] = bool(done)
                         row["info"] = info
@@ -204,6 +290,7 @@ def main() -> int:
 
             _write_jsonl(log_path, row)
             rows += 1
+            prev_after_projection = current_after_projection
             if not loop:
                 break
             time.sleep(max(0.05, float(args.interval)))

@@ -135,6 +135,7 @@ def _detect_contract_hash(state_hashes: dict[str, str]) -> bool:
             "state_hash_full",
             "state_hash_p14_real_action_observed_core",
             "state_hash_p32_real_action_position_observed_core",
+            "state_hash_p37_action_fidelity_core",
         }:
             return True
         if key.startswith("state_hash_p"):
@@ -165,6 +166,7 @@ def evaluate_step_validity(
         if not (
             "state_hash_p14_real_action_observed_core" in state_hashes
             or "state_hash_p32_real_action_position_observed_core" in state_hashes
+            or "state_hash_p37_action_fidelity_core" in state_hashes
         ):
             return False, "missing_real_action_scope_hash"
 

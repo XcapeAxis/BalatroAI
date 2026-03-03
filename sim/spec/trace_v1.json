@@ -208,6 +208,9 @@
     },
     "state_hash_p32_real_action_position_observed_core": {
       "type": "string"
+    },
+    "state_hash_p37_action_fidelity_core": {
+      "type": "string"
     }
   }
 }

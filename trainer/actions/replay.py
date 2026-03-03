@@ -37,6 +37,72 @@ def _ensure_int_list(values: Any) -> list[int]:
     return out
 
 
+ACTION_TYPE_ALIASES: dict[str, str] = {
+    "REROLL": "SHOP_REROLL",
+    "BUY": "SHOP_BUY",
+    "PACK": "PACK_OPEN",
+    "USE": "CONSUMABLE_USE",
+    "SWAP_HAND_CARDS": "SWAP_HAND_CARD",
+    "SWAP_JOKERS": "SWAP_JOKER",
+}
+
+
+def _canonical_action_type(value: Any) -> str:
+    raw = str(value or "WAIT").strip().upper()
+    return ACTION_TYPE_ALIASES.get(raw, raw)
+
+
+def _read_index_base(src: dict[str, Any], params: dict[str, Any]) -> int:
+    candidate = src.get("index_base", params.get("index_base", 0))
+    try:
+        base = int(candidate)
+    except Exception:
+        base = 0
+    return 1 if base == 1 else 0
+
+
+def _normalize_index(value: Any, *, index_base: int, default: int = 0) -> int:
+    try:
+        idx = int(value)
+    except Exception:
+        idx = int(default)
+    norm = idx - int(index_base)
+    return max(0, norm)
+
+
+def _normalize_params_indices(params: dict[str, Any], *, index_base: int) -> dict[str, Any]:
+    out = dict(params)
+    if index_base not in {0, 1}:
+        index_base = 0
+
+    scalar_fields = (
+        "index",
+        "card",
+        "pack",
+        "voucher",
+        "consumable",
+        "joker",
+        "shop_index",
+        "pack_index",
+        "choice_index",
+        "voucher_index",
+        "consumable_index",
+        "joker_index",
+    )
+    for field in scalar_fields:
+        if field in out:
+            out[field] = _normalize_index(out.get(field), index_base=index_base, default=0)
+
+    list_fields = ("cards", "targets", "hand_indices")
+    for field in list_fields:
+        if field in out and isinstance(out.get(field), list):
+            values = _ensure_int_list(out.get(field))
+            out[field] = [_normalize_index(v, index_base=index_base, default=0) for v in values]
+
+    out["index_base"] = 0
+    return out
+
+
 def normalize_high_level_action(
     action: dict[str, Any] | None,
     *,
@@ -50,29 +116,61 @@ def normalize_high_level_action(
     """
     src = dict(action or {})
     params = src.get("params") if isinstance(src.get("params"), dict) else {}
-    action_type = str(src.get("action_type") or params.get("action_type") or "WAIT").strip().upper()
+    action_type = _canonical_action_type(src.get("action_type") or params.get("action_type") or "WAIT")
     out: dict[str, Any] = {
         "schema_version": str(src.get("schema_version") or "action_v1"),
         "phase": str(src.get("phase") or phase or "UNKNOWN"),
         "action_type": action_type,
     }
+    index_base = _read_index_base(src, params)
 
     if action_type in {"PLAY", "DISCARD"}:
-        out["indices"] = _ensure_int_list(src.get("indices") if "indices" in src else params.get("indices"))
+        raw_indices = src.get("indices") if "indices" in src else params.get("indices")
+        if not isinstance(raw_indices, list):
+            raw_indices = src.get("cards") if isinstance(src.get("cards"), list) else params.get("cards")
+        out["indices"] = [_normalize_index(v, index_base=index_base, default=0) for v in _ensure_int_list(raw_indices)]
     elif action_type == "SELECT":
         out["index"] = int(src.get("index", params.get("index", 0)))
-    elif action_type in {"BUY", "SELL", "PACK", "USE"}:
+    elif action_type in {"SHOP_BUY", "SELL", "PACK_OPEN", "CONSUMABLE_USE"}:
         merged = dict(params)
-        for key in ("card", "pack", "voucher", "joker", "consumable", "skip", "targets", "target_side"):
+        for key in (
+            "card",
+            "pack",
+            "voucher",
+            "joker",
+            "consumable",
+            "shop_index",
+            "pack_index",
+            "choice_index",
+            "voucher_index",
+            "consumable_index",
+            "joker_index",
+            "cards",
+            "hand_indices",
+            "skip",
+            "targets",
+            "target_side",
+            "kind",
+            "key",
+            "index_base",
+        ):
             if key in src and key not in merged:
                 merged[key] = src[key]
-        out["params"] = merged
+        out["params"] = _normalize_params_indices(merged, index_base=index_base)
     elif action_type in {"REORDER_HAND", "REORDER_JOKERS"}:
         permutation = src.get("permutation") if "permutation" in src else params.get("permutation")
         out["permutation"] = _ensure_int_list(permutation)
-    elif action_type in {"SWAP_HAND_CARDS", "SWAP_JOKERS"}:
-        out["i"] = int(src.get("i", params.get("i", 0)))
-        out["j"] = int(src.get("j", params.get("j", 0)))
+        out["index_base"] = 0
+    elif action_type in {"MOVE_HAND_CARD", "MOVE_JOKER"}:
+        src_index = src.get("src_index", src.get("from_index", params.get("src_index", params.get("from_index", 0))))
+        dst_index = src.get("dst_index", src.get("to_index", params.get("dst_index", params.get("to_index", 0))))
+        out["src_index"] = _normalize_index(src_index, index_base=index_base, default=0)
+        out["dst_index"] = _normalize_index(dst_index, index_base=index_base, default=0)
+        out["index_base"] = 0
+    elif action_type in {"SWAP_HAND_CARD", "SWAP_JOKER"}:
+        out["i"] = _normalize_index(src.get("i", params.get("i", 0)), index_base=index_base, default=0)
+        out["j"] = _normalize_index(src.get("j", params.get("j", 0)), index_base=index_base, default=0)
+        out["index_base"] = 0
     elif action_type in {"CARD_REORDER", "JOKER_REORDER", "APPLY_TAROT_SWAP", "USE_CONSUMABLE_ON_HAND_CARD"}:
         # Reserved P33 hook names for future contract expansion.
         out["params"] = dict(params)
@@ -229,4 +327,3 @@ __all__ = [
     "ReplayResult",
     "normalize_high_level_action",
 ]
-

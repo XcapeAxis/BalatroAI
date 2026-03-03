@@ -2,13 +2,28 @@
 from typing import Any
 
 
-def _hand_keys(state: dict[str, Any]) -> list[str]:
+def _hand_cards_signal(state: dict[str, Any]) -> list[dict[str, Any]]:
     cards = (state.get("hand") or {}).get("cards") or []
-    out = []
+    out: list[dict[str, Any]] = []
     for c in cards:
         if not isinstance(c, dict):
             continue
-        out.append(str(c.get("key") or c.get("card_id") or c.get("id") or ""))
+        value = c.get("value") if isinstance(c.get("value"), dict) else {}
+        raw_id = c.get("id")
+        if raw_id is None:
+            raw_id = c.get("card_id")
+        if raw_id is None:
+            raw_id = c.get("uid")
+        rank = c.get("rank") if c.get("rank") is not None else value.get("rank")
+        suit = c.get("suit") if c.get("suit") is not None else value.get("suit")
+        out.append(
+            {
+                "id": "" if raw_id is None else str(raw_id),
+                "key": str(c.get("key") or ""),
+                "rank": "" if rank is None else str(rank),
+                "suit": "" if suit is None else str(suit),
+            }
+        )
     return out
 
 
@@ -131,8 +146,8 @@ def extract_rng_events(prev_state: dict[str, Any] | None, cur_state: dict[str, A
             }
         )
 
-    cur_hand = _hand_keys(cur_state)
-    prev_hand = _hand_keys(prev_state)
+    cur_hand = _hand_cards_signal(cur_state)
+    prev_hand = _hand_cards_signal(prev_state)
     if cur_hand and cur_hand != prev_hand:
         events.append(
             {

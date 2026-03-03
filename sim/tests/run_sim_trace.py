@@ -31,6 +31,7 @@ from sim.core.hashing import (
     state_hash_p11_prob_econ_observed_core,
     state_hash_p14_real_action_observed_core,
     state_hash_p32_real_action_position_observed_core,
+    state_hash_p37_action_fidelity_core,
     state_hash_rng_events_core,
     state_hash_score_core,
     state_hash_zones_core,
@@ -151,6 +152,7 @@ def main() -> int:
             canonical_with_observed = dict(canonical)
             canonical_with_observed["score_observed"] = dict(score_observed)
             canonical_with_observed["rng_replay"] = dict(rng_replay)
+            canonical_with_observed["_last_action_type"] = str(executed_action.get("action_type") or "").upper()
 
             include_snapshot = (
                 step_id == 0
@@ -184,6 +186,7 @@ def main() -> int:
                 "state_hash_p11_prob_econ_observed_core": state_hash_p11_prob_econ_observed_core(canonical_with_observed),
                 "state_hash_p14_real_action_observed_core": state_hash_p14_real_action_observed_core(canonical_with_observed),
                 "state_hash_p32_real_action_position_observed_core": state_hash_p32_real_action_position_observed_core(canonical_with_observed),
+                "state_hash_p37_action_fidelity_core": state_hash_p37_action_fidelity_core(canonical_with_observed),
                 "state_hash_zones_core": state_hash_zones_core(canonical),
                 "state_hash_zones_counts_core": state_hash_zones_counts_core(canonical),
                 "state_hash_economy_core": state_hash_economy_core(canonical),

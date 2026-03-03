@@ -1009,6 +1009,71 @@ def _filter_p32_real_action_position_observed_core(state: dict[str, Any]) -> dic
     }
 
 
+def _ordered_hand_uid_tokens(state: dict[str, Any]) -> list[str]:
+    zones = state.get("zones") if isinstance(state.get("zones"), dict) else {}
+    hand = zones.get("hand") if isinstance(zones.get("hand"), list) else []
+    out: list[str] = []
+    for idx, card in enumerate(hand):
+        if not isinstance(card, dict):
+            continue
+        uid = card.get("uid") or card.get("card_id") or card.get("id") or card.get("key")
+        if uid is None or str(uid) == "":
+            uid = f"hand-{idx}"
+        out.append(str(uid))
+    return out
+
+
+def _ordered_joker_uid_key_tokens(state: dict[str, Any]) -> list[dict[str, str]]:
+    raw = state.get("jokers")
+    items = raw.get("cards") if isinstance(raw, dict) and isinstance(raw.get("cards"), list) else raw
+    if not isinstance(items, list):
+        items = []
+    out: list[dict[str, str]] = []
+    for idx, item in enumerate(items):
+        if isinstance(item, dict):
+            uid = item.get("uid") or item.get("card_id") or item.get("id") or item.get("joker_id") or item.get("key")
+            key = item.get("key") or item.get("joker_id") or item.get("id")
+        else:
+            uid = item
+            key = item
+        uid_text = str(uid or "").strip().lower()
+        key_text = str(key or "").strip().lower()
+        if not uid_text:
+            uid_text = f"joker-{idx}"
+        out.append({"uid": uid_text, "key": key_text})
+    return out
+
+
+def _selected_hand_indices_min(state: dict[str, Any]) -> list[int]:
+    selected = state.get("selected")
+    if isinstance(selected, dict):
+        cards = selected.get("cards") if isinstance(selected.get("cards"), list) else []
+        out = [int(x) for x in cards if isinstance(x, int) or str(x).isdigit()]
+        return sorted(set(out))
+    if isinstance(selected, list):
+        out = [int(x) for x in selected if isinstance(x, int) or str(x).isdigit()]
+        return sorted(set(out))
+    return []
+
+
+def _filter_p37_action_fidelity_core(state: dict[str, Any]) -> dict[str, Any]:
+    state = to_builtin(state)
+    return {
+        "schema_version": state.get("schema_version"),
+        "phase": str(state.get("phase") or ""),
+        "hand_order": {
+            "uids": _ordered_hand_uid_tokens(state),
+        },
+        "jokers_order": {
+            "items": _ordered_joker_uid_key_tokens(state),
+        },
+        "selected": {
+            "hand_indices": _selected_hand_indices_min(state),
+        },
+        "last_action_type": str(state.get("_last_action_type") or state.get("last_action_type") or "").strip().upper(),
+    }
+
+
 def _filter_zones_core(state: dict[str, Any]) -> dict[str, Any]:
     state = to_builtin(state)
     zones = state.get("zones") or {}
@@ -1180,6 +1245,10 @@ def state_hash_p32_real_action_position_observed_core(state: dict[str, Any]) -> 
     return _sha256_text(canonical_dumps(_filter_p32_real_action_position_observed_core(state)))
 
 
+def state_hash_p37_action_fidelity_core(state: dict[str, Any]) -> str:
+    return _sha256_text(canonical_dumps(_filter_p37_action_fidelity_core(state)))
+
+
 def state_hash_zones_core(state: dict[str, Any]) -> str:
     return _sha256_text(canonical_dumps(_filter_zones_core(state)))
 
@@ -1271,6 +1340,10 @@ def p14_real_action_observed_core_projection(state: dict[str, Any]) -> dict[str,
 
 def p32_real_action_position_observed_core_projection(state: dict[str, Any]) -> dict[str, Any]:
     return _filter_p32_real_action_position_observed_core(state)
+
+
+def p37_action_fidelity_core_projection(state: dict[str, Any]) -> dict[str, Any]:
+    return _filter_p37_action_fidelity_core(state)
 
 
 def zones_core_projection(state: dict[str, Any]) -> dict[str, Any]:

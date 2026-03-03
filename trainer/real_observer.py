@@ -75,6 +75,27 @@ def parse_hand(gamestate: dict[str, Any]) -> dict[str, Any]:
     return {"hand_size": len(cards), "cards": cards}
 
 
+def parse_jokers(gamestate: dict[str, Any]) -> dict[str, Any]:
+    jokers_raw = gamestate.get("jokers")
+    if isinstance(jokers_raw, dict):
+        cards_raw = jokers_raw.get("cards") if isinstance(jokers_raw.get("cards"), list) else []
+    elif isinstance(jokers_raw, list):
+        cards_raw = jokers_raw
+    else:
+        cards_raw = []
+
+    cards: list[dict[str, Any]] = []
+    for idx, joker in enumerate(cards_raw):
+        if isinstance(joker, dict):
+            key = str(joker.get("key") or joker.get("joker_id") or joker.get("id") or "")
+            disabled = bool(joker.get("disabled") or False)
+        else:
+            key = str(joker or "")
+            disabled = False
+        cards.append({"index": idx, "key": key, "disabled": disabled})
+    return {"joker_size": len(cards), "cards": cards}
+
+
 def _parse_market_block(block: Any) -> dict[str, Any]:
     if not isinstance(block, dict):
         return {"count": 0, "cards": []}
@@ -83,12 +104,17 @@ def _parse_market_block(block: Any) -> dict[str, Any]:
     for idx, card in enumerate(cards_raw):
         if not isinstance(card, dict):
             continue
+        cost_raw = card.get("cost")
+        if isinstance(cost_raw, dict):
+            cost_value = float(cost_raw.get("buy") or 0.0)
+        else:
+            cost_value = float(cost_raw or 0.0)
         cards.append(
             {
                 "index": idx,
                 "key": str(card.get("key") or ""),
                 "label": str(card.get("label") or ""),
-                "cost": float(card.get("cost") or 0.0),
+                "cost": cost_value,
                 "set": str(card.get("set") or ""),
             }
         )
@@ -130,6 +156,7 @@ def build_observation(gamestate: dict[str, Any]) -> dict[str, Any]:
         "phase": str(gamestate.get("state") or "UNKNOWN"),
         "resources": parse_resources(gamestate),
         "hand": parse_hand(gamestate),
+        "jokers": parse_jokers(gamestate),
         "shop": parse_shop(gamestate),
     }
 

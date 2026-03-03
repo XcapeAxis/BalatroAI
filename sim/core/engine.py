@@ -399,39 +399,80 @@ class SimEnv:
             elif typ == "shop_roll":
                 raw = outcome.get("value")
                 offers = raw if isinstance(raw, list) else []
-                cards: list[dict[str, Any]] = []
-                for idx, key in enumerate(offers):
-                    key_s = str(key or "").strip().lower()
-                    if not key_s:
-                        continue
-                    cards.append(
+                shop_now = self._state.get("shop") if isinstance(self._state.get("shop"), dict) else {}
+                has_shop_cards = bool(isinstance(shop_now.get("cards"), list) and len(shop_now.get("cards")) > 0)
+                # Keep shop_roll as a deterministic token; only synthesize fallback cards
+                # when no concrete shop_offers outcome is available.
+                if not has_shop_cards:
+                    cards: list[dict[str, Any]] = []
+                    for idx, key in enumerate(offers):
+                        key_s = str(key or "").strip().lower()
+                        if not key_s:
+                            continue
+                        cards.append(
+                            {
+                                "key": key_s,
+                                "set": "JOKER",
+                                "label": key_s.upper(),
+                                "cost": {"buy": 0.0},
+                                "slot_index": idx,
+                            }
+                        )
+                    if cards:
+                        self._state["shop"] = {
+                            "count": len(cards),
+                            "limit": max(len(cards), int((self._state.get("shop") or {}).get("limit") or 0)),
+                            "highlighted_limit": int((self._state.get("shop") or {}).get("highlighted_limit") or 0),
+                            "cards": cards,
+                        }
+                applied += 1
+            elif typ == "phase_transition":
+                to_phase = str(outcome.get("to_phase") or "").strip().upper()
+                if to_phase:
+                    self._state["state"] = to_phase
+                applied += 1
+            elif typ == "hand_cards":
+                cards_raw = outcome.get("cards") if isinstance(outcome.get("cards"), list) else []
+                rebuilt: list[dict[str, Any]] = []
+                for idx, item in enumerate(cards_raw):
+                    if isinstance(item, dict):
+                        key = str(item.get("key") or "").strip()
+                        card_id_raw = item.get("id")
+                        if card_id_raw is None:
+                            card_id_raw = item.get("card_id")
+                        if card_id_raw is None:
+                            card_id_raw = item.get("uid")
+                        card_id = str(card_id_raw or key or f"rng-hand-{idx}")
+                        rank = str(item.get("rank") or "")
+                        suit = str(item.get("suit") or "")
+                    else:
+                        key = str(item or "").strip()
+                        card_id = key or f"rng-hand-{idx}"
+                        rank = ""
+                        suit = ""
+                    rebuilt.append(
                         {
-                            "key": key_s,
-                            "set": "JOKER",
-                            "label": key_s.upper(),
-                            "cost": {"buy": 0.0},
-                            "slot_index": idx,
+                            "card_id": card_id,
+                            "id": card_id,
+                            "rank": rank,
+                            "suit": suit,
+                            "key": key,
+                            "value": {"rank": rank, "suit": suit, "effect": ""},
+                            "modifier": [],
+                            "state": [],
                         }
                     )
-                if cards:
-                    self._state["shop"] = {
-                        "count": len(cards),
-                        "limit": max(len(cards), int((self._state.get("shop") or {}).get("limit") or 0)),
-                        "highlighted_limit": int((self._state.get("shop") or {}).get("highlighted_limit") or 0),
-                        "cards": cards,
-                    }
-                applied += 1
-            elif typ in {"phase_transition", "hand_cards"}:
-                # Observable oracle tokens used for replay determinism diagnostics.
+                if rebuilt:
+                    self._state["hand"] = {"cards": rebuilt}
                 applied += 1
 
         if applied:
             info["rng_replay_applied"] = applied
 
-    def _consume_rng_replay(self, action: dict[str, Any], info: dict[str, Any]) -> None:
+    def _consume_rng_replay(self, action: dict[str, Any], info: dict[str, Any]) -> list[dict[str, Any]]:
         replay = action.get("rng_replay") if isinstance(action.get("rng_replay"), dict) else None
         if not replay:
-            return
+            return []
         enabled = bool(replay.get("enabled") or False)
         outcomes = replay.get("outcomes") if isinstance(replay.get("outcomes"), list) else []
         if enabled and replay.get("outcomes") is not None and not isinstance(replay.get("outcomes"), list):
@@ -441,8 +482,21 @@ class SimEnv:
         self._state["_rng_replay_last"] = list(outcomes)
         info["rng_replay_enabled"] = enabled
         info["rng_replay_consumed"] = len(outcomes)
+        deferred: list[dict[str, Any]] = []
         if enabled:
-            self._apply_rng_replay_outcomes(outcomes, info)
+            immediate: list[dict[str, Any]] = []
+            for outcome in outcomes:
+                if not isinstance(outcome, dict):
+                    continue
+                typ = str(outcome.get("type") or "").strip().lower()
+                if typ in {"phase_transition", "hand_cards"}:
+                    deferred.append(dict(outcome))
+                else:
+                    immediate.append(dict(outcome))
+            if immediate:
+                self._apply_rng_replay_outcomes(immediate, info)
+        info["rng_replay_deferred"] = len(deferred)
+        return deferred
 
     def _make_blinds(self, ante: int, selected: str, selecting: bool) -> dict[str, dict[str, Any]]:
         scores = self._target_scores(ante)
@@ -802,6 +856,47 @@ class SimEnv:
         perm[ii], perm[jj] = perm[jj], perm[ii]
         return perm
 
+    @staticmethod
+    def _read_index_base(action: dict[str, Any]) -> int:
+        params = action.get("params") if isinstance(action.get("params"), dict) else {}
+        candidate = action.get("index_base", params.get("index_base", 0))
+        try:
+            base = int(candidate)
+        except Exception:
+            base = 0
+        return 1 if base == 1 else 0
+
+    @staticmethod
+    def _normalize_external_index(value: Any, *, index_base: int, label: str) -> int:
+        try:
+            idx = int(value)
+        except Exception:
+            raise ValueError(f"{label} index must be integer")
+        idx = idx - int(index_base)
+        if idx < 0:
+            raise ValueError(f"{label} index out of range")
+        return idx
+
+    def _resolve_move_indices(self, action: dict[str, Any], *, size: int, label: str) -> tuple[int, int]:
+        params = action.get("params") if isinstance(action.get("params"), dict) else {}
+        index_base = self._read_index_base(action)
+        src_raw = action.get("src_index", action.get("from_index", params.get("src_index", params.get("from_index"))))
+        dst_raw = action.get("dst_index", action.get("to_index", params.get("dst_index", params.get("to_index"))))
+        src = self._normalize_external_index(src_raw, index_base=index_base, label=label)
+        dst = self._normalize_external_index(dst_raw, index_base=index_base, label=label)
+        if src >= size or dst >= size:
+            raise ValueError(f"{label} move indices out of range")
+        return src, dst
+
+    @staticmethod
+    def _move_slot(items: list[Any], src: int, dst: int) -> list[Any]:
+        if src == dst:
+            return list(items)
+        moved = list(items)
+        card = moved.pop(src)
+        moved.insert(dst, card)
+        return moved
+
     def _apply_reorder_hand(self, action: dict[str, Any]) -> None:
         hand_cards = self._state["hand"]["cards"]
         size = len(hand_cards)
@@ -826,8 +921,9 @@ class SimEnv:
         hand_cards = self._state["hand"]["cards"]
         size = len(hand_cards)
         params = action.get("params") if isinstance(action.get("params"), dict) else {}
-        i = action.get("i", params.get("i"))
-        j = action.get("j", params.get("j"))
+        index_base = self._read_index_base(action)
+        i = self._normalize_external_index(action.get("i", params.get("i")), index_base=index_base, label="SWAP_HAND_CARD")
+        j = self._normalize_external_index(action.get("j", params.get("j")), index_base=index_base, label="SWAP_HAND_CARD")
         perm = self._swap_to_permutation(i, j, size, "SWAP_HAND_CARDS")
         self._state["hand"]["cards"] = [hand_cards[idx] for idx in perm]
 
@@ -835,10 +931,34 @@ class SimEnv:
         jokers = self._state.get("jokers") if isinstance(self._state.get("jokers"), list) else []
         size = len(jokers)
         params = action.get("params") if isinstance(action.get("params"), dict) else {}
-        i = action.get("i", params.get("i"))
-        j = action.get("j", params.get("j"))
+        index_base = self._read_index_base(action)
+        i = self._normalize_external_index(action.get("i", params.get("i")), index_base=index_base, label="SWAP_JOKER")
+        j = self._normalize_external_index(action.get("j", params.get("j")), index_base=index_base, label="SWAP_JOKER")
         perm = self._swap_to_permutation(i, j, size, "SWAP_JOKERS")
         self._state["jokers"] = [jokers[idx] for idx in perm]
+
+    def _apply_move_hand_card(self, action: dict[str, Any]) -> None:
+        hand_cards = self._state["hand"]["cards"]
+        src, dst = self._resolve_move_indices(action, size=len(hand_cards), label="MOVE_HAND_CARD")
+        self._state["hand"]["cards"] = self._move_slot(hand_cards, src, dst)
+
+    def _apply_move_joker(self, action: dict[str, Any]) -> None:
+        jokers = self._state.get("jokers") if isinstance(self._state.get("jokers"), list) else []
+        src, dst = self._resolve_move_indices(action, size=len(jokers), label="MOVE_JOKER")
+        self._state["jokers"] = self._move_slot(jokers, src, dst)
+
+    @staticmethod
+    def _canonical_action_type(raw_action_type: Any) -> str:
+        action_type = str(raw_action_type or "WAIT").upper()
+        aliases = {
+            "REROLL": "SHOP_REROLL",
+            "BUY": "SHOP_BUY",
+            "PACK": "PACK_OPEN",
+            "USE": "CONSUMABLE_USE",
+            "SWAP_HAND_CARDS": "SWAP_HAND_CARD",
+            "SWAP_JOKERS": "SWAP_JOKER",
+        }
+        return aliases.get(action_type, action_type)
 
     def step(self, action: dict[str, Any]) -> tuple[dict[str, Any], float, bool, dict[str, Any]]:
         if not isinstance(action, dict):
@@ -847,27 +967,33 @@ class SimEnv:
         prev_chips = float((self._state.get("round") or {}).get("chips") or 0.0)
         info: dict[str, Any] = {"backend": "sim", "overridden": False}
 
-        self._consume_rng_replay(action, info)
+        deferred_rng_outcomes = self._consume_rng_replay(action, info)
 
-        action_type = str(action.get("action_type") or "WAIT").upper()
+        action_type = self._canonical_action_type(action.get("action_type"))
         if action_type == "AUTO":
             action = self._phase_default_action()
-            action_type = str(action.get("action_type") or "WAIT").upper()
+            action_type = self._canonical_action_type(action.get("action_type"))
             info["overridden"] = True
 
         phase = str(self._state.get("state") or "UNKNOWN")
 
-        if action_type in {"REORDER_HAND", "SWAP_HAND_CARDS", "REORDER_JOKERS", "SWAP_JOKERS"}:
+        if action_type in {"REORDER_HAND", "SWAP_HAND_CARD", "REORDER_JOKERS", "SWAP_JOKER", "MOVE_HAND_CARD", "MOVE_JOKER"}:
             if phase in {"MENU", "GAME_OVER"}:
                 raise ValueError(f"invalid action_type={action_type} for phase={phase}")
             if action_type == "REORDER_HAND":
                 self._apply_reorder_hand(action)
-            elif action_type == "SWAP_HAND_CARDS":
+            elif action_type == "SWAP_HAND_CARD":
                 self._apply_swap_hand_cards(action)
             elif action_type == "REORDER_JOKERS":
                 self._apply_reorder_jokers(action)
-            elif action_type == "SWAP_JOKERS":
+            elif action_type == "SWAP_JOKER":
                 self._apply_swap_jokers(action)
+            elif action_type == "MOVE_HAND_CARD":
+                self._apply_move_hand_card(action)
+            elif action_type == "MOVE_JOKER":
+                self._apply_move_joker(action)
+            if deferred_rng_outcomes:
+                self._apply_rng_replay_outcomes(deferred_rng_outcomes, info)
             self._refresh_done_flags()
             now = copy.deepcopy(self._state)
             reward = float((now.get("round") or {}).get("chips") or 0.0) - prev_chips
@@ -879,6 +1005,8 @@ class SimEnv:
             raw_stake = action.get("stake")
             stake_name = self._sanitize_stake_name(raw_stake) if raw_stake is not None else self._stake_name
             st = self.reset(seed=seed if isinstance(seed, str) else self.seed, stake=stake_name)
+            if deferred_rng_outcomes:
+                self._apply_rng_replay_outcomes(deferred_rng_outcomes, info)
             reward = float((st.get("round") or {}).get("chips") or 0.0) - prev_chips
             return st, reward, bool(st.get("done") or False), info
 
@@ -893,6 +1021,8 @@ class SimEnv:
             self._state["hand"]["cards"] = []
             self._state["played"]["cards"] = []
             self._state["discard"]["cards"] = []
+            if deferred_rng_outcomes:
+                self._apply_rng_replay_outcomes(deferred_rng_outcomes, info)
             self._refresh_done_flags()
             now = copy.deepcopy(self._state)
             reward = float((now.get("round") or {}).get("chips") or 0.0) - prev_chips
@@ -1019,13 +1149,16 @@ class SimEnv:
         elif phase == "SHOP":
             if action_type == "NEXT_ROUND":
                 self._begin_round(next_round=True)
-            elif action_type == "REROLL":
+            elif action_type == "SHOP_REROLL":
                 self._state["money"] = max(0, int(self._state.get("money") or 0) - int((self._state.get("round") or {}).get("reroll_cost") or 0))
-            elif action_type == "BUY":
+            elif action_type == "SHOP_BUY":
                 params = action.get("params") if isinstance(action.get("params"), dict) else {}
-                if "pack" in params:
+                pack_idx = params.get("pack")
+                if pack_idx is None:
+                    pack_idx = params.get("pack_index")
+                if pack_idx is not None:
                     self._state["state"] = "SMODS_BOOSTER_OPENED"
-            elif action_type in {"PACK", "SELL", "USE", "WAIT"}:
+            elif action_type in {"PACK_OPEN", "SELL", "CONSUMABLE_USE", "WAIT"}:
                 pass
             else:
                 if self.fail_fast:
@@ -1035,7 +1168,7 @@ class SimEnv:
             self._apply_expected_shop_context(action, info)
 
         elif phase == "SMODS_BOOSTER_OPENED":
-            if action_type in {"PACK", "SKIP", "WAIT"}:
+            if action_type in {"PACK_OPEN", "SKIP", "WAIT"}:
                 self._state["state"] = "SHOP"
             elif action_type == "NEXT_ROUND":
                 self._begin_round(next_round=True)
@@ -1061,6 +1194,8 @@ class SimEnv:
                 info["overridden"] = True
                 return self.step(self._phase_default_action())
 
+        if deferred_rng_outcomes:
+            self._apply_rng_replay_outcomes(deferred_rng_outcomes, info)
         self._refresh_done_flags()
         now = copy.deepcopy(self._state)
         reward = float((now.get("round") or {}).get("chips") or 0.0) - prev_chips

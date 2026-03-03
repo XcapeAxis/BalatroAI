@@ -19,13 +19,21 @@
         "WAIT",
         "MENU",
         "SKIP",
+        "SHOP_REROLL",
         "REROLL",
+        "SHOP_BUY",
         "BUY",
+        "PACK_OPEN",
         "PACK",
         "SELL",
+        "CONSUMABLE_USE",
         "USE",
         "REORDER_HAND",
         "REORDER_JOKERS",
+        "MOVE_HAND_CARD",
+        "MOVE_JOKER",
+        "SWAP_HAND_CARD",
+        "SWAP_JOKER",
         "SWAP_HAND_CARDS",
         "SWAP_JOKERS"
       ]
@@ -39,13 +47,36 @@
     "index": {"type": "integer", "minimum": 0},
     "seed": {"type": "string"},
     "params": {"type": "object"},
+    "index_base": {"type": "integer", "enum": [0, 1]},
     "permutation": {
       "type": "array",
       "items": {"type": "integer", "minimum": 0},
       "uniqueItems": true
     },
+    "src_index": {"type": "integer", "minimum": 0},
+    "dst_index": {"type": "integer", "minimum": 0},
+    "from_index": {"type": "integer", "minimum": 0},
+    "to_index": {"type": "integer", "minimum": 0},
     "i": {"type": "integer", "minimum": 0},
     "j": {"type": "integer", "minimum": 0},
+    "kind": {"type": "string"},
+    "key": {"type": "string"},
+    "cards": {
+      "type": "array",
+      "items": {"type": "integer", "minimum": 0},
+      "uniqueItems": true
+    },
+    "hand_indices": {
+      "type": "array",
+      "items": {"type": "integer", "minimum": 0},
+      "uniqueItems": true
+    },
+    "shop_index": {"type": "integer", "minimum": 0},
+    "pack_index": {"type": "integer", "minimum": 0},
+    "choice_index": {"type": "integer", "minimum": 0},
+    "voucher_index": {"type": "integer", "minimum": 0},
+    "consumable_index": {"type": "integer", "minimum": 0},
+    "joker_index": {"type": "integer", "minimum": 0},
     "targets": {
       "type": "array",
       "items": {"type": "integer", "minimum": 0},
