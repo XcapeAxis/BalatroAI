@@ -1,0 +1,45 @@
+﻿{
+  "schema": "p36_selfsup_replay_v1",
+  "replay": {
+    "real_roots": [
+      "docs/artifacts/p32",
+      "docs/artifacts/p13"
+    ],
+    "sim_roots": [
+      "sim/tests/fixtures_runtime",
+      "docs/artifacts/p32/smoke_position_fixture"
+    ],
+    "max_episodes_per_source": 6,
+    "out_dir": "docs/artifacts/p36/replay/smoke_latest"
+  },
+  "data": {
+    "replay_steps_path": "docs/artifacts/p36/replay/latest/replay_steps.jsonl",
+    "max_samples": 320,
+    "valid_only": true
+  },
+  "model": {
+    "action_embed_dim": 16,
+    "hidden_dim": 96,
+    "latent_dim": 64,
+    "dropout": 0.1
+  },
+  "training": {
+    "objective_type": "hybrid",
+    "seed": 3606,
+    "epochs": 2,
+    "batch_size": 32,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "val_ratio": 0.2,
+    "mask_ratio": 0.2,
+    "mask_weight": 1.0,
+    "next_delta_weight": 1.0,
+    "log_every": 10,
+    "max_steps": 120,
+    "device": "auto"
+  },
+  "output": {
+    "artifacts_root": "docs/artifacts/p36/selfsup_replay",
+    "run_root": "trainer_runs/p36_selfsup/replay"
+  }
+}

@@ -753,7 +753,7 @@ def _run_selfsup_seed_experiment(
     seed_idx: int,
     seed_total: int,
 ) -> dict[str, Any]:
-    from trainer.selfsup_train import run_selfsup_training
+    from trainer.experiments.selfsup_train import run_selfsup_training
 
     eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
     selfsup_cfg_rel = str(
@@ -775,8 +775,16 @@ def _run_selfsup_seed_experiment(
     )
     final = summary.get("final_metrics") if isinstance(summary.get("final_metrics"), dict) else {}
     val_loss = float(final.get("val_loss") or 0.0)
-    val_mae = float(final.get("val_score_delta_mae") or 0.0)
-    hand_acc = float(final.get("val_hand_type_acc") or 0.0)
+    val_mae = float(
+        final.get("val_score_delta_mae")
+        or final.get("val_next_delta_mae")
+        or 0.0
+    )
+    hand_acc = float(
+        final.get("val_hand_type_acc")
+        or final.get("val_mask_acc")
+        or 0.0
+    )
 
     # Keep orchestrator metric schema compatible while carrying selfsup signals.
     avg_ante = max(0.0, 3.0 + (hand_acc * 1.6) + (max(0.0, 1.0 - val_mae) * 0.4))
