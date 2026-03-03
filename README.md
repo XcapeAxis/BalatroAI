@@ -13,7 +13,9 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
-
+[![CI Smoke](https://github.com/XcapeAxis/BalatroAI/actions/workflows/ci-smoke.yml/badge.svg)](https://github.com/XcapeAxis/BalatroAI/actions/workflows/ci-smoke.yml)
+[![GitHub Stars](https://img.shields.io/github/stars/XcapeAxis/BalatroAI?style=social)](https://github.com/XcapeAxis/BalatroAI/stargazers)
+[![GitHub Issues](https://img.shields.io/github/issues/XcapeAxis/BalatroAI)](https://github.com/XcapeAxis/BalatroAI/issues)
 <!-- BADGES:END -->
 
 BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33 self-supervised entries plus a unified P33 action replay contract. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised iteration, not as a cheat injector or memory-hook tool.
@@ -211,7 +213,7 @@ P33 self-supervised plumbing reproducibility (experimental entry):
 - trend_warehouse_last_updated: 2026-03-02T17:16:27.519440+00:00
 - trend_rows_count: 20115
 - champion: quick_risk_aware (champion)
-- candidate: quick_hybrid (decision: hold)
+- candidate:  (decision: hold)
 - docs_coverage: P15-P33
 <!-- README_STATUS:END -->
 <!-- STATUS:END -->
@@ -353,4 +355,5 @@ Planned:
 
 - License: currently not specified by a top-level `LICENSE` file.
 - Contributions: use mainline-only workflow and run gates before proposing changes.
+
 
