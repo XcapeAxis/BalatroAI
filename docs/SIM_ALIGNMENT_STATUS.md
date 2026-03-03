@@ -122,3 +122,17 @@ The runner executes:
 - Reference docs:
   - `docs/EXPERIMENTS_P33.md`
   - `docs/COVERAGE_P33_STATUS.md`
+
+## P35 Telemetry + Reproducibility Hardening Note
+
+- P22 telemetry/event streams are now normalized for both run-level and per-experiment logs:
+  - run-level: `schema=p34_telemetry_event_v1`
+  - experiment-level: `schema=p34_progress_event_v1`
+- Seed usage is explicitly materialized in:
+  - `run_plan.json -> experiments_with_seeds[]`
+  - `<exp_id>/seeds_used.json`
+  - `summary_table.*` (`seed_set_name`, `seed_hash`, `seeds_used`)
+- P35 also adds a P32 self-supervised representation stub line (`pretrain_repr`) via:
+  - `configs/experiments/p32_self_supervised.yaml`
+  - `scripts/run_p32_self_supervised.ps1`
+  - `docs/EXPERIMENTS_P32_SELF_SUPERVISED.md`

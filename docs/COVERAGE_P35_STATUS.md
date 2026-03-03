@@ -1,0 +1,23 @@
+# COVERAGE P35 STATUS
+
+- milestone: P35
+- focus:
+  - README/docs alignment and onboarding clarity
+  - telemetry/reproducibility hardening for P22
+  - self-supervised representation stub orchestration path
+- key additions:
+  - `configs/experiments/p32_self_supervised.yaml`
+  - `scripts/run_p32_self_supervised.ps1`
+  - `trainer/self_supervised/run_pretrain.py`
+  - `docs/EXPERIMENTS_P32_SELF_SUPERVISED.md`
+  - `docs/SEEDS_AND_REPRODUCIBILITY.md`
+  - `docs/ROADMAP.md`
+- artifact roots:
+  - `docs/artifacts/p22/runs/<run_id>/...`
+  - `docs/artifacts/p32_selfsup/runs/<run_id>/...`
+- seed policy note:
+  - quick smoke can use reduced seed count for latency
+  - comparison/decision flows should use multi-seed aggregates
+- maturity:
+  - representation pretrain line is `stub/experimental`
+  - BC/DAgger/RL mainline remains unchanged

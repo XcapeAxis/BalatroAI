@@ -29,6 +29,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 |---|---|---|
 | Plan only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -DryRun` | validates matrix + writes plan/report |
 | Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | 4 experiments x 2 seeds (includes selfsup entries) |
+| Multi-seed quick compare | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline,quick_candidate -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | 2 strategies x 3 seeds |
 | Fast smoke (verbose) | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -VerboseLogs` | adds per-seed/per-stage console logs |
 | Nightly style | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Nightly -Resume` | larger seed set + resume |
 | Single experiment | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline -Resume` | rerun one exp id |
@@ -175,6 +176,53 @@ Telemetry schema notes (P34):
 - canonical fields: `run_id`, `exp_id`, `seed`, `phase`, `stage`, `status`, `step_or_epoch`, `metrics`, `elapsed_sec`, `wall_time_sec`, `message`.
 - `summary_table.*` now also exposes `seed_set_name`, `seed_hash`, `seeds_used`, `final_win_rate`, and `final_loss` (loss fields populated for self-supervised rows).
 
+## How to Read Champion/Candidate Outputs
+
+P22 writes ranking and decision artifacts used by later gates:
+
+- run-level report: `docs/artifacts/p22/runs/<run_id>/report_p23.json`
+- out-root rolling decision files:
+  - `docs/artifacts/p22/champion.json`
+  - `docs/artifacts/p22/candidate.json`
+  - `docs/artifacts/p22/release_state.json` (when release flow is enabled)
+
+Recommended interpretation flow:
+
+1. use `summary_table.md` for quick ranking by primary metric
+2. inspect per-experiment `seed_count` and `seeds_used` before trusting deltas
+3. read `report_p23.json` decision fields for promote/hold rationale
+4. validate with higher-seed reruns before changing default strategy
+
+## Multi-Seed Quick Start Example (2x3)
+
+Command:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline,quick_candidate -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"
+```
+
+Expected artifacts:
+
+- `run_plan.json` contains `experiments_with_seeds[]` with exactly 3 seeds per selected experiment
+- each experiment has `seeds_used.json` with `seed_policy_version=explicit.cli_override`
+- `summary_table.md` includes two rows (`quick_baseline`, `quick_candidate`) with aggregated metrics and `seed_count=3`
+
+Practical readout:
+
+- compare `mean`/`avg_ante` and `win_rate` across rows
+- check `std` + failure counts to detect unstable candidates
+- treat single-seed wins as smoke only; prefer multi-seed consistency
+
+## P32 Self-Supervised Skeleton Integration (P35)
+
+A dedicated config/wrapper is now available for representation pretrain stubs:
+
+- config: `configs/experiments/p32_self_supervised.yaml`
+- wrapper: `scripts/run_p32_self_supervised.ps1`
+- docs: `docs/EXPERIMENTS_P32_SELF_SUPERVISED.md`
+
+This line is intentionally experimental and does not replace BC/DAgger gates.
+
 Quick viewer helper:
 
 ```powershell
@@ -241,3 +289,4 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_selfsup
 - [SEEDS_AND_REPRODUCIBILITY.md](SEEDS_AND_REPRODUCIBILITY.md)
 - [SEED_POLICY_P23.md](SEED_POLICY_P23.md)
 - [EXPERIMENTS_P31.md](EXPERIMENTS_P31.md)
+- [EXPERIMENTS_P32_SELF_SUPERVISED.md](EXPERIMENTS_P32_SELF_SUPERVISED.md)

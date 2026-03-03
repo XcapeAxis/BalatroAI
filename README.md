@@ -13,6 +13,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
+[![Latest Tag](https://img.shields.io/github/v/tag/XcapeAxis/BalatroAI)](https://github.com/XcapeAxis/BalatroAI/tags)
 [![CI Smoke](https://github.com/XcapeAxis/BalatroAI/actions/workflows/ci-smoke.yml/badge.svg)](https://github.com/XcapeAxis/BalatroAI/actions/workflows/ci-smoke.yml)
 [![GitHub Stars](https://img.shields.io/github/stars/XcapeAxis/BalatroAI?style=social)](https://github.com/XcapeAxis/BalatroAI/stargazers)
 [![GitHub Issues](https://img.shields.io/github/issues/XcapeAxis/BalatroAI)](https://github.com/XcapeAxis/BalatroAI/issues)
@@ -91,6 +92,12 @@ Optional verbose progress:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -VerboseLogs
+```
+
+Optional multi-seed comparison smoke (2 experiments x 3 seeds):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline,quick_candidate -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"
 ```
 
 6. Inspect generated artifacts.
@@ -217,6 +224,17 @@ P33 self-supervised plumbing reproducibility (experimental entry):
   - `docs/artifacts/p33/selfsup_training_summary_<timestamp>.json`
 - details: [docs/EXPERIMENTS_P33.md](docs/EXPERIMENTS_P33.md), [docs/COVERAGE_P33_STATUS.md](docs/COVERAGE_P33_STATUS.md)
 
+P32 representation-pretrain stub (P35 skeleton):
+
+- config: `configs/experiments/p32_self_supervised.yaml`
+- orchestrator wrapper: `powershell -ExecutionPolicy Bypass -File scripts\run_p32_self_supervised.ps1 -Quick`
+- direct stub run: `python -B -m trainer.self_supervised.run_pretrain --config configs/experiments/p32_self_supervised.yaml`
+- artifacts:
+  - `docs/artifacts/p32_selfsup/runs/<run_id>/run_plan.json`
+  - `docs/artifacts/p32_selfsup/runs/<run_id>/summary_table.{csv,json,md}`
+  - `docs/artifacts/p32_selfsup/runs/<run_id>/<exp_id>/progress.jsonl`
+- details: [docs/EXPERIMENTS_P32_SELF_SUPERVISED.md](docs/EXPERIMENTS_P32_SELF_SUPERVISED.md)
+
 <!-- STATUS:START -->
 <!-- README_STATUS:BEGIN -->
 ### Repository Status (Auto-generated)
@@ -323,6 +341,7 @@ Planned:
 - Generated status/readme snippets are local-run artifacts and should be refreshed before release notes.
 - P31 self-supervised backbone is alpha-grade: current heads focus on `score_delta` and `hand_type`; broader tactical targets will be added incrementally.
 - P33 self-supervised entry is experimental plumbing: it validates data->train->summary flow, not production-strength policy gains.
+- P32 representation pretrain line is currently a stub baseline for data plumbing and observability; it is not yet a full contrastive/world-model stack.
 
 ## Further Reading
 
@@ -331,6 +350,8 @@ Planned:
 - [docs/SEEDS_AND_REPRODUCIBILITY.md](docs/SEEDS_AND_REPRODUCIBILITY.md)
 - [docs/EXPERIMENTS_P31.md](docs/EXPERIMENTS_P31.md)
 - [docs/EXPERIMENTS_P33.md](docs/EXPERIMENTS_P33.md)
+- [docs/EXPERIMENTS_P32_SELF_SUPERVISED.md](docs/EXPERIMENTS_P32_SELF_SUPERVISED.md)
+- [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/P32_REAL_ACTION_CONTRACT_STATUS.md](docs/P32_REAL_ACTION_CONTRACT_STATUS.md)
 - [docs/P32_REAL_ACTION_CONTRACT_SPEC.md](docs/P32_REAL_ACTION_CONTRACT_SPEC.md)
 - [docs/P32_SHOP_RNG_ALIGNMENT.md](docs/P32_SHOP_RNG_ALIGNMENT.md)
@@ -338,6 +359,7 @@ Planned:
 - [docs/COVERAGE_P31_STATUS.md](docs/COVERAGE_P31_STATUS.md)
 - [docs/COVERAGE_P33_STATUS.md](docs/COVERAGE_P33_STATUS.md)
 - [docs/COVERAGE_P32_STATUS.md](docs/COVERAGE_P32_STATUS.md)
+- [docs/COVERAGE_P35_STATUS.md](docs/COVERAGE_P35_STATUS.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ## Documentation Index
@@ -358,6 +380,8 @@ Planned:
 - [docs/SEEDS_AND_REPRODUCIBILITY.md](docs/SEEDS_AND_REPRODUCIBILITY.md)
 - [docs/EXPERIMENTS_P31.md](docs/EXPERIMENTS_P31.md)
 - [docs/EXPERIMENTS_P33.md](docs/EXPERIMENTS_P33.md)
+- [docs/EXPERIMENTS_P32_SELF_SUPERVISED.md](docs/EXPERIMENTS_P32_SELF_SUPERVISED.md)
+- [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/P32_REAL_ACTION_CONTRACT_STATUS.md](docs/P32_REAL_ACTION_CONTRACT_STATUS.md)
 - [docs/P32_REAL_ACTION_CONTRACT_SPEC.md](docs/P32_REAL_ACTION_CONTRACT_SPEC.md)
 - [docs/P32_SHOP_RNG_ALIGNMENT.md](docs/P32_SHOP_RNG_ALIGNMENT.md)
@@ -366,6 +390,7 @@ Planned:
 - [docs/ARCHITECTURE_P25.md](docs/ARCHITECTURE_P25.md)
 - [docs/COVERAGE_P31_STATUS.md](docs/COVERAGE_P31_STATUS.md)
 - [docs/COVERAGE_P33_STATUS.md](docs/COVERAGE_P33_STATUS.md)
+- [docs/COVERAGE_P35_STATUS.md](docs/COVERAGE_P35_STATUS.md)
 
 ## License and Contributing
 
