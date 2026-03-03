@@ -97,7 +97,7 @@ uvx balatrobot serve --headless --fast --port 12346
 powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP10
 ```
 
-5. Run the P22 quick orchestration matrix (includes `quick_selfsup_pretrain`, `quick_selfsup_p33`, and P36 rows `quick_selfsup_future_value` / `quick_selfsup_action_type`).
+5. Run the P22 quick orchestration matrix (includes `quick_selfsup_pretrain`, `quick_selfsup_p33`, P36 rows `quick_selfsup_future_value` / `quick_selfsup_action_type`, and P37 RL smoke `rl_ppo_smoke`).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
@@ -126,10 +126,11 @@ Expected console excerpt (trimmed):
 
 ```text
 [RunFast] PASS (P0/P1 baseline completed)
-[P22] Experiment 1/6: quick_baseline (seeds 2, mode=gate)
-[P22] Experiment 5/6: quick_selfsup_future_value (seeds 2, mode=gate)
-[P22] Experiment 6/6: quick_selfsup_action_type (seeds 2, mode=gate)
-[P22] Completed 6/6: quick_selfsup_action_type status=passed | avg_ante=2.8545 median_ante=2.855 win_rate=49.09% hand_top1=54.55% hand_top3=69.55% shop_top1=80.26% illegal=3.95%
+[P22] Experiment 1/7: quick_baseline (seeds 2, mode=gate)
+[P22] Experiment 5/7: quick_selfsup_future_value (seeds 2, mode=gate)
+[P22] Experiment 6/7: quick_selfsup_action_type (seeds 2, mode=gate)
+[P22] Experiment 7/7: rl_ppo_smoke (seeds 2, mode=gate)
+[P22] Completed 7/7: rl_ppo_smoke status=passed | avg_ante=... win_rate=... hand_top1=... hand_top3=... shop_top1=... illegal=...
 [P23] run_id=20260303-005315 mode=gate status=PASS
 [P23] live_snapshot=.../docs/artifacts/p22/runs/20260303-005315/live_summary_snapshot.json
 [P23] summary_json=.../docs/artifacts/p22/runs/20260303-005315/summary_table.json
@@ -143,6 +144,7 @@ More details:
 - [USAGE_GUIDE.md](USAGE_GUIDE.md)
 - [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
 - [docs/SELF_SUPERVISED_OVERVIEW.md](docs/SELF_SUPERVISED_OVERVIEW.md)
+- [docs/RL_OVERVIEW.md](docs/RL_OVERVIEW.md)
 - [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 
 ## Architecture Overview
@@ -268,6 +270,21 @@ P36 self-supervised core (dataset + two tasks):
   - `quick_selfsup_action_type`
 - details: [docs/P36_SELF_SUP_LEARNING.md](docs/P36_SELF_SUP_LEARNING.md)
 
+## Reinforcement Learning (P37)
+
+P37 adds a research skeleton for RL iteration without claiming a fully optimized agent:
+
+- standard env adapter: `trainer/rl/env.py` (`reset` / `step` / `render`) on top of existing sim backend
+- self-play collection loop: `trainer/rl/selfplay.py` with per-episode `progress.jsonl`
+- rollout container: `trainer/rl/rollout_buffer.py` with discounted return computation
+- PPO-like training skeleton: `trainer/rl/ppo_skeleton.py` (single policy-gradient update, metrics output)
+- model interfaces: `trainer/models/rl_policy.py` and `trainer/models/rl_value.py`, encoder-compatible with P36 style reuse
+- P22 rows:
+  - `rl_ppo_smoke`
+  - `rl_ppo_medium`
+
+This path is for experiment plumbing and reproducibility; it is not yet a production-strength RL policy line.
+
 <!-- STATUS:START -->
 <!-- README_STATUS:BEGIN -->
 ### Repository Status (Auto-generated)
@@ -386,6 +403,7 @@ Planned:
 - [docs/EXPERIMENTS_P31.md](docs/EXPERIMENTS_P31.md)
 - [docs/EXPERIMENTS_P33.md](docs/EXPERIMENTS_P33.md)
 - [docs/P36_SELF_SUP_LEARNING.md](docs/P36_SELF_SUP_LEARNING.md)
+- [docs/RL_OVERVIEW.md](docs/RL_OVERVIEW.md)
 - [docs/EXPERIMENTS_P32_SELF_SUPERVISED.md](docs/EXPERIMENTS_P32_SELF_SUPERVISED.md)
 - [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/P32_REAL_ACTION_CONTRACT_STATUS.md](docs/P32_REAL_ACTION_CONTRACT_STATUS.md)
@@ -418,6 +436,7 @@ Planned:
 - [docs/EXPERIMENTS_P31.md](docs/EXPERIMENTS_P31.md)
 - [docs/EXPERIMENTS_P33.md](docs/EXPERIMENTS_P33.md)
 - [docs/EXPERIMENTS_P32_SELF_SUPERVISED.md](docs/EXPERIMENTS_P32_SELF_SUPERVISED.md)
+- [docs/RL_OVERVIEW.md](docs/RL_OVERVIEW.md)
 - [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/P32_REAL_ACTION_CONTRACT_STATUS.md](docs/P32_REAL_ACTION_CONTRACT_STATUS.md)
 - [docs/P32_REAL_ACTION_CONTRACT_SPEC.md](docs/P32_REAL_ACTION_CONTRACT_SPEC.md)
