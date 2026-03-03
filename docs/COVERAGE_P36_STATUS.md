@@ -8,6 +8,11 @@
 - unified self-supervised data contract:
   - `trainer/selfsup/data.py`
   - `trainer/selfsup/build_selfsup_dataset.py`
+- replay-contract-first ingestion path:
+  - `trainer/replay/schema.py`
+  - `trainer/replay/ingest_real.py`
+  - `trainer/replay/ingest_sim.py`
+  - `trainer/replay/storage.py`
 - shared encoder abstraction:
   - `trainer/models/encoder.py`
 - two self-supervised tasks:
@@ -27,6 +32,7 @@
 ## Validation Snapshot
 
 - `python -m py_compile` on new/updated P36 modules: PASS
+- replay storage smoke (`trainer.replay.storage`): PASS
 - dataset build smoke: PASS (`docs/artifacts/p36/selfsup_datasets/<run_id>`)
 - standalone task smoke:
   - `trainer.selfsup.train_future_value`: PASS
@@ -36,6 +42,7 @@
 ## Current Limits
 
 - P36 trains representation/predictive heads, not a direct deploy policy.
+- Replay contract validity is conservative by design; steps missing contract hashes are excluded from training.
 - Metrics are currently normalized into P22 comparison columns for ranking continuity; absolute values are task-dependent.
 - For robust policy claims, downstream BC/DAgger/search/RL and larger seed budgets remain required.
 
@@ -44,4 +51,3 @@
 - `docs/P36_SELF_SUP_LEARNING.md`
 - `docs/EXPERIMENTS_P22.md`
 - `docs/SEEDS_AND_REPRODUCIBILITY.md`
-

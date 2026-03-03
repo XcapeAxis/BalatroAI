@@ -166,6 +166,29 @@ P22 `summary_table.*` still exposes one normalized row per experiment with:
 - `final_loss` mapped from the task-specific validation loss
 - standard comparison columns (`score`, `avg_ante`, `win_rate`, etc.) for ranking continuity
 
+## P36 Replay Pipeline v1 (Unified Real/Sim Replay Contract)
+
+P36 replay v1 introduces a stricter data path for pretraining experiments:
+
+- replay ingestion modules: `trainer/replay/schema.py`, `trainer/replay/ingest_real.py`, `trainer/replay/ingest_sim.py`, `trainer/replay/storage.py`
+- pretrain entrypoint: `python -B -m trainer.experiments.selfsup_train --config configs/experiments/p22_selfsup_smoke.yaml`
+- objective set: `mask`, `next_delta`, `hybrid`
+
+Replay rows include `valid_for_training` / `invalid_reason` and training defaults to `valid_only=true`.
+
+Quick smoke flow:
+
+```powershell
+python -B -m trainer.replay.storage --real-roots docs/artifacts/p32 docs/artifacts/p13 --sim-roots sim/tests/fixtures_runtime docs/artifacts/p32/smoke_position_fixture --out-dir docs/artifacts/p36/replay/smoke_latest --max-episodes-per-source 6
+python -B -m trainer.experiments.selfsup_train --config configs/experiments/p22_selfsup_smoke.yaml
+```
+
+Generated outputs:
+
+- replay dataset: `docs/artifacts/p36/replay/*/replay_steps.jsonl`
+- replay summary: `docs/artifacts/p36/replay/*/replay_summary.{json,md}`
+- selfsup run summary: `docs/artifacts/p36/selfsup_replay/<run_id>/summary.json`
+
 ## P32 Action-Fidelity Integration
 
 P32 adds position-sensitive action fidelity checks to the broader experiment/ops workflow.

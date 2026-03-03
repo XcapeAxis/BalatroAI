@@ -142,6 +142,7 @@ More details:
 - [trainer/README.md](trainer/README.md)
 - [USAGE_GUIDE.md](USAGE_GUIDE.md)
 - [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
+- [docs/SELF_SUPERVISED_OVERVIEW.md](docs/SELF_SUPERVISED_OVERVIEW.md)
 - [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 
 ## Architecture Overview
@@ -181,6 +182,7 @@ All BC/DAgger/Self-Supervised (P33/P36) experiment paths now normalize actions t
 | Orchestrator | `scripts/run_p22.ps1`, `scripts/run_p23.ps1` | run plans, telemetry, live snapshot, summary tables |
 | Campaign ops | `scripts/run_p24.ps1` | campaign status/summary, triage, ranking |
 | Training | `trainer/train_bc.py`, `trainer/train_rl.py`, `trainer/train_pv.py` | checkpoints + eval metrics |
+| Self-supervised replay v1 (P36) | `python -B -m trainer.replay.storage`, `python -B -m trainer.experiments.selfsup_train --config configs/experiments/p22_selfsup_smoke.yaml` | replay-validated dataset + pretrain metrics + checkpoints |
 | Self-supervised (P33 plumbing) | `scripts/run_p33_selfsup.ps1`, `python -B -m trainer.experiments.selfsupervised_p33` | dataset stats + selfsup summary + checkpoints |
 | Self-supervised core (P36) | `python -B -m trainer.selfsup.build_selfsup_dataset`, `python -B -m trainer.selfsup.train_future_value`, `python -B -m trainer.selfsup.train_action_type` | unified dataset + task metrics + checkpoints |
 | Inference | `trainer/infer_assistant.py` | suggestions / optional controlled execution |

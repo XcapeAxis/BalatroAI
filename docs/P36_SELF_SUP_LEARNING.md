@@ -116,6 +116,17 @@ For each experiment, seeds are recorded in:
 
 - `docs/artifacts/p22/runs/<run_id>/<exp_id>/seeds_used.json`
 
+## Replay Pipeline v1 Entry
+
+For replay-contract-first pretraining smoke (real/sim unified rows + validity filtering):
+
+```powershell
+python -B -m trainer.replay.storage --real-roots docs/artifacts/p32 docs/artifacts/p13 --sim-roots sim/tests/fixtures_runtime docs/artifacts/p32/smoke_position_fixture --out-dir docs/artifacts/p36/replay/smoke_latest --max-episodes-per-source 6
+python -B -m trainer.experiments.selfsup_train --config configs/experiments/p22_selfsup_smoke.yaml
+```
+
+The second command defaults to `valid_only=true` and reports `invalid_fraction` in `summary.json`.
+
 Task metrics are emitted under each experiment directory and normalized into `summary_table.*`.
 
 ## Seed and Reproducibility Notes
@@ -138,4 +149,3 @@ Task metrics are emitted under each experiment directory and normalized into `su
 - [EXPERIMENTS_P33.md](EXPERIMENTS_P33.md)
 - [SEEDS_AND_REPRODUCIBILITY.md](SEEDS_AND_REPRODUCIBILITY.md)
 - [SIM_ALIGNMENT_STATUS.md](SIM_ALIGNMENT_STATUS.md)
-

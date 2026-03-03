@@ -40,6 +40,7 @@ The orchestrator executes experiment matrices with explicit seed sets, budget co
    - per-experiment `run_manifest.json`, `progress.jsonl`, `seeds_used.json`
 5. Status publishing and dashboard steps consume these artifacts for README/dashboard/report views.
 6. P36 self-supervised path converts traces into `SelfSupSample` rows, trains shared-encoder tasks (`future_value`, `action_type`), and feeds summaries back into P22 matrix reports.
+7. P36 replay v1 adds `trainer/replay/*` to normalize real/sim traces into replay-step contracts and marks each step with `valid_for_training` before pretraining.
 
 ## Related Documents
 
