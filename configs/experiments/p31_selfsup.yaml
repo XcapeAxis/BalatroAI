@@ -6,9 +6,9 @@ data:
   require_steps: true
   sources:
     - type: oracle_traces
-      path: sim/tests/fixtures_runtime/oracle_p3_jokers_v1_regression
+      path: docs/artifacts/p32
     - type: oracle_traces
-      path: sim/tests/fixtures_runtime/oracle_p8_shop_v1_regression
+      path: docs/artifacts/p32/smoke_position_fixture
     - type: p13_drift_fixture
       path: docs/artifacts/p13
 

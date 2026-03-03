@@ -1,0 +1,35 @@
+schema: p33_selfsup_config_v1
+
+task:
+  name: next_score_delta_bucket
+  bucket_thresholds: [0.0, 120.0]
+  horizon_steps: 3
+
+data:
+  sources:
+    - type: p13_drift_fixture
+      path: docs/artifacts/p13
+    - type: oracle_traces
+      path: docs/artifacts/p32
+  max_trajectories_per_source: 12
+  max_samples: 1200
+  dataset_out: trainer_data/p33/selfsup_dataset.jsonl
+  stats_out: docs/artifacts/p33/selfsup_dataset_stats.json
+
+model:
+  hidden_dim: 64
+  dropout: 0.1
+
+training:
+  seed: 3301
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  val_ratio: 0.2
+  epochs: 2
+  log_every: 10
+  device: auto
+
+output:
+  run_root: trainer_runs/p33_selfsup
+

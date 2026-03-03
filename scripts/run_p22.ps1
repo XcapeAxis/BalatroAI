@@ -43,7 +43,7 @@ if (-not [string]::IsNullOrWhiteSpace($Exclude)) { $args += @("--exclude", $Excl
 if ($SeedLimit -gt 0) { $args += @("--seed-limit", "$SeedLimit") }
 
 if ($Quick) {
-  if (-not ($args -contains "--only")) { $args += @("--only", "quick_baseline,quick_candidate,quick_selfsup_pretrain") }
+  if (-not ($args -contains "--only")) { $args += @("--only", "quick_baseline,quick_candidate,quick_selfsup_pretrain,quick_selfsup_p33") }
   if ($SeedLimit -le 0) { $args += @("--seed-limit", "2") }
 }
 

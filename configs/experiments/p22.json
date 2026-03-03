@@ -95,6 +95,44 @@
         "config": "configs/experiments/p31_selfsup.yaml",
         "max_steps": 80
       }
+    },
+    {
+      "id": "quick_selfsup_p33",
+      "name": "quick_selfsup_p33",
+      "backend": "sim",
+      "policy": "selfsup_p33",
+      "experiment_type": "selfsup_p33",
+      "seed_mode": "regression_fixed",
+      "seed_set_name": "contract_regression",
+      "seeds": [
+        "AAAAAAA",
+        "BBBBBBB",
+        "CCCCCCC"
+      ],
+      "gate_flag": "RunFast",
+      "modes": {
+        "quick": true,
+        "gate": true,
+        "nightly": true
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "sanity_compile": [
+        "trainer/self_supervised/datasets.py",
+        "trainer/self_supervised/models.py",
+        "trainer/self_supervised/train.py",
+        "trainer/experiments/selfsupervised_p33.py"
+      ],
+      "eval": {
+        "mode": "selfsup_p33",
+        "config": "configs/experiments/p33_selfsup.yaml",
+        "max_samples": 240
+      }
     }
   ],
   "evaluation": {
