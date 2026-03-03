@@ -1,0 +1,135 @@
+# P37 Execution Log
+
+## T0 Repo and Branch Hygiene
+- Commands:
+  - `git rev-parse --abbrev-ref HEAD`
+  - `git fetch origin --prune --tags`
+  - `git branch --format='%(refname:short)'`
+  - `git branch -vv`
+  - `powershell -ExecutionPolicy Bypass -File scripts\git_sync.ps1 -DryRun:$true`
+- Results:
+  - current branch: `main`
+  - local branches detected: only `main` (no extra local branches to delete)
+  - `git fetch` returned remote `502` on GitHub during this run; development continued per instruction
+  - `git_sync` dry-run succeeded and wrote report:
+    - `docs/artifacts/git_sync/git_sync_20260304-002026.json`
+- Self-check:
+  - T0 acceptance satisfied (`main` only, no unmerged non-main local branch found).
+  - `docs/BRANCH_CLEANUP_REPORT.md` not required because no unmerged non-main local branch exists.
+- Next:
+  - Execute T1 action trace gap audit and write dedicated report.
+
+## T1 Action Trace Gap Audit
+- Commands:
+  - `Get-Content -Raw sim/spec/TRACE_CONTRACT.md`
+  - `Get-Content -Raw sim/spec/action_v1.json`
+  - `Get-Content -Raw sim/spec/trace_v1.json`
+  - `Get-Content -Raw trainer/record_real_session.py`
+  - `Get-Content -Raw trainer/real_executor.py`
+  - `Get-Content -Raw trainer/real_trace_to_fixture.py`
+  - `Get-Content -Raw sim/tests/run_real_action_replay_fixture.py`
+  - `Get-Content -Raw sim/tests/run_real_drift_fixture.py`
+- Results:
+  - Existing pipeline and schema coverage were audited end-to-end.
+  - Gap report created:
+    - `docs/P37_ACTION_GAP_AUDIT.md`
+  - Report includes mandatory audit rows (hand/joker reorder, tarot position dependence, shop/pack probability semantics, play/discard order, consumable parameter shapes) with `P0/P1/P2` priorities and fixture plans.
+- Self-check:
+  - T1 acceptance satisfied.
+- Next:
+  - Execute T2: action contract extension (`MOVE_*`, `CONSUMABLE_USE`, `SHOP_*`) and engine/oracle capture updates.
+
+## T2 Action Contract / Engine / Oracle Capture
+- Commands:
+  - `python -m py_compile sim/core/engine.py sim/core/hashing.py sim/oracle/extract_rng_outcomes.py sim/oracle/run_oracle_trace.py sim/oracle/batch_build_p37_action_fidelity.py sim/tests/run_directed_fixture.py sim/tests/run_real_action_replay_fixture.py sim/tests/run_sim_trace.py sim/tests/build_p37_action_fixture.py trainer/actions/replay.py trainer/env_client.py trainer/real_executor.py trainer/real_observer.py trainer/real_trace_to_fixture.py trainer/record_real_session.py trainer/replay/schema.py trainer/build_p37_synthetic_session.py`
+  - `python -m pytest -q trainer/tests/test_p32_realaction_infer.py sim/tests/test_hand_reorder.py trainer/tests/test_trajectory_loading.py`
+  - `python -B trainer/build_p37_synthetic_session.py --out docs/artifacts/p37/t2_explicit/session.jsonl --seed P37T2EXPLICIT --scenario explicit_position`
+  - `python -B trainer/real_trace_to_fixture.py --in docs/artifacts/p37/t2_explicit/session.jsonl --out-dir docs/artifacts/p37/t2_explicit/fixture --seed P37T2EXPLICIT`
+  - `python -B sim/tests/run_real_action_replay_fixture.py --fixture-dir docs/artifacts/p37/t2_explicit/fixture --scope p37_action_fidelity_core --out docs/artifacts/p37/t2_explicit/replay_report.json --out-trace docs/artifacts/p37/t2_explicit/replay_trace.jsonl --fail-fast`
+  - `python -B trainer/build_p37_synthetic_session.py --out docs/artifacts/p37/t2_inferred/session.jsonl --seed P37T2INFER --scenario inferred_position`
+  - `python -B trainer/real_trace_to_fixture.py --in docs/artifacts/p37/t2_inferred/session.jsonl --out-dir docs/artifacts/p37/t2_inferred/fixture --seed P37T2INFER`
+  - `python -B sim/tests/run_real_action_replay_fixture.py --fixture-dir docs/artifacts/p37/t2_inferred/fixture --scope p37_action_fidelity_core --out docs/artifacts/p37/t2_inferred/replay_report.json --out-trace docs/artifacts/p37/t2_inferred/replay_trace.jsonl --fail-fast`
+  - `uvx balatrobot serve --headless --fast --port 12346 --love-path D:\SteamLibrary\steamapps\common\Balatro\Balatro.exe --lovely-path D:\SteamLibrary\steamapps\common\Balatro\version.dll` (background start)
+  - `python trainer/record_real_session.py --print-arm-token` (token mint, twice)
+  - real hand session:
+    - `python trainer/record_real_session.py --base-url http://127.0.0.1:12346 --steps 4 --interval 0.2 --execute --arm-token <token> --confirm I_UNDERSTAND --max-actions 2 --rate-limit-sec 0 --action-trace docs/artifacts/p37/real_sessions/hand_move/action_trace.jsonl --include-raw --out docs/artifacts/p37/real_sessions/hand_move/session.jsonl`
+  - real joker session:
+    - `python trainer/record_real_session.py --base-url http://127.0.0.1:12346 --steps 4 --interval 0.2 --execute --arm-token <token> --confirm I_UNDERSTAND --max-actions 2 --rate-limit-sec 0 --action-trace docs/artifacts/p37/real_sessions/joker_move/action_trace.jsonl --include-raw --out docs/artifacts/p37/real_sessions/joker_move/session.jsonl`
+  - `python -B trainer/real_trace_to_fixture.py --in docs/artifacts/p37/real_sessions/hand_move/session.jsonl --out-dir docs/artifacts/p37/real_sessions/hand_move/fixture --seed P37REALHAND`
+  - `python -B trainer/real_trace_to_fixture.py --in docs/artifacts/p37/real_sessions/joker_move/session.jsonl --out-dir docs/artifacts/p37/real_sessions/joker_move/fixture --seed P37REALJOKER3`
+  - `python -B sim/tests/run_real_action_replay_fixture.py --fixture-dir docs/artifacts/p37/real_sessions/hand_move/fixture --scope p37_action_fidelity_core --out docs/artifacts/p37/real_sessions/hand_move/replay_report.json --out-trace docs/artifacts/p37/real_sessions/hand_move/replay_trace.jsonl --fail-fast`
+  - `python -B sim/tests/run_real_action_replay_fixture.py --fixture-dir docs/artifacts/p37/real_sessions/joker_move/fixture --scope p37_action_fidelity_core --out docs/artifacts/p37/real_sessions/joker_move/replay_report.json --out-trace docs/artifacts/p37/real_sessions/joker_move/replay_trace.jsonl --fail-fast`
+- Results:
+  - Schema/engine/recorder/replay path updated for P37 actions (`MOVE_*`, canonical `SHOP_*`, `CONSUMABLE_USE`).
+  - `py_compile` passed for all changed files.
+  - focused tests passed: `6 passed, 1 skipped`.
+  - synthetic explicit + inferred sessions both replayed with `diff_fail=0`.
+  - real sessions were captured and replayed with `status=pass`, `diff_fail=0` (note: reorder RPC unavailable on runtime, actions were captured with explicit degraded reason and no-order-change rows were skipped; play-step parity still verified in `p37_action_fidelity_core` after RNG replay fixes).
+  - additional fixes landed during self-check:
+    - `trainer/env_client.py`: real `MOVE_JOKER` now supports raw `jokers` dict shape.
+    - `trainer/real_trace_to_fixture.py`: auto-build `rng_replay.outcomes` via `extract_rng_outcomes` when recorder did not emit `outcome_tokens`.
+    - `sim/oracle/extract_rng_events.py` + `sim/core/engine.py`: `hand_cards` outcomes now carry/apply card identifiers; deferred RNG application logic added so post-action outcomes (`hand_cards`/`phase_transition`) apply after step semantics.
+    - `sim/core/engine.py`: `shop_roll` token no longer clobbers concrete `shop_offers` replay state.
+- Self-check:
+  - T2 acceptance satisfied for replay parity under available runtime capabilities.
+- Next:
+  - Execute T3 dedicated scope/fixtures/batch gate validation.
+
+## T3 P37 Scope + Directed Fixtures + Gate Hook
+- Commands:
+  - `python -B sim/oracle/batch_build_p37_action_fidelity.py --out-dir docs/artifacts/p37/t3_batch_20260304-012725 --seed P37T3POSTFIX --scope p37_action_fidelity_core`
+  - `powershell -ExecutionPolicy Bypass -File scripts/run_regressions.ps1 -RunP37` (queued for T6 full gate phase)
+- Results:
+  - P37 scope (`p37_action_fidelity_core`) integrated into hashing/trace/replay tooling.
+  - P37 directed fixture builders and batch runner landed:
+    - `sim/tests/build_p37_action_fixture.py`
+    - `trainer/build_p37_synthetic_session.py`
+    - `sim/oracle/batch_build_p37_action_fidelity.py`
+  - batch report pass:
+    - `docs/artifacts/p37/t3_batch_20260304-012725/report_p37.json`
+    - `status=PASS`, `diff_fail=0`.
+  - regression entrypoint updated with `-RunP37` in `scripts/run_regressions.ps1`.
+- Self-check:
+  - T3 acceptance pre-check satisfied (batch pass + gate hook implemented).
+- Next:
+  - Execute T4 probability/weight parity audit and document known gaps.
+
+## T4 Probability / Weight Parity Audit
+- Commands:
+  - `python -B sim/oracle/audit_p37_probability_parity.py --base-url http://127.0.0.1:12346 --seed P37PROBAUDIT --samples 240 --pack-interval 5 --out-dir docs/artifacts/p37`
+  - `python -B sim/oracle/audit_p37_probability_parity.py --base-url http://127.0.0.1:12346 --seed P37PROBAUDIT2 --samples 240 --pack-interval 5 --out-dir docs/artifacts/p37`
+- Results:
+  - New audit script landed:
+    - `sim/oracle/audit_p37_probability_parity.py`
+  - First run produced soft warning (`shop_set` divergence), root-caused to `shop_roll` fallback overriding set types.
+  - Engine fix applied, second run passed:
+    - `docs/artifacts/p37/probability_audit_20260304-013136.json`
+    - `docs/artifacts/p37/probability_audit_20260304-013136.md`
+    - `status=PASS`, `samples_collected_reroll=240`, `oracle_steps=244`, `sim_replayed_steps=244`, warnings empty.
+  - Probability parity doc created:
+    - `docs/P37_PROBABILITY_PARITY.md`
+- Self-check:
+  - T4 acceptance satisfied (artifactized audit, explainable conclusions, known gaps documented).
+- Next:
+  - Execute T5 docs/README hardening and then final T6 gate/cleanup/sync.
+
+## T5 README / Docs Hardening
+- Commands:
+  - manual doc updates in:
+    - `README.md`
+    - `docs/ROADMAP.md`
+    - `docs/SIM_ALIGNMENT_STATUS.md`
+- Results:
+  - README updated with:
+    - P37 quick-start gate command (`-RunP37`)
+    - cleanup command path
+    - architecture/dataflow mermaid explicitly showing `real recorder -> trace -> oracle diff/replay -> sim -> trainer -> orchestrator`
+    - reproducible P37 action-fidelity + probability-audit commands
+    - example artifacts directory tree
+    - refreshed roadmap snapshot + limitations notes for P37 boundaries
+  - `docs/ROADMAP.md` rewritten to milestone tree (P0..P37 + P38/P39/P40 suggestions).
+  - `docs/SIM_ALIGNMENT_STATUS.md` appended with P37 scope/gate/probability-audit notes.
+- Self-check:
+  - T5 acceptance satisfied (README quick commands present, roadmap/status docs aligned to P37 gate additions).
+- Next:
+  - Execute T6 full regression gate, cleanup, final git sync and branch hygiene closure.

@@ -1,32 +1,36 @@
 # BalatroAI Roadmap
 
-## Milestone Map (Condensed)
+## Milestone Tree
 
-| Band | Focus | Representative Milestones |
+| Milestone | Theme | Status |
 |---|---|---|
-| Foundations | Oracle/sim parity and deterministic replay scopes | P0-P8 |
-| Episode & Economy | Long horizon episode checks, probability/econ controls | P9-P11 |
-| Real Integration | Real session recording, drift checks, DAgger data loop | P13 |
-| Experiment Ops | Matrix orchestration, seed governance, campaign ranking | P22-P24 |
-| Docs/Ops Hardening | Status publishing, dashboard, release train, UX hardening | P25-P30 |
-| Decision & Action Stack | Unified decision stack, real-action contract alignment | P31-P32 |
-| Representation Track | Self-supervised plumbing, shared encoder tasks, replay-aligned training entry | P33-P36 |
+| P0-P2b | Hand-score core + joker smoke parity | done |
+| P3-P8 | Joker/consumable/shop/rng coverage expansion | done |
+| P9-P11 | Long-episode + probability/economy observed scopes | done |
+| P13 | Real-session recording + drift fixtures | done |
+| P22-P27 | Experiment orchestration, seed governance, campaign/release ops | done |
+| P29-P36 | Data flywheel, action replay, self-supervised tracks | done |
+| P37 | Single-action fidelity + mechanics parity audit framework (real↔sim) | in progress (this change set) |
 
-## Current Priorities
+## P37 Delivery Focus
 
-1. Keep parity gates green (P0-P13, P22, P8/P10).
-2. Expand multi-seed experiment coverage and telemetry observability.
-3. Upgrade self-supervised line from stub to transferable encoder pretrain.
-4. Tighten champion/candidate decision confidence with richer reliability checks.
+1. Position-sensitive action semantics as first-class actions:
+   - `MOVE_HAND_CARD`, `MOVE_JOKER`, `CONSUMABLE_USE`, `SHOP_REROLL/SHOP_BUY/PACK_OPEN`.
+2. Real trace capture/conversion that preserves actionable replay details (including inferred move sequences when explicit drag RPC is absent).
+3. Dedicated fidelity scope (`p37_action_fidelity_core`) and directed batch gate (`-RunP37`).
+4. Probability parity audit path with artifactized json/md outputs under `docs/artifacts/p37/`.
 
-## Near-Term Execution Items
+## Next Milestones
 
-- P35: README/docs consistency and self-supervised orchestrator skeleton.
-- P36: unified self-supervised data contract + future/action task heads + P22 matrix integration.
-- P37 target: plug encoder into BC/DAgger warm-start path and compare by seed sets.
+| Milestone | Target | Exit Signal |
+|---|---|---|
+| P38 | Full UI-action parity (drag/drop, multi-select, booster interaction) | Real sessions can replay complex UI flows with zero drift in action-fidelity scopes. |
+| P39 | Long-horizon self-play with oracle-supervised correction loops | Multi-round strategy deltas become measurable with stable parity and replay contracts. |
+| P40 | Large-scale self-supervised representation + cross-seed transfer | Encoder pretraining materially improves BC/DAgger/RL sample efficiency under fixed gates. |
 
 ## Known Constraints
 
-- Real-runtime workflows depend on local Balatro + balatrobot environment.
-- Metrics are seed/budget/version dependent and must cite artifacts.
-- Several advanced mechanics remain under iterative parity expansion.
+- Real/oracle paths require local Balatro + balatrobot runtime availability.
+- Replay parity can be exact while underlying native weight formulas are still partially unknown; this must be disclosed when reporting results.
+- All benchmark claims remain seed/config/version scoped and must cite artifacts.
+

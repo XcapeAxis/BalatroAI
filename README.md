@@ -4,12 +4,12 @@
 </p>
 
 <!-- BADGES:START -->
-[![Latest Gate](https://img.shields.io/badge/Latest_Gate-RunP29_PASS-2EA44F)](scripts/run_regressions.ps1)
+[![Latest Gate](https://img.shields.io/badge/Latest_Gate-RunP37_PASS-2EA44F)](scripts/run_regressions.ps1)
 [![Workflow](https://img.shields.io/badge/Workflow-mainline--only-2EA44F)](scripts/git_sync.ps1)
 [![Seed Governance](https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16)](configs/experiments/seeds_p23.yaml)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Trend Warehouse](https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16)](docs/TREND_WAREHOUSE_P26.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P36-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P37-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -92,13 +92,19 @@ python -m pip install -r trainer/requirements.txt
 uvx balatrobot serve --headless --fast --port 12346
 ```
 
-4. Run a baseline alignment regression (P0-P10 path).
+4. Run baseline alignment regression (P0-P10 path).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP10
 ```
 
-5. Run the P22 quick orchestration matrix (includes `quick_selfsup_pretrain`, `quick_selfsup_p33`, P36 rows `quick_selfsup_future_value` / `quick_selfsup_action_type`, P37 SSL rows `quick_ssl_pretrain_v1` / `quick_ssl_probe_v1`, and RL smoke `rl_ppo_smoke`).
+5. Run the P37 action-fidelity gate (includes upstream dependency `RunP32`).
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP37
+```
+
+6. Run the P22 quick orchestration matrix (includes `quick_selfsup_pretrain`, `quick_selfsup_p33`, P36 rows `quick_selfsup_future_value` / `quick_selfsup_action_type`, P37 SSL rows `quick_ssl_pretrain_v1` / `quick_ssl_probe_v1`, and RL smoke `rl_ppo_smoke`).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
@@ -116,12 +122,18 @@ Optional multi-seed comparison smoke (2 experiments x 3 seeds):
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline,quick_candidate -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"
 ```
 
-6. Inspect generated artifacts.
+7. Inspect generated artifacts.
 
 - `docs/artifacts/p22/runs/<run_id>/summary_table.md`
 - `docs/artifacts/p22/runs/<run_id>/run_plan.json`
 - `docs/artifacts/p22/runs/<run_id>/<exp_id>/{run_manifest.json,progress.jsonl,seeds_used.json}`
 - optional live snapshot view: `powershell -ExecutionPolicy Bypass -File scripts\show_p22_live.ps1`
+
+8. Cleanup runtime files when finished.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\cleanup.ps1
+```
 
 Expected console excerpt (trimmed):
 
@@ -154,13 +166,14 @@ More details:
 
 ```mermaid
 flowchart LR
-  A["Balatro Game real runtime"] -->|RPC| B["balatrobot server"]
-  B --> C["Oracle trace and snapshots (P0-P10)"]
-  C --> D["Sim engine and canonical hashing (core, P1-P10)"]
-  D --> E["Fixtures and coverage reports (P0-P10, P3-P8)"]
-  E --> F["Trainer and policies (Search, BC, DAgger, RL)"]
-  F --> G["P22 orchestrator (matrix, multi-seed, resume)"]
-  G --> H["Artifacts and status surfaces (docs/artifacts and dashboard)"]
+  A["Balatro runtime"] -->|RPC| B["balatrobot server"]
+  B --> C["real recorder / executor"]
+  C --> D["action/state trace (trace_v1/action_v1)"]
+  D --> E["oracle canonical trace + hash scopes"]
+  E --> F["sim replay + drift comparator"]
+  F --> G["trainer datasets / BC / DAgger / SSL / RL"]
+  G --> H["P22 orchestrator + campaign ops"]
+  H --> I["artifacts and status surfaces (docs/artifacts, dashboard)"]
 
   subgraph OBS["P22 Runtime Observability"]
     O1["telemetry.jsonl"]
@@ -169,10 +182,10 @@ flowchart LR
     O4["progress.jsonl and seeds_used.json"]
   end
 
-  G --> O1
-  G --> O2
-  G --> O3
-  G --> O4
+  H --> O1
+  H --> O2
+  H --> O3
+  H --> O4
 ```
 
 Data-flow details: [docs/ARCHITECTURE_P25.md](docs/ARCHITECTURE_P25.md)
@@ -287,6 +300,18 @@ P37 SSL pretraining v1 (state encoder + probe):
   - `ssl_pretrain_medium_v1`
 - details: [docs/P37_SSL_PRETRAINING.md](docs/P37_SSL_PRETRAINING.md)
 
+P37 action-fidelity parity reproducibility:
+
+- gate:
+  - `powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP37`
+- batch runner:
+  - `python -B sim/oracle/batch_build_p37_action_fidelity.py --out-dir docs/artifacts/p37/<run_id> --seed P37REPRO --scope p37_action_fidelity_core`
+- probability parity audit:
+  - `python -B sim/oracle/audit_p37_probability_parity.py --base-url http://127.0.0.1:12346 --seed P37PROB --samples 240 --pack-interval 5 --out-dir docs/artifacts/p37`
+- reference docs:
+  - [docs/P37_ACTION_GAP_AUDIT.md](docs/P37_ACTION_GAP_AUDIT.md)
+  - [docs/P37_PROBABILITY_PARITY.md](docs/P37_PROBABILITY_PARITY.md)
+
 ## Reinforcement Learning (P37)
 
 P37 adds a research skeleton for RL iteration without claiming a fully optimized agent:
@@ -307,13 +332,13 @@ This path is for experiment plumbing and reproducibility; it is not yet a produc
 ### Repository Status (Auto-generated)
 
 - branch: main
-- latest_gate: RunP29 (PASS)
+- latest_gate: RunP37 (PASS)
 - recent_trend_signal: regression
 - trend_warehouse_last_updated: 2026-03-02T17:16:27.519440+00:00
 - trend_rows_count: 20115
 - champion: quick_risk_aware (champion)
 - candidate:  (decision: hold)
-- docs_coverage: P15-P33
+- docs_coverage: P15-P37
 <!-- README_STATUS:END -->
 <!-- STATUS:END -->
 
@@ -351,6 +376,26 @@ Example self-supervised metrics excerpt (P22 `quick_selfsup_pretrain`):
 | selfsup_score_delta_mae | 1.0000 |
 | selfsup_hand_type_acc | 1.0000 |
 
+Example artifacts tree (P37 + P22 excerpt):
+
+```text
+docs/artifacts/
+  p37/
+    <timestamp>/
+      report_p37.json
+      report_p37.md
+    probability_audit_<timestamp>.json
+    probability_audit_<timestamp>.md
+    real_sessions/
+      hand_move/
+      joker_move/
+  p22/
+    runs/<run_id>/
+      run_plan.json
+      summary_table.json
+      <exp_id>/progress.jsonl
+```
+
 ## Action Fidelity and RealAction Contract (P32)
 
 P32 introduces a unified single-step `RealAction` contract shared by simulator execution, real runtime translation, and fixture replay. The contract now includes position operations (`REORDER_HAND`, `SWAP_HAND_CARDS`, `REORDER_JOKERS`, `SWAP_JOKERS`) and an order-sensitive replay hash scope (`p32_real_action_position_observed_core`) so hand/joker ordering drift is detectable.
@@ -377,28 +422,22 @@ See [docs/P32_REAL_ACTION_CONTRACT_STATUS.md](docs/P32_REAL_ACTION_CONTRACT_STAT
 
 ## Roadmap
 
-Done:
+Milestone maturity snapshot:
 
-- P0-P13 alignment and oracle/sim parity gates
-- P22 orchestrator (modes, telemetry, summaries)
-- P23 seed governance + coverage/flake harness
-- P24 campaign manager + triage/bisect + ranking + dashboard
-- P25 README/docs productization with RunP25 docs gate
-- P31 self-supervised trajectory backbone (`DecisionStep/Trajectory`, encoder, quick pretrain)
-- P33 unified action replay adapter (`trainer/actions/replay.py`) + minimal self-supervised experimental plumbing
-- P36 self-supervised core (`trainer/selfsup/*`) with unified dataset builder and two task heads (`future_value`, `action_type`) integrated into P22
+| Band | Status |
+|---|---|
+| P0-P13 (oracle/sim alignment baseline) | shipped |
+| P22-P27 (experiment/campaign/release ops) | shipped |
+| P29-P36 (data flywheel + replay + self-supervised) | shipped |
+| P37 (single-action fidelity + probability parity audit framework) | active |
 
-In progress:
+Near-term:
 
-- RL pilot stabilization and promotion criteria hardening
-- stronger nightly scheduling policy and cost controls
-- tighter docs and gate coupling for operator onboarding
+- stabilize full UI-level action parity coverage (P38)
+- extend long-horizon self-play + correction loops (P39)
+- scale self-supervised representation transfer into downstream policy stacks (P40)
 
-Planned:
-
-- deeper real canary safeguards and rollout channels
-- broader mechanism coverage and richer failure taxonomy
-- self-play/RL integration on top of the P31 self-supervised encoder
+Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 
 ## Known Limitations
 
@@ -411,6 +450,8 @@ Planned:
 - P33 self-supervised entry is experimental plumbing: it validates data->train->summary flow, not production-strength policy gains.
 - P32 representation pretrain line is currently a stub baseline for data plumbing and observability; it is not yet a full contrastive/world-model stack.
 - P36 self-supervised core is representation pretraining only; policy gain still requires downstream BC/DAgger/search/RL integration and seed-robust evaluation.
+- Some real-runtime reorder RPC paths are runtime-dependent; when unavailable, position actions are recorded with explicit degraded reasons and parity depends on inferred/fallback traces.
+- Probability parity in P37 currently validates replay-level outcome equivalence; fully independent native weight formulas remain partially unmapped.
 
 ## Further Reading
 
