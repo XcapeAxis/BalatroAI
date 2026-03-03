@@ -28,7 +28,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | Scenario | Command | Notes |
 |---|---|---|
 | Plan only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -DryRun` | validates matrix + writes plan/report |
-| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | 6 experiments x 2 seeds (includes P31/P33/P36 selfsup entries) |
+| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | 9 experiments x 2 seeds (includes P31/P33/P36 + P37 SSL + RL smoke rows) |
 | Multi-seed quick compare | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline,quick_candidate -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | 2 strategies x 3 seeds |
 | Fast smoke (verbose) | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -VerboseLogs` | adds per-seed/per-stage console logs |
 | Nightly style | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Nightly -Resume` | larger seed set + resume |
@@ -59,7 +59,7 @@ Key sections:
 - `matrix[]`:
   - `id`, `name`
   - `backend`, `policy`
-  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`, `selfsup_future_value`, `selfsup_action_type`)
+  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`, `selfsup_future_value`, `selfsup_action_type`, `ssl_pretrain`, `ssl_probe`, `rl_selfplay`)
   - `seed_mode` (`regression_fixed` or `nightly`)
   - `seeds` (optional explicit seed override list)
   - `gate_flag` (passed to `scripts/run_regressions.ps1`)
@@ -165,6 +165,41 @@ P22 `summary_table.*` still exposes one normalized row per experiment with:
 - `seed_set_name`, `seeds_used`, `seed_count`
 - `final_loss` mapped from the task-specific validation loss
 - standard comparison columns (`score`, `avg_ante`, `win_rate`, etc.) for ranking continuity
+
+## P37 SSL Pretraining Integration (State/Trait Encoder v1)
+
+P37 adds two new orchestrated rows focused on representation pretraining and downstream probe:
+
+- `quick_ssl_pretrain_v1` (`experiment_type: ssl_pretrain`)
+- `quick_ssl_probe_v1` (`experiment_type: ssl_probe`)
+- optional longer run: `ssl_pretrain_medium_v1`
+
+Reference configs:
+
+- `configs/experiments/p37_ssl_pretrain.yaml`
+- `configs/experiments/p37_ssl_probe.yaml`
+
+Task intent:
+
+- `ssl_pretrain`: next-step contrastive objective on `(s_t, s_{t+1})` pairs, backed by trace-derived samples.
+- `ssl_probe`: frozen-encoder linear probe on reward-bucket labels, with baseline-vs-SSL warm-start comparison.
+
+Artifacts per seed:
+
+- `.../quick_ssl_pretrain_v1/ssl_pretrain_runs/seed_*/metrics.json`
+- `.../quick_ssl_probe_v1/ssl_probe_runs/seed_*/probe_metrics.json`
+
+Recent smoke run (preliminary): `run_id=20260303-225348`
+
+- seeds used: `AAAAAAA`, `BBBBBBB` (see each `seeds_used.json`)
+- `quick_ssl_pretrain_v1` summary:
+  - mean score: `3.1985`
+  - final_loss: `2.2710`
+- `quick_ssl_probe_v1` summary:
+  - mean score: `3.4923`
+  - final_loss: `0.9125`
+  - per-seed probe can be mixed at this scale (small-data preliminary):
+    - seed `AAAAAAA`: baseline_acc `0.9000`, ssl_acc `0.9000`, delta `0.0000`
 
 ## P36 Replay Pipeline v1 (Unified Real/Sim Replay Contract)
 

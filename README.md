@@ -19,7 +19,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/XcapeAxis/BalatroAI)](https://github.com/XcapeAxis/BalatroAI/issues)
 <!-- BADGES:END -->
 
-BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries plus a unified action replay contract. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised iteration, not as a cheat injector or memory-hook tool.
+BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, plus a unified action replay contract. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised iteration, not as a cheat injector or memory-hook tool.
 
 Badge/status refresh source:
 
@@ -59,6 +59,7 @@ Current learning modes are complementary rather than mutually exclusive:
 - BC (`train_bc.py`): supervised imitation on curated datasets; fast baseline policy shaping.
 - DAgger (`dagger_collect.py` + BC refresh): interactive correction with policy-in-the-loop traces.
 - Self-Supervised P36 (`trainer/selfsup/*`): representation pretraining from trace artifacts without teacher labels.
+- Self-Supervised P37 SSL (`trainer/experiments/ssl_*`): next-step contrastive state encoder pretraining + frozen linear probe.
 - RL (existing pilot paths): downstream policy improvement after stable encoder/policy initialization.
 
 Data dependency by stage:
@@ -97,7 +98,7 @@ uvx balatrobot serve --headless --fast --port 12346
 powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP10
 ```
 
-5. Run the P22 quick orchestration matrix (includes `quick_selfsup_pretrain`, `quick_selfsup_p33`, P36 rows `quick_selfsup_future_value` / `quick_selfsup_action_type`, and P37 RL smoke `rl_ppo_smoke`).
+5. Run the P22 quick orchestration matrix (includes `quick_selfsup_pretrain`, `quick_selfsup_p33`, P36 rows `quick_selfsup_future_value` / `quick_selfsup_action_type`, P37 SSL rows `quick_ssl_pretrain_v1` / `quick_ssl_probe_v1`, and RL smoke `rl_ppo_smoke`).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
@@ -126,11 +127,12 @@ Expected console excerpt (trimmed):
 
 ```text
 [RunFast] PASS (P0/P1 baseline completed)
-[P22] Experiment 1/7: quick_baseline (seeds 2, mode=gate)
-[P22] Experiment 5/7: quick_selfsup_future_value (seeds 2, mode=gate)
-[P22] Experiment 6/7: quick_selfsup_action_type (seeds 2, mode=gate)
-[P22] Experiment 7/7: rl_ppo_smoke (seeds 2, mode=gate)
-[P22] Completed 7/7: rl_ppo_smoke status=passed | avg_ante=... win_rate=... hand_top1=... hand_top3=... shop_top1=... illegal=...
+[P22] Experiment 1/9: quick_baseline (seeds 2, mode=gate)
+[P22] Experiment 5/9: quick_selfsup_future_value (seeds 2, mode=gate)
+[P22] Experiment 7/9: quick_ssl_pretrain_v1 (seeds 2, mode=gate)
+[P22] Experiment 8/9: quick_ssl_probe_v1 (seeds 2, mode=gate)
+[P22] Experiment 9/9: rl_ppo_smoke (seeds 2, mode=gate)
+[P22] Completed 9/9: rl_ppo_smoke status=passed | avg_ante=... win_rate=... hand_top1=... hand_top3=... shop_top1=... illegal=...
 [P23] run_id=20260303-005315 mode=gate status=PASS
 [P23] live_snapshot=.../docs/artifacts/p22/runs/20260303-005315/live_summary_snapshot.json
 [P23] summary_json=.../docs/artifacts/p22/runs/20260303-005315/summary_table.json
@@ -144,6 +146,7 @@ More details:
 - [USAGE_GUIDE.md](USAGE_GUIDE.md)
 - [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
 - [docs/SELF_SUPERVISED_OVERVIEW.md](docs/SELF_SUPERVISED_OVERVIEW.md)
+- [docs/P37_SSL_PRETRAINING.md](docs/P37_SSL_PRETRAINING.md)
 - [docs/RL_OVERVIEW.md](docs/RL_OVERVIEW.md)
 - [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 
@@ -269,6 +272,20 @@ P36 self-supervised core (dataset + two tasks):
   - `quick_selfsup_future_value`
   - `quick_selfsup_action_type`
 - details: [docs/P36_SELF_SUP_LEARNING.md](docs/P36_SELF_SUP_LEARNING.md)
+
+P37 SSL pretraining v1 (state encoder + probe):
+
+- configs:
+  - `configs/experiments/p37_ssl_pretrain.yaml`
+  - `configs/experiments/p37_ssl_probe.yaml`
+- entrypoints:
+  - `python -B -m trainer.experiments.ssl_trainer --config configs/experiments/p37_ssl_pretrain.yaml`
+  - `python -B -m trainer.experiments.ssl_probe --config configs/experiments/p37_ssl_probe.yaml`
+- P22 rows:
+  - `quick_ssl_pretrain_v1`
+  - `quick_ssl_probe_v1`
+  - `ssl_pretrain_medium_v1`
+- details: [docs/P37_SSL_PRETRAINING.md](docs/P37_SSL_PRETRAINING.md)
 
 ## Reinforcement Learning (P37)
 
