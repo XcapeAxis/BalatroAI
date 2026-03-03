@@ -162,12 +162,24 @@ All BC/DAgger/Self-Supervised (P33) experiment paths now normalize actions throu
 | Self-supervised (P33) | `scripts/run_p33_selfsup.ps1`, `python -B -m trainer.experiments.selfsupervised_p33` | dataset stats + selfsup summary + checkpoints |
 | Inference | `trainer/infer_assistant.py` | suggestions / optional controlled execution |
 
-## Reproducibility
+## Experiments & Telemetry (P34)
+
+P22 now emits a consistent telemetry event schema across run-level and per-experiment streams so you can trace progress without parsing ad-hoc logs.
+
+- run-level stream: `docs/artifacts/p22/runs/<run_id>/telemetry.jsonl` (`schema: p34_telemetry_event_v1`)
+- per-experiment stream: `docs/artifacts/p22/runs/<run_id>/<exp_id>/progress.jsonl` (`schema: p34_progress_event_v1`)
+- live queue snapshot: `docs/artifacts/p22/runs/<run_id>/live_summary_snapshot.json`
+- final roll-up: `docs/artifacts/p22/runs/<run_id>/summary_table.{csv,json,md}`
+
+Each telemetry/progress event includes `run_id`, `exp_id`, `seed`, `phase`, `stage`, `status`, `step_or_epoch`, `metrics`, and elapsed/wall time fields.
+
+## Reproducibility & Seeds
 
 P22 experiments are config-first and artifactized:
 
 - experiment matrix config: `configs/experiments/p22.yaml`
 - seed governance config: `configs/experiments/seeds_p23.yaml`
+- local default policy block: `configs/experiments/p22.yaml -> seed_policy`
 - entrypoint: `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 ...`
 
 Each P22 run writes:
@@ -180,11 +192,13 @@ Each P22 run writes:
 
 Seed policy clarification:
 
-- regression and alignment gates use fixed seeds for stable regression detection.
-- P22 orchestration is multi-seed by design (quick/nightly modes select explicit seed sets).
-- actual seeds for each experiment are always persisted in `seeds_used.json`; results are not assumed to be only `AAAAAAA`.
+- default sets are split by intent (`regression_smoke`, `train_default`, `eval_default`) and nightly can add deterministic extras.
+- `scripts/run_p22.ps1 -Quick` keeps runtime bounded via `--seed-limit 2`, but still uses multi-seed execution.
+- actual seeds are persisted in both `run_plan.json -> experiments_with_seeds[]` and each experiment `seeds_used.json`.
+- optional CLI override is available with `scripts/run_p22.ps1 -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` and is recorded in artifacts.
+- summary tables now expose `seed_set_name`, `seeds_used`, and final metrics (`final_win_rate`, `final_loss` when applicable).
 
-For details and repro patterns: [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md), [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
+For details and repro patterns: [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md), [docs/SEEDS_AND_REPRODUCIBILITY.md](docs/SEEDS_AND_REPRODUCIBILITY.md), [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 
 P31 self-supervised backbone reproducibility:
 
@@ -314,6 +328,7 @@ Planned:
 
 - [docs/SIM_ALIGNMENT_STATUS.md](docs/SIM_ALIGNMENT_STATUS.md)
 - [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
+- [docs/SEEDS_AND_REPRODUCIBILITY.md](docs/SEEDS_AND_REPRODUCIBILITY.md)
 - [docs/EXPERIMENTS_P31.md](docs/EXPERIMENTS_P31.md)
 - [docs/EXPERIMENTS_P33.md](docs/EXPERIMENTS_P33.md)
 - [docs/P32_REAL_ACTION_CONTRACT_STATUS.md](docs/P32_REAL_ACTION_CONTRACT_STATUS.md)
@@ -340,6 +355,7 @@ Planned:
 - [docs/STATUS_PUBLISHING_P27.md](docs/STATUS_PUBLISHING_P27.md)
 - [docs/RELEASE_TRAIN_P27.md](docs/RELEASE_TRAIN_P27.md)
 - [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
+- [docs/SEEDS_AND_REPRODUCIBILITY.md](docs/SEEDS_AND_REPRODUCIBILITY.md)
 - [docs/EXPERIMENTS_P31.md](docs/EXPERIMENTS_P31.md)
 - [docs/EXPERIMENTS_P33.md](docs/EXPERIMENTS_P33.md)
 - [docs/P32_REAL_ACTION_CONTRACT_STATUS.md](docs/P32_REAL_ACTION_CONTRACT_STATUS.md)

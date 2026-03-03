@@ -33,6 +33,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | Nightly style | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Nightly -Resume` | larger seed set + resume |
 | Single experiment | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline -Resume` | rerun one exp id |
 | Limit seeds | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -SeedLimit 2` | local-cost control |
+| Custom seeds | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | explicit reproducibility override (recorded to artifacts) |
 
 ## Config Structure (`configs/experiments/p22.yaml`)
 
@@ -48,6 +49,12 @@ Key sections:
   - `base_seed`
   - `regression_fixed`
   - `extra_random`
+- `seed_policy` (P34 local policy):
+  - `version`
+  - `regression_smoke`
+  - `train_default`
+  - `eval_default`
+  - `nightly_extra_random`
 - `matrix[]`:
   - `id`, `name`
   - `backend`, `policy`
@@ -65,13 +72,18 @@ Key sections:
 ## Seed Policy and "AAAAAAA" Clarification
 
 - Fixed seeds are intentionally used in regression-style comparisons for stability.
-- P22 supports multi-seed experiments by default; quick and nightly modes materialize seed sets from config/policy.
-- Nightly mode extends the fixed set with deterministic extra random seeds.
-- Current default fixed seed set in `configs/experiments/p22.yaml`:
-  - `AAAAAAA, BBBBBBB, CCCCCCC, DDDDDDD, EEEEEEE, FFFFFFF, GGGGGGG, HHHHHHH`
+- P22 supports multi-seed experiments by default; quick and nightly modes materialize seed sets from config policy.
+- P34 default policy sets:
+  - `regression_smoke`: `AAAAAAA, BBBBBBB, CCCCCCC, DDDDDDD`
+  - `train_default`: `AAAAAAA .. HHHHHHH`
+  - `eval_default`: `AAAAAAA .. FFFFFFF`
+- Nightly mode extends the selected base set with deterministic extra random seeds.
 - `scripts/run_p22.ps1 -Quick` keeps runtime stable by applying `--seed-limit 2` while still using more than one seed.
 - Real seeds used in each experiment are written to:
   - `docs/artifacts/p22/runs/<run_id>/<exp_id>/seeds_used.json`
+- Planned seeds per experiment are written to:
+  - `docs/artifacts/p22/runs/<run_id>/run_plan.json -> experiments_with_seeds[]`
+- CLI override seeds are supported via `-Seeds`/`--seeds` and persisted with source `cli.seeds_override`.
 - Do not infer seed usage from a single default token; always inspect `seeds_used.json`.
 - Result robustness guidance:
   - 2 seeds: fast smoke and gate sanity only.
@@ -156,6 +168,13 @@ P22 emits both per-experiment and run-level observability artifacts:
   - `docs/artifacts/p22/runs/<run_id>/<exp_id>/status.json`
   - `docs/artifacts/p22/runs/<run_id>/<exp_id>/seeds_used.json`
 
+Telemetry schema notes (P34):
+
+- run-level `telemetry.jsonl` uses `schema: p34_telemetry_event_v1`.
+- experiment-level `progress.jsonl` uses `schema: p34_progress_event_v1`.
+- canonical fields: `run_id`, `exp_id`, `seed`, `phase`, `stage`, `status`, `step_or_epoch`, `metrics`, `elapsed_sec`, `wall_time_sec`, `message`.
+- `summary_table.*` now also exposes `seed_set_name`, `seed_hash`, `seeds_used`, `final_win_rate`, and `final_loss` (loss fields populated for self-supervised rows).
+
 Quick viewer helper:
 
 ```powershell
@@ -200,6 +219,7 @@ Then inspect:
 - `docs/artifacts/p22/runs/<run_id>/quick_baseline/run_manifest.json`
 - `docs/artifacts/p22/runs/<run_id>/quick_baseline/progress.jsonl`
 - `docs/artifacts/p22/runs/<run_id>/quick_baseline/seeds_used.json`
+- `docs/artifacts/p22/runs/<run_id>/run_plan.json` (`experiments_with_seeds[]`)
 - `docs/artifacts/p22/runs/<run_id>/summary_table.md`
 
 Reproduce selfsup row only:
@@ -218,5 +238,6 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_selfsup
 
 - [../README.md](../README.md)
 - [REPRODUCIBILITY_P25.md](REPRODUCIBILITY_P25.md)
+- [SEEDS_AND_REPRODUCIBILITY.md](SEEDS_AND_REPRODUCIBILITY.md)
 - [SEED_POLICY_P23.md](SEED_POLICY_P23.md)
 - [EXPERIMENTS_P31.md](EXPERIMENTS_P31.md)
