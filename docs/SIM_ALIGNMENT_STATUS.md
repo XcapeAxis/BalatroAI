@@ -176,3 +176,26 @@ powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP37
   - `docs/P37_PROBABILITY_PARITY.md`
   - `docs/artifacts/p37/probability_audit_*.json`
   - `docs/artifacts/p37/probability_audit_*.md`
+
+## P38 Long-Horizon Statistical Consistency Note
+
+- P38 adds long-episode stress comparison between oracle and sim at aggregate level.
+- New scripts:
+  - `sim/oracle/batch_build_p38_long_episode.py`
+  - `sim/oracle/analyze_p38_long_stats.py`
+  - `sim/oracle/plot_p38_stats.py`
+- Gate:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP38
+```
+
+- Hard gate:
+  - episode drift mismatch (`mismatch_count > 0`) must be zero.
+- Soft warnings:
+  - aggregate relative diff > `5%`
+  - categorical chi-square `p-value < 0.01` (when available)
+- Artifacts:
+  - `docs/artifacts/p38/long_episode/<run_id>/episode_*.json`
+  - `docs/artifacts/p38/analysis_<timestamp>/summary_stats.{json,md}`
+  - `docs/artifacts/p38/plots/*.png`

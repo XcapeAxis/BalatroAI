@@ -1237,6 +1237,204 @@ def _run_rl_selfplay_seed_experiment(
     }
 
 
+def _numeric_mean_from_p38(summary: dict[str, Any], metric: str, side: str) -> float:
+    rows = summary.get("numeric_metrics") if isinstance(summary.get("numeric_metrics"), list) else []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("metric") or "") != metric:
+            continue
+        side_block = row.get(side) if isinstance(row.get(side), dict) else {}
+        value = side_block.get("mean")
+        try:
+            return float(value)
+        except Exception:
+            return 0.0
+    return 0.0
+
+
+def _avg_abs_relative_diff(summary: dict[str, Any]) -> float:
+    rows = summary.get("numeric_metrics") if isinstance(summary.get("numeric_metrics"), list) else []
+    vals: list[float] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        rel = row.get("relative_diff_pct")
+        try:
+            vals.append(abs(float(rel)))
+        except Exception:
+            continue
+    if not vals:
+        return 0.0
+    return float(sum(vals) / len(vals))
+
+
+def _append_p38_orchestrator_summary(ctx: RunContext, payload: dict[str, Any]) -> None:
+    path = ctx.run_root / "p38_summary.json"
+    existing = read_json(path)
+    rows: list[dict[str, Any]] = []
+    if isinstance(existing, dict):
+        raw_rows = existing.get("rows")
+        if isinstance(raw_rows, list):
+            for item in raw_rows:
+                if isinstance(item, dict):
+                    rows.append(item)
+    rows.append(payload)
+    write_json(
+        path,
+        {
+            "schema": "p38_orchestrator_summary_v1",
+            "generated_at": now_iso(),
+            "run_id": ctx.run_id,
+            "rows": rows,
+        },
+    )
+
+
+def _run_long_consistency_seed_experiment(
+    *,
+    ctx: RunContext,
+    exp: dict[str, Any],
+    exp_dir: Path,
+    seed: str,
+    seed_idx: int,
+    seed_total: int,
+) -> dict[str, Any]:
+    eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+    base_url = str(eval_cfg.get("base_url") or exp.get("base_url") or "http://127.0.0.1:12346")
+    episodes = int(eval_cfg.get("episodes") or exp.get("episodes") or 5)
+    max_steps = int(eval_cfg.get("max_steps") or exp.get("max_steps") or 240)
+    scope = str(eval_cfg.get("scope") or exp.get("scope") or "p37_action_fidelity_core")
+
+    out_dir = exp_dir / "long_consistency_runs" / f"seed_{seed_idx:03d}_{seed}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    batch_root = out_dir / "long_episode"
+    batch_run_id = f"seed_{seed_idx:03d}_{seed}"
+    batch_cmd = [
+        sys.executable,
+        "-B",
+        "sim/oracle/batch_build_p38_long_episode.py",
+        "--base-url",
+        base_url,
+        "--out-dir",
+        str(batch_root),
+        "--run-id",
+        batch_run_id,
+        "--episodes",
+        str(max(1, episodes)),
+        "--max-steps",
+        str(max(1, max_steps)),
+        "--seeds",
+        seed,
+        "--scope",
+        scope,
+    ]
+    batch_result = run_process(batch_cmd, cwd=ctx.repo_root, timeout_sec=max(600, max_steps * episodes * 2))
+    fixtures_dir = batch_root / batch_run_id
+    report_path = fixtures_dir / "report_p38_long_episode.json"
+    report_obj = read_json(report_path) or {}
+
+    analyze_out = out_dir / "analysis"
+    analyze_cmd = [
+        sys.executable,
+        "-B",
+        "sim/oracle/analyze_p38_long_stats.py",
+        "--fixtures-dir",
+        str(fixtures_dir),
+        "--out-dir",
+        str(analyze_out),
+    ]
+    analyze_result = run_process(analyze_cmd, cwd=ctx.repo_root, timeout_sec=600)
+    summary_path = analyze_out / "summary_stats.json"
+    summary_obj = read_json(summary_path) or {}
+
+    plot_cmd = [
+        sys.executable,
+        "-B",
+        "sim/oracle/plot_p38_stats.py",
+        "--fixtures-dir",
+        str(fixtures_dir),
+        "--out-dir",
+        str(out_dir / "plots"),
+    ]
+    plot_result = run_process(plot_cmd, cwd=ctx.repo_root, timeout_sec=300)
+
+    hard_fail = int(report_obj.get("hard_fail_count") or summary_obj.get("hard_fail_count") or 0)
+    soft_warn = int(summary_obj.get("soft_warn_count") or 0)
+    episodes_total = int(report_obj.get("episodes_total") or summary_obj.get("episodes_total") or episodes)
+
+    sim_score = _numeric_mean_from_p38(summary_obj, "total_score", "sim")
+    sim_rounds = _numeric_mean_from_p38(summary_obj, "rounds_survived", "sim")
+    sim_money = _numeric_mean_from_p38(summary_obj, "money_earned", "sim")
+    sim_rerolls = _numeric_mean_from_p38(summary_obj, "rerolls_count", "sim")
+    sim_packs = _numeric_mean_from_p38(summary_obj, "packs_opened", "sim")
+    sim_consumables = _numeric_mean_from_p38(summary_obj, "consumables_used", "sim")
+    rel_diff_avg = _avg_abs_relative_diff(summary_obj)
+
+    metrics = {
+        "score": sim_score,
+        "avg_reward": sim_score,
+        "best_episode_reward": sim_score,
+        "avg_ante_reached": sim_rounds,
+        "median_ante": sim_rounds,
+        "win_rate": (1.0 if hard_fail == 0 else 0.0),
+        "hand_top1": 0.0,
+        "hand_top3": 0.0,
+        "shop_top1": max(0.0, 1.0 - min(1.0, rel_diff_avg / 100.0)),
+        "illegal_action_rate": (float(hard_fail) / max(1.0, float(episodes_total))),
+        "p38_mean_money_earned": sim_money,
+        "p38_mean_rerolls": sim_rerolls,
+        "p38_mean_packs_opened": sim_packs,
+        "p38_mean_consumables_used": sim_consumables,
+        "p38_hard_fail_count": hard_fail,
+        "p38_soft_warn_count": soft_warn,
+        "p38_mean_relative_diff_pct": rel_diff_avg,
+        "p38_report_path": str(report_path),
+        "p38_summary_path": str(summary_path),
+        "p38_fixtures_dir": str(fixtures_dir),
+    }
+
+    summary_payload = {
+        "schema": "p38_orchestrator_seed_summary_v1",
+        "generated_at": now_iso(),
+        "exp_id": str(exp.get("id") or ""),
+        "seed": seed,
+        "seed_index": seed_idx,
+        "seed_total": seed_total,
+        "episodes": episodes_total,
+        "hard_fail_count": hard_fail,
+        "soft_warn_count": soft_warn,
+        "batch_returncode": int(batch_result.get("returncode") or 0),
+        "analyze_returncode": int(analyze_result.get("returncode") or 0),
+        "plot_returncode": int(plot_result.get("returncode") or 0),
+        "report_path": str(report_path),
+        "summary_path": str(summary_path),
+        "fixtures_dir": str(fixtures_dir),
+        "metrics": metrics,
+    }
+    _append_p38_orchestrator_summary(ctx, summary_payload)
+
+    status = "ok"
+    if int(batch_result.get("returncode") or 0) != 0:
+        status = "failed"
+    if int(analyze_result.get("returncode") or 0) != 0:
+        status = "failed"
+    if hard_fail > 0:
+        status = "failed"
+
+    return {
+        "status": status,
+        "metrics": metrics,
+        "summary": {
+            "batch": batch_result,
+            "analyze": analyze_result,
+            "plot": plot_result,
+            "payload": summary_payload,
+        },
+    }
+
+
 def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, exp_total: int) -> dict[str, Any]:
     exp_id = str(exp["id"])
     exp_type = str(exp.get("experiment_type") or "standard").strip().lower()
@@ -1458,6 +1656,14 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                 eval_cfg.get("max_steps_per_episode") or exp.get("max_steps_per_episode") or 320
             ),
             "reward_mode": str(eval_cfg.get("reward_mode") or exp.get("reward_mode") or "score_delta"),
+        }
+    elif exp_type in {"long_consistency", "long_horizon_consistency"}:
+        eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+        manifest["long_consistency"] = {
+            "base_url": str(eval_cfg.get("base_url") or exp.get("base_url") or "http://127.0.0.1:12346"),
+            "episodes": int(eval_cfg.get("episodes") or exp.get("episodes") or 5),
+            "max_steps": int(eval_cfg.get("max_steps") or exp.get("max_steps") or 240),
+            "scope": str(eval_cfg.get("scope") or exp.get("scope") or "p37_action_fidelity_core"),
         }
     write_json(exp_dir / "run_manifest.json", manifest)
     print(
@@ -1837,6 +2043,52 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                             "elapsed_sec": elapsed(),
                             "metrics": dict(rl_result.get("metrics") or {}),
                             "rl_summary": rl_result.get("summary") or {},
+                        }
+                    )
+                append_experiment_progress_event(
+                    progress_path,
+                    run_id=ctx.run_id,
+                    exp_id=exp_id,
+                    phase="eval",
+                    stage="eval",
+                    status=str(seed_results[-1].get("status")),
+                    seed=seed,
+                    step_or_epoch=seed_idx,
+                    elapsed_sec=elapsed(),
+                    metrics=seed_results[-1].get("metrics") or {},
+                    message=exp_type,
+                    extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
+                )
+            elif exp_type in {"long_consistency", "long_horizon_consistency"}:
+                try:
+                    long_result = _run_long_consistency_seed_experiment(
+                        ctx=ctx,
+                        exp=exp,
+                        exp_dir=exp_dir,
+                        seed=seed,
+                        seed_idx=seed_idx,
+                        seed_total=len(seeds),
+                    )
+                except Exception as exc:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "failed",
+                            "stage": "eval",
+                            "error": f"long_consistency_exception: {exc}",
+                            "elapsed_sec": elapsed(),
+                            "metrics": {},
+                        }
+                    )
+                else:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "ok" if long_result["status"] == "ok" else "failed",
+                            "stage": "eval",
+                            "elapsed_sec": elapsed(),
+                            "metrics": dict(long_result.get("metrics") or {}),
+                            "long_summary": long_result.get("summary") or {},
                         }
                     )
                 append_experiment_progress_event(

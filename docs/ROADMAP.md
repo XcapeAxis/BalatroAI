@@ -4,33 +4,29 @@
 
 | Milestone | Theme | Status |
 |---|---|---|
-| P0-P2b | Hand-score core + joker smoke parity | done |
-| P3-P8 | Joker/consumable/shop/rng coverage expansion | done |
-| P9-P11 | Long-episode + probability/economy observed scopes | done |
-| P13 | Real-session recording + drift fixtures | done |
+| P0-P13 | Oracle/sim baseline alignment and real-session drift loop | done |
 | P22-P27 | Experiment orchestration, seed governance, campaign/release ops | done |
-| P29-P36 | Data flywheel, action replay, self-supervised tracks | done |
-| P37 | Single-action fidelity + mechanics parity audit framework (real↔sim) | in progress (this change set) |
+| P29-P37 | Data flywheel, action replay unification, self-supervised and single-action fidelity | done |
+| P38 | Long-horizon statistical consistency framework (multi-seed stress + aggregate parity) | in progress |
 
-## P37 Delivery Focus
+## Current Focus: P38
 
-1. Position-sensitive action semantics as first-class actions:
-   - `MOVE_HAND_CARD`, `MOVE_JOKER`, `CONSUMABLE_USE`, `SHOP_REROLL/SHOP_BUY/PACK_OPEN`.
-2. Real trace capture/conversion that preserves actionable replay details (including inferred move sequences when explicit drag RPC is absent).
-3. Dedicated fidelity scope (`p37_action_fidelity_core`) and directed batch gate (`-RunP37`).
-4. Probability parity audit path with artifactized json/md outputs under `docs/artifacts/p37/`.
+1. Long episode stress runner with multi-seed support and per-episode artifacts.
+2. Aggregate stats comparator (`score`, `rounds`, `economy`, `shop/pack/joker distributions`).
+3. Gate split:
+   - hard fail for replay drift mismatches
+   - soft warning for aggregate statistical drift
+4. P22 orchestrator integration (`experiment_type: long_consistency`) and run-level summary output.
 
 ## Next Milestones
 
 | Milestone | Target | Exit Signal |
 |---|---|---|
-| P38 | Full UI-action parity (drag/drop, multi-select, booster interaction) | Real sessions can replay complex UI flows with zero drift in action-fidelity scopes. |
-| P39 | Long-horizon self-play with oracle-supervised correction loops | Multi-round strategy deltas become measurable with stable parity and replay contracts. |
-| P40 | Large-scale self-supervised representation + cross-seed transfer | Encoder pretraining materially improves BC/DAgger/RL sample efficiency under fixed gates. |
+| P39 | Full UI-action parity coverage (drag/drop, multi-select, booster interactions) | Complex real sessions replay in sim with stable zero-drift under fidelity scopes. |
+| P40 | Long-horizon self-play and self-supervised transfer scale-up | Representation + policy lines show reproducible seed-robust gains with gate-backed evidence. |
 
-## Known Constraints
+## Constraints
 
-- Real/oracle paths require local Balatro + balatrobot runtime availability.
-- Replay parity can be exact while underlying native weight formulas are still partially unknown; this must be disclosed when reporting results.
-- All benchmark claims remain seed/config/version scoped and must cite artifacts.
-
+- Real/oracle validation requires local Balatro + balatrobot runtime availability.
+- Aggregate parity interpretation must remain seed/config/version scoped.
+- Replay-level exactness can coexist with partially unknown native closed-form weight formulas; reports must disclose this boundary.

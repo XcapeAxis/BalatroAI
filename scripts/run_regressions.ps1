@@ -40,6 +40,7 @@ param(
   [switch]$RunP31,
   [switch]$RunP32,
   [switch]$RunP37,
+  [switch]$RunP38,
   [switch]$RequireMainBranch,
   [string]$P21Timestamp = ""
 )
@@ -112,6 +113,9 @@ if ($RunP32) {
 }
 if ($RunP37) {
   $RunP32 = $true
+}
+if ($RunP38) {
+  $RunP37 = $true
 }
 
 function Invoke-GitCapture([string[]]$GitArgs) {
@@ -2935,6 +2939,102 @@ if ($RunP37) {
   Write-Host ("[P37] artifact_dir=" + $p37Dir + " gate_status=" + $reportP37.status + " diff_fail=" + $reportP37.diff_fail)
   if ($reportP37.status -ne "PASS" -or [int]$reportP37.diff_fail -ne 0) {
     throw "[P37] gate failed; inspect report_p37"
+  }
+}
+
+if ($RunP38) {
+  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $p38Root = Join-Path $ProjectRoot "docs/artifacts/p38"
+  if (-not (Test-Path $p38Root)) { New-Item -ItemType Directory -Path $p38Root -Force | Out-Null }
+
+  $p38LongRoot = Join-Path $p38Root "long_episode"
+  if (-not (Test-Path $p38LongRoot)) { New-Item -ItemType Directory -Path $p38LongRoot -Force | Out-Null }
+  $p38RunId = $stamp
+  $p38LongDir = Join-Path $p38LongRoot $p38RunId
+  $p38AnalysisDir = Join-Path $p38Root ("analysis_" + $stamp)
+  $p38PlotsDir = Join-Path $p38Root "plots"
+
+  $p38Py = Join-Path $ProjectRoot ".venv_trainer\Scripts\python.exe"
+  if (-not (Test-Path $p38Py)) { $p38Py = "python" }
+
+  $p38Seeds = "AAAAAAA,BBBBBBB,CCCCCCC,DDDDDDD,EEEEEEE"
+
+  $p38Batch = Run-Py -Label "P38-batch-long-episode" -PyArgs @(
+    "-B",
+    "sim/oracle/batch_build_p38_long_episode.py",
+    "--base-url", $BaseUrl,
+    "--out-dir", $p38LongRoot,
+    "--run-id", $p38RunId,
+    "--episodes", "12",
+    "--max-steps", "260",
+    "--seeds", $p38Seeds,
+    "--scope", "p37_action_fidelity_core"
+  )
+
+  $reportP38Path = Join-Path $p38LongDir "report_p38_long_episode.json"
+  $reportP38 = Read-JsonFile -Path $reportP38Path
+  if (-not $reportP38) {
+    throw "[P38] missing report_p38_long_episode.json"
+  }
+
+  $p38Analyze = Run-Py -Label "P38-analyze-stats" -PyArgs @(
+    "-B",
+    "sim/oracle/analyze_p38_long_stats.py",
+    "--fixtures-dir", $p38LongDir,
+    "--out-dir", $p38AnalysisDir,
+    "--warn-relative-pct", "5",
+    "--warn-pvalue", "0.01"
+  )
+  if ([int]$p38Analyze.Code -ne 0) {
+    throw "[P38] analyze stats failed"
+  }
+
+  $p38SummaryPath = Join-Path $p38AnalysisDir "summary_stats.json"
+  $p38Summary = Read-JsonFile -Path $p38SummaryPath
+  if (-not $p38Summary) {
+    throw "[P38] missing summary_stats.json"
+  }
+
+  $p38Plot = Run-Py -Label "P38-plot-stats" -PyArgs @(
+    "-B",
+    "sim/oracle/plot_p38_stats.py",
+    "--fixtures-dir", $p38LongDir,
+    "--out-dir", $p38PlotsDir
+  )
+  if ([int]$p38Plot.Code -ne 0) {
+    Write-Host "[P38][WARNING] plot script returned non-zero"
+  }
+
+  $hardFailCount = [int]($reportP38.hard_fail_count)
+  $softWarnCount = [int]($p38Summary.soft_warn_count)
+  $coverageP38Path = Join-Path $ProjectRoot "docs/COVERAGE_P38_STATUS.md"
+  @(
+    "# COVERAGE P38 STATUS",
+    "",
+    "- timestamp: " + (Get-Date -Format "yyyy-MM-dd HH:mm:ss"),
+    "- baseline_gate: RunP37",
+    "- run_p37_invoked: " + $RunP37,
+    "- episodes_total: " + $reportP38.episodes_total,
+    "- episodes_pass: " + $reportP38.episodes_pass,
+    "- hard_fail_count: " + $hardFailCount,
+    "- soft_warn_count: " + $softWarnCount,
+    "- report_long_episode: " + $reportP38Path,
+    "- report_summary_stats: " + $p38SummaryPath,
+    "- gate_status: " + $(if ($hardFailCount -eq 0) { "PASS" } else { "FAIL" })
+  ) -join "`n" | Out-File -LiteralPath $coverageP38Path -Encoding UTF8
+
+  if ($softWarnCount -gt 0) {
+    Write-Host ("[P38][WARNING] soft statistical warnings detected: " + $softWarnCount)
+  }
+
+  Write-Host (
+    "[P38] run_dir=" + $p38LongDir +
+    " hard_fail_count=" + $hardFailCount +
+    " soft_warn_count=" + $softWarnCount
+  )
+
+  if ($hardFailCount -gt 0 -or [int]$p38Batch.Code -ne 0) {
+    throw "[P38] hard gate failed; inspect report_p38_long_episode.json and summary_stats.json"
   }
 }
 

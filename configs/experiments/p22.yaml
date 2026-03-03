@@ -420,6 +420,78 @@ matrix:
       gamma: 0.99
       lr: 0.001
 
+  - id: p38_long_consistency_smoke
+    name: p38_long_consistency_smoke
+    backend: oracle_sim
+    policy: long_consistency
+    experiment_type: long_consistency
+    episodes: 5
+    max_steps: 240
+    scope: p37_action_fidelity_core
+    seed_mode: regression_fixed
+    seed_set_name: contract_regression
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+      - CCCCCCC
+    gate_flag: RunP38
+    modes:
+      quick: true
+      gate: true
+      nightly: true
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - sim/oracle/batch_build_p38_long_episode.py
+      - sim/oracle/analyze_p38_long_stats.py
+      - sim/oracle/plot_p38_stats.py
+    eval:
+      mode: long_consistency
+      episodes: 5
+      max_steps: 240
+      scope: p37_action_fidelity_core
+
+  - id: p38_long_consistency_nightly
+    name: p38_long_consistency_nightly
+    backend: oracle_sim
+    policy: long_consistency
+    experiment_type: long_consistency
+    episodes: 30
+    max_steps: 300
+    scope: p37_action_fidelity_core
+    seed_mode: nightly
+    seed_set_name: eval_default
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+      - CCCCCCC
+      - DDDDDDD
+      - EEEEEEE
+    gate_flag: RunP38
+    modes:
+      quick: false
+      gate: false
+      nightly: true
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - sim/oracle/batch_build_p38_long_episode.py
+      - sim/oracle/analyze_p38_long_stats.py
+      - sim/oracle/plot_p38_stats.py
+    eval:
+      mode: long_consistency
+      episodes: 30
+      max_steps: 300
+      scope: p37_action_fidelity_core
+
 evaluation:
   primary_metric: score
   gates:

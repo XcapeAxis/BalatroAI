@@ -4,12 +4,12 @@
 </p>
 
 <!-- BADGES:START -->
-[![Latest Gate](https://img.shields.io/badge/Latest_Gate-RunP37_PASS-2EA44F)](scripts/run_regressions.ps1)
+[![Latest Gate](https://img.shields.io/badge/Latest_Gate-RunP38_PASS-2EA44F)](scripts/run_regressions.ps1)
 [![Workflow](https://img.shields.io/badge/Workflow-mainline--only-2EA44F)](scripts/git_sync.ps1)
 [![Seed Governance](https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16)](configs/experiments/seeds_p23.yaml)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Trend Warehouse](https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16)](docs/TREND_WAREHOUSE_P26.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P37-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P38-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -104,7 +104,13 @@ powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP10
 powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP37
 ```
 
-6. Run the P22 quick orchestration matrix (includes `quick_selfsup_pretrain`, `quick_selfsup_p33`, P36 rows `quick_selfsup_future_value` / `quick_selfsup_action_type`, P37 SSL rows `quick_ssl_pretrain_v1` / `quick_ssl_probe_v1`, and RL smoke `rl_ppo_smoke`).
+6. Run the P38 long-horizon statistical consistency gate (includes `RunP37`).
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP38
+```
+
+7. Run the P22 quick orchestration matrix (includes `quick_selfsup_pretrain`, `quick_selfsup_p33`, P36 rows `quick_selfsup_future_value` / `quick_selfsup_action_type`, P37 SSL rows `quick_ssl_pretrain_v1` / `quick_ssl_probe_v1`, and RL smoke `rl_ppo_smoke`).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
@@ -122,14 +128,20 @@ Optional multi-seed comparison smoke (2 experiments x 3 seeds):
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline,quick_candidate -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"
 ```
 
-7. Inspect generated artifacts.
+Optional P38 orchestrator smoke row:
+
+```powershell
+python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.yaml --out-root docs/artifacts/p22 --only p38_long_consistency_smoke --seed-limit 1
+```
+
+8. Inspect generated artifacts.
 
 - `docs/artifacts/p22/runs/<run_id>/summary_table.md`
 - `docs/artifacts/p22/runs/<run_id>/run_plan.json`
 - `docs/artifacts/p22/runs/<run_id>/<exp_id>/{run_manifest.json,progress.jsonl,seeds_used.json}`
 - optional live snapshot view: `powershell -ExecutionPolicy Bypass -File scripts\show_p22_live.ps1`
 
-8. Cleanup runtime files when finished.
+9. Cleanup runtime files when finished.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\cleanup.ps1
@@ -312,6 +324,22 @@ P37 action-fidelity parity reproducibility:
   - [docs/P37_ACTION_GAP_AUDIT.md](docs/P37_ACTION_GAP_AUDIT.md)
   - [docs/P37_PROBABILITY_PARITY.md](docs/P37_PROBABILITY_PARITY.md)
 
+P38 long-horizon statistical consistency reproducibility:
+
+- gate:
+  - `powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP38`
+- long episode batch:
+  - `python -B sim/oracle/batch_build_p38_long_episode.py --base-url http://127.0.0.1:12346 --episodes 12 --max-steps 260 --seeds "AAAAAAA,BBBBBBB,CCCCCCC,DDDDDDD,EEEEEEE" --scope p37_action_fidelity_core`
+- aggregate analysis:
+  - `python -B sim/oracle/analyze_p38_long_stats.py --fixtures-dir docs/artifacts/p38/long_episode/<run_id>`
+- plots:
+  - `python -B sim/oracle/plot_p38_stats.py --fixtures-dir docs/artifacts/p38/long_episode/<run_id>`
+- maturity signal:
+  - hard parity: `mismatch_count == 0`
+  - statistical parity target: aggregate relative diff `< 5%` (soft warning threshold)
+- reference docs:
+  - [docs/P38_LONG_HORIZON_VALIDATION.md](docs/P38_LONG_HORIZON_VALIDATION.md)
+
 ## Reinforcement Learning (P37)
 
 P37 adds a research skeleton for RL iteration without claiming a fully optimized agent:
@@ -332,13 +360,13 @@ This path is for experiment plumbing and reproducibility; it is not yet a produc
 ### Repository Status (Auto-generated)
 
 - branch: main
-- latest_gate: RunP37 (PASS)
+- latest_gate: RunP38 (PASS)
 - recent_trend_signal: regression
 - trend_warehouse_last_updated: 2026-03-02T17:16:27.519440+00:00
 - trend_rows_count: 20115
 - champion: quick_risk_aware (champion)
 - candidate:  (decision: hold)
-- docs_coverage: P15-P37
+- docs_coverage: P15-P38
 <!-- README_STATUS:END -->
 <!-- STATUS:END -->
 
@@ -429,13 +457,14 @@ Milestone maturity snapshot:
 | P0-P13 (oracle/sim alignment baseline) | shipped |
 | P22-P27 (experiment/campaign/release ops) | shipped |
 | P29-P36 (data flywheel + replay + self-supervised) | shipped |
-| P37 (single-action fidelity + probability parity audit framework) | active |
+| P37 (single-action fidelity + probability parity audit framework) | shipped |
+| P38 (long-horizon statistical consistency framework) | active |
 
 Near-term:
 
-- stabilize full UI-level action parity coverage (P38)
-- extend long-horizon self-play + correction loops (P39)
-- scale self-supervised representation transfer into downstream policy stacks (P40)
+- stabilize full UI-level action parity coverage (P39)
+- extend long-horizon self-play + correction loops (P40)
+- scale self-supervised representation transfer into downstream policy stacks (P41+)
 
 Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 
@@ -452,6 +481,7 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - P36 self-supervised core is representation pretraining only; policy gain still requires downstream BC/DAgger/search/RL integration and seed-robust evaluation.
 - Some real-runtime reorder RPC paths are runtime-dependent; when unavailable, position actions are recorded with explicit degraded reasons and parity depends on inferred/fallback traces.
 - Probability parity in P37 currently validates replay-level outcome equivalence; fully independent native weight formulas remain partially unmapped.
+- P38 aggregate thresholds are currently warning-level for statistical drift and should be interpreted with sample-budget context.
 
 ## Further Reading
 
