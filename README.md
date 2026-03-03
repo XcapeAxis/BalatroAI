@@ -9,14 +9,14 @@
 [![Seed Governance](https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16)](configs/experiments/seeds_p23.yaml)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Trend Warehouse](https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16)](docs/TREND_WAREHOUSE_P26.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P31-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P33-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
 
 <!-- BADGES:END -->
 
-BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes a P31 self-supervised encoder backbone for trajectory-native pretraining. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised iteration, not as a cheat injector or memory-hook tool.
+BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33 self-supervised entries plus a unified P33 action replay contract. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised iteration, not as a cheat injector or memory-hook tool.
 
 Badge/status refresh source:
 
@@ -38,7 +38,7 @@ BalatroAI exists to make policy development and validation for Balatro engineeri
 Suitable for:
 
 - simulator parity and canonical trace alignment work
-- offline-online policy iteration (Search -> BC -> DAgger -> RL)
+- offline-online policy iteration (Search -> BC -> DAgger -> Self-Supervised (P33) -> RL)
 - regression-gated experiment automation (P22+ / P23+ / P24+)
 - engineering workflows around champion/candidate decisions
 
@@ -79,7 +79,7 @@ uvx balatrobot serve --headless --fast --port 12346
 powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP10
 ```
 
-5. Run the P22 quick orchestration matrix (now includes `quick_selfsup_pretrain`).
+5. Run the P22 quick orchestration matrix (includes `quick_selfsup_pretrain` and `quick_selfsup_p33`).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
@@ -102,9 +102,10 @@ Expected console excerpt (trimmed):
 
 ```text
 [RunFast] PASS (P0/P1 baseline completed)
-[P22] Experiment 1/3: quick_baseline (seeds 2, mode=gate)
-[P22] Experiment 3/3: quick_selfsup_pretrain (seeds 2, mode=gate)
-[P22] Completed 3/3: quick_selfsup_pretrain status=passed | avg_ante=4.6000 median_ante=4.600 win_rate=100.00% hand_top1=100.00% hand_top3=100.00% shop_top1=0.00% illegal=11.41%
+[P22] Experiment 1/4: quick_baseline (seeds 2, mode=gate)
+[P22] Experiment 3/4: quick_selfsup_pretrain (seeds 2, mode=gate)
+[P22] Experiment 4/4: quick_selfsup_p33 (seeds 2, mode=gate)
+[P22] Completed 4/4: quick_selfsup_p33 status=passed | avg_ante=2.8750 median_ante=2.875 win_rate=29.69% hand_top1=31.25% hand_top3=46.25% shop_top1=0.00% illegal=5.41%
 [P23] run_id=20260303-005315 mode=gate status=PASS
 [P23] live_snapshot=.../docs/artifacts/p22/runs/20260303-005315/live_summary_snapshot.json
 [P23] summary_json=.../docs/artifacts/p22/runs/20260303-005315/summary_table.json
@@ -146,6 +147,7 @@ flowchart LR
 
 Data-flow details: [docs/ARCHITECTURE_P25.md](docs/ARCHITECTURE_P25.md)
 For a detailed architecture and dataflow overview, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+All BC/DAgger/Self-Supervised (P33) experiment paths now normalize actions through a unified replay adapter so single-step behavior is consistent across sim and real-runtime adapters.
 
 ## Core Workflows
 
@@ -155,6 +157,7 @@ For a detailed architecture and dataflow overview, see [docs/ARCHITECTURE.md](do
 | Orchestrator | `scripts/run_p22.ps1`, `scripts/run_p23.ps1` | run plans, telemetry, live snapshot, summary tables |
 | Campaign ops | `scripts/run_p24.ps1` | campaign status/summary, triage, ranking |
 | Training | `trainer/train_bc.py`, `trainer/train_rl.py`, `trainer/train_pv.py` | checkpoints + eval metrics |
+| Self-supervised (P33) | `scripts/run_p33_selfsup.ps1`, `python -B -m trainer.experiments.selfsupervised_p33` | dataset stats + selfsup summary + checkpoints |
 | Inference | `trainer/infer_assistant.py` | suggestions / optional controlled execution |
 
 ## Reproducibility
@@ -188,6 +191,16 @@ P31 self-supervised backbone reproducibility:
 - orchestrated run: `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` (includes `quick_selfsup_pretrain`)
 - reference docs: [docs/EXPERIMENTS_P31.md](docs/EXPERIMENTS_P31.md), [docs/COVERAGE_P31_STATUS.md](docs/COVERAGE_P31_STATUS.md)
 
+P33 self-supervised plumbing reproducibility (experimental entry):
+
+- config: `configs/experiments/p33_selfsup.yaml`
+- direct run: `python -B trainer/experiments/selfsupervised_p33.py --config configs/experiments/p33_selfsup.yaml`
+- wrapper: `powershell -ExecutionPolicy Bypass -File scripts\run_p33_selfsup.ps1`
+- artifacts:
+  - `docs/artifacts/p33/selfsup_dataset_stats.json`
+  - `docs/artifacts/p33/selfsup_training_summary_<timestamp>.json`
+- details: [docs/EXPERIMENTS_P33.md](docs/EXPERIMENTS_P33.md), [docs/COVERAGE_P33_STATUS.md](docs/COVERAGE_P33_STATUS.md)
+
 <!-- STATUS:START -->
 <!-- README_STATUS:BEGIN -->
 ### Repository Status (Auto-generated)
@@ -199,7 +212,7 @@ P31 self-supervised backbone reproducibility:
 - trend_rows_count: 20115
 - champion: quick_risk_aware (champion)
 - candidate: quick_hybrid (decision: hold)
-- docs_coverage: P15-P31
+- docs_coverage: P15-P33
 <!-- README_STATUS:END -->
 <!-- STATUS:END -->
 
@@ -271,6 +284,7 @@ Done:
 - P24 campaign manager + triage/bisect + ranking + dashboard
 - P25 README/docs productization with RunP25 docs gate
 - P31 self-supervised trajectory backbone (`DecisionStep/Trajectory`, encoder, quick pretrain)
+- P33 unified action replay adapter (`trainer/actions/replay.py`) + minimal self-supervised experimental plumbing
 
 In progress:
 
@@ -292,17 +306,20 @@ Planned:
 - Simulator/mechanic coverage is still expanding across milestones.
 - Generated status/readme snippets are local-run artifacts and should be refreshed before release notes.
 - P31 self-supervised backbone is alpha-grade: current heads focus on `score_delta` and `hand_type`; broader tactical targets will be added incrementally.
+- P33 self-supervised entry is experimental plumbing: it validates data->train->summary flow, not production-strength policy gains.
 
 ## Further Reading
 
 - [docs/SIM_ALIGNMENT_STATUS.md](docs/SIM_ALIGNMENT_STATUS.md)
 - [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
 - [docs/EXPERIMENTS_P31.md](docs/EXPERIMENTS_P31.md)
+- [docs/EXPERIMENTS_P33.md](docs/EXPERIMENTS_P33.md)
 - [docs/P32_REAL_ACTION_CONTRACT_STATUS.md](docs/P32_REAL_ACTION_CONTRACT_STATUS.md)
 - [docs/P32_REAL_ACTION_CONTRACT_SPEC.md](docs/P32_REAL_ACTION_CONTRACT_SPEC.md)
 - [docs/P32_SHOP_RNG_ALIGNMENT.md](docs/P32_SHOP_RNG_ALIGNMENT.md)
 - Coverage snapshots: `docs/COVERAGE_P*_STATUS.md`
 - [docs/COVERAGE_P31_STATUS.md](docs/COVERAGE_P31_STATUS.md)
+- [docs/COVERAGE_P33_STATUS.md](docs/COVERAGE_P33_STATUS.md)
 - [docs/COVERAGE_P32_STATUS.md](docs/COVERAGE_P32_STATUS.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
@@ -322,6 +339,7 @@ Planned:
 - [docs/RELEASE_TRAIN_P27.md](docs/RELEASE_TRAIN_P27.md)
 - [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
 - [docs/EXPERIMENTS_P31.md](docs/EXPERIMENTS_P31.md)
+- [docs/EXPERIMENTS_P33.md](docs/EXPERIMENTS_P33.md)
 - [docs/P32_REAL_ACTION_CONTRACT_STATUS.md](docs/P32_REAL_ACTION_CONTRACT_STATUS.md)
 - [docs/P32_REAL_ACTION_CONTRACT_SPEC.md](docs/P32_REAL_ACTION_CONTRACT_SPEC.md)
 - [docs/P32_SHOP_RNG_ALIGNMENT.md](docs/P32_SHOP_RNG_ALIGNMENT.md)
@@ -329,6 +347,7 @@ Planned:
 - [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 - [docs/ARCHITECTURE_P25.md](docs/ARCHITECTURE_P25.md)
 - [docs/COVERAGE_P31_STATUS.md](docs/COVERAGE_P31_STATUS.md)
+- [docs/COVERAGE_P33_STATUS.md](docs/COVERAGE_P33_STATUS.md)
 
 ## License and Contributing
 

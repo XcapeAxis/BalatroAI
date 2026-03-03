@@ -28,7 +28,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | Scenario | Command | Notes |
 |---|---|---|
 | Plan only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -DryRun` | validates matrix + writes plan/report |
-| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | 2 experiments x 2 seeds |
+| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | 4 experiments x 2 seeds (includes selfsup entries) |
 | Fast smoke (verbose) | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -VerboseLogs` | adds per-seed/per-stage console logs |
 | Nightly style | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Nightly -Resume` | larger seed set + resume |
 | Single experiment | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline -Resume` | rerun one exp id |
@@ -51,7 +51,7 @@ Key sections:
 - `matrix[]`:
   - `id`, `name`
   - `backend`, `policy`
-  - `experiment_type` (optional, e.g. `selfsup_pretrain`)
+  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`)
   - `seed_mode` (`regression_fixed` or `nightly`)
   - `seeds` (optional explicit seed override list)
   - `gate_flag` (passed to `scripts/run_regressions.ps1`)
@@ -100,6 +100,30 @@ Selfsup output paths:
 - `docs/artifacts/p22/runs/<run_id>/quick_selfsup_pretrain/selfsup_runs/seed_*/summary.json`
 - `docs/artifacts/p22/runs/<run_id>/quick_selfsup_pretrain/progress.jsonl`
 - `docs/artifacts/p22/runs/<run_id>/summary_table.{csv,json,md}`
+
+## P33 Self-Supervised Plumbing Integration (Experimental)
+
+P22 now supports `experiment_type: selfsup_p33` for the minimal P33 data->train plumbing path.
+
+Current reference row in `configs/experiments/p22.yaml`:
+
+- `id: quick_selfsup_p33`
+- `experiment_type: selfsup_p33`
+- explicit seeds: `AAAAAAA, BBBBBBB, CCCCCCC` (`-Quick` applies `--seed-limit 2`)
+- selfsup config: `configs/experiments/p33_selfsup.yaml`
+
+Behavior:
+
+- orchestrator invokes `trainer.self_supervised.train.run_p33_selfsup_training(...)` directly.
+- run manifest records the selfsup type, config path, and declared data sources.
+- per-seed outputs are written under `selfsup_p33_runs/seed_*`.
+
+Output paths:
+
+- `docs/artifacts/p22/runs/<run_id>/quick_selfsup_p33/selfsup_p33_runs/seed_*/summary.json`
+- `docs/artifacts/p22/runs/<run_id>/quick_selfsup_p33/progress.jsonl`
+- `docs/artifacts/p33/selfsup_dataset_stats.json`
+- `docs/artifacts/p33/selfsup_training_summary_<timestamp>.json`
 
 ## P32 Action-Fidelity Integration
 
@@ -182,6 +206,12 @@ Reproduce selfsup row only:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_selfsup_pretrain -SeedLimit 2
+```
+
+Reproduce P33 selfsup row only:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_selfsup_p33 -SeedLimit 2
 ```
 
 ## Related Docs

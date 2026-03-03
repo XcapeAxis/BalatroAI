@@ -110,3 +110,15 @@ The runner executes:
 - Details:
   - `docs/EXPERIMENTS_P31.md`
   - `docs/COVERAGE_P31_STATUS.md`
+
+## P33 Action Replay + Self-Supervised Plumbing Note
+
+- P33 introduces a unified action replay adapter (`trainer/actions/replay.py`) to normalize and execute high-level actions across sim/real backends.
+- Current integration points include recorder/real executor/DAgger sim-augment paths, plus action normalization in real-trace fixture conversion.
+- P33 also adds a minimal self-supervised experiment entry:
+  - `trainer/experiments/selfsupervised_p33.py`
+  - `configs/experiments/p33_selfsup.yaml`
+  - P22 row: `quick_selfsup_p33`
+- Reference docs:
+  - `docs/EXPERIMENTS_P33.md`
+  - `docs/COVERAGE_P33_STATUS.md`
