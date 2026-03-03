@@ -1,0 +1,89 @@
+schema: p32_self_supervised_config_v1
+
+budget:
+  max_wall_time_minutes: 60
+  max_episodes: 200
+  max_seeds: 6
+  max_concurrent_workers: 1
+
+seed_policy:
+  version: p35.p32.selfsup.v1
+  base_seed: P32SS
+  regression_smoke:
+    - AAAAAAA
+    - BBBBBBB
+    - CCCCCCC
+  train_default:
+    - AAAAAAA
+    - BBBBBBB
+    - CCCCCCC
+    - DDDDDDD
+    - EEEEEEE
+  eval_default:
+    - AAAAAAA
+    - BBBBBBB
+    - CCCCCCC
+  nightly_extra_random: 2
+
+matrix:
+  - id: p32_repr_stub_quick
+    name: p32_repr_stub_quick
+    backend: sim
+    policy: selfsup_repr_stub
+    experiment_type: pretrain_repr
+    seed_mode: regression_fixed
+    seed_set_name: regression_smoke
+    gate_flag: RunFast
+    modes:
+      quick: true
+      gate: true
+      nightly: true
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/self_supervised/datasets.py
+      - trainer/self_supervised/run_pretrain.py
+      - trainer/experiments/orchestrator.py
+    eval:
+      mode: selfsup_p32_stub
+      config: configs/experiments/p32_self_supervised.yaml
+      max_samples: 180
+
+evaluation:
+  primary_metric: score
+  gates:
+    baseline_gate: RunFast
+  promotion:
+    min_delta: 0.005
+    require_all_gates_pass: false
+
+data:
+  sources:
+    - type: oracle_traces
+      path: docs/artifacts/p32
+    - type: oracle_traces
+      path: docs/artifacts/p32/smoke_position_fixture
+    - type: p13_drift_fixture
+      path: docs/artifacts/p13
+  max_trajectories_per_source: 12
+  max_samples: 400
+  dataset_out: trainer_data/p32/selfsup_stub_dataset.jsonl
+  stats_out: docs/artifacts/p32/selfsup_stub_dataset_stats.json
+
+task:
+  name: pretrain_repr_stub
+  bucket_thresholds: [0.0, 120.0]
+  horizon_steps: 3
+
+training:
+  seed: 3201
+  epochs: 1
+  batch_size: 64
+
+output:
+  run_root: trainer_runs/p32_selfsup_stub
+  summary_out: docs/artifacts/p32/selfsup_stub_training_summary_latest.json
