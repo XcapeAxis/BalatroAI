@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from trainer.actions.replay import normalize_high_level_action
 from sim.core.hashing import (
     state_hash_full,
     state_hash_hand_core,
@@ -311,7 +312,7 @@ def main() -> int:
         rng_replay = _rng_replay(row)
         canonical_after_obs["rng_replay"] = rng_replay
 
-        action_for_trace = dict(action)
+        action_for_trace = normalize_high_level_action(action, phase=_phase_for_action(canonical_after, row))
         if not isinstance(action_for_trace.get("rng_replay"), dict):
             action_for_trace["rng_replay"] = dict(rng_replay)
 

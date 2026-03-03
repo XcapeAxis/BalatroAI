@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from trainer import action_space_shop
+from trainer.actions.replay import ActionReplayer
 from trainer.env_client import create_backend
 from trainer.infer_assistant_real import _heuristic_hand_rankings, _heuristic_shop_rankings
 from trainer.real_observer import build_observation
@@ -180,6 +181,13 @@ def main() -> int:
     if out_path.exists():
         out_path.unlink()
     backend = create_backend("real", base_url=args.base_url, timeout_sec=8.0, seed="AAAAAAA", logger=logger)
+    replayer = ActionReplayer(
+        mode="real",
+        backend=backend,
+        logger=logger,
+        strict=False,
+        debug_dir=Path("docs/artifacts/p33/logs"),
+    )
     scripted_actions = _load_action_trace(args.action_trace)
     scripted_cursor = 0
 
@@ -249,7 +257,13 @@ def main() -> int:
                     if safe_action is not None:
                         try:
                             action_sent = dict(safe_action)
-                            next_state, reward, done, info = backend.step(action_sent)
+                            replay_res = replayer.replay_single_action(before_state, action_sent)
+                            if not replay_res.ok:
+                                raise RuntimeError(replay_res.error or "action_replay_failed")
+                            next_state = backend.get_state()
+                            reward = float(replay_res.reward)
+                            done = bool(replay_res.done)
+                            info = dict(replay_res.info)
                             after_state = next_state
                             after_obs = build_observation(after_state)
                             action_result = {
@@ -317,6 +331,7 @@ def main() -> int:
             if step_idx + 1 < int(args.steps):
                 time.sleep(max(0.05, float(args.interval)))
     finally:
+        replayer.close()
         backend.close()
 
     summary = {

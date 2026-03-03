@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from trainer import action_space, action_space_shop
+from trainer.actions.replay import ActionReplayer
 from trainer.dataset import JsonlWriter
 from trainer.env_client import create_backend
 from trainer.features import extract_features
@@ -383,6 +384,13 @@ def main() -> int:
     if args.allow_sim_augment and (stats["hand_records"] < int(args.hand_samples) or stats["shop_records"] < int(args.shop_samples)):
         logger.info("insufficient real samples, augmenting from sim...")
         sim_backend = create_backend("sim", seed="DAGGER-AUG")
+        sim_replayer = ActionReplayer(
+            mode="sim",
+            backend=sim_backend,
+            logger=logger,
+            strict=False,
+            debug_dir=Path("docs/artifacts/p33/logs"),
+        )
         try:
             episode = 1
             step = 0
@@ -456,7 +464,11 @@ def main() -> int:
                     if stats["hand_records"] >= int(args.hand_samples) and stats["shop_records"] >= int(args.shop_samples):
                         break
                     try:
-                        state, _, done, _ = sim_backend.step(chosen_action)
+                        replay_res = sim_replayer.replay_single_action(state, chosen_action)
+                        if not replay_res.ok:
+                            break
+                        state = sim_backend.get_state()
+                        done = bool(replay_res.done)
                     except Exception:
                         break
                     step += 1
@@ -499,6 +511,7 @@ def main() -> int:
                         add_record(rec, "shop")
                     synth_idx += 1
         finally:
+            sim_replayer.close()
             sim_backend.close()
 
     with JsonlWriter(out_path) as writer:
