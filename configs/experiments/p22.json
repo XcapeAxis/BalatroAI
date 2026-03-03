@@ -164,6 +164,80 @@
         "config": "configs/experiments/p33_selfsup.yaml",
         "max_samples": 240
       }
+    },
+    {
+      "id": "quick_selfsup_future_value",
+      "name": "quick_selfsup_future_value",
+      "backend": "sim",
+      "policy": "selfsup_p36_future",
+      "experiment_type": "selfsup_future_value",
+      "seed_mode": "regression_fixed",
+      "seed_set_name": "contract_regression",
+      "seeds": [
+        "AAAAAAA",
+        "BBBBBBB",
+        "CCCCCCC"
+      ],
+      "gate_flag": "RunFast",
+      "modes": {
+        "quick": true,
+        "gate": true,
+        "nightly": true
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "sanity_compile": [
+        "trainer/selfsup/data.py",
+        "trainer/selfsup/tasks.py",
+        "trainer/selfsup/train_future_value.py"
+      ],
+      "eval": {
+        "mode": "selfsup_future_value",
+        "config": "configs/experiments/p36_selfsup_future_value.yaml",
+        "max_samples": 220
+      }
+    },
+    {
+      "id": "quick_selfsup_action_type",
+      "name": "quick_selfsup_action_type",
+      "backend": "sim",
+      "policy": "selfsup_p36_action",
+      "experiment_type": "selfsup_action_type",
+      "seed_mode": "regression_fixed",
+      "seed_set_name": "contract_regression",
+      "seeds": [
+        "AAAAAAA",
+        "BBBBBBB",
+        "CCCCCCC"
+      ],
+      "gate_flag": "RunFast",
+      "modes": {
+        "quick": true,
+        "gate": true,
+        "nightly": true
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "sanity_compile": [
+        "trainer/selfsup/data.py",
+        "trainer/selfsup/tasks.py",
+        "trainer/selfsup/train_action_type.py"
+      ],
+      "eval": {
+        "mode": "selfsup_action_type",
+        "config": "configs/experiments/p36_selfsup_action_type.yaml",
+        "max_samples": 220
+      }
     }
   ],
   "evaluation": {

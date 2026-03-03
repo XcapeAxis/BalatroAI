@@ -1,0 +1,33 @@
+{
+  "schema": "p36_selfsup_future_value_config_v1",
+  "data": {
+    "dataset_path": "docs/artifacts/p36/selfsup_datasets/latest/dataset.jsonl",
+    "sources": [
+      { "type": "oracle", "path": "sim/tests/fixtures_runtime/oracle_p0_v6_regression" },
+      { "type": "real", "path": "docs/artifacts/p32" }
+    ],
+    "max_trajectories_per_source": 8,
+    "max_samples": 320,
+    "lookahead_k": 3
+  },
+  "model": {
+    "latent_dim": 64,
+    "hidden_dim": 128,
+    "dropout": 0.1
+  },
+  "training": {
+    "seed": 3601,
+    "epochs": 2,
+    "batch_size": 32,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "val_ratio": 0.2,
+    "log_every": 10,
+    "device": "auto"
+  },
+  "output": {
+    "artifacts_root": "docs/artifacts/p36/future_value",
+    "run_root": "trainer_runs/p36_selfsup/future_value"
+  }
+}
+

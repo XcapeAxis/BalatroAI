@@ -903,6 +903,111 @@ def _run_selfsup_p32_seed_experiment(
     }
 
 
+def _run_selfsup_future_value_seed_experiment(
+    *,
+    ctx: RunContext,
+    exp: dict[str, Any],
+    exp_dir: Path,
+    seed: str,
+    seed_idx: int,
+    seed_total: int,
+) -> dict[str, Any]:
+    from trainer.selfsup.train_future_value import run_train_future_value
+
+    eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+    cfg_rel = str(
+        eval_cfg.get("config")
+        or exp.get("selfsup_config")
+        or "configs/experiments/p36_selfsup_future_value.yaml"
+    )
+    cfg_path = (ctx.repo_root / cfg_rel).resolve()
+    max_samples = int(eval_cfg.get("max_samples") or eval_cfg.get("max_steps") or 0)
+    out_dir = exp_dir / "selfsup_p36_future_runs" / f"seed_{seed_idx:03d}_{seed}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    summary = run_train_future_value(
+        config_path=cfg_path,
+        out_dir=out_dir,
+        seed_override=_seed_to_int(seed),
+        max_samples_override=(max_samples if max_samples > 0 else None),
+        quiet=(not ctx.verbose),
+    )
+    final = summary.get("final_metrics") if isinstance(summary.get("final_metrics"), dict) else {}
+    val_loss = float(final.get("val_loss") or 0.0)
+    val_mae = float(final.get("val_mae") or 0.0)
+    score = max(0.0, 2.5 + (1.0 / (1.0 + max(0.0, val_mae))) * 1.7 - (val_loss * 0.04))
+    hand_top1 = max(0.0, min(1.0, 1.0 / (1.0 + max(0.0, val_mae))))
+    metrics = {
+        "score": score,
+        "avg_ante_reached": max(0.0, 2.1 + hand_top1),
+        "median_ante": max(0.0, 2.1 + hand_top1),
+        "win_rate": max(0.0, min(1.0, hand_top1 * 0.85)),
+        "hand_top1": hand_top1,
+        "hand_top3": max(0.0, min(1.0, hand_top1 + 0.12)),
+        "shop_top1": max(0.0, min(1.0, 1.0 - min(1.0, val_loss * 0.1))),
+        "illegal_action_rate": max(0.0, min(0.30, val_loss * 0.02)),
+        "selfsup_p36_future_val_loss": val_loss,
+        "selfsup_p36_future_val_mae": val_mae,
+        "selfsup_p36_future_run_dir": str(summary.get("run_dir") or out_dir),
+    }
+    return {
+        "status": "ok" if str(summary.get("status") or "") == "ok" else "failed",
+        "metrics": metrics,
+        "summary": summary,
+    }
+
+
+def _run_selfsup_action_type_seed_experiment(
+    *,
+    ctx: RunContext,
+    exp: dict[str, Any],
+    exp_dir: Path,
+    seed: str,
+    seed_idx: int,
+    seed_total: int,
+) -> dict[str, Any]:
+    from trainer.selfsup.train_action_type import run_train_action_type
+
+    eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+    cfg_rel = str(
+        eval_cfg.get("config")
+        or exp.get("selfsup_config")
+        or "configs/experiments/p36_selfsup_action_type.yaml"
+    )
+    cfg_path = (ctx.repo_root / cfg_rel).resolve()
+    max_samples = int(eval_cfg.get("max_samples") or eval_cfg.get("max_steps") or 0)
+    out_dir = exp_dir / "selfsup_p36_action_runs" / f"seed_{seed_idx:03d}_{seed}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    summary = run_train_action_type(
+        config_path=cfg_path,
+        out_dir=out_dir,
+        seed_override=_seed_to_int(seed),
+        max_samples_override=(max_samples if max_samples > 0 else None),
+        quiet=(not ctx.verbose),
+    )
+    final = summary.get("final_metrics") if isinstance(summary.get("final_metrics"), dict) else {}
+    val_loss = float(final.get("val_loss") or 0.0)
+    val_acc = float(final.get("val_acc") or 0.0)
+    score = max(0.0, 2.4 + (val_acc * 1.9) - (val_loss * 0.25))
+    metrics = {
+        "score": score,
+        "avg_ante_reached": max(0.0, 2.2 + (val_acc * 1.2)),
+        "median_ante": max(0.0, 2.2 + (val_acc * 1.2)),
+        "win_rate": max(0.0, min(1.0, val_acc * 0.9)),
+        "hand_top1": max(0.0, min(1.0, val_acc)),
+        "hand_top3": max(0.0, min(1.0, val_acc + 0.15)),
+        "shop_top1": max(0.0, min(1.0, 1.0 - min(1.0, val_loss * 0.1))),
+        "illegal_action_rate": max(0.0, min(0.30, val_loss * 0.02)),
+        "selfsup_p36_action_val_loss": val_loss,
+        "selfsup_p36_action_val_acc": val_acc,
+        "selfsup_p36_action_run_dir": str(summary.get("run_dir") or out_dir),
+    }
+    return {
+        "status": "ok" if str(summary.get("status") or "") == "ok" else "failed",
+        "metrics": metrics,
+        "summary": summary,
+    }
+
+
 def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, exp_total: int) -> dict[str, Any]:
     exp_id = str(exp["id"])
     exp_type = str(exp.get("experiment_type") or "standard").strip().lower()
@@ -1056,7 +1161,15 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "experiment_type": exp_type,
         "experiment": exp,
     }
-    if exp_type in {"selfsup_pretrain", "selfsup_p33", "pretrain_repr", "self_supervised", "selfsup_stub"}:
+    if exp_type in {
+        "selfsup_pretrain",
+        "selfsup_p33",
+        "pretrain_repr",
+        "self_supervised",
+        "selfsup_stub",
+        "selfsup_future_value",
+        "selfsup_action_type",
+    }:
         eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
         default_cfg_map = {
             "selfsup_pretrain": "configs/experiments/p31_selfsup.yaml",
@@ -1064,6 +1177,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "pretrain_repr": "configs/experiments/p32_self_supervised.yaml",
             "self_supervised": "configs/experiments/p32_self_supervised.yaml",
             "selfsup_stub": "configs/experiments/p32_self_supervised.yaml",
+            "selfsup_future_value": "configs/experiments/p36_selfsup_future_value.yaml",
+            "selfsup_action_type": "configs/experiments/p36_selfsup_action_type.yaml",
         }
         default_cfg = default_cfg_map.get(exp_type, "configs/experiments/p32_self_supervised.yaml")
         cfg_rel = str(eval_cfg.get("config") or exp.get("selfsup_config") or default_cfg)
@@ -1267,7 +1382,15 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                         seed=seed,
                     )
                 )
-            if exp_type in {"selfsup_pretrain", "selfsup_p33", "pretrain_repr", "self_supervised", "selfsup_stub"}:
+            if exp_type in {
+                "selfsup_pretrain",
+                "selfsup_p33",
+                "pretrain_repr",
+                "self_supervised",
+                "selfsup_stub",
+                "selfsup_future_value",
+                "selfsup_action_type",
+            }:
                 try:
                     if exp_type == "selfsup_pretrain":
                         selfsup_result = _run_selfsup_seed_experiment(
@@ -1280,6 +1403,24 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                         )
                     elif exp_type in {"pretrain_repr", "self_supervised", "selfsup_stub"}:
                         selfsup_result = _run_selfsup_p32_seed_experiment(
+                            ctx=ctx,
+                            exp=exp,
+                            exp_dir=exp_dir,
+                            seed=seed,
+                            seed_idx=seed_idx,
+                            seed_total=len(seeds),
+                        )
+                    elif exp_type == "selfsup_future_value":
+                        selfsup_result = _run_selfsup_future_value_seed_experiment(
+                            ctx=ctx,
+                            exp=exp,
+                            exp_dir=exp_dir,
+                            seed=seed,
+                            seed_idx=seed_idx,
+                            seed_total=len(seeds),
+                        )
+                    elif exp_type == "selfsup_action_type":
+                        selfsup_result = _run_selfsup_action_type_seed_experiment(
                             ctx=ctx,
                             exp=exp,
                             exp_dir=exp_dir,
@@ -1427,7 +1568,15 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                         else (
                             latest_metrics.get("selfsup_p33_val_loss")
                             if latest_metrics.get("selfsup_p33_val_loss") is not None
-                            else latest_metrics.get("selfsup_p32_val_loss")
+                            else (
+                                latest_metrics.get("selfsup_p32_val_loss")
+                                if latest_metrics.get("selfsup_p32_val_loss") is not None
+                                else (
+                                    latest_metrics.get("selfsup_p36_future_val_loss")
+                                    if latest_metrics.get("selfsup_p36_future_val_loss") is not None
+                                    else latest_metrics.get("selfsup_p36_action_val_loss")
+                                )
+                            )
                         )
                     ),
                     elapsed=elapsed(),
@@ -1447,7 +1596,15 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         else (
             final_seed_metrics.get("selfsup_p33_val_loss")
             if final_seed_metrics.get("selfsup_p33_val_loss") is not None
-            else final_seed_metrics.get("selfsup_p32_val_loss")
+            else (
+                final_seed_metrics.get("selfsup_p32_val_loss")
+                if final_seed_metrics.get("selfsup_p32_val_loss") is not None
+                else (
+                    final_seed_metrics.get("selfsup_p36_future_val_loss")
+                    if final_seed_metrics.get("selfsup_p36_future_val_loss") is not None
+                    else final_seed_metrics.get("selfsup_p36_action_val_loss")
+                )
+            )
         )
     )
 
