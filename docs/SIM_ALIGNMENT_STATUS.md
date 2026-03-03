@@ -153,3 +153,26 @@ The runner executes:
 - Reference docs:
   - `docs/P36_SELF_SUP_LEARNING.md`
   - `docs/EXPERIMENTS_P22.md`
+
+## P37 Single-Action Fidelity Note
+
+- P37 extends the action contract with position/control actions used by real-session replay:
+  - `MOVE_HAND_CARD`, `MOVE_JOKER`
+  - `SWAP_HAND_CARD`, `SWAP_JOKER`
+  - canonical shop/consumable actions: `SHOP_REROLL`, `SHOP_BUY`, `PACK_OPEN`, `CONSUMABLE_USE`
+- New replay scope `p37_action_fidelity_core` hashes:
+  - ordered hand UIDs
+  - ordered joker UID/key slots
+  - selected hand indices + last action type token
+- Added dedicated batch builder:
+  - `sim/oracle/batch_build_p37_action_fidelity.py`
+- Gate entry:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP37
+```
+
+- Probability/weight parity audit artifacts:
+  - `docs/P37_PROBABILITY_PARITY.md`
+  - `docs/artifacts/p37/probability_audit_*.json`
+  - `docs/artifacts/p37/probability_audit_*.md`
