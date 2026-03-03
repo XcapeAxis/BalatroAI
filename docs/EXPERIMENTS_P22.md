@@ -28,7 +28,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | Scenario | Command | Notes |
 |---|---|---|
 | Plan only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -DryRun` | validates matrix + writes plan/report |
-| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | 4 experiments x 2 seeds (includes selfsup entries) |
+| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | 6 experiments x 2 seeds (includes P31/P33/P36 selfsup entries) |
 | Multi-seed quick compare | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline,quick_candidate -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | 2 strategies x 3 seeds |
 | Fast smoke (verbose) | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -VerboseLogs` | adds per-seed/per-stage console logs |
 | Nightly style | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Nightly -Resume` | larger seed set + resume |
@@ -59,7 +59,7 @@ Key sections:
 - `matrix[]`:
   - `id`, `name`
   - `backend`, `policy`
-  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`)
+  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`, `selfsup_future_value`, `selfsup_action_type`)
   - `seed_mode` (`regression_fixed` or `nightly`)
   - `seeds` (optional explicit seed override list)
   - `gate_flag` (passed to `scripts/run_regressions.ps1`)
@@ -137,6 +137,34 @@ Output paths:
 - `docs/artifacts/p22/runs/<run_id>/quick_selfsup_p33/progress.jsonl`
 - `docs/artifacts/p33/selfsup_dataset_stats.json`
 - `docs/artifacts/p33/selfsup_training_summary_<timestamp>.json`
+
+## P36 Self-Supervised Core Integration
+
+P36 adds two explicit self-supervised tasks under the same P22 matrix system:
+
+- `quick_selfsup_future_value` (`experiment_type: selfsup_future_value`)
+- `quick_selfsup_action_type` (`experiment_type: selfsup_action_type`)
+
+Reference configs:
+
+- `configs/experiments/p36_selfsup_future_value.yaml`
+- `configs/experiments/p36_selfsup_action_type.yaml`
+
+Task intent:
+
+- `future_value`: predict short-horizon future chips delta (`delta_chips_k`) from state features.
+- `action_type`: inverse-dynamics style prediction of next high-level action type from `(state_t, state_t+1)`.
+
+Artifacts per seed:
+
+- `.../quick_selfsup_future_value/selfsup_p36_future_runs/seed_*/metrics.json`
+- `.../quick_selfsup_action_type/selfsup_p36_action_runs/seed_*/metrics.json`
+
+P22 `summary_table.*` still exposes one normalized row per experiment with:
+
+- `seed_set_name`, `seeds_used`, `seed_count`
+- `final_loss` mapped from the task-specific validation loss
+- standard comparison columns (`score`, `avg_ante`, `win_rate`, etc.) for ranking continuity
 
 ## P32 Action-Fidelity Integration
 
@@ -234,6 +262,7 @@ Console UX notes:
 - default output includes `Experiment i/N` start lines and per-experiment completion summaries.
 - completion summaries report key metrics: `avg_ante`, `median_ante`, `win_rate`, `hand_top1`, `hand_top3`, `shop_top1`, `illegal_action_rate`.
 - `-VerboseLogs` adds per-seed and per-stage detailed command progress.
+- P36 rows print task losses in-line (`selfsup_p36_future_val_loss` / `selfsup_p36_action_val_loss`) through the shared `final_loss` channel.
 
 ## Adding a New Experiment Row
 
@@ -290,3 +319,4 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_selfsup
 - [SEED_POLICY_P23.md](SEED_POLICY_P23.md)
 - [EXPERIMENTS_P31.md](EXPERIMENTS_P31.md)
 - [EXPERIMENTS_P32_SELF_SUPERVISED.md](EXPERIMENTS_P32_SELF_SUPERVISED.md)
+- [P36_SELF_SUP_LEARNING.md](P36_SELF_SUP_LEARNING.md)

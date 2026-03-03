@@ -8,7 +8,7 @@ flowchart LR
   B --> C["Oracle collectors and snapshots"]
   C --> D["Canonical traces and scope hashes"]
   D --> E["Simulator parity checks and fixtures"]
-  E --> F["Trainer pipelines Search BC DAgger RL"]
+  E --> F["Trainer pipelines Search BC DAgger SelfSup RL"]
   F --> G["P22 P23 experiment orchestrator"]
   G --> H["Artifacts and reports in docs artifacts"]
 ```
@@ -21,8 +21,8 @@ The alignment layer treats oracle traces from real runtime as source of truth an
 ### Hashing/Scopes (`hand_score_observed_core`, etc.)
 Scopes define which subset of state/action outcomes is contract-critical for a given milestone, while hashing provides deterministic fingerprints for those scoped observations. This keeps regressions stable and comparable even when non-scoped fields evolve, and allows targeted parity gates per mechanic cluster.
 
-### Trainer Layer (fixtures + real sessions, P13)
-Trainer pipelines consume simulator fixtures for fast, repeatable offline iteration and can also consume curated real-session artifacts introduced in P13 to reduce sim-to-real drift. The layer supports policy-search and learning loops (Search -> BC -> DAgger -> RL), with metric outputs written as experiment artifacts.
+### Trainer Layer (fixtures + real sessions, P13 + P36)
+Trainer pipelines consume simulator fixtures for fast, repeatable offline iteration and can also consume curated real-session artifacts introduced in P13/P32 style traces to reduce sim-to-real drift. The layer now supports both policy-search loops and representation pretraining loops (Search -> BC -> DAgger -> SelfSup -> RL), with metric outputs written as experiment artifacts.
 
 ### Experiment Orchestrator Layer
 The orchestrator executes experiment matrices with explicit seed sets, budget controls, resumability, and per-run reports. It drives long-horizon evaluation and strategy comparison by producing normalized summary tables, ranking candidates, and updating champion/candidate states via artifactized decisions.
@@ -39,9 +39,11 @@ The orchestrator executes experiment matrices with explicit seed sets, budget co
    - `summary_table.{csv,json,md}`
    - per-experiment `run_manifest.json`, `progress.jsonl`, `seeds_used.json`
 5. Status publishing and dashboard steps consume these artifacts for README/dashboard/report views.
+6. P36 self-supervised path converts traces into `SelfSupSample` rows, trains shared-encoder tasks (`future_value`, `action_type`), and feeds summaries back into P22 matrix reports.
 
 ## Related Documents
 
 - [SIM_ALIGNMENT_STATUS.md](SIM_ALIGNMENT_STATUS.md)
 - [EXPERIMENTS_P22.md](EXPERIMENTS_P22.md)
+- [P36_SELF_SUP_LEARNING.md](P36_SELF_SUP_LEARNING.md)
 - [ARCHITECTURE_P25.md](ARCHITECTURE_P25.md)

@@ -10,7 +10,7 @@
 | Experiment Ops | Matrix orchestration, seed governance, campaign ranking | P22-P24 |
 | Docs/Ops Hardening | Status publishing, dashboard, release train, UX hardening | P25-P30 |
 | Decision & Action Stack | Unified decision stack, real-action contract alignment | P31-P32 |
-| Representation Track | Self-supervised plumbing and replay-aligned training entry | P33-P35 |
+| Representation Track | Self-supervised plumbing, shared encoder tasks, replay-aligned training entry | P33-P36 |
 
 ## Current Priorities
 
@@ -22,7 +22,7 @@
 ## Near-Term Execution Items
 
 - P35: README/docs consistency and self-supervised orchestrator skeleton.
-- P36 target: stronger representation objectives + encoder export flow.
+- P36: unified self-supervised data contract + future/action task heads + P22 matrix integration.
 - P37 target: plug encoder into BC/DAgger warm-start path and compare by seed sets.
 
 ## Known Constraints

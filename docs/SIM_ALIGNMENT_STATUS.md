@@ -136,3 +136,20 @@ The runner executes:
   - `configs/experiments/p32_self_supervised.yaml`
   - `scripts/run_p32_self_supervised.ps1`
   - `docs/EXPERIMENTS_P32_SELF_SUPERVISED.md`
+
+## P36 Self-Supervised Core Note
+
+- P36 introduces a unified self-supervised sample contract (`trainer/selfsup/data.py`) that reuses trace artifacts rather than engine internals.
+- Two concrete tasks are now available:
+  - future chips-delta prediction (`trainer/selfsup/train_future_value.py`)
+  - inverse dynamics action-type prediction (`trainer/selfsup/train_action_type.py`)
+- P22 matrix includes these rows directly:
+  - `quick_selfsup_future_value`
+  - `quick_selfsup_action_type`
+- Seed execution remains explicit and artifactized through:
+  - `run_plan.json -> experiments_with_seeds`
+  - `<exp_id>/seeds_used.json`
+  - `summary_table.* -> seeds_used/final_loss`
+- Reference docs:
+  - `docs/P36_SELF_SUP_LEARNING.md`
+  - `docs/EXPERIMENTS_P22.md`

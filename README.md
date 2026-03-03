@@ -9,7 +9,7 @@
 [![Seed Governance](https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16)](configs/experiments/seeds_p23.yaml)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Trend Warehouse](https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16)](docs/TREND_WAREHOUSE_P26.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P33-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P36-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -19,7 +19,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/XcapeAxis/BalatroAI)](https://github.com/XcapeAxis/BalatroAI/issues)
 <!-- BADGES:END -->
 
-BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33 self-supervised entries plus a unified P33 action replay contract. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised iteration, not as a cheat injector or memory-hook tool.
+BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries plus a unified action replay contract. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised iteration, not as a cheat injector or memory-hook tool.
 
 Badge/status refresh source:
 
@@ -41,7 +41,7 @@ BalatroAI exists to make policy development and validation for Balatro engineeri
 Suitable for:
 
 - simulator parity and canonical trace alignment work
-- offline-online policy iteration (Search -> BC -> DAgger -> Self-Supervised (P33) -> RL)
+- offline-online policy iteration (Search -> BC -> DAgger -> Self-Supervised (P33/P36) -> RL)
 - regression-gated experiment automation (P22+ / P23+ / P24+)
 - engineering workflows around champion/candidate decisions
 
@@ -51,6 +51,21 @@ Not suitable for:
 - uncontrolled real-game execution without safety rails
 - interpreting metrics outside seed/budget/config/version context
 - claiming universal performance without reproducible gate artifacts
+
+## Learning Modes
+
+Current learning modes are complementary rather than mutually exclusive:
+
+- BC (`train_bc.py`): supervised imitation on curated datasets; fast baseline policy shaping.
+- DAgger (`dagger_collect.py` + BC refresh): interactive correction with policy-in-the-loop traces.
+- Self-Supervised P36 (`trainer/selfsup/*`): representation pretraining from trace artifacts without teacher labels.
+- RL (existing pilot paths): downstream policy improvement after stable encoder/policy initialization.
+
+Data dependency by stage:
+
+- early bootstrap: sim traces + oracle fixtures
+- alignment-informed iteration: real/P13/P32 replay-compatible traces
+- larger-scale policy comparison: P22 orchestrator multi-seed matrix + gate reports
 
 ## Quick Start (Windows + PowerShell, < 5 min)
 
@@ -82,7 +97,7 @@ uvx balatrobot serve --headless --fast --port 12346
 powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP10
 ```
 
-5. Run the P22 quick orchestration matrix (includes `quick_selfsup_pretrain` and `quick_selfsup_p33`).
+5. Run the P22 quick orchestration matrix (includes `quick_selfsup_pretrain`, `quick_selfsup_p33`, and P36 rows `quick_selfsup_future_value` / `quick_selfsup_action_type`).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
@@ -111,10 +126,10 @@ Expected console excerpt (trimmed):
 
 ```text
 [RunFast] PASS (P0/P1 baseline completed)
-[P22] Experiment 1/4: quick_baseline (seeds 2, mode=gate)
-[P22] Experiment 3/4: quick_selfsup_pretrain (seeds 2, mode=gate)
-[P22] Experiment 4/4: quick_selfsup_p33 (seeds 2, mode=gate)
-[P22] Completed 4/4: quick_selfsup_p33 status=passed | avg_ante=2.8750 median_ante=2.875 win_rate=29.69% hand_top1=31.25% hand_top3=46.25% shop_top1=0.00% illegal=5.41%
+[P22] Experiment 1/6: quick_baseline (seeds 2, mode=gate)
+[P22] Experiment 5/6: quick_selfsup_future_value (seeds 2, mode=gate)
+[P22] Experiment 6/6: quick_selfsup_action_type (seeds 2, mode=gate)
+[P22] Completed 6/6: quick_selfsup_action_type status=passed | avg_ante=2.8545 median_ante=2.855 win_rate=49.09% hand_top1=54.55% hand_top3=69.55% shop_top1=80.26% illegal=3.95%
 [P23] run_id=20260303-005315 mode=gate status=PASS
 [P23] live_snapshot=.../docs/artifacts/p22/runs/20260303-005315/live_summary_snapshot.json
 [P23] summary_json=.../docs/artifacts/p22/runs/20260303-005315/summary_table.json
@@ -156,7 +171,7 @@ flowchart LR
 
 Data-flow details: [docs/ARCHITECTURE_P25.md](docs/ARCHITECTURE_P25.md)
 For a detailed architecture and dataflow overview, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-All BC/DAgger/Self-Supervised (P33) experiment paths now normalize actions through a unified replay adapter so single-step behavior is consistent across sim and real-runtime adapters.
+All BC/DAgger/Self-Supervised (P33/P36) experiment paths now normalize actions through a unified replay adapter so single-step behavior is consistent across sim and real-runtime adapters.
 
 ## Core Workflows
 
@@ -166,7 +181,8 @@ All BC/DAgger/Self-Supervised (P33) experiment paths now normalize actions throu
 | Orchestrator | `scripts/run_p22.ps1`, `scripts/run_p23.ps1` | run plans, telemetry, live snapshot, summary tables |
 | Campaign ops | `scripts/run_p24.ps1` | campaign status/summary, triage, ranking |
 | Training | `trainer/train_bc.py`, `trainer/train_rl.py`, `trainer/train_pv.py` | checkpoints + eval metrics |
-| Self-supervised (P33) | `scripts/run_p33_selfsup.ps1`, `python -B -m trainer.experiments.selfsupervised_p33` | dataset stats + selfsup summary + checkpoints |
+| Self-supervised (P33 plumbing) | `scripts/run_p33_selfsup.ps1`, `python -B -m trainer.experiments.selfsupervised_p33` | dataset stats + selfsup summary + checkpoints |
+| Self-supervised core (P36) | `python -B -m trainer.selfsup.build_selfsup_dataset`, `python -B -m trainer.selfsup.train_future_value`, `python -B -m trainer.selfsup.train_action_type` | unified dataset + task metrics + checkpoints |
 | Inference | `trainer/infer_assistant.py` | suggestions / optional controlled execution |
 
 ## Experiments & Telemetry (P34)
@@ -234,6 +250,21 @@ P32 representation-pretrain stub (P35 skeleton):
   - `docs/artifacts/p32_selfsup/runs/<run_id>/summary_table.{csv,json,md}`
   - `docs/artifacts/p32_selfsup/runs/<run_id>/<exp_id>/progress.jsonl`
 - details: [docs/EXPERIMENTS_P32_SELF_SUPERVISED.md](docs/EXPERIMENTS_P32_SELF_SUPERVISED.md)
+
+P36 self-supervised core (dataset + two tasks):
+
+- configs:
+  - `configs/experiments/p36_selfsup_future_value.yaml`
+  - `configs/experiments/p36_selfsup_action_type.yaml`
+- dataset build:
+  - `python -B -m trainer.selfsup.build_selfsup_dataset --sources "oracle:sim/tests/fixtures_runtime/oracle_p0_v6_regression" "real:docs/artifacts/p32" --out-dir docs/artifacts/p36/selfsup_datasets/<run_id>`
+- task runs:
+  - `python -B -m trainer.selfsup.train_future_value --config configs/experiments/p36_selfsup_future_value.yaml`
+  - `python -B -m trainer.selfsup.train_action_type --config configs/experiments/p36_selfsup_action_type.yaml`
+- P22 matrix integration rows:
+  - `quick_selfsup_future_value`
+  - `quick_selfsup_action_type`
+- details: [docs/P36_SELF_SUP_LEARNING.md](docs/P36_SELF_SUP_LEARNING.md)
 
 <!-- STATUS:START -->
 <!-- README_STATUS:BEGIN -->
@@ -319,6 +350,7 @@ Done:
 - P25 README/docs productization with RunP25 docs gate
 - P31 self-supervised trajectory backbone (`DecisionStep/Trajectory`, encoder, quick pretrain)
 - P33 unified action replay adapter (`trainer/actions/replay.py`) + minimal self-supervised experimental plumbing
+- P36 self-supervised core (`trainer/selfsup/*`) with unified dataset builder and two task heads (`future_value`, `action_type`) integrated into P22
 
 In progress:
 
@@ -342,6 +374,7 @@ Planned:
 - P31 self-supervised backbone is alpha-grade: current heads focus on `score_delta` and `hand_type`; broader tactical targets will be added incrementally.
 - P33 self-supervised entry is experimental plumbing: it validates data->train->summary flow, not production-strength policy gains.
 - P32 representation pretrain line is currently a stub baseline for data plumbing and observability; it is not yet a full contrastive/world-model stack.
+- P36 self-supervised core is representation pretraining only; policy gain still requires downstream BC/DAgger/search/RL integration and seed-robust evaluation.
 
 ## Further Reading
 
@@ -350,6 +383,7 @@ Planned:
 - [docs/SEEDS_AND_REPRODUCIBILITY.md](docs/SEEDS_AND_REPRODUCIBILITY.md)
 - [docs/EXPERIMENTS_P31.md](docs/EXPERIMENTS_P31.md)
 - [docs/EXPERIMENTS_P33.md](docs/EXPERIMENTS_P33.md)
+- [docs/P36_SELF_SUP_LEARNING.md](docs/P36_SELF_SUP_LEARNING.md)
 - [docs/EXPERIMENTS_P32_SELF_SUPERVISED.md](docs/EXPERIMENTS_P32_SELF_SUPERVISED.md)
 - [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/P32_REAL_ACTION_CONTRACT_STATUS.md](docs/P32_REAL_ACTION_CONTRACT_STATUS.md)
@@ -360,6 +394,7 @@ Planned:
 - [docs/COVERAGE_P33_STATUS.md](docs/COVERAGE_P33_STATUS.md)
 - [docs/COVERAGE_P32_STATUS.md](docs/COVERAGE_P32_STATUS.md)
 - [docs/COVERAGE_P35_STATUS.md](docs/COVERAGE_P35_STATUS.md)
+- [docs/COVERAGE_P36_STATUS.md](docs/COVERAGE_P36_STATUS.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ## Documentation Index
