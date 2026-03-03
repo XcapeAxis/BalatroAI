@@ -1,6 +1,6 @@
 # P9 Blinds/Tags Coverage
 
-- generated_at: `2026-03-02T21:33:41.017844+00:00`
+- generated_at: `2026-03-03T04:59:00.895724+00:00`
 - boss_supported: **25** / 28
 - tag_supported: **23** / 24
 
