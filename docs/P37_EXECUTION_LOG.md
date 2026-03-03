@@ -153,6 +153,7 @@
   - `git_sync` non-dry-run executed with built-in retries; remote fetch failed with repeated GitHub `502`:
     - `docs/artifacts/git_sync/git_sync_20260304-014630.json`
     - `docs/artifacts/git_sync/git_sync_20260304-014729.json`
+    - `docs/artifacts/git_sync/git_sync_20260304-015001.json`
   - local branch hygiene check: only `main` remains.
 - Self-check:
   - T6 gate + cleanup acceptance satisfied.
