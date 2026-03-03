@@ -1,6 +1,6 @@
 # P9 Episode Coverage Status
 
-- Generated at: `2026-03-03T04:59:48.926309+00:00`
+- Generated at: `2026-03-03T12:21:48.518349+00:00`
 - Base URL: `http://127.0.0.1:12346`
 - Scope: `p9_episode_observed_core`
 

@@ -1,6 +1,6 @@
 # P5 Voucher/Pack Fixture Coverage Status
 
-- Generated at: `2026-03-03T04:57:36.085325+00:00`
+- Generated at: `2026-03-03T12:20:26.273515+00:00`
 - Base URL: `http://127.0.0.1:12346`
 - Scope: `p5_voucher_pack_observed_core`
 - Classifier total targets: **47**

@@ -1,6 +1,6 @@
 # P10 Long Episode Coverage Status
 
-- generated_at: `2026-03-03T05:01:16.055044+00:00`
+- generated_at: `2026-03-03T12:22:44.489037+00:00`
 - base_url: `http://127.0.0.1:12346`
 - scope: `p10_long_episode_observed_core`
 - total: **4**
