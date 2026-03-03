@@ -199,3 +199,30 @@ powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP38
   - `docs/artifacts/p38/long_episode/<run_id>/episode_*.json`
   - `docs/artifacts/p38/analysis_<timestamp>/summary_stats.{json,md}`
   - `docs/artifacts/p38/plots/*.png`
+
+## P39 Policy Arena Note
+
+- P39 adds unified policy adapter and arena evaluation layers:
+  - `trainer/policy_arena/policy_adapter.py`
+  - `trainer/policy_arena/arena_runner.py`
+  - `trainer/policy_arena/champion_rules.py`
+- Supported policy families in v1:
+  - heuristic baseline
+  - search expert
+  - model adapter (stub-capable fallback)
+  - hybrid heuristic/search adapter
+- P22 integration:
+  - `experiment_type: policy_arena`
+  - quick row: `p39_policy_arena_smoke`
+  - nightly row: `p39_policy_arena_nightly`
+- Validation commands:
+
+```powershell
+python -m trainer.policy_arena.arena_runner --quick
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only p39_policy_arena_smoke -SeedLimit 2
+```
+
+- Artifacts:
+  - `docs/artifacts/p39/arena_runs/<run_id>/{summary_table,bucket_metrics,episode_records}.json*`
+  - `docs/artifacts/p39/champion_eval_<timestamp>/candidate_decision.{json,md}`
+  - `docs/artifacts/p22/runs/<run_id>/p39_summary.json`

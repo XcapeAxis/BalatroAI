@@ -28,7 +28,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | Scenario | Command | Notes |
 |---|---|---|
 | Plan only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -DryRun` | validates matrix + writes plan/report |
-| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | 9 experiments x 2 seeds (includes P31/P33/P36 + P37 SSL + RL smoke rows) |
+| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | 10 experiments x 2 seeds (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row) |
 | Multi-seed quick compare | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline,quick_candidate -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | 2 strategies x 3 seeds |
 | Fast smoke (verbose) | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -VerboseLogs` | adds per-seed/per-stage console logs |
 | Nightly style | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Nightly -Resume` | larger seed set + resume |
@@ -59,7 +59,7 @@ Key sections:
 - `matrix[]`:
   - `id`, `name`
   - `backend`, `policy`
-  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`, `selfsup_future_value`, `selfsup_action_type`, `ssl_pretrain`, `ssl_probe`, `rl_selfplay`)
+  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`, `selfsup_future_value`, `selfsup_action_type`, `ssl_pretrain`, `ssl_probe`, `rl_selfplay`, `policy_arena`)
   - `seed_mode` (`regression_fixed` or `nightly`)
   - `seeds` (optional explicit seed override list)
   - `gate_flag` (passed to `scripts/run_regressions.ps1`)
@@ -240,6 +240,31 @@ Notes:
 
 - P22 experiment rows remain policy/eval oriented; P32 is a fidelity gate that ensures position actions can be represented and replay-validated.
 - Position-sensitive strategy experiments should explicitly include action-space assumptions (allow/deny reorder actions) in their experiment row metadata.
+
+## P39 Policy Arena Integration
+
+P39 introduces `experiment_type: policy_arena` so P22 can run unified multi-policy comparisons under the same seed/materialization pipeline.
+
+Reference rows in `configs/experiments/p22.yaml`:
+
+- `p39_policy_arena_smoke` (quick/gate)
+- `p39_policy_arena_nightly` (nightly)
+
+Key eval fields:
+
+- `policies`: policy ids (`heuristic_baseline`, `search_expert`, `model_policy`, ...)
+- `episodes_per_seed`
+- `max_steps`
+- `mode` (`long_episode` for v1)
+- `candidate_policy` / `champion_policy`
+- `enable_champion_rules`
+
+Generated artifacts:
+
+- `docs/artifacts/p22/runs/<run_id>/p39_summary.json`
+- `docs/artifacts/p22/runs/<run_id>/p39_policy_arena_smoke/policy_arena_runs/seed_*/arena_runs/<seed_run_id>/summary_table.json`
+- `docs/artifacts/p22/runs/<run_id>/p39_policy_arena_smoke/policy_arena_runs/seed_*/arena_runs/<seed_run_id>/bucket_metrics.json`
+- optional champion decision outputs under `.../champion_eval/`
 
 ## Runtime Observability (During Execution)
 

@@ -9,7 +9,7 @@
 [![Seed Governance](https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16)](configs/experiments/seeds_p23.yaml)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Trend Warehouse](https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16)](docs/TREND_WAREHOUSE_P26.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P38-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P39-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -110,7 +110,7 @@ powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP37
 powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP38
 ```
 
-7. Run the P22 quick orchestration matrix (includes `quick_selfsup_pretrain`, `quick_selfsup_p33`, P36 rows `quick_selfsup_future_value` / `quick_selfsup_action_type`, P37 SSL rows `quick_ssl_pretrain_v1` / `quick_ssl_probe_v1`, and RL smoke `rl_ppo_smoke`).
+7. Run the P22 quick orchestration matrix (includes `quick_selfsup_pretrain`, `quick_selfsup_p33`, P36 rows `quick_selfsup_future_value` / `quick_selfsup_action_type`, P37 SSL rows `quick_ssl_pretrain_v1` / `quick_ssl_probe_v1`, RL smoke `rl_ppo_smoke`, and P39 arena smoke `p39_policy_arena_smoke`).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
@@ -134,6 +134,18 @@ Optional P38 orchestrator smoke row:
 python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.yaml --out-root docs/artifacts/p22 --only p38_long_consistency_smoke --seed-limit 1
 ```
 
+Optional P39 standalone policy arena smoke:
+
+```powershell
+python -m trainer.policy_arena.arena_runner --quick
+```
+
+Optional P39 champion/candidate decision from arena summary:
+
+```powershell
+python -m trainer.policy_arena.champion_rules --summary-json docs/artifacts/p39/arena_runs/<run_id>/summary_table.json --out-dir docs/artifacts/p39
+```
+
 8. Inspect generated artifacts.
 
 - `docs/artifacts/p22/runs/<run_id>/summary_table.md`
@@ -151,12 +163,13 @@ Expected console excerpt (trimmed):
 
 ```text
 [RunFast] PASS (P0/P1 baseline completed)
-[P22] Experiment 1/9: quick_baseline (seeds 2, mode=gate)
-[P22] Experiment 5/9: quick_selfsup_future_value (seeds 2, mode=gate)
-[P22] Experiment 7/9: quick_ssl_pretrain_v1 (seeds 2, mode=gate)
-[P22] Experiment 8/9: quick_ssl_probe_v1 (seeds 2, mode=gate)
-[P22] Experiment 9/9: rl_ppo_smoke (seeds 2, mode=gate)
-[P22] Completed 9/9: rl_ppo_smoke status=passed | avg_ante=... win_rate=... hand_top1=... hand_top3=... shop_top1=... illegal=...
+[P22] Experiment 1/10: quick_baseline (seeds 2, mode=gate)
+[P22] Experiment 5/10: quick_selfsup_future_value (seeds 2, mode=gate)
+[P22] Experiment 7/10: quick_ssl_pretrain_v1 (seeds 2, mode=gate)
+[P22] Experiment 8/10: quick_ssl_probe_v1 (seeds 2, mode=gate)
+[P22] Experiment 9/10: rl_ppo_smoke (seeds 2, mode=gate)
+[P22] Experiment 10/10: p39_policy_arena_smoke (seeds 2, mode=gate)
+[P22] Completed 10/10: p39_policy_arena_smoke status=passed | avg_ante=... win_rate=... hand_top1=... hand_top3=... shop_top1=... illegal=...
 [P23] run_id=20260303-005315 mode=gate status=PASS
 [P23] live_snapshot=.../docs/artifacts/p22/runs/20260303-005315/live_summary_snapshot.json
 [P23] summary_json=.../docs/artifacts/p22/runs/20260303-005315/summary_table.json
@@ -203,6 +216,44 @@ flowchart LR
 Data-flow details: [docs/ARCHITECTURE_P25.md](docs/ARCHITECTURE_P25.md)
 For a detailed architecture and dataflow overview, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 All BC/DAgger/Self-Supervised (P33/P36) experiment paths now normalize actions through a unified replay adapter so single-step behavior is consistent across sim and real-runtime adapters.
+
+## Evaluation and Validation
+
+- P37 single-step action fidelity:
+  - gate: `powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP37`
+  - signal: replay/action semantics aligned (`diff_fail=0` under `p37_action_fidelity_core`)
+- P38 long-horizon statistical consistency:
+  - gate: `powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP38`
+  - signal: hard parity `mismatch_count=0`; aggregate drift tracked with soft warnings (`relative diff > 5%`)
+- P39 policy arena comparison:
+  - quick: `python -m trainer.policy_arena.arena_runner --quick`
+  - signal: multi-seed policy summary + bucket metrics + champion decision input
+
+## How to Compare Policies
+
+Fast local comparison:
+
+```powershell
+python -m trainer.policy_arena.arena_runner --quick
+```
+
+Orchestrated comparison (includes P39 smoke in quick set):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
+```
+
+Arena artifacts:
+
+- `docs/artifacts/p39/arena_runs/<run_id>/summary_table.json`
+- `docs/artifacts/p39/arena_runs/<run_id>/bucket_metrics.json`
+
+## Champion/Candidate Workflow
+
+- run arena with fixed seeds and budget
+- compare candidate vs champion by global + bucket metrics
+- apply `trainer.policy_arena.champion_rules` for machine-readable recommendation
+- review `candidate_decision.json` before any manual champion switch
 
 ## Core Workflows
 
@@ -340,6 +391,20 @@ P38 long-horizon statistical consistency reproducibility:
 - reference docs:
   - [docs/P38_LONG_HORIZON_VALIDATION.md](docs/P38_LONG_HORIZON_VALIDATION.md)
 
+P39 policy arena reproducibility:
+
+- standalone quick:
+  - `python -m trainer.policy_arena.arena_runner --quick`
+- standalone configurable run:
+  - `python -m trainer.policy_arena.arena_runner --policies "heuristic_baseline,search_expert,model_policy" --seeds "AAAAAAA,BBBBBBB,CCCCCCC" --episodes-per-seed 2 --max-steps 180`
+- decision layer:
+  - `python -m trainer.policy_arena.champion_rules --summary-json docs/artifacts/p39/arena_runs/<run_id>/summary_table.json --out-dir docs/artifacts/p39`
+- P22 rows:
+  - `p39_policy_arena_smoke`
+  - `p39_policy_arena_nightly`
+- reference docs:
+  - [docs/P39_POLICY_ARENA.md](docs/P39_POLICY_ARENA.md)
+
 ## Reinforcement Learning (P37)
 
 P37 adds a research skeleton for RL iteration without claiming a fully optimized agent:
@@ -366,7 +431,7 @@ This path is for experiment plumbing and reproducibility; it is not yet a produc
 - trend_rows_count: 20115
 - champion: quick_risk_aware (champion)
 - candidate:  (decision: hold)
-- docs_coverage: P15-P38
+- docs_coverage: P15-P39
 <!-- README_STATUS:END -->
 <!-- STATUS:END -->
 
@@ -458,13 +523,14 @@ Milestone maturity snapshot:
 | P22-P27 (experiment/campaign/release ops) | shipped |
 | P29-P36 (data flywheel + replay + self-supervised) | shipped |
 | P37 (single-action fidelity + probability parity audit framework) | shipped |
-| P38 (long-horizon statistical consistency framework) | active |
+| P38 (long-horizon statistical consistency framework) | shipped |
+| P39 (policy arena + champion decision rules) | active |
 
 Near-term:
 
-- stabilize full UI-level action parity coverage (P39)
-- extend long-horizon self-play + correction loops (P40)
-- scale self-supervised representation transfer into downstream policy stacks (P41+)
+- stabilize full UI-level action parity coverage (P40)
+- extend long-horizon self-play + correction loops (P41)
+- scale self-supervised representation transfer into downstream policy stacks (P42+)
 
 Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 
