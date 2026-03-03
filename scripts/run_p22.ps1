@@ -10,7 +10,8 @@ param(
   [string]$Only = "",
   [string]$Exclude = "",
   [int]$MaxParallel = 1,
-  [int]$SeedLimit = 0
+  [int]$SeedLimit = 0,
+  [string]$Seeds = ""
 )
 
 Set-StrictMode -Version Latest
@@ -41,6 +42,7 @@ if ($VerboseLogs) { $args += "--verbose" }
 if (-not [string]::IsNullOrWhiteSpace($Only)) { $args += @("--only", $Only) }
 if (-not [string]::IsNullOrWhiteSpace($Exclude)) { $args += @("--exclude", $Exclude) }
 if ($SeedLimit -gt 0) { $args += @("--seed-limit", "$SeedLimit") }
+if (-not [string]::IsNullOrWhiteSpace($Seeds)) { $args += @("--seeds", $Seeds) }
 
 if ($Quick) {
   if (-not ($args -contains "--only")) { $args += @("--only", "quick_baseline,quick_candidate,quick_selfsup_pretrain,quick_selfsup_p33") }

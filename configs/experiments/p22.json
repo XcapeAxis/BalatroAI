@@ -20,6 +20,35 @@
     ],
     "extra_random": 4
   },
+  "seed_policy": {
+    "version": "p34.p22.v1",
+    "base_seed": "P22BASE",
+    "regression_smoke": [
+      "AAAAAAA",
+      "BBBBBBB",
+      "CCCCCCC",
+      "DDDDDDD"
+    ],
+    "train_default": [
+      "AAAAAAA",
+      "BBBBBBB",
+      "CCCCCCC",
+      "DDDDDDD",
+      "EEEEEEE",
+      "FFFFFFF",
+      "GGGGGGG",
+      "HHHHHHH"
+    ],
+    "eval_default": [
+      "AAAAAAA",
+      "BBBBBBB",
+      "CCCCCCC",
+      "DDDDDDD",
+      "EEEEEEE",
+      "FFFFFFF"
+    ],
+    "nightly_extra_random": 4
+  },
   "matrix": [
     {
       "id": "quick_baseline",
@@ -27,6 +56,7 @@
       "backend": "sim",
       "policy": "baseline",
       "seed_mode": "regression_fixed",
+      "seed_set_name": "regression_smoke",
       "gate_flag": "RunFast",
       "stages": {
         "sanity": true,
@@ -46,6 +76,7 @@
       "backend": "sim",
       "policy": "candidate",
       "seed_mode": "nightly",
+      "seed_set_name": "eval_default",
       "gate_flag": "RunFast",
       "stages": {
         "sanity": true,

@@ -154,6 +154,25 @@ def build_extra_random_seeds(
     return seeds
 
 
+def _normalize_seed_list(values: Any) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    out: list[str] = []
+    for v in values:
+        token = str(v).strip()
+        if token:
+            out.append(token)
+    return out
+
+
+def _legacy_seed_policy_block(cfg: dict[str, Any]) -> dict[str, Any]:
+    # P34: local seed-policy block for quick reproducibility without external policy file.
+    raw = cfg.get("seed_policy")
+    if not isinstance(raw, dict):
+        return {}
+    return raw
+
+
 def _select_seeds_legacy(
     *,
     exp: dict[str, Any],
@@ -162,16 +181,49 @@ def _select_seeds_legacy(
     nightly: bool,
     seed_limit: int | None,
 ) -> list[str]:
-    seeds_cfg = cfg.get("seeds") or {}
-    fixed = [str(s) for s in (seeds_cfg.get("regression_fixed") or [])]
-    if not fixed:
-        raise ValueError("config.seeds.regression_fixed must not be empty")
+    policy_block = _legacy_seed_policy_block(cfg)
+    seed_set_name = str(exp.get("seed_set_name") or "").strip().lower()
+    mode = str(exp.get("seed_mode") or "regression_fixed").strip().lower()
 
-    base_seed = str(seeds_cfg.get("base_seed") or "P22BASE")
-    extra_count = int(seeds_cfg.get("extra_random") or 0)
-    mode = str(exp.get("seed_mode") or "regression_fixed").lower()
+    regression_smoke = _normalize_seed_list(policy_block.get("regression_smoke"))
+    train_default = _normalize_seed_list(policy_block.get("train_default"))
+    eval_default = _normalize_seed_list(policy_block.get("eval_default"))
+    base_seed = str(policy_block.get("base_seed") or "P22BASE")
+    extra_count = int(policy_block.get("nightly_extra_random") or 0)
+
+    # Backward-compatible fallback.
+    if not regression_smoke and not train_default and not eval_default:
+        seeds_cfg = cfg.get("seeds") or {}
+        fixed = [str(s) for s in (seeds_cfg.get("regression_fixed") or [])]
+        if not fixed:
+            raise ValueError("config.seeds.regression_fixed must not be empty")
+        regression_smoke = list(fixed)
+        train_default = list(fixed)
+        eval_default = list(fixed)
+        base_seed = str(seeds_cfg.get("base_seed") or base_seed)
+        extra_count = int(seeds_cfg.get("extra_random") or extra_count)
+
+    if not regression_smoke:
+        raise ValueError("seed policy regression_smoke must not be empty")
+    if not train_default:
+        train_default = list(regression_smoke)
+    if not eval_default:
+        eval_default = list(regression_smoke)
+
+    if seed_set_name in {"regression_smoke", "contract_regression", "regression_fixed"}:
+        chosen = list(regression_smoke)
+    elif seed_set_name in {"train_default", "train"}:
+        chosen = list(train_default)
+    elif seed_set_name in {"eval_default", "eval"}:
+        chosen = list(eval_default)
+    elif mode in {"train", "train_default"}:
+        chosen = list(train_default)
+    elif mode in {"eval", "eval_default", "nightly"}:
+        chosen = list(eval_default)
+    else:
+        chosen = list(regression_smoke)
+
     use_extra = nightly or mode == "nightly"
-    chosen = list(fixed)
     if use_extra and extra_count > 0:
         extras = build_extra_random_seeds(
             base_seed=base_seed,
@@ -200,6 +252,8 @@ def select_seeds(
     seed_policy: dict[str, Any] | None,
 ) -> dict[str, Any]:
     if seed_policy is None:
+        local_policy = _legacy_seed_policy_block(cfg)
+        local_policy_version = str(local_policy.get("version") or "legacy.p22")
         legacy = _select_seeds_legacy(
             exp=exp,
             cfg=cfg,
@@ -213,12 +267,12 @@ def select_seeds(
         return {
             "schema": "p23_seeds_used_v1",
             "generated_at": now_iso(),
-            "seed_policy_version": "legacy.p22",
+            "seed_policy_version": local_policy_version,
             "seed_set_name": str(exp.get("seed_set_name") or exp.get("seed_mode") or "regression_fixed"),
             "seed_hash": hash_v,
             "seed_count": len(legacy),
             "seeds": legacy,
-            "metadata": {"source": "legacy_p22"},
+            "metadata": {"source": "legacy_p22", "seed_policy_present": bool(local_policy)},
         }
 
     explicit_single_seed_override = bool(exp.get("allow_single_seed_override"))
@@ -253,6 +307,67 @@ def select_seeds(
         json.dumps(seeds, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
     return seeds_payload
+
+
+def resolve_experiment_seeds(
+    *,
+    exp: dict[str, Any],
+    cfg: dict[str, Any],
+    git_commit: str,
+    nightly: bool,
+    seed_limit: int | None,
+    run_id: str,
+    seed_policy: dict[str, Any] | None,
+    cli_seeds: list[str] | None,
+) -> dict[str, Any]:
+    if cli_seeds:
+        seeds = [str(s).strip() for s in cli_seeds if str(s).strip()]
+        if seed_limit is not None:
+            seeds = seeds[: max(1, int(seed_limit))]
+        if not seeds:
+            raise ValueError("CLI seeds override resolved to empty set")
+        return {
+            "schema": "p34_seeds_used_v1",
+            "generated_at": now_iso(),
+            "seed_policy_version": "explicit.cli_override",
+            "seed_set_name": str(exp.get("seed_set_name") or "cli_override"),
+            "seed_hash": hashlib.sha256(
+                json.dumps(seeds, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            ).hexdigest(),
+            "seed_count": len(seeds),
+            "seeds": seeds,
+            "metadata": {"source": "cli.seeds_override"},
+        }
+
+    explicit_seeds = exp.get("seeds") if isinstance(exp.get("seeds"), list) else []
+    if explicit_seeds:
+        seeds = [str(s).strip() for s in explicit_seeds if str(s).strip()]
+        if seed_limit is not None:
+            seeds = seeds[: max(1, int(seed_limit))]
+        if not seeds:
+            raise ValueError(f"exp={exp.get('id')} has empty explicit seeds list after filtering")
+        return {
+            "schema": "p31_seeds_used_v1",
+            "generated_at": now_iso(),
+            "seed_policy_version": "explicit.experiment",
+            "seed_set_name": str(exp.get("seed_set_name") or "explicit"),
+            "seed_hash": hashlib.sha256(
+                json.dumps(seeds, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            ).hexdigest(),
+            "seed_count": len(seeds),
+            "seeds": seeds,
+            "metadata": {"source": "experiment.seeds"},
+        }
+
+    return select_seeds(
+        exp=exp,
+        cfg=cfg,
+        git_commit=git_commit,
+        nightly=nightly,
+        seed_limit=seed_limit,
+        run_id=run_id,
+        seed_policy=seed_policy,
+    )
 
 
 def format_progress(
@@ -304,23 +419,36 @@ def emit_progress(
     stage: str,
     status: str,
     elapsed_sec: float,
+    phase: str = "orchestrator",
+    seed: str | None = None,
+    step_or_epoch: int | str | None = None,
+    metrics: dict[str, Any] | None = None,
+    wall_time_sec: float | None = None,
+    message: str = "",
     seed_index: int | None = None,
     seed_total: int | None = None,
     metric_snapshot: str = "",
     eta_sec: float | None = None,
 ) -> None:
     event = {
+        "schema": "p34_telemetry_event_v1",
         "ts": now_iso(),
         "run_id": ctx.run_id,
         "mode": ctx.mode,
         "exp_id": exp_id,
+        "seed": seed,
+        "phase": phase,
         "stage": stage,
         "status": status,
+        "step_or_epoch": step_or_epoch,
+        "metrics": metrics or {},
+        "wall_time_sec": wall_time_sec,
         "seed_index": seed_index,
         "seed_total": seed_total,
         "elapsed_sec": elapsed_sec,
         "eta_sec": eta_sec,
         "metric_snapshot": metric_snapshot,
+        "message": message,
     }
     append_jsonl(ctx.telemetry_path, event)
     row = ctx.queue_state.get(exp_id) or {"exp_id": exp_id}
@@ -353,6 +481,42 @@ def emit_progress(
     )
 
 
+def append_experiment_progress_event(
+    progress_path: Path,
+    *,
+    run_id: str,
+    exp_id: str,
+    phase: str,
+    stage: str,
+    status: str,
+    seed: str | None = None,
+    step_or_epoch: int | str | None = None,
+    metrics: dict[str, Any] | None = None,
+    elapsed_sec: float | None = None,
+    wall_time_sec: float | None = None,
+    message: str = "",
+    extra: dict[str, Any] | None = None,
+) -> None:
+    payload: dict[str, Any] = {
+        "schema": "p34_progress_event_v1",
+        "ts": now_iso(),
+        "run_id": run_id,
+        "exp_id": exp_id,
+        "seed": seed,
+        "phase": phase,
+        "stage": stage,
+        "status": status,
+        "step_or_epoch": step_or_epoch,
+        "metrics": metrics or {},
+        "elapsed_sec": elapsed_sec,
+        "wall_time_sec": wall_time_sec,
+        "message": message,
+    }
+    if extra:
+        payload.update(extra)
+    append_jsonl(progress_path, payload)
+
+
 @dataclass
 class RunContext:
     repo_root: Path
@@ -375,6 +539,7 @@ class RunContext:
     live_summary_path: Path
     run_started_ts: float
     queue_state: dict[str, dict[str, Any]]
+    cli_seeds: list[str] | None
 
 
 def _expand_command(command_tmpl: Any, context: dict[str, Any]) -> str | list[str]:
@@ -401,15 +566,15 @@ def _run_stage_command(
     command = _expand_command(command_tmpl, context)
     if not command:
         payload = {"status": "skipped", "reason": "empty_command"}
-        append_jsonl(
+        append_experiment_progress_event(
             progress_path,
-            {
-                "ts": now_iso(),
-                "exp_id": exp_id,
-                "stage": stage,
-                "status": "skipped",
-                "message": "empty_command",
-            },
+            run_id=ctx.run_id,
+            exp_id=exp_id,
+            phase="stage",
+            stage=stage,
+            status="skipped",
+            elapsed_sec=time.time() - started_ts,
+            message="empty_command",
         )
         emit_progress(
             ctx,
@@ -417,6 +582,8 @@ def _run_stage_command(
             stage=stage,
             status="skipped",
             elapsed_sec=time.time() - started_ts,
+            phase="stage",
+            message="empty_command",
         )
         return payload
     attempts = 0
@@ -435,16 +602,23 @@ def _run_stage_command(
         result = run_process(command, cwd=repo_root, timeout_sec=timeout_sec)
         timed_out = bool(result.get("timed_out"))
         status = "timed_out" if timed_out else ("ok" if result["returncode"] == 0 else "failed")
-        append_jsonl(
+        append_experiment_progress_event(
             progress_path,
-            {
-                "ts": now_iso(),
-                "exp_id": exp_id,
-                "stage": stage,
-                "status": status,
+            run_id=ctx.run_id,
+            exp_id=exp_id,
+            phase="stage",
+            stage=stage,
+            status=status,
+            step_or_epoch=attempts,
+            elapsed_sec=time.time() - started_ts,
+            wall_time_sec=float(result.get("elapsed_sec") or 0.0),
+            metrics={
+                "returncode": result.get("returncode"),
+                "timed_out": bool(result.get("timed_out")),
+            },
+            extra={
                 "attempt": attempts,
                 "returncode": result["returncode"],
-                "elapsed_sec": result["elapsed_sec"],
                 "timeout_sec": timeout_sec,
                 "command": command,
             },
@@ -455,6 +629,13 @@ def _run_stage_command(
             stage=stage,
             status=status,
             elapsed_sec=time.time() - started_ts,
+            phase="stage",
+            step_or_epoch=attempts,
+            metrics={
+                "returncode": result.get("returncode"),
+                "timed_out": bool(result.get("timed_out")),
+            },
+            wall_time_sec=float(result.get("elapsed_sec") or 0.0),
         )
         if status == "ok":
             break
@@ -679,6 +860,13 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
     progress_path = exp_dir / "progress.jsonl"
     stage_results: dict[str, Any] = {}
     started = time.time()
+    seeds: list[str] = []
+    seeds_payload: dict[str, Any] = {
+        "seed_set_name": str(exp.get("seed_set_name") or ""),
+        "seed_hash": "",
+        "seed_count": 0,
+        "seeds": [],
+    }
 
     budget = ctx.config.get("budget") or {}
     max_wall_time_min = int(budget.get("max_wall_time_minutes") or 60)
@@ -709,6 +897,11 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "hand_top3": 0.0,
             "shop_top1": 0.0,
             "illegal_action_rate": 1.0,
+            "seed_set_name": seeds_payload.get("seed_set_name"),
+            "seed_hash": seeds_payload.get("seed_hash"),
+            "seeds_used": list(seeds),
+            "final_win_rate": 0.0,
+            "final_loss": 0.0,
         }
         write_json(status_path, payload)
         emit_progress(
@@ -717,7 +910,9 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             stage=stage,
             status=status,
             elapsed_sec=elapsed(),
+            phase="stage",
             metric_snapshot=reason,
+            message=reason,
         )
         return {
             "exp_id": exp_id,
@@ -735,6 +930,11 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "catastrophic_failure_count": payload["catastrophic_failure_count"],
             "elapsed_sec": payload["elapsed_sec"],
             "run_dir": str(exp_dir),
+            "seed_set_name": payload["seed_set_name"],
+            "seed_hash": payload["seed_hash"],
+            "seeds_used": payload["seeds_used"],
+            "final_win_rate": payload["final_win_rate"],
+            "final_loss": payload["final_loss"],
         }
 
     if ctx.resume:
@@ -756,42 +956,32 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                 "avg_ante_reached": old.get("avg_ante_reached", old.get("mean")),
                 "median_ante": old.get("median_ante"),
                 "win_rate": old.get("win_rate"),
+                "hand_top1": old.get("hand_top1"),
+                "hand_top3": old.get("hand_top3"),
+                "shop_top1": old.get("shop_top1"),
+                "illegal_action_rate": old.get("illegal_action_rate"),
                 "seed_count": old.get("seed_count"),
                 "catastrophic_failure_count": old.get("catastrophic_failure_count", 0),
                 "elapsed_sec": old.get("elapsed_sec", 0.0),
                 "run_dir": str(exp_dir),
+                "seed_set_name": old.get("seed_set_name"),
+                "seed_hash": old.get("seed_hash"),
+                "seeds_used": old.get("seeds_used", []),
+                "final_win_rate": old.get("final_win_rate"),
+                "final_loss": old.get("final_loss"),
                 "resumed": True,
             }
 
-    explicit_seeds = exp.get("seeds") if isinstance(exp.get("seeds"), list) else []
-    if explicit_seeds:
-        seeds = [str(s).strip() for s in explicit_seeds if str(s).strip()]
-        if ctx.seed_limit is not None:
-            seeds = seeds[: max(1, int(ctx.seed_limit))]
-        if not seeds:
-            raise ValueError(f"exp={exp_id} has empty explicit seeds list after filtering")
-        seeds_payload = {
-            "schema": "p31_seeds_used_v1",
-            "generated_at": now_iso(),
-            "seed_policy_version": "explicit.experiment",
-            "seed_set_name": str(exp.get("seed_set_name") or "explicit"),
-            "seed_hash": hashlib.sha256(
-                json.dumps(seeds, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-            ).hexdigest(),
-            "seed_count": len(seeds),
-            "seeds": seeds,
-            "metadata": {"source": "experiment.seeds"},
-        }
-    else:
-        seeds_payload = select_seeds(
-            exp=exp,
-            cfg=ctx.config,
-            git_commit=ctx.git_commit,
-            nightly=ctx.nightly,
-            seed_limit=ctx.seed_limit,
-            run_id=ctx.run_id,
-            seed_policy=ctx.seed_policy,
-        )
+    seeds_payload = resolve_experiment_seeds(
+        exp=exp,
+        cfg=ctx.config,
+        git_commit=ctx.git_commit,
+        nightly=ctx.nightly,
+        seed_limit=ctx.seed_limit,
+        run_id=ctx.run_id,
+        seed_policy=ctx.seed_policy,
+        cli_seeds=ctx.cli_seeds,
+    )
     seeds = [str(s) for s in (seeds_payload.get("seeds") or [])]
     write_json(exp_dir / "seeds_used.json", seeds_payload)
 
@@ -838,8 +1028,26 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         )
     )
 
-    append_jsonl(progress_path, {"ts": now_iso(), "exp_id": exp_id, "stage": "init", "status": "start"})
-    emit_progress(ctx, exp_id=exp_id, stage="init", status="running", elapsed_sec=0.0)
+    append_experiment_progress_event(
+        progress_path,
+        run_id=ctx.run_id,
+        exp_id=exp_id,
+        phase="orchestrator",
+        stage="init",
+        status="start",
+        elapsed_sec=0.0,
+        message="experiment_start",
+        extra={"seed_set_name": seeds_payload.get("seed_set_name"), "seeds": seeds},
+    )
+    emit_progress(
+        ctx,
+        exp_id=exp_id,
+        stage="init",
+        status="running",
+        elapsed_sec=0.0,
+        phase="orchestrator",
+        message="experiment_start",
+    )
 
     if ctx.dry_run:
         payload = {
@@ -856,9 +1064,24 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "seed_count": len(seeds),
             "catastrophic_failure_count": 0,
             "elapsed_sec": 0.0,
+            "seed_set_name": seeds_payload.get("seed_set_name"),
+            "seed_hash": seeds_payload.get("seed_hash"),
+            "seeds_used": list(seeds),
+            "final_metrics": {},
+            "final_win_rate": 0.0,
+            "final_loss": 0.0,
         }
         write_json(status_path, payload)
-        emit_progress(ctx, exp_id=exp_id, stage="done", status="passed", elapsed_sec=0.0, metric_snapshot="dry_run")
+        emit_progress(
+            ctx,
+            exp_id=exp_id,
+            stage="done",
+            status="passed",
+            elapsed_sec=0.0,
+            phase="orchestrator",
+            metric_snapshot="dry_run",
+            message="dry_run",
+        )
         return {
             "exp_id": exp_id,
             "status": "passed",
@@ -875,6 +1098,11 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "catastrophic_failure_count": 0,
             "elapsed_sec": 0.0,
             "run_dir": str(exp_dir),
+            "seed_set_name": seeds_payload.get("seed_set_name"),
+            "seed_hash": seeds_payload.get("seed_hash"),
+            "seeds_used": list(seeds),
+            "final_win_rate": 0.0,
+            "final_loss": 0.0,
         }
 
     stages = exp.get("stages") or {}
@@ -955,9 +1183,13 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                     stage="eval",
                     status="budget_cut",
                     elapsed_sec=elapsed(),
+                    phase="eval",
+                    seed=seed,
+                    step_or_epoch=seed_idx,
                     seed_index=seed_idx,
                     seed_total=len(seeds),
                     metric_snapshot="budget_exceeded",
+                    message="per_experiment_budget_exceeded",
                 )
                 break
 
@@ -1018,17 +1250,19 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                             "selfsup_summary": selfsup_result.get("summary") or {},
                         }
                     )
-                append_jsonl(
+                append_experiment_progress_event(
                     progress_path,
-                    {
-                        "ts": now_iso(),
-                        "exp_id": exp_id,
-                        "stage": "eval",
-                        "seed": seed,
-                        "status": seed_results[-1].get("status"),
-                        "mode": exp_type,
-                        "metrics": seed_results[-1].get("metrics") or {},
-                    },
+                    run_id=ctx.run_id,
+                    exp_id=exp_id,
+                    phase="eval",
+                    stage="eval",
+                    status=str(seed_results[-1].get("status")),
+                    seed=seed,
+                    step_or_epoch=seed_idx,
+                    elapsed_sec=elapsed(),
+                    metrics=seed_results[-1].get("metrics") or {},
+                    message=exp_type,
+                    extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
                 )
             else:
                 metrics = _synthetic_eval_metrics(exp_id, seed, bias)
@@ -1076,16 +1310,19 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                             "metrics": metrics,
                         }
                     )
-                    append_jsonl(
+                    append_experiment_progress_event(
                         progress_path,
-                        {
-                            "ts": now_iso(),
-                            "exp_id": exp_id,
-                            "stage": "eval",
-                            "seed": seed,
-                            "status": "ok",
-                            "metrics": metrics,
-                        },
+                        run_id=ctx.run_id,
+                        exp_id=exp_id,
+                        phase="eval",
+                        stage="eval",
+                        status="ok",
+                        seed=seed,
+                        step_or_epoch=seed_idx,
+                        elapsed_sec=elapsed(),
+                        metrics=metrics,
+                        message="synthetic_eval",
+                        extra={"seed_index": seed_idx, "seed_total": len(seeds)},
                     )
             latest_metrics = seed_results[-1].get("metrics") or {}
             snap = latest_metrics.get(primary_metric)
@@ -1098,15 +1335,45 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                 stage="eval",
                 status=str(seed_results[-1].get("status")),
                 elapsed_sec=elapsed(),
+                phase="eval",
+                seed=seed,
+                step_or_epoch=seed_idx,
+                metrics=latest_metrics,
                 seed_index=seed_idx,
                 seed_total=len(seeds),
                 eta_sec=eta_sec,
                 metric_snapshot=f"{primary_metric}={snap}",
             )
+            print(
+                "[P22] exp={exp} seed={seed} ({idx}/{total}) status={status} score={score} win_rate={win} loss={loss} elapsed={elapsed:.1f}s".format(
+                    exp=exp_id,
+                    seed=seed,
+                    idx=seed_idx,
+                    total=len(seeds),
+                    status=str(seed_results[-1].get("status")),
+                    score=_fmt_num(latest_metrics.get("score")),
+                    win=_fmt_pct(latest_metrics.get("win_rate")),
+                    loss=_fmt_num(
+                        latest_metrics.get("selfsup_val_loss")
+                        if latest_metrics.get("selfsup_val_loss") is not None
+                        else latest_metrics.get("selfsup_p33_val_loss")
+                    ),
+                    elapsed=elapsed(),
+                )
+            )
 
     metric_summary = aggregate_seed_metrics(seed_results, primary_metric=primary_metric)
     success = is_success(metric_summary)
     elapsed_total = elapsed()
+    final_seed_metrics = {}
+    if seed_results:
+        final_seed_metrics = dict(seed_results[-1].get("metrics") or {})
+    final_win_rate = _as_number(final_seed_metrics.get("win_rate"))
+    final_loss = _as_number(
+        final_seed_metrics.get("selfsup_val_loss")
+        if final_seed_metrics.get("selfsup_val_loss") is not None
+        else final_seed_metrics.get("selfsup_p33_val_loss")
+    )
 
     exp_summary = {
         "schema": "p23_experiment_summary_v1",
@@ -1116,6 +1383,10 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "status": "success" if success else "failed",
         "stages": stage_results,
         "seed_metrics": metric_summary,
+        "seed_set_name": seeds_payload.get("seed_set_name"),
+        "seed_hash": seeds_payload.get("seed_hash"),
+        "seeds_used": list(seeds),
+        "final_metrics": final_seed_metrics,
         "elapsed_sec": elapsed_total,
         "run_dir": str(exp_dir),
     }
@@ -1137,6 +1408,12 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "seed_count": metric_summary.get("count"),
             "catastrophic_failure_count": metric_summary.get("catastrophic_failure_count"),
             "elapsed_sec": elapsed_total,
+            "seed_set_name": seeds_payload.get("seed_set_name"),
+            "seed_hash": seeds_payload.get("seed_hash"),
+            "seeds_used": list(seeds),
+            "final_metrics": final_seed_metrics,
+            "final_win_rate": final_win_rate,
+            "final_loss": final_loss,
         },
     )
 
@@ -1155,6 +1432,13 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         stage="done",
         status=final_status,
         elapsed_sec=elapsed_total,
+        phase="orchestrator",
+        metrics={
+            "mean": metric_summary.get("mean"),
+            "win_rate": metric_summary.get("win_rate"),
+            "final_win_rate": final_win_rate,
+            "final_loss": final_loss,
+        },
         metric_snapshot=f"{primary_metric}={metric_summary.get('mean')}",
     )
     print(
@@ -1182,6 +1466,11 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "catastrophic_failure_count": metric_summary.get("catastrophic_failure_count"),
         "elapsed_sec": elapsed_total,
         "run_dir": str(exp_dir),
+        "seed_set_name": seeds_payload.get("seed_set_name"),
+        "seed_hash": seeds_payload.get("seed_hash"),
+        "seeds_used": list(seeds),
+        "final_win_rate": final_win_rate,
+        "final_loss": final_loss,
     }
 
 
@@ -1236,6 +1525,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-experiments", type=int, default=0)
     p.add_argument("--max-wall-time-minutes", type=int, default=0)
     p.add_argument("--seed-limit", type=int, default=0)
+    p.add_argument("--seeds", default="")
     p.add_argument("--seed-policy-config", default="")
     p.add_argument("--verbose", action="store_true")
     return p.parse_args()
@@ -1286,6 +1576,9 @@ def main() -> int:
         write_json(run_root / "seed_policy.json", seed_policy)
 
     seed_limit = int(args.seed_limit) if int(args.seed_limit) > 0 else None
+    cli_seed_override = _normalize_seed_list((args.seeds or "").split(",")) if str(args.seeds or "").strip() else None
+    if cli_seed_override and seed_limit is not None:
+        cli_seed_override = cli_seed_override[: max(1, int(seed_limit))]
     queue_state = {
         str(exp["id"]): {
             "exp_id": str(exp["id"]),
@@ -1320,11 +1613,36 @@ def main() -> int:
         live_summary_path=run_root / "live_summary_snapshot.json",
         run_started_ts=time.time(),
         queue_state=queue_state,
+        cli_seeds=cli_seed_override,
     )
     _update_live_snapshot(ctx)
 
+    plan_experiments: list[dict[str, Any]] = []
+    for exp in experiments:
+        seeds_payload = resolve_experiment_seeds(
+            exp=exp,
+            cfg=cfg,
+            git_commit=git_commit,
+            nightly=(mode == "nightly"),
+            seed_limit=seed_limit,
+            run_id=run_id,
+            seed_policy=seed_policy,
+            cli_seeds=cli_seed_override,
+        )
+        plan_experiments.append(
+            {
+                "exp_id": str(exp.get("id")),
+                "seed_mode": str(exp.get("seed_mode") or "regression_fixed"),
+                "seed_set_name": seeds_payload.get("seed_set_name"),
+                "seed_policy_version": seeds_payload.get("seed_policy_version"),
+                "seed_hash": seeds_payload.get("seed_hash"),
+                "seed_count": seeds_payload.get("seed_count"),
+                "seeds": seeds_payload.get("seeds") or [],
+            }
+        )
+
     plan_payload = {
-        "schema": "p23_run_plan_v1",
+        "schema": "p34_run_plan_v1",
         "generated_at": now_iso(),
         "run_id": run_id,
         "mode": mode,
@@ -1339,8 +1657,14 @@ def main() -> int:
         "max_parallel": ctx.max_parallel,
         "max_experiments": max_experiments,
         "seed_policy_config": seed_policy_config,
-        "seed_policy_version": (seed_policy or {}).get("seed_policy_version") if seed_policy else "legacy.p22",
+        "seed_policy_version": (
+            (seed_policy or {}).get("seed_policy_version")
+            if seed_policy
+            else str((_legacy_seed_policy_block(cfg).get("version") or "legacy.p22"))
+        ),
+        "cli_seed_override": cli_seed_override or [],
         "experiments": [e["id"] for e in experiments],
+        "experiments_with_seeds": plan_experiments,
         "budget": budget_cfg,
     }
     write_json(run_root / "run_plan.json", plan_payload)
@@ -1358,7 +1682,9 @@ def main() -> int:
                 stage="budget",
                 status="budget_cut",
                 elapsed_sec=time.time() - ctx.run_started_ts,
+                phase="orchestrator",
                 metric_snapshot="run_budget_exceeded",
+                message="run_budget_exceeded",
             )
             rows.append(
                 {
@@ -1377,6 +1703,11 @@ def main() -> int:
                     "catastrophic_failure_count": 1,
                     "elapsed_sec": 0.0,
                     "run_dir": str(run_root / exp_id),
+                    "seed_set_name": "",
+                    "seed_hash": "",
+                    "seeds_used": [],
+                    "final_win_rate": 0.0,
+                    "final_loss": 0.0,
                 }
             )
             continue
