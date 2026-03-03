@@ -1,0 +1,40 @@
+{
+  "schema": "p37_ssl_pretrain_config_v1",
+  "data": {
+    "dataset_path": "docs/artifacts/p37/ssl_datasets/latest/dataset.jsonl",
+    "sources": [
+      {
+        "type": "oracle",
+        "path": "sim/tests/fixtures_runtime/oracle_p0_v6_regression"
+      },
+      {
+        "type": "real",
+        "path": "docs/artifacts/p32"
+      }
+    ],
+    "max_episodes": 10,
+    "min_episode_length": 2,
+    "window_size": 2,
+    "max_samples": 480,
+    "train_ratio": 0.8
+  },
+  "model": {
+    "latent_dim": 64,
+    "hidden_dim": 128,
+    "projection_dim": 64,
+    "dropout": 0.1
+  },
+  "training": {
+    "seed": 3701,
+    "epochs": 2,
+    "batch_size": 32,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "temperature": 0.15,
+    "log_every": 10,
+    "device": "auto"
+  },
+  "output": {
+    "artifacts_root": "docs/artifacts/p37/ssl_pretrain"
+  }
+}
