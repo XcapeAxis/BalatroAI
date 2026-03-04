@@ -1,7 +1,7 @@
 ﻿# COVERAGE P38 STATUS
 
 - timestamp: 
-2026-03-04 15:54:17
+2026-03-04 18:57:58
 - baseline_gate: RunP37
 - run_p37_invoked: 
 True
@@ -14,8 +14,8 @@ True
 - soft_warn_count: 
 0
 - report_long_episode: 
-D:\MYFILES\BalatroAI\docs\artifacts\p38\long_episode\20260304-153503\report_p38_long_episode.json
+D:\MYFILES\BalatroAI\docs\artifacts\p38\long_episode\20260304-184029\report_p38_long_episode.json
 - report_summary_stats: 
-D:\MYFILES\BalatroAI\docs\artifacts\p38\analysis_20260304-153503\summary_stats.json
+D:\MYFILES\BalatroAI\docs\artifacts\p38\analysis_20260304-184029\summary_stats.json
 - gate_status: 
 PASS
