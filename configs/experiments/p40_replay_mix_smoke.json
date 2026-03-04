@@ -1,0 +1,51 @@
+{
+  "schema": "p40_replay_mixer_config_v1",
+  "output": {
+    "artifacts_root": "docs/artifacts/p40/replay_mixer"
+  },
+  "seeds": [
+    "AAAAAAA",
+    "BBBBBBB"
+  ],
+  "split": {
+    "train": 0.85,
+    "val": 0.15
+  },
+  "quick": {
+    "max_samples_per_source": 240
+  },
+  "sources": [
+    {
+      "id": "p10_long_episode",
+      "type": "p10_long_episode",
+      "weight": 0.2,
+      "max_samples": 200
+    },
+    {
+      "id": "p13_dagger_or_real",
+      "type": "p13_dagger_or_real",
+      "weight": 0.35,
+      "max_samples": 260,
+      "roots": [
+        "docs/artifacts/p13",
+        "docs/artifacts/p16"
+      ]
+    },
+    {
+      "id": "selfsup_replay",
+      "type": "selfsup_replay",
+      "weight": 0.35,
+      "max_samples": 260,
+      "roots": [
+        "docs/artifacts/p36"
+      ]
+    },
+    {
+      "id": "arena_failures",
+      "type": "arena_failures",
+      "weight": 0.1,
+      "max_samples": 120,
+      "failure_pack_manifest": ""
+    }
+  ]
+}

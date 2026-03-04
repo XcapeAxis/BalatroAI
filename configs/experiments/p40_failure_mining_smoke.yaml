@@ -1,0 +1,19 @@
+schema: p40_failure_mining_config_v1
+
+output:
+  artifacts_root: docs/artifacts/p40/failure_mining
+
+input:
+  p39_root: docs/artifacts/p39
+  arena_run_dir: ""
+  candidate_decision_json: ""
+
+criteria:
+  bottom_quantile: 0.2
+  champion_score_regression_ratio: 0.05
+  high_risk_round_threshold: 2
+  max_failures: 300
+
+quick:
+  max_episode_scan: 240
+
