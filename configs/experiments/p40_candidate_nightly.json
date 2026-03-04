@@ -1,0 +1,26 @@
+{
+  "schema": "p40_candidate_train_config_v1",
+  "mode": "bc_finetune",
+  "output": {
+    "artifacts_root": "docs/artifacts/p40/candidate_train"
+  },
+  "replay_mix_manifest": "",
+  "seeds": [
+    "AAAAAAA",
+    "BBBBBBB",
+    "CCCCCCC",
+    "DDDDDDD"
+  ],
+  "training": {
+    "epochs": 2,
+    "batch_size": 96,
+    "lr": 0.001,
+    "timeout_sec": 2400,
+    "max_rows_per_seed": 1200,
+    "prefer_source_types": [
+      "p13_dagger_or_real",
+      "arena_failures",
+      "selfsup_replay"
+    ]
+  }
+}

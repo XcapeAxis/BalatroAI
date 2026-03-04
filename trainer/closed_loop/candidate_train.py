@@ -1,0 +1,479 @@
+from __future__ import annotations
+
+if __package__ is None or __package__ == "":
+    import sys
+    from pathlib import Path
+
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+
+import argparse
+import hashlib
+import json
+import statistics
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+try:  # pragma: no cover - optional dependency
+    import yaml  # type: ignore
+except Exception:  # pragma: no cover
+    yaml = None
+
+from trainer.closed_loop.replay_manifest import (
+    append_jsonl,
+    build_seeds_payload,
+    now_iso,
+    now_stamp,
+    read_json,
+    to_abs_path,
+    write_json,
+)
+
+
+def _read_yaml_or_json(path: Path) -> dict[str, Any]:
+    text = path.read_text(encoding="utf-8-sig")
+    if path.suffix.lower() in {".yml", ".yaml"}:
+        if yaml is not None:
+            payload = yaml.safe_load(text)
+        else:
+            try:
+                payload = json.loads(text)
+            except Exception:
+                sidecar = path.with_suffix(".json")
+                if sidecar.exists():
+                    payload = json.loads(sidecar.read_text(encoding="utf-8-sig"))
+                else:
+                    raise RuntimeError(f"PyYAML unavailable and no sidecar JSON for: {path}")
+    else:
+        payload = json.loads(text)
+    if not isinstance(payload, dict):
+        raise ValueError(f"config must be mapping: {path}")
+    return payload
+
+
+def _seed_to_int(seed: str) -> int:
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+    return int(digest[:8], 16)
+
+
+def _run_process(command: list[str], *, cwd: Path, timeout_sec: int) -> dict[str, Any]:
+    start = time.time()
+    try:
+        proc = subprocess.run(
+            command,
+            cwd=str(cwd),
+            text=True,
+            capture_output=True,
+            timeout=max(1, timeout_sec),
+        )
+        return {
+            "returncode": int(proc.returncode),
+            "stdout": str(proc.stdout or ""),
+            "stderr": str(proc.stderr or ""),
+            "elapsed_sec": time.time() - start,
+            "timed_out": False,
+        }
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "returncode": 124,
+            "stdout": str(exc.stdout or ""),
+            "stderr": str(exc.stderr or ""),
+            "elapsed_sec": time.time() - start,
+            "timed_out": True,
+        }
+
+
+def _pick_python_exe(repo_root: Path) -> str:
+    venv_py = repo_root / ".venv_trainer" / "Scripts" / "python.exe"
+    if venv_py.exists():
+        return str(venv_py)
+    return str(sys.executable)
+
+
+def _pick_replay_manifest_path(repo_root: Path, cfg: dict[str, Any]) -> Path:
+    replay_raw = str(cfg.get("replay_mix_manifest") or "").strip()
+    if replay_raw:
+        return to_abs_path(repo_root, replay_raw)
+    latest_root = to_abs_path(repo_root, "docs/artifacts/p40/replay_mixer")
+    if latest_root.exists():
+        runs = sorted([p for p in latest_root.iterdir() if p.is_dir()], key=lambda p: p.name)
+        if runs:
+            manifest = runs[-1] / "replay_mix_manifest.json"
+            if manifest.exists():
+                return manifest
+    raise FileNotFoundError("replay mix manifest not provided and no latest manifest found")
+
+
+def _pick_bc_entries(
+    replay_manifest: dict[str, Any],
+    *,
+    prefer_source_types: list[str],
+) -> list[dict[str, Any]]:
+    selected = replay_manifest.get("selected_entries")
+    if not isinstance(selected, list):
+        return []
+    rows = [row for row in selected if isinstance(row, dict)]
+    if not rows:
+        return []
+
+    bc_rows = [r for r in rows if str(r.get("format_hint") or "").strip().lower() == "bc_record_v1"]
+    if bc_rows:
+        return bc_rows
+
+    for source_type in prefer_source_types:
+        subset = [r for r in rows if str(r.get("source_type") or "").strip().lower() == source_type.lower()]
+        if subset:
+            return subset
+    return rows
+
+
+def _extract_replay_line_limit(entry: dict[str, Any]) -> int:
+    span = entry.get("sample_span") if isinstance(entry.get("sample_span"), dict) else {}
+    line_end = int(span.get("line_end") or entry.get("sample_count") or 0)
+    return max(0, line_end)
+
+
+def _build_subset_dataset(
+    *,
+    entries: list[dict[str, Any]],
+    out_path: Path,
+    max_rows: int,
+) -> dict[str, Any]:
+    kept = 0
+    scanned = 0
+    source_files: list[str] = []
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", encoding="utf-8", newline="\n") as out_fp:
+        for entry in entries:
+            src_raw = str(entry.get("path") or "").strip()
+            if not src_raw:
+                continue
+            src = Path(src_raw)
+            if not src.exists():
+                continue
+            source_files.append(str(src))
+            local_cap = _extract_replay_line_limit(entry)
+            with src.open("r", encoding="utf-8", errors="replace") as in_fp:
+                for line_idx, line in enumerate(in_fp, start=1):
+                    if local_cap > 0 and line_idx > local_cap:
+                        break
+                    text = line.strip()
+                    if not text:
+                        continue
+                    scanned += 1
+                    try:
+                        obj = json.loads(text)
+                    except Exception:
+                        continue
+                    if not isinstance(obj, dict):
+                        continue
+                    phase = str(obj.get("phase") or "")
+                    has_hand_label = obj.get("expert_action_id") is not None and phase == "SELECTING_HAND"
+                    has_shop_label = obj.get("shop_expert_action_id") is not None and phase in {"SHOP", "SMODS_BOOSTER_OPENED"}
+                    if not (has_hand_label or has_shop_label):
+                        continue
+                    out_fp.write(json.dumps(obj, ensure_ascii=False) + "\n")
+                    kept += 1
+                    if max_rows > 0 and kept >= max_rows:
+                        return {"kept_rows": kept, "scanned_rows": scanned, "source_files": source_files}
+    return {"kept_rows": kept, "scanned_rows": scanned, "source_files": source_files}
+
+
+def _read_train_metrics(path: Path) -> dict[str, Any]:
+    payload = read_json(path)
+    if not isinstance(payload, dict):
+        return {}
+    history = payload.get("history") if isinstance(payload.get("history"), list) else []
+    final_row = history[-1] if history and isinstance(history[-1], dict) else {}
+    val_hand = final_row.get("val_hand") if isinstance(final_row.get("val_hand"), dict) else {}
+    val_shop = final_row.get("val_shop") if isinstance(final_row.get("val_shop"), dict) else {}
+    return {
+        "val_hand_acc1": float(val_hand.get("acc1") or 0.0),
+        "val_hand_acc3": float(val_hand.get("acc3") or 0.0),
+        "val_hand_loss": float(val_hand.get("loss") or 0.0),
+        "val_shop_acc1": float(val_shop.get("acc1") or 0.0),
+        "val_shop_illegal_rate": float(val_shop.get("illegal_rate") or 0.0),
+        "val_shop_loss": float(val_shop.get("loss") or 0.0),
+    }
+
+
+def run_candidate_training(
+    *,
+    config_path: str | Path,
+    out_dir: str | Path | None = None,
+    run_id: str = "",
+    quick: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    repo_root = Path(__file__).resolve().parents[2]
+    cfg_path = to_abs_path(repo_root, config_path)
+    cfg = _read_yaml_or_json(cfg_path)
+
+    output_cfg = cfg.get("output") if isinstance(cfg.get("output"), dict) else {}
+    artifacts_root = str(output_cfg.get("artifacts_root") or "docs/artifacts/p40/candidate_train")
+    chosen_run_id = str(run_id or output_cfg.get("run_id") or now_stamp())
+    if out_dir:
+        run_dir = to_abs_path(repo_root, out_dir)
+    else:
+        run_dir = to_abs_path(repo_root, artifacts_root) / chosen_run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    mode = str(cfg.get("mode") or "bc_finetune").strip().lower()
+    seeds_cfg = cfg.get("seeds")
+    if isinstance(seeds_cfg, list):
+        seeds = [str(s).strip() for s in seeds_cfg if str(s).strip()]
+    else:
+        seeds = ["AAAAAAA", "BBBBBBB"]
+    if quick and len(seeds) > 2:
+        seeds = seeds[:2]
+    seeds_payload = build_seeds_payload(seeds, seed_policy_version="p40.candidate_train")
+    write_json(run_dir / "seeds_used.json", seeds_payload)
+
+    train_cfg = cfg.get("training") if isinstance(cfg.get("training"), dict) else {}
+    epochs = int(train_cfg.get("epochs") or 1)
+    batch_size = int(train_cfg.get("batch_size") or 64)
+    lr = float(train_cfg.get("lr") or 1e-3)
+    timeout_sec = int(train_cfg.get("timeout_sec") or 1800)
+    max_rows_per_seed = int(train_cfg.get("max_rows_per_seed") or (256 if quick else 2000))
+
+    prefer_sources = train_cfg.get("prefer_source_types")
+    if not isinstance(prefer_sources, list) or not prefer_sources:
+        prefer_sources = ["p13_dagger_or_real", "arena_failures"]
+
+    replay_manifest_path = _pick_replay_manifest_path(repo_root, cfg)
+    replay_manifest = read_json(replay_manifest_path)
+    if not isinstance(replay_manifest, dict):
+        raise RuntimeError(f"invalid replay manifest: {replay_manifest_path}")
+    replay_entries = _pick_bc_entries(replay_manifest, prefer_source_types=[str(x) for x in prefer_sources])
+
+    progress_path = run_dir / "progress.jsonl"
+    seed_results: list[dict[str, Any]] = []
+    best_checkpoint: Path | None = None
+    best_loss: float | None = None
+    stub_reason = ""
+
+    for idx, seed in enumerate(seeds, start=1):
+        event_base = {
+            "schema": "p40_candidate_train_progress_v1",
+            "ts": now_iso(),
+            "run_id": chosen_run_id,
+            "seed": seed,
+            "seed_index": idx,
+            "seed_total": len(seeds),
+            "mode": mode,
+        }
+        append_jsonl(progress_path, {**event_base, "stage": "seed_start", "status": "running"})
+
+        seed_dir = run_dir / "seed_runs" / f"seed_{idx:03d}_{seed}"
+        seed_dir.mkdir(parents=True, exist_ok=True)
+        subset_path = seed_dir / "train_subset.jsonl"
+        subset_meta = _build_subset_dataset(entries=replay_entries, out_path=subset_path, max_rows=max_rows_per_seed)
+
+        if dry_run:
+            seed_result = {
+                "seed": seed,
+                "status": "dry_run",
+                "subset_rows": int(subset_meta.get("kept_rows") or 0),
+                "metrics": {},
+                "run_dir": str(seed_dir),
+            }
+            seed_results.append(seed_result)
+            append_jsonl(progress_path, {**event_base, "stage": "seed_done", "status": "dry_run", "metrics": {}})
+            continue
+
+        if mode != "bc_finetune":
+            stub_reason = f"unsupported_mode:{mode}"
+            seed_result = {
+                "seed": seed,
+                "status": "stub",
+                "subset_rows": int(subset_meta.get("kept_rows") or 0),
+                "metrics": {},
+                "run_dir": str(seed_dir),
+                "reason": stub_reason,
+            }
+            seed_results.append(seed_result)
+            append_jsonl(progress_path, {**event_base, "stage": "seed_done", "status": "stub", "reason": stub_reason})
+            continue
+
+        if int(subset_meta.get("kept_rows") or 0) <= 0:
+            stub_reason = "no_bc_compatible_rows_in_replay_mix"
+            seed_result = {
+                "seed": seed,
+                "status": "stub",
+                "subset_rows": 0,
+                "metrics": {},
+                "run_dir": str(seed_dir),
+                "reason": stub_reason,
+            }
+            seed_results.append(seed_result)
+            append_jsonl(progress_path, {**event_base, "stage": "seed_done", "status": "stub", "reason": stub_reason})
+            continue
+
+        command = [
+            _pick_python_exe(repo_root),
+            "-B",
+            "trainer/train_bc.py",
+            "--train-jsonl",
+            str(subset_path),
+            "--epochs",
+            str(max(1, epochs)),
+            "--batch-size",
+            str(max(1, batch_size)),
+            "--lr",
+            str(lr),
+            "--seed",
+            str(_seed_to_int(seed)),
+            "--out-dir",
+            str(seed_dir / "bc_run"),
+        ]
+        append_jsonl(progress_path, {**event_base, "stage": "train_cmd", "status": "running", "command": command})
+        result = _run_process(command, cwd=repo_root, timeout_sec=timeout_sec)
+        metrics_path = seed_dir / "bc_run" / "train_metrics.json"
+        metrics = _read_train_metrics(metrics_path) if result["returncode"] == 0 else {}
+        final_loss = float(metrics.get("val_hand_loss", 0.0)) + float(metrics.get("val_shop_loss", 0.0))
+        checkpoint = seed_dir / "bc_run" / "best.pt"
+        status = "ok" if result["returncode"] == 0 and checkpoint.exists() else "failed"
+
+        seed_result = {
+            "seed": seed,
+            "status": status,
+            "subset_rows": int(subset_meta.get("kept_rows") or 0),
+            "metrics": metrics,
+            "final_loss": float(final_loss),
+            "checkpoint": str(checkpoint) if checkpoint.exists() else "",
+            "stdout_tail": (result.get("stdout") or "")[-800:],
+            "stderr_tail": (result.get("stderr") or "")[-800:],
+            "elapsed_sec": float(result.get("elapsed_sec") or 0.0),
+            "returncode": int(result.get("returncode") or 0),
+            "run_dir": str(seed_dir),
+        }
+        seed_results.append(seed_result)
+        append_jsonl(
+            progress_path,
+            {
+                **event_base,
+                "stage": "seed_done",
+                "status": status,
+                "metrics": metrics,
+                "final_loss": final_loss,
+                "checkpoint": seed_result["checkpoint"],
+            },
+        )
+
+        if status == "ok":
+            if best_loss is None or final_loss < best_loss:
+                best_loss = final_loss
+                best_checkpoint = checkpoint
+
+    if best_checkpoint is None:
+        stub_checkpoint = run_dir / "candidate_stub_checkpoint.json"
+        stub_payload = {
+            "schema": "p40_stub_checkpoint_v1",
+            "generated_at": now_iso(),
+            "run_id": chosen_run_id,
+            "mode": mode,
+            "reason": stub_reason or "no_successful_seed_run",
+            "seed_results": seed_results,
+        }
+        write_json(stub_checkpoint, stub_payload)
+        best_checkpoint = stub_checkpoint
+
+    best_checkpoint_txt = run_dir / "best_checkpoint.txt"
+    best_checkpoint_txt.write_text(str(best_checkpoint) + "\n", encoding="utf-8")
+
+    ok_rows = [r for r in seed_results if str(r.get("status")) == "ok"]
+    metric_rows = [r.get("metrics") for r in ok_rows if isinstance(r.get("metrics"), dict)]
+    mean_hand_top1 = (
+        statistics.mean([float(m.get("val_hand_acc1") or 0.0) for m in metric_rows]) if metric_rows else 0.0
+    )
+    mean_hand_top3 = (
+        statistics.mean([float(m.get("val_hand_acc3") or 0.0) for m in metric_rows]) if metric_rows else 0.0
+    )
+    mean_shop_top1 = (
+        statistics.mean([float(m.get("val_shop_acc1") or 0.0) for m in metric_rows]) if metric_rows else 0.0
+    )
+    mean_illegal = (
+        statistics.mean([float(m.get("val_shop_illegal_rate") or 0.0) for m in metric_rows]) if metric_rows else 1.0
+    )
+    mean_loss = (
+        statistics.mean(
+            [float(m.get("val_hand_loss") or 0.0) + float(m.get("val_shop_loss") or 0.0) for m in metric_rows]
+        )
+        if metric_rows
+        else 0.0
+    )
+
+    status = "ok" if ok_rows else ("dry_run" if dry_run else "stub")
+    metrics_payload = {
+        "schema": "p40_candidate_train_metrics_v1",
+        "generated_at": now_iso(),
+        "run_id": chosen_run_id,
+        "status": status,
+        "mode": mode,
+        "seed_count": len(seeds),
+        "ok_seed_count": len(ok_rows),
+        "hand_top1": mean_hand_top1,
+        "hand_top3": mean_hand_top3,
+        "shop_top1": mean_shop_top1,
+        "illegal_action_rate": mean_illegal,
+        "final_loss": mean_loss,
+        "candidate_checkpoint": str(best_checkpoint),
+    }
+    manifest = {
+        "schema": "p40_candidate_train_manifest_v1",
+        "generated_at": now_iso(),
+        "run_id": chosen_run_id,
+        "status": status,
+        "mode": mode,
+        "config_path": str(cfg_path),
+        "run_dir": str(run_dir),
+        "quick": bool(quick),
+        "dry_run": bool(dry_run),
+        "replay_mix_manifest": str(replay_manifest_path),
+        "replay_selected_entries": len(replay_entries),
+        "seed_results": seed_results,
+        "candidate_checkpoint": str(best_checkpoint),
+        "metrics_ref": str(run_dir / "metrics.json"),
+    }
+
+    write_json(run_dir / "candidate_train_manifest.json", manifest)
+    write_json(run_dir / "metrics.json", metrics_payload)
+
+    return {
+        "status": status,
+        "run_id": chosen_run_id,
+        "run_dir": str(run_dir),
+        "candidate_train_manifest": str(run_dir / "candidate_train_manifest.json"),
+        "metrics": str(run_dir / "metrics.json"),
+        "best_checkpoint": str(best_checkpoint),
+        "seeds_used": str(run_dir / "seeds_used.json"),
+    }
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="P40 candidate training loop.")
+    parser.add_argument("--config", default="configs/experiments/p40_candidate_smoke.yaml")
+    parser.add_argument("--out-dir", default="")
+    parser.add_argument("--run-id", default="")
+    parser.add_argument("--quick", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    summary = run_candidate_training(
+        config_path=args.config,
+        out_dir=(args.out_dir if str(args.out_dir).strip() else None),
+        run_id=str(args.run_id or ""),
+        quick=bool(args.quick),
+        dry_run=bool(args.dry_run),
+    )
+    print(json.dumps(summary, ensure_ascii=False))
+    return 0 if str(summary.get("status")) in {"ok", "stub", "dry_run"} else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

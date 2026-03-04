@@ -1,0 +1,45 @@
+schema: p40_closed_loop_config_v1
+
+output:
+  artifacts_root: docs/artifacts/p40/closed_loop_runs
+
+seeds:
+  - AAAAAAA
+  - BBBBBBB
+
+replay_mixer:
+  config: configs/experiments/p40_replay_mix_smoke.yaml
+  quick: true
+
+failure_mining:
+  enabled: true
+  config: configs/experiments/p40_failure_mining_smoke.yaml
+  quick: true
+
+candidate_train:
+  config: configs/experiments/p40_candidate_smoke.yaml
+  quick: true
+
+arena_eval:
+  enabled: true
+  backend: sim
+  mode: long_episode
+  policies:
+    - heuristic_baseline
+    - model_policy
+  candidate_policy: model_policy
+  champion_policy: heuristic_baseline
+  episodes_per_seed: 1
+  max_steps: 120
+  timeout_sec: 1800
+
+champion_rules:
+  enabled: true
+  champion_json: docs/artifacts/p22/champion.json
+  min_seeds: 2
+  max_invalid_increase: 0.02
+  max_timeout_increase: 0.01
+  min_score_improvement: 0.01
+  max_score_regression: 0.02
+  min_win_improvement: 0.0
+
