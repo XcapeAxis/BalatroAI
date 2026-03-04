@@ -21,7 +21,9 @@ except Exception:  # pragma: no cover
     yaml = None
 
 from trainer.closed_loop.candidate_train import run_candidate_training
+from trainer.closed_loop.check_replay_lineage import run_lineage_check
 from trainer.closed_loop.failure_mining import run_failure_mining
+from trainer.closed_loop.regression_triage import run_regression_triage
 from trainer.closed_loop.replay_manifest import now_iso, now_stamp, to_abs_path, write_json, write_markdown
 from trainer.closed_loop.replay_mixer import run_replay_mixer
 
@@ -137,6 +139,12 @@ def _write_summary_tables(run_dir: Path, row: dict[str, Any]) -> dict[str, str]:
         "score_delta",
         "candidate_win_rate",
         "candidate_invalid_action_rate",
+        "lineage_health_status",
+        "curriculum_enabled",
+        "triage_status",
+        "lineage_summary_json",
+        "curriculum_plan_json",
+        "triage_report_json",
     ]
     csv_path = run_dir / "summary_table.csv"
     json_path = run_dir / "summary_table.json"
@@ -149,11 +157,11 @@ def _write_summary_tables(run_dir: Path, row: dict[str, Any]) -> dict[str, str]:
 
     write_json(json_path, [row])
     lines = [
-        f"# P40 Closed-Loop Summary ({row.get('run_id')})",
+        f"# Closed-Loop Summary ({row.get('run_id')})",
         "",
-        "| run_id | status | replay | failure | candidate | arena | recommendation | promote | cand_score | champ_score | delta | win_rate | invalid |",
-        "|---|---|---|---|---|---|---|---:|---:|---:|---:|---:|---:|",
-        "| {run_id} | {status} | {replay_status} | {failure_status} | {candidate_status} | {arena_status} | {recommendation} | {recommend_promotion} | {candidate_score:.6f} | {champion_score:.6f} | {score_delta:.6f} | {candidate_win_rate:.6f} | {candidate_invalid_action_rate:.6f} |".format(
+        "| run_id | status | replay | failure | candidate | arena | recommendation | promote | cand_score | champ_score | delta | win_rate | invalid | lineage_health | curriculum | triage |",
+        "|---|---|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---|---|---|",
+        "| {run_id} | {status} | {replay_status} | {failure_status} | {candidate_status} | {arena_status} | {recommendation} | {recommend_promotion} | {candidate_score:.6f} | {champion_score:.6f} | {score_delta:.6f} | {candidate_win_rate:.6f} | {candidate_invalid_action_rate:.6f} | {lineage_health_status} | {curriculum_enabled} | {triage_status} |".format(
             run_id=row.get("run_id"),
             status=row.get("status"),
             replay_status=row.get("replay_status"),
@@ -167,6 +175,9 @@ def _write_summary_tables(run_dir: Path, row: dict[str, Any]) -> dict[str, str]:
             score_delta=float(row.get("score_delta") or 0.0),
             candidate_win_rate=float(row.get("candidate_win_rate") or 0.0),
             candidate_invalid_action_rate=float(row.get("candidate_invalid_action_rate") or 0.0),
+            lineage_health_status=row.get("lineage_health_status"),
+            curriculum_enabled=str(bool(row.get("curriculum_enabled"))).lower(),
+            triage_status=row.get("triage_status"),
         ),
     ]
     write_markdown(md_path, lines)
@@ -199,6 +210,15 @@ def _build_promotion_md(payload: dict[str, Any]) -> list[str]:
         lines.extend([f"- {str(item)}" for item in reasons])
     else:
         lines.append("- none")
+    if str(payload.get("slice_decision_breakdown_json") or "").strip():
+        lines.extend(
+            [
+                "",
+                "## Slice Breakdown",
+                f"- json: `{payload.get('slice_decision_breakdown_json')}`",
+                f"- md: `{payload.get('slice_decision_breakdown_md')}`",
+            ]
+        )
     return lines
 
 
@@ -244,6 +264,19 @@ def run_closed_loop(
             "generated_at": now_iso(),
             "kind": "replay_mixer",
             "summary": replay_summary,
+        },
+    )
+    lineage_check = run_lineage_check(
+        manifest_path=str(replay_summary.get("replay_mix_manifest") or ""),
+        out_dir=run_dir / "replay_lineage_health",
+    )
+    write_json(
+        run_dir / "replay_lineage_health_ref.json",
+        {
+            "schema": "p41_ref_v1",
+            "generated_at": now_iso(),
+            "kind": "replay_lineage_health",
+            "summary": lineage_check,
         },
     )
 
@@ -365,6 +398,8 @@ def run_closed_loop(
         arena_result = _run_process(arena_cmd, cwd=repo_root, timeout_sec=timeout_sec)
         arena_run_dir = arena_root / arena_run_id
         summary_path = arena_run_dir / "summary_table.json"
+        episode_records_path = arena_run_dir / "episode_records.jsonl"
+        bucket_metrics_path = arena_run_dir / "bucket_metrics.json"
         arena_status = "ok" if arena_result.get("returncode") == 0 and summary_path.exists() else "failed"
         arena_reason = ""
         if arena_status != "ok":
@@ -380,6 +415,8 @@ def run_closed_loop(
             "arena_elapsed_sec": float(arena_result.get("elapsed_sec") or 0.0),
             "arena_run_dir": str(arena_run_dir),
             "summary_json": str(summary_path),
+            "episode_records_jsonl": str(episode_records_path),
+            "bucket_metrics_json": str(bucket_metrics_path),
         }
 
         champion_cfg = cfg.get("champion_rules") if isinstance(cfg.get("champion_rules"), dict) else {}
@@ -398,6 +435,10 @@ def run_closed_loop(
                 candidate_policy,
                 "--champion-policy",
                 champion_policy,
+                "--episode-records-jsonl",
+                str(episode_records_path),
+                "--bucket-metrics-json",
+                str(bucket_metrics_path),
             ]
             champion_json = str(champion_cfg.get("champion_json") or "docs/artifacts/p22/champion.json")
             champion_cmd.extend(["--champion-json", champion_json])
@@ -408,6 +449,8 @@ def run_closed_loop(
                 ("min_score_improvement", "--min-score-improvement"),
                 ("max_score_regression", "--max-score-regression"),
                 ("min_win_improvement", "--min-win-improvement"),
+                ("bootstrap_iterations", "--bootstrap-iterations"),
+                ("slice_min_samples", "--slice-min-samples"),
             ]:
                 if champion_cfg.get(arg_key) is not None:
                     champion_cmd.extend([cli_key, str(champion_cfg.get(arg_key))])
@@ -435,6 +478,12 @@ def run_closed_loop(
                 if isinstance(loaded, dict):
                     decision_payload = loaded
                     arena_summary_ref["champion_decision_json"] = str(decision_json_path)
+                    arena_summary_ref["slice_decision_breakdown_json"] = str(
+                        loaded.get("slice_decision_breakdown_json") or ""
+                    )
+                    arena_summary_ref["slice_decision_breakdown_md"] = str(
+                        loaded.get("slice_decision_breakdown_md") or ""
+                    )
 
         if not decision_payload:
             metrics = _summary_row_to_metrics(summary_path, candidate_policy, champion_policy)
@@ -518,7 +567,7 @@ def run_closed_loop(
         recommend_promotion = False
 
     promotion_decision = {
-        "schema": "p40_promotion_decision_v1",
+        "schema": "p41_promotion_decision_v2",
         "generated_at": now_iso(),
         "run_id": chosen_run_id,
         "recommendation": recommendation,
@@ -536,10 +585,43 @@ def run_closed_loop(
             (decision_payload.get("reasons") if isinstance(decision_payload.get("reasons"), list) else [])
             + conservative_reasons
         ),
+        "slice_decision_breakdown_json": str(decision_payload.get("slice_decision_breakdown_json") or ""),
+        "slice_decision_breakdown_md": str(decision_payload.get("slice_decision_breakdown_md") or ""),
         "champion_rules_payload": decision_payload,
     }
     write_json(run_dir / "promotion_decision.json", promotion_decision)
     write_markdown(run_dir / "promotion_decision.md", _build_promotion_md(promotion_decision))
+
+    triage_cfg = cfg.get("regression_triage") if isinstance(cfg.get("regression_triage"), dict) else {}
+    triage_enabled = bool(triage_cfg.get("enabled", True))
+    triage_summary: dict[str, Any] = {"status": "skipped", "reason": "disabled"}
+    if triage_enabled:
+        triage_summary = run_regression_triage(
+            current_run_dir=run_dir,
+            out_dir=run_dir,
+            baseline_run_dir=(str(triage_cfg.get("baseline_run_dir")) if str(triage_cfg.get("baseline_run_dir") or "").strip() else None),
+        )
+    write_json(
+        run_dir / "triage_ref.json",
+        {
+            "schema": "p41_ref_v1",
+            "generated_at": now_iso(),
+            "kind": "regression_triage",
+            "summary": triage_summary,
+        },
+    )
+
+    curriculum_enabled = False
+    candidate_manifest_path = Path(str(candidate_summary.get("candidate_train_manifest") or ""))
+    if candidate_manifest_path.exists():
+        try:
+            loaded_candidate_manifest = json.loads(candidate_manifest_path.read_text(encoding="utf-8-sig"))
+        except Exception:
+            loaded_candidate_manifest = None
+        if isinstance(loaded_candidate_manifest, dict):
+            curriculum_enabled = bool(
+                (loaded_candidate_manifest.get("curriculum_plan") if isinstance(loaded_candidate_manifest.get("curriculum_plan"), dict) else {}).get("enabled", False)
+            )
 
     row = {
         "run_id": chosen_run_id,
@@ -557,11 +639,17 @@ def run_closed_loop(
         "score_delta": promotion_decision.get("score_delta"),
         "candidate_win_rate": promotion_decision.get("candidate_win_rate"),
         "candidate_invalid_action_rate": promotion_decision.get("candidate_invalid_action_rate"),
+        "lineage_health_status": str(lineage_check.get("status") or "unknown"),
+        "curriculum_enabled": bool(curriculum_enabled),
+        "triage_status": str(triage_summary.get("status") or "skipped"),
+        "lineage_summary_json": str(replay_summary.get("lineage_summary_json") or ""),
+        "curriculum_plan_json": str(candidate_summary.get("curriculum_plan") or ""),
+        "triage_report_json": str(triage_summary.get("triage_report_json") or ""),
     }
     summary_paths = _write_summary_tables(run_dir, row)
 
     run_manifest = {
-        "schema": "p40_closed_loop_run_manifest_v1",
+        "schema": "p41_closed_loop_run_manifest_v2",
         "generated_at": now_iso(),
         "run_id": chosen_run_id,
         "status": row["status"],
@@ -572,10 +660,12 @@ def run_closed_loop(
         "seeds": seeds,
         "steps": {
             "replay_mixer": replay_summary,
+            "replay_lineage_health": lineage_check,
             "failure_mining": failure_summary,
             "candidate_train": candidate_summary,
             "arena_eval": arena_summary_ref,
             "promotion_decision": promotion_decision,
+            "regression_triage": triage_summary,
         },
         "summary_table_paths": summary_paths,
     }
@@ -592,8 +682,8 @@ def run_closed_loop(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="P40 closed-loop runner (replay mix -> failure mining -> train -> arena).")
-    parser.add_argument("--config", default="configs/experiments/p40_closed_loop_smoke.yaml")
+    parser = argparse.ArgumentParser(description="Closed-loop runner (replay mix -> failure mining -> train -> arena -> triage).")
+    parser.add_argument("--config", default="configs/experiments/p41_closed_loop_v2_smoke.yaml")
     parser.add_argument("--out-dir", default="")
     parser.add_argument("--run-id", default="")
     parser.add_argument("--seeds", default="", help="Optional comma-separated seed override")
