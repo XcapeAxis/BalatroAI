@@ -31,6 +31,11 @@ from trainer.closed_loop.replay_manifest import (
     write_json,
 )
 from trainer.closed_loop.curriculum_scheduler import build_curriculum_plan, build_phase_allocations
+from trainer.experiments.training_modes import (
+    MODE_CATEGORY_EXPERIMENTAL,
+    MODE_CATEGORY_LEGACY_BASELINE,
+    mode_category,
+)
 from trainer.rl.ppo_lite import run_ppo_lite_training
 
 
@@ -106,6 +111,81 @@ def _pick_replay_manifest_path(repo_root: Path, cfg: dict[str, Any]) -> Path:
             if manifest.exists():
                 return manifest
     raise FileNotFoundError("replay mix manifest not provided and no latest manifest found")
+
+
+def _normalize_mode_ids(values: Any) -> list[str]:
+    if isinstance(values, str):
+        token = values.strip().lower()
+        return [token] if token else []
+    if not isinstance(values, list):
+        return []
+    out: list[str] = []
+    for value in values:
+        token = str(value).strip().lower()
+        if token:
+            out.append(token)
+    return out
+
+
+def _resolve_requested_modes(cfg: dict[str, Any]) -> list[str]:
+    explicit_modes = _normalize_mode_ids(cfg.get("candidate_modes"))
+    if explicit_modes:
+        return explicit_modes
+    mode = str(cfg.get("mode") or "").strip().lower()
+    if mode:
+        return [mode]
+    # P43 default mainline order.
+    return ["rl_ppo_lite", "selfsup_warm_bc"]
+
+
+def _resolve_training_mode(cfg: dict[str, Any]) -> dict[str, Any]:
+    requested_modes = _resolve_requested_modes(cfg)
+    allow_legacy_fallback = bool(cfg.get("allow_legacy_fallback") or cfg.get("fallback_to_legacy") or False)
+    legacy_fallback_modes = _normalize_mode_ids(cfg.get("legacy_fallback_modes")) or ["bc_finetune"]
+
+    known_modes = {"rl_ppo_lite", "selfsup_warm_bc", "bc_finetune", "dagger_refresh"}
+    selected_mode = ""
+    unsupported_modes: list[str] = []
+    for mode in requested_modes:
+        if mode in known_modes:
+            selected_mode = mode
+            break
+        unsupported_modes.append(mode)
+
+    fallback_used = False
+    fallback_reason = ""
+    if not selected_mode and allow_legacy_fallback:
+        for mode in legacy_fallback_modes:
+            if mode in known_modes:
+                selected_mode = mode
+                fallback_used = True
+                fallback_reason = (
+                    "mainline_modes_unavailable:" + ",".join(requested_modes)
+                    if requested_modes
+                    else "mainline_modes_unavailable"
+                )
+                break
+
+    if not selected_mode:
+        selected_mode = requested_modes[0] if requested_modes else "rl_ppo_lite"
+        if unsupported_modes:
+            fallback_reason = "unsupported_requested_modes:" + ",".join(unsupported_modes)
+
+    selected_category = mode_category(selected_mode, default=MODE_CATEGORY_EXPERIMENTAL)
+    legacy_paths_used: list[str] = []
+    if selected_category == MODE_CATEGORY_LEGACY_BASELINE:
+        legacy_paths_used = ["trainer/train_bc.py", "trainer/dagger_collect.py", "trainer/dagger_collect_v4.py"]
+
+    return {
+        "requested_modes": requested_modes,
+        "selected_mode": selected_mode,
+        "selected_category": selected_category,
+        "allow_legacy_fallback": allow_legacy_fallback,
+        "legacy_fallback_modes": legacy_fallback_modes,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "legacy_paths_used": legacy_paths_used,
+    }
 
 
 def _pick_bc_entries(
@@ -272,7 +352,15 @@ def run_candidate_training(
         run_dir = to_abs_path(repo_root, artifacts_root) / chosen_run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    mode = str(cfg.get("mode") or "bc_finetune").strip().lower()
+    mode_resolution = _resolve_training_mode(cfg)
+    mode = str(mode_resolution.get("selected_mode") or "rl_ppo_lite").strip().lower()
+    training_mode_category = str(mode_resolution.get("selected_category") or MODE_CATEGORY_EXPERIMENTAL)
+    fallback_used = bool(mode_resolution.get("fallback_used"))
+    fallback_reason = str(mode_resolution.get("fallback_reason") or "")
+    legacy_paths_used = [str(x) for x in (mode_resolution.get("legacy_paths_used") or [])]
+    requested_modes = [str(x) for x in (mode_resolution.get("requested_modes") or [])]
+    legacy_fallback_modes = [str(x) for x in (mode_resolution.get("legacy_fallback_modes") or [])]
+    write_json(run_dir / "mode_resolution.json", mode_resolution)
     seeds_cfg = cfg.get("seeds")
     if isinstance(seeds_cfg, list):
         seeds = [str(s).strip() for s in seeds_cfg if str(s).strip()]
@@ -323,6 +411,8 @@ def run_candidate_training(
                 "run_id": chosen_run_id,
                 "status": str(rl_summary.get("status") or "stub"),
                 "mode": mode,
+                "training_mode": mode,
+                "training_mode_category": training_mode_category,
                 "seed_count": len(seeds),
                 "ok_seed_count": 0,
                 "mean_reward": 0.0,
@@ -330,6 +420,11 @@ def run_candidate_training(
                 "final_loss": 0.0,
                 "candidate_checkpoint": str(rl_summary.get("best_checkpoint") or ""),
             }
+        metrics_payload["training_mode"] = mode
+        metrics_payload["training_mode_category"] = training_mode_category
+        metrics_payload["fallback_used"] = fallback_used
+        metrics_payload["fallback_reason"] = fallback_reason
+        metrics_payload["legacy_paths_used"] = legacy_paths_used
         status = str(rl_summary.get("status") or "stub")
         best_checkpoint = Path(str(rl_summary.get("best_checkpoint") or "")) if str(rl_summary.get("best_checkpoint") or "").strip() else None
         best_checkpoint_txt = run_dir / "best_checkpoint.txt"
@@ -341,6 +436,13 @@ def run_candidate_training(
             "run_id": chosen_run_id,
             "status": status,
             "mode": mode,
+            "training_mode": mode,
+            "training_mode_category": training_mode_category,
+            "candidate_modes": requested_modes,
+            "fallback_used": fallback_used,
+            "fallback_reason": fallback_reason,
+            "legacy_fallback_modes": legacy_fallback_modes,
+            "legacy_paths_used": legacy_paths_used,
             "config_path": str(cfg_path),
             "run_dir": str(run_dir),
             "quick": bool(quick),
@@ -365,11 +467,106 @@ def run_candidate_training(
             "candidate_train_manifest": str(run_dir / "candidate_train_manifest.json"),
             "metrics": str(run_dir / "metrics.json"),
             "best_checkpoint": str(best_checkpoint) if best_checkpoint else "",
+            "training_mode": mode,
+            "training_mode_category": training_mode_category,
+            "fallback_used": fallback_used,
+            "fallback_reason": fallback_reason,
+            "legacy_paths_used": legacy_paths_used,
             "seeds_used": str(run_dir / "seeds_used.json"),
             "curriculum_plan": str(run_dir / "curriculum_plan.json"),
             "curriculum_applied": str(curriculum_applied_path),
             "reward_config": str((run_dir / "rl_train" / "reward_config.json")),
             "warnings_log": str((run_dir / "rl_train" / "warnings.log")),
+        }
+
+    if mode == "selfsup_warm_bc":
+        status = "dry_run" if dry_run else "stub"
+        stub_reason = "selfsup_warm_bc_not_implemented_in_p43"
+        checkpoint_path = run_dir / "candidate_selfsup_warm_stub_checkpoint.json"
+        checkpoint_payload = {
+            "schema": "p43_selfsup_warm_stub_checkpoint_v1",
+            "generated_at": now_iso(),
+            "run_id": chosen_run_id,
+            "training_mode": mode,
+            "training_mode_category": training_mode_category,
+            "reason": stub_reason,
+        }
+        write_json(checkpoint_path, checkpoint_payload)
+        best_checkpoint_txt = run_dir / "best_checkpoint.txt"
+        best_checkpoint_txt.write_text(str(checkpoint_path) + "\n", encoding="utf-8")
+        curriculum_plan = {
+            "enabled": False,
+            "phase_count": 0,
+            "phases": [],
+            "seeds": list(seeds),
+            "reason": "not_applicable_for_selfsup_warm_bc_stub",
+        }
+        write_json(run_dir / "curriculum_plan.json", curriculum_plan)
+        curriculum_applied_path = run_dir / "curriculum_applied.jsonl"
+        curriculum_applied_path.parent.mkdir(parents=True, exist_ok=True)
+        if not curriculum_applied_path.exists():
+            curriculum_applied_path.write_text("", encoding="utf-8")
+
+        metrics_payload = {
+            "schema": "p43_candidate_train_metrics_v1",
+            "generated_at": now_iso(),
+            "run_id": chosen_run_id,
+            "status": status,
+            "mode": mode,
+            "training_mode": mode,
+            "training_mode_category": training_mode_category,
+            "fallback_used": fallback_used,
+            "fallback_reason": fallback_reason,
+            "legacy_paths_used": legacy_paths_used,
+            "seed_count": len(seeds),
+            "ok_seed_count": 0,
+            "mean_reward": 0.0,
+            "invalid_action_rate": 1.0,
+            "final_loss": 0.0,
+            "candidate_checkpoint": str(checkpoint_path),
+            "reason": stub_reason,
+        }
+        manifest = {
+            "schema": "p43_candidate_train_manifest_v1",
+            "generated_at": now_iso(),
+            "run_id": chosen_run_id,
+            "status": status,
+            "mode": mode,
+            "training_mode": mode,
+            "training_mode_category": training_mode_category,
+            "candidate_modes": requested_modes,
+            "fallback_used": fallback_used,
+            "fallback_reason": fallback_reason,
+            "legacy_fallback_modes": legacy_fallback_modes,
+            "legacy_paths_used": legacy_paths_used,
+            "reason": stub_reason,
+            "config_path": str(cfg_path),
+            "run_dir": str(run_dir),
+            "quick": bool(quick),
+            "dry_run": bool(dry_run),
+            "curriculum_plan": curriculum_plan,
+            "curriculum_config_path": "",
+            "curriculum_applied": str(curriculum_applied_path),
+            "candidate_checkpoint": str(checkpoint_path),
+            "metrics_ref": str(run_dir / "metrics.json"),
+        }
+        write_json(run_dir / "candidate_train_manifest.json", manifest)
+        write_json(run_dir / "metrics.json", metrics_payload)
+        return {
+            "status": status,
+            "run_id": chosen_run_id,
+            "run_dir": str(run_dir),
+            "candidate_train_manifest": str(run_dir / "candidate_train_manifest.json"),
+            "metrics": str(run_dir / "metrics.json"),
+            "best_checkpoint": str(checkpoint_path),
+            "training_mode": mode,
+            "training_mode_category": training_mode_category,
+            "fallback_used": fallback_used,
+            "fallback_reason": fallback_reason,
+            "legacy_paths_used": legacy_paths_used,
+            "seeds_used": str(run_dir / "seeds_used.json"),
+            "curriculum_plan": str(run_dir / "curriculum_plan.json"),
+            "curriculum_applied": str(curriculum_applied_path),
         }
 
     train_cfg = cfg.get("training") if isinstance(cfg.get("training"), dict) else {}
@@ -652,6 +849,11 @@ def run_candidate_training(
         "run_id": chosen_run_id,
         "status": status,
         "mode": mode,
+        "training_mode": mode,
+        "training_mode_category": training_mode_category,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "legacy_paths_used": legacy_paths_used,
         "curriculum_enabled": bool(curriculum_plan.get("enabled")),
         "curriculum_phase_count": int(curriculum_plan.get("phase_count") or len(curriculum_plan.get("phases") or [])),
         "seed_count": len(seeds),
@@ -669,6 +871,13 @@ def run_candidate_training(
         "run_id": chosen_run_id,
         "status": status,
         "mode": mode,
+        "training_mode": mode,
+        "training_mode_category": training_mode_category,
+        "candidate_modes": requested_modes,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "legacy_fallback_modes": legacy_fallback_modes,
+        "legacy_paths_used": legacy_paths_used,
         "config_path": str(cfg_path),
         "run_dir": str(run_dir),
         "quick": bool(quick),
@@ -693,6 +902,11 @@ def run_candidate_training(
         "candidate_train_manifest": str(run_dir / "candidate_train_manifest.json"),
         "metrics": str(run_dir / "metrics.json"),
         "best_checkpoint": str(best_checkpoint),
+        "training_mode": mode,
+        "training_mode_category": training_mode_category,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "legacy_paths_used": legacy_paths_used,
         "seeds_used": str(run_dir / "seeds_used.json"),
         "curriculum_plan": str(run_dir / "curriculum_plan.json"),
         "curriculum_applied": str(curriculum_applied_path),
@@ -700,7 +914,7 @@ def run_candidate_training(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="P40 candidate training loop.")
+    parser = argparse.ArgumentParser(description="P40/P41/P42 candidate training loop (mainline-first, legacy fallback optional).")
     parser.add_argument("--config", default="configs/experiments/p40_candidate_smoke.yaml")
     parser.add_argument("--out-dir", default="")
     parser.add_argument("--run-id", default="")

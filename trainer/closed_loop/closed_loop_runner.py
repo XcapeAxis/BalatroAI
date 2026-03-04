@@ -126,6 +126,11 @@ def _write_summary_tables(run_dir: Path, row: dict[str, Any]) -> dict[str, str]:
     fields = [
         "run_id",
         "status",
+        "training_mode",
+        "training_mode_category",
+        "fallback_used",
+        "fallback_reason",
+        "legacy_paths_used",
         "replay_status",
         "failure_status",
         "candidate_status",
@@ -159,11 +164,14 @@ def _write_summary_tables(run_dir: Path, row: dict[str, Any]) -> dict[str, str]:
     lines = [
         f"# Closed-Loop Summary ({row.get('run_id')})",
         "",
-        "| run_id | status | replay | failure | candidate | arena | recommendation | promote | cand_score | champ_score | delta | win_rate | invalid | lineage_health | curriculum | triage |",
-        "|---|---|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---|---|---|",
-        "| {run_id} | {status} | {replay_status} | {failure_status} | {candidate_status} | {arena_status} | {recommendation} | {recommend_promotion} | {candidate_score:.6f} | {champion_score:.6f} | {score_delta:.6f} | {candidate_win_rate:.6f} | {candidate_invalid_action_rate:.6f} | {lineage_health_status} | {curriculum_enabled} | {triage_status} |".format(
+        "| run_id | status | training_mode | category | fallback | replay | failure | candidate | arena | recommendation | promote | cand_score | champ_score | delta | win_rate | invalid | lineage_health | curriculum | triage |",
+        "|---|---|---|---|---|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---|---|---|",
+        "| {run_id} | {status} | {training_mode} | {training_mode_category} | {fallback_used} | {replay_status} | {failure_status} | {candidate_status} | {arena_status} | {recommendation} | {recommend_promotion} | {candidate_score:.6f} | {champion_score:.6f} | {score_delta:.6f} | {candidate_win_rate:.6f} | {candidate_invalid_action_rate:.6f} | {lineage_health_status} | {curriculum_enabled} | {triage_status} |".format(
             run_id=row.get("run_id"),
             status=row.get("status"),
+            training_mode=row.get("training_mode"),
+            training_mode_category=row.get("training_mode_category"),
+            fallback_used=str(bool(row.get("fallback_used"))).lower(),
             replay_status=row.get("replay_status"),
             failure_status=row.get("failure_status"),
             candidate_status=row.get("candidate_status"),
@@ -328,6 +336,15 @@ def run_closed_loop(
         quick=bool(quick or candidate_cfg.get("quick")),
         dry_run=bool(dry_run),
     )
+    training_mode = str(candidate_summary.get("training_mode") or "")
+    training_mode_category = str(candidate_summary.get("training_mode_category") or "")
+    fallback_used = bool(candidate_summary.get("fallback_used"))
+    fallback_reason = str(candidate_summary.get("fallback_reason") or "")
+    legacy_paths_used = [
+        str(item)
+        for item in (candidate_summary.get("legacy_paths_used") or [])
+        if str(item).strip()
+    ]
     write_json(
         run_dir / "candidate_train_ref.json",
         {
@@ -626,6 +643,11 @@ def run_closed_loop(
     row = {
         "run_id": chosen_run_id,
         "status": "ok" if recommendation in {"promote", "observe", "reject"} else "stub",
+        "training_mode": training_mode,
+        "training_mode_category": training_mode_category,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "legacy_paths_used": ",".join(legacy_paths_used),
         "replay_status": str(replay_summary.get("status") or "stub"),
         "failure_status": str(failure_summary.get("status") or "skipped"),
         "candidate_status": str(candidate_summary.get("status") or "stub"),
@@ -653,6 +675,11 @@ def run_closed_loop(
         "generated_at": now_iso(),
         "run_id": chosen_run_id,
         "status": row["status"],
+        "training_mode": training_mode,
+        "training_mode_category": training_mode_category,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "legacy_paths_used": legacy_paths_used,
         "config_path": str(cfg_path),
         "run_dir": str(run_dir),
         "quick": bool(quick),
@@ -675,6 +702,11 @@ def run_closed_loop(
         "status": row["status"],
         "run_id": chosen_run_id,
         "run_dir": str(run_dir),
+        "training_mode": training_mode,
+        "training_mode_category": training_mode_category,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "legacy_paths_used": legacy_paths_used,
         "run_manifest": str(run_dir / "run_manifest.json"),
         "promotion_decision": str(run_dir / "promotion_decision.json"),
         "summary_table_json": summary_paths["json"],

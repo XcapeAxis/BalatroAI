@@ -1,10 +1,18 @@
 {
   "schema": "p40_candidate_train_config_v1",
-  "mode": "bc_finetune",
+  "candidate_modes": [
+    "rl_ppo_lite",
+    "selfsup_warm_bc"
+  ],
+  "allow_legacy_fallback": false,
+  "legacy_fallback_modes": [
+    "bc_finetune"
+  ],
   "output": {
     "artifacts_root": "docs/artifacts/p40/candidate_train"
   },
   "replay_mix_manifest": "",
+  "rl_config": "configs/experiments/p42_rl_nightly.yaml",
   "seeds": [
     "AAAAAAA",
     "BBBBBBB",
