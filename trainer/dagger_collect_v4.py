@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""LEGACY BASELINE: DAgger v4 wrapper.
+
+Intended use: baseline/probe collection and compatibility checks.
+Not part of the default mainline self-supervised + RL path.
+"""
+
 if __package__ is None or __package__ == "":
     import sys
     from pathlib import Path
@@ -18,7 +24,10 @@ from trainer.utils import timestamp
 
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="P19 DAgger v4 wrapper (failure-prioritized + source-policy summary).")
+    p = argparse.ArgumentParser(
+        description="LEGACY BASELINE: P19 DAgger v4 wrapper (failure-prioritized + source-policy summary).",
+        epilog="Use for legacy baseline probing only; this path is not default mainline training.",
+    )
     p.add_argument("--from-failure-buckets", required=True)
     p.add_argument("--backend", choices=["sim"], default="sim")
     p.add_argument("--out", required=True)

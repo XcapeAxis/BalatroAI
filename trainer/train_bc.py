@@ -1,4 +1,10 @@
-﻿if __package__ is None or __package__ == "":
+﻿"""LEGACY BASELINE: behavior-cloning trainer.
+
+Intended use: baseline comparison, warm-start experiments, and debugging probes.
+This path remains runnable but is not the default mainline training route.
+"""
+
+if __package__ is None or __package__ == "":
     import sys
     from pathlib import Path
 
@@ -30,7 +36,10 @@ def _require_torch():
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train behavior cloning policy from rollout jsonl (hand + shop heads).")
+    parser = argparse.ArgumentParser(
+        description="LEGACY BASELINE: train BC policy from rollout jsonl (hand + shop heads).",
+        epilog="Use for baseline/warm-start/debug only; mainline training uses self-supervised + RL candidate pipelines.",
+    )
     parser.add_argument("--train-jsonl", required=True, help="Training dataset jsonl path.")
     parser.add_argument("--val-jsonl", default=None, help="Validation dataset path. If omitted, auto-split train.")
     parser.add_argument("--epochs", type=int, default=5)
@@ -448,3 +457,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+

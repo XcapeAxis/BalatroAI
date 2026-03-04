@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""LEGACY BASELINE: DAgger data collection.
+
+Intended use: baseline refresh, warm-start, debugging, and probe datasets.
+Not part of the default mainline self-supervised + RL training path.
+"""
+
 if __package__ is None or __package__ == "":
     import sys
     from pathlib import Path
@@ -236,7 +242,10 @@ def _macro_progress_action(state: dict[str, Any], seed: str) -> dict[str, Any]:
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Collect DAgger dataset from real shadow session + sim teacher.")
+    parser = argparse.ArgumentParser(
+        description="LEGACY BASELINE: collect DAgger dataset from real shadow session + sim teacher.",
+        epilog="Use for baseline/probe workflows only; this path is no longer default mainline training.",
+    )
     parser.add_argument("--session", default="", help="session jsonl produced by record_real_session.py")
     parser.add_argument("--from-failure-buckets", default="", help="Optional failure bucket json for prioritized sampling.")
     parser.add_argument("--backend", choices=["sim"], default="sim")

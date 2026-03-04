@@ -41,6 +41,7 @@ param(
   [switch]$RunP32,
   [switch]$RunP37,
   [switch]$RunP38,
+  [switch]$RunLegacySmoke,
   [switch]$RequireMainBranch,
   [string]$P21Timestamp = ""
 )
@@ -116,6 +117,10 @@ if ($RunP37) {
 }
 if ($RunP38) {
   $RunP37 = $true
+}
+if ($RunP22 -and -not $RunLegacySmoke) {
+  # P43: keep a minimal legacy baseline health check, but avoid full BC/DAgger runs by default.
+  $RunLegacySmoke = $true
 }
 
 function Invoke-GitCapture([string[]]$GitArgs) {
@@ -1047,6 +1052,33 @@ if ($RunP22) {
       if (Test-Path $candidateP22) { $RunP22LatestReport = $candidateP22 }
     }
   }
+}
+
+if ($RunLegacySmoke) {
+  $legacyStamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $legacyRoot = Join-Path $ProjectRoot "docs/artifacts/legacy_smoke"
+  if (-not (Test-Path $legacyRoot)) { New-Item -ItemType Directory -Path $legacyRoot -Force | Out-Null }
+  $legacyDir = Join-Path $legacyRoot $legacyStamp
+  New-Item -ItemType Directory -Path $legacyDir -Force | Out-Null
+
+  Run-PyStrict -Label "LegacySmoke-train-bc-help" -PyArgs @("-B", "trainer/train_bc.py", "--help") | Out-Null
+  Run-PyStrict -Label "LegacySmoke-dagger-help" -PyArgs @("-B", "trainer/dagger_collect.py", "--help") | Out-Null
+  Run-PyStrict -Label "LegacySmoke-dagger-v4-help" -PyArgs @("-B", "trainer/dagger_collect_v4.py", "--help") | Out-Null
+
+  $legacyReport = [ordered]@{
+    schema = "legacy_baseline_smoke_v1"
+    generated_at = (Get-Date).ToString("o")
+    status = "PASS"
+    checks = @(
+      @{ id = "train_bc_help"; status = "PASS"; command = "python -B trainer/train_bc.py --help" },
+      @{ id = "dagger_collect_help"; status = "PASS"; command = "python -B trainer/dagger_collect.py --help" },
+      @{ id = "dagger_collect_v4_help"; status = "PASS"; command = "python -B trainer/dagger_collect_v4.py --help" }
+    )
+    note = "Legacy baseline health check only; BC/DAgger are not mainline training gates."
+  }
+  $legacyReportPath = Join-Path $legacyDir "report_legacy_smoke.json"
+  Write-JsonFile -Path $legacyReportPath -Object $legacyReport
+  Write-Host ("[LegacySmoke] PASS artifact=" + $legacyReportPath)
 }
 
 if ($RunP23) {
