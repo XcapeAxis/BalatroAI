@@ -4,6 +4,8 @@ param(
   [switch]$DryRun,
   [switch]$Quick,
   [switch]$Nightly,
+  [switch]$IncludeLegacy,
+  [switch]$LegacyOnly,
   [switch]$Resume,
   [switch]$KeepIntermediate,
   [switch]$VerboseLogs,
@@ -36,6 +38,8 @@ $args = @(
 
 if ($DryRun) { $args += "--dry-run" }
 if ($Nightly) { $args += "--nightly" }
+if ($IncludeLegacy) { $args += "--include-legacy" }
+if ($LegacyOnly) { $args += "--legacy-only" }
 if ($Resume) { $args += "--resume" }
 if ($KeepIntermediate) { $args += "--keep-intermediate" }
 if ($VerboseLogs) { $args += "--verbose" }
@@ -45,8 +49,39 @@ if ($SeedLimit -gt 0) { $args += @("--seed-limit", "$SeedLimit") }
 if (-not [string]::IsNullOrWhiteSpace($Seeds)) { $args += @("--seeds", $Seeds) }
 
 if ($Quick) {
-  if (-not ($args -contains "--only")) { $args += @("--only", "quick_baseline,quick_candidate,quick_selfsup_pretrain,quick_selfsup_p33,quick_selfsup_future_value,quick_selfsup_action_type,quick_ssl_pretrain_v1,quick_ssl_probe_v1,rl_ppo_smoke,p39_policy_arena_smoke,p40_closed_loop_smoke,p41_closed_loop_v2_smoke,p42_rl_candidate_smoke") }
+  if (-not ($args -contains "--only")) {
+    $quickIds = @(
+      "quick_baseline",
+      "quick_candidate",
+      "quick_selfsup_pretrain",
+      "quick_selfsup_p33",
+      "quick_selfsup_future_value",
+      "quick_selfsup_action_type",
+      "quick_ssl_pretrain_v1",
+      "quick_ssl_probe_v1",
+      "rl_ppo_smoke",
+      "p39_policy_arena_smoke",
+      "p40_closed_loop_smoke",
+      "p41_closed_loop_v2_smoke",
+      "p42_rl_candidate_smoke"
+    )
+    if ($IncludeLegacy -or $LegacyOnly) {
+      $quickIds += @("legacy_bc_dagger_probe")
+    }
+    if ($LegacyOnly) {
+      $quickIds = @("legacy_bc_dagger_probe")
+    }
+    $args += @("--only", ($quickIds -join ","))
+  }
   if ($SeedLimit -le 0) { $args += @("--seed-limit", "2") }
+}
+
+if ($LegacyOnly) {
+  Write-Host "[P22] Selected categories: legacy_baseline"
+} elseif ($IncludeLegacy) {
+  Write-Host "[P22] Selected categories: mainline + legacy_baseline"
+} else {
+  Write-Host "[P22] Selected categories: mainline"
 }
 
 Write-Host ("[P22] repo_root: " + $ProjectRoot)

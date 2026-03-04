@@ -178,6 +178,25 @@
           ]
         }
       ]
+    },
+    "legacy_bc_dagger_probe": {
+      "description": "Legacy BC/DAgger baseline probes (non-default)",
+      "variants": [
+        {
+          "id": "legacy_bc_dagger_probe",
+          "algo": "bc_dagger_probe",
+          "seeds": [
+            "AAAAAAA"
+          ]
+        },
+        {
+          "id": "legacy_bc_dagger_smoke",
+          "algo": "bc_dagger_smoke",
+          "seeds": [
+            "AAAAAAA"
+          ]
+        }
+      ]
     }
   },
   "matrix": [
@@ -185,6 +204,8 @@
       "id": "quick_baseline",
       "name": "quick_baseline",
       "backend": "sim",
+      "category": "required_validation",
+      "default_enabled": true,
       "policy": "baseline",
       "seed_mode": "regression_fixed",
       "seed_set_name": "regression_smoke",
@@ -205,6 +226,8 @@
       "id": "quick_candidate",
       "name": "quick_candidate",
       "backend": "sim",
+      "category": "required_validation",
+      "default_enabled": true,
       "policy": "candidate",
       "seed_mode": "nightly",
       "seed_set_name": "eval_default",
@@ -1006,6 +1029,78 @@
         "timeout_sec": 10800,
         "candidate_policy": "model_policy",
         "champion_policy": "heuristic_baseline"
+      }
+    },
+    {
+      "id": "legacy_bc_dagger_probe",
+      "name": "legacy_bc_dagger_probe",
+      "backend": "sim",
+      "policy": "legacy_baseline",
+      "experiment_type": "legacy_bc_dagger_probe",
+      "category": "legacy_baseline",
+      "default_enabled": false,
+      "seed_mode": "regression_fixed",
+      "seed_set_name": "regression_smoke",
+      "seeds": [
+        "AAAAAAA"
+      ],
+      "gate_flag": "RunP22",
+      "modes": {
+        "quick": true,
+        "gate": true,
+        "nightly": false
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "sanity_compile": [
+        "trainer/train_bc.py",
+        "trainer/dagger_collect.py",
+        "trainer/dagger_collect_v4.py"
+      ],
+      "eval": {
+        "mode": "synthetic",
+        "primary_metric_bias": -0.015
+      }
+    },
+    {
+      "id": "legacy_bc_dagger_smoke",
+      "name": "legacy_bc_dagger_smoke",
+      "backend": "sim",
+      "policy": "legacy_baseline",
+      "experiment_type": "legacy_bc_dagger_smoke",
+      "category": "legacy_baseline",
+      "default_enabled": false,
+      "seed_mode": "regression_fixed",
+      "seed_set_name": "regression_smoke",
+      "seeds": [
+        "AAAAAAA"
+      ],
+      "gate_flag": "RunP22",
+      "modes": {
+        "quick": false,
+        "gate": true,
+        "nightly": false
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "sanity_compile": [
+        "trainer/train_bc.py",
+        "trainer/dagger_collect.py",
+        "trainer/dagger_collect_v4.py"
+      ],
+      "eval": {
+        "mode": "synthetic",
+        "primary_metric_bias": -0.02
       }
     }
   ],

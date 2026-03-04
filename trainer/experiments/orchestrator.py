@@ -35,6 +35,14 @@ from trainer.experiments.seed_policy import (
     read_seed_policy,
     validate_seed_policy,
 )
+from trainer.experiments.training_modes import (
+    MODE_CATEGORY_EXPERIMENTAL,
+    MODE_CATEGORY_LEGACY_BASELINE,
+    MODE_CATEGORY_MAINLINE,
+)
+
+
+MODE_CATEGORY_REQUIRED_VALIDATION = "required_validation"
 
 
 def now_iso() -> str:
@@ -107,6 +115,80 @@ def parse_csv_list(text: str) -> set[str]:
     if not text:
         return set()
     return {part.strip() for part in text.split(",") if part.strip()}
+
+
+def normalize_experiment_category(exp: dict[str, Any]) -> str:
+    raw = str(exp.get("category") or "").strip().lower()
+    if raw:
+        return raw
+
+    exp_id = str(exp.get("id") or "").strip().lower()
+    exp_type = str(exp.get("experiment_type") or "standard").strip().lower()
+    policy = str(exp.get("policy") or "").strip().lower()
+    joined = " ".join([exp_id, exp_type, policy])
+
+    if exp_id in {"quick_baseline", "quick_candidate"}:
+        return MODE_CATEGORY_REQUIRED_VALIDATION
+    if any(token in joined for token in ("bc", "dagger", "legacy")):
+        return MODE_CATEGORY_LEGACY_BASELINE
+    if exp_type in {
+        "selfsup_pretrain",
+        "selfsup_p33",
+        "pretrain_repr",
+        "self_supervised",
+        "selfsup_stub",
+        "selfsup_future_value",
+        "selfsup_action_type",
+        "ssl_pretrain",
+        "ssl_probe",
+        "rl_selfplay",
+        "rl_selfplay_v1",
+        "long_consistency",
+        "long_horizon_consistency",
+        "policy_arena",
+        "policy_arena_v1",
+        "arena",
+        "closed_loop_improvement",
+        "closed_loop",
+        "p40_closed_loop",
+        "closed_loop_improvement_v2",
+        "p41_closed_loop_v2",
+        "closed_loop_v2",
+        "closed_loop_rl_candidate",
+        "rl_candidate_pipeline",
+        "p42_rl_candidate",
+        "p42_rl_candidate_pipeline",
+    }:
+        return MODE_CATEGORY_MAINLINE
+    if exp_type == "standard" and policy in {"baseline", "candidate"}:
+        return MODE_CATEGORY_REQUIRED_VALIDATION
+    return MODE_CATEGORY_EXPERIMENTAL
+
+
+def resolve_experiment_default_enabled(exp: dict[str, Any], *, category: str) -> bool:
+    raw = exp.get("default_enabled")
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, (int, float)):
+        return bool(raw)
+    if isinstance(raw, str) and raw.strip():
+        token = raw.strip().lower()
+        if token in {"1", "true", "yes", "on"}:
+            return True
+        if token in {"0", "false", "no", "off"}:
+            return False
+    return category != MODE_CATEGORY_LEGACY_BASELINE
+
+
+def attach_experiment_mode_metadata(experiments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for exp in experiments:
+        copied = copy.deepcopy(exp)
+        category = normalize_experiment_category(copied)
+        copied["category"] = category
+        copied["default_enabled"] = resolve_experiment_default_enabled(copied, category=category)
+        out.append(copied)
+    return out
 
 
 def current_git_commit(repo_root: Path) -> str:
@@ -1932,6 +2014,8 @@ def _run_long_consistency_seed_experiment(
 def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, exp_total: int) -> dict[str, Any]:
     exp_id = str(exp["id"])
     exp_type = str(exp.get("experiment_type") or "standard").strip().lower()
+    exp_category = str(exp.get("category") or normalize_experiment_category(exp)).strip().lower()
+    exp_default_enabled = resolve_experiment_default_enabled(exp, category=exp_category)
     exp_dir = ctx.run_root / exp_id
     exp_dir.mkdir(parents=True, exist_ok=True)
     status_path = exp_dir / "status.json"
@@ -1983,6 +2067,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "seeds_used": list(seeds),
             "final_win_rate": 0.0,
             "final_loss": 0.0,
+            "category": exp_category,
+            "default_enabled": exp_default_enabled,
         }
         write_json(status_path, payload)
         emit_progress(
@@ -2019,6 +2105,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "seeds_used": payload["seeds_used"],
             "final_win_rate": payload["final_win_rate"],
             "final_loss": payload["final_loss"],
+            "category": exp_category,
+            "default_enabled": exp_default_enabled,
         }
 
     if ctx.resume:
@@ -2057,6 +2145,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                 "final_win_rate": old.get("final_win_rate"),
                 "final_loss": old.get("final_loss"),
                 "resumed": True,
+                "category": exp_category,
+                "default_enabled": exp_default_enabled,
             }
 
     seeds_payload = resolve_experiment_seeds(
@@ -2089,6 +2179,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "seed_hash": seeds_payload.get("seed_hash"),
         "seed_policy_config": ctx.seed_policy_config,
         "experiment_type": exp_type,
+        "experiment_category": exp_category,
+        "default_enabled": exp_default_enabled,
         "experiment": exp,
     }
     if exp_type in {
@@ -2254,6 +2346,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "final_metrics": {},
             "final_win_rate": 0.0,
             "final_loss": 0.0,
+            "category": exp_category,
+            "default_enabled": exp_default_enabled,
         }
         write_json(status_path, payload)
         emit_progress(
@@ -2290,6 +2384,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "seeds_used": list(seeds),
             "final_win_rate": 0.0,
             "final_loss": 0.0,
+            "category": exp_category,
+            "default_enabled": exp_default_enabled,
         }
 
     stages = exp.get("stages") or {}
@@ -2903,6 +2999,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "final_metrics": final_seed_metrics,
         "elapsed_sec": elapsed_total,
         "run_dir": str(exp_dir),
+        "category": exp_category,
+        "default_enabled": exp_default_enabled,
     }
     write_json(exp_dir / "stage_results.json", stage_results)
     write_json(exp_dir / "exp_summary.json", exp_summary)
@@ -2931,6 +3029,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "final_metrics": final_seed_metrics,
             "final_win_rate": final_win_rate,
             "final_loss": final_loss,
+            "category": exp_category,
+            "default_enabled": exp_default_enabled,
         },
     )
     write_json(
@@ -2948,6 +3048,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "seeds": list(seeds),
             "final_metrics": final_seed_metrics,
             "final_loss": final_loss,
+            "category": exp_category,
+            "default_enabled": exp_default_enabled,
         },
     )
 
@@ -3008,6 +3110,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "seeds_used": list(seeds),
         "final_win_rate": final_win_rate,
         "final_loss": final_loss,
+        "category": exp_category,
+        "default_enabled": exp_default_enabled,
     }
 
 
@@ -3032,19 +3136,42 @@ def resolve_run_root(out_root: Path, resume: bool) -> tuple[str, Path]:
 def select_experiments_for_mode(
     experiments: list[dict[str, Any]],
     mode: str,
+    *,
+    include_legacy: bool = False,
+    legacy_only: bool = False,
 ) -> list[dict[str, Any]]:
+    annotated = attach_experiment_mode_metadata(experiments)
     mode = str(mode or "gate").lower()
     if mode == "quick":
-        picked = [e for e in experiments if bool((e.get("modes") or {}).get("quick", False))]
-        return picked if picked else experiments[:3]
-    if mode == "milestone":
-        picked = [e for e in experiments if bool((e.get("modes") or {}).get("milestone", False))]
-        return picked if picked else experiments
-    if mode == "nightly":
-        picked = [e for e in experiments if bool((e.get("modes") or {}).get("nightly", True))]
-        return picked if picked else experiments
-    picked = [e for e in experiments if bool((e.get("modes") or {}).get("gate", True))]
-    return picked if picked else experiments
+        picked = [e for e in annotated if bool((e.get("modes") or {}).get("quick", False))]
+        if not picked:
+            picked = annotated[:3]
+    elif mode == "milestone":
+        picked = [e for e in annotated if bool((e.get("modes") or {}).get("milestone", False))]
+        if not picked:
+            picked = annotated
+    elif mode == "nightly":
+        picked = [e for e in annotated if bool((e.get("modes") or {}).get("nightly", True))]
+        if not picked:
+            picked = annotated
+    else:
+        picked = [e for e in annotated if bool((e.get("modes") or {}).get("gate", True))]
+        if not picked:
+            picked = annotated
+
+    filtered: list[dict[str, Any]] = []
+    for exp in picked:
+        category = str(exp.get("category") or MODE_CATEGORY_EXPERIMENTAL).strip().lower()
+        enabled = bool(exp.get("default_enabled"))
+        if legacy_only and category != MODE_CATEGORY_LEGACY_BASELINE:
+            continue
+        if not legacy_only and category == MODE_CATEGORY_LEGACY_BASELINE and not include_legacy:
+            continue
+        if not enabled and category != MODE_CATEGORY_LEGACY_BASELINE:
+            continue
+        filtered.append(exp)
+
+    return filtered
 
 
 def parse_args() -> argparse.Namespace:
@@ -3065,6 +3192,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seeds", default="")
     p.add_argument("--seed-policy-config", default="")
     p.add_argument("--verbose", action="store_true")
+    p.add_argument("--include-legacy", action="store_true", help="Include legacy_baseline experiments.")
+    p.add_argument("--legacy-only", action="store_true", help="Run only legacy_baseline experiments.")
     return p.parse_args()
 
 
@@ -3076,6 +3205,10 @@ def main() -> int:
     mode = str(args.mode or "gate").lower()
     if bool(args.nightly):
         mode = "nightly"
+    include_legacy = bool(args.include_legacy)
+    legacy_only = bool(args.legacy_only)
+    if legacy_only:
+        include_legacy = True
 
     config_path = (repo_root / args.config).resolve()
     out_root = (repo_root / args.out_root).resolve()
@@ -3091,7 +3224,12 @@ def main() -> int:
             raise SystemExit("seed policy validation failed")
 
     experiments = build_matrix(cfg)
-    experiments = select_experiments_for_mode(experiments, mode=mode)
+    experiments = select_experiments_for_mode(
+        experiments,
+        mode=mode,
+        include_legacy=include_legacy,
+        legacy_only=legacy_only,
+    )
     only_set = parse_csv_list(args.only)
     exclude_set = parse_csv_list(args.exclude)
 
@@ -3119,6 +3257,8 @@ def main() -> int:
     queue_state = {
         str(exp["id"]): {
             "exp_id": str(exp["id"]),
+            "category": str(exp.get("category") or ""),
+            "default_enabled": bool(exp.get("default_enabled")),
             "stage": "queued",
             "status": "queued",
             "seed": "-",
@@ -3169,6 +3309,8 @@ def main() -> int:
         plan_experiments.append(
             {
                 "exp_id": str(exp.get("id")),
+                "category": str(exp.get("category") or ""),
+                "default_enabled": bool(exp.get("default_enabled")),
                 "seed_mode": str(exp.get("seed_mode") or "regression_fixed"),
                 "seed_set_name": seeds_payload.get("seed_set_name"),
                 "seed_policy_version": seeds_payload.get("seed_policy_version"),
@@ -3183,6 +3325,8 @@ def main() -> int:
         "generated_at": now_iso(),
         "run_id": run_id,
         "mode": mode,
+        "include_legacy": include_legacy,
+        "legacy_only": legacy_only,
         "config_path": str(config_path),
         "out_root": str(out_root),
         "run_root": str(run_root),
@@ -3200,6 +3344,12 @@ def main() -> int:
             else str((_legacy_seed_policy_block(cfg).get("version") or "legacy.p22"))
         ),
         "cli_seed_override": cli_seed_override or [],
+        "selected_categories": sorted(
+            {
+                str(exp.get("category") or MODE_CATEGORY_EXPERIMENTAL)
+                for exp in experiments
+            }
+        ),
         "experiments": [e["id"] for e in experiments],
         "experiments_with_seeds": plan_experiments,
         "budget": budget_cfg,
@@ -3226,6 +3376,8 @@ def main() -> int:
             rows.append(
                 {
                     "exp_id": exp_id,
+                    "category": str(exp.get("category") or MODE_CATEGORY_EXPERIMENTAL),
+                    "default_enabled": bool(exp.get("default_enabled")),
                     "status": "budget_cut",
                     "mean": 0.0,
                     "std": 0.0,

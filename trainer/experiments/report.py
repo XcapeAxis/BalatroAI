@@ -25,6 +25,8 @@ def write_summary_tables(
 
     fieldnames = [
         "exp_id",
+        "category",
+        "default_enabled",
         "status",
         "seed_set_name",
         "seed_hash",
@@ -58,6 +60,8 @@ def write_summary_tables(
             writer.writerow(
                 {
                     "exp_id": row.get("exp_id"),
+                    "category": row.get("category"),
+                    "default_enabled": row.get("default_enabled"),
                     "status": row.get("status"),
                     "seed_set_name": row.get("seed_set_name"),
                     "seed_hash": row.get("seed_hash"),
@@ -90,13 +94,15 @@ def write_summary_tables(
     md_lines = [
         f"# P23 Summary ({run_id})",
         "",
-        "| exp_id | status | seed_set | mean | std | avg_reward | reward_std | best_episode_reward | avg_ante | median_ante | win_rate | final_win_rate | final_loss | hand_top1 | hand_top3 | shop_top1 | illegal_rate | seeds | failures | elapsed_sec |",
-        "|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| exp_id | category | default_enabled | status | seed_set | mean | std | avg_reward | reward_std | best_episode_reward | avg_ante | median_ante | win_rate | final_win_rate | final_loss | hand_top1 | hand_top3 | shop_top1 | illegal_rate | seeds | failures | elapsed_sec |",
+        "|---|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
         md_lines.append(
-            "| {exp} | {status} | {seed_set} | {mean} | {std} | {avg_reward} | {reward_std} | {best_episode_reward} | {avg_ante} | {median_ante} | {win_rate} | {final_win_rate} | {final_loss} | {hand_top1} | {hand_top3} | {shop_top1} | {illegal_rate} | {seeds} | {fails} | {elapsed} |".format(
+            "| {exp} | {category} | {default_enabled} | {status} | {seed_set} | {mean} | {std} | {avg_reward} | {reward_std} | {best_episode_reward} | {avg_ante} | {median_ante} | {win_rate} | {final_win_rate} | {final_loss} | {hand_top1} | {hand_top3} | {shop_top1} | {illegal_rate} | {seeds} | {fails} | {elapsed} |".format(
                 exp=row.get("exp_id"),
+                category=row.get("category"),
+                default_enabled=str(bool(row.get("default_enabled"))).lower(),
                 status=row.get("status"),
                 seed_set=row.get("seed_set_name"),
                 mean=_safe_float(row.get("mean")),
