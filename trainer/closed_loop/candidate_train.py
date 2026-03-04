@@ -31,6 +31,7 @@ from trainer.closed_loop.replay_manifest import (
     write_json,
 )
 from trainer.closed_loop.curriculum_scheduler import build_curriculum_plan, build_phase_allocations
+from trainer.rl.ppo_lite import run_ppo_lite_training
 
 
 def _read_yaml_or_json(path: Path) -> dict[str, Any]:
@@ -281,6 +282,95 @@ def run_candidate_training(
         seeds = seeds[:2]
     seeds_payload = build_seeds_payload(seeds, seed_policy_version="p40.candidate_train")
     write_json(run_dir / "seeds_used.json", seeds_payload)
+
+    if mode == "rl_ppo_lite":
+        curriculum_plan = {
+            "enabled": False,
+            "phase_count": 0,
+            "phases": [],
+            "seeds": list(seeds),
+            "reason": "not_applicable_for_rl_ppo_lite",
+        }
+        write_json(run_dir / "curriculum_plan.json", curriculum_plan)
+        curriculum_applied_path = run_dir / "curriculum_applied.jsonl"
+        curriculum_applied_path.parent.mkdir(parents=True, exist_ok=True)
+        if not curriculum_applied_path.exists():
+            curriculum_applied_path.write_text("", encoding="utf-8")
+
+        rl_config_path = str(cfg.get("rl_config") or "").strip()
+        rl_config_payload: dict[str, Any] | None = None
+        if rl_config_path:
+            resolved_rl = to_abs_path(repo_root, rl_config_path)
+            if resolved_rl.exists():
+                rl_config_payload = _read_yaml_or_json(resolved_rl)
+        training_cfg = cfg.get("training") if isinstance(cfg.get("training"), dict) else {}
+        timeout_sec = int(training_cfg.get("timeout_sec") or 3600)
+
+        rl_summary = run_ppo_lite_training(
+            config_path=(to_abs_path(repo_root, rl_config_path) if rl_config_path else None),
+            config=rl_config_payload,
+            out_dir=run_dir / "rl_train",
+            run_id=f"{chosen_run_id}-rl",
+            quick=bool(quick),
+            dry_run=bool(dry_run),
+            seeds_override=seeds,
+        )
+        metrics_payload = read_json(Path(str(rl_summary.get("metrics") or "")))
+        if not isinstance(metrics_payload, dict):
+            metrics_payload = {
+                "schema": "p42_candidate_train_metrics_v1",
+                "generated_at": now_iso(),
+                "run_id": chosen_run_id,
+                "status": str(rl_summary.get("status") or "stub"),
+                "mode": mode,
+                "seed_count": len(seeds),
+                "ok_seed_count": 0,
+                "mean_reward": 0.0,
+                "invalid_action_rate": 0.0,
+                "final_loss": 0.0,
+                "candidate_checkpoint": str(rl_summary.get("best_checkpoint") or ""),
+            }
+        status = str(rl_summary.get("status") or "stub")
+        best_checkpoint = Path(str(rl_summary.get("best_checkpoint") or "")) if str(rl_summary.get("best_checkpoint") or "").strip() else None
+        best_checkpoint_txt = run_dir / "best_checkpoint.txt"
+        best_checkpoint_txt.write_text((str(best_checkpoint) if best_checkpoint else "") + "\n", encoding="utf-8")
+
+        manifest = {
+            "schema": "p42_candidate_train_manifest_v1",
+            "generated_at": now_iso(),
+            "run_id": chosen_run_id,
+            "status": status,
+            "mode": mode,
+            "config_path": str(cfg_path),
+            "run_dir": str(run_dir),
+            "quick": bool(quick),
+            "dry_run": bool(dry_run),
+            "replay_mix_manifest": str(cfg.get("replay_mix_manifest") or ""),
+            "replay_selected_entries": 0,
+            "curriculum_plan": curriculum_plan,
+            "curriculum_config_path": "",
+            "curriculum_applied": str(curriculum_applied_path),
+            "rl_train_summary": rl_summary,
+            "rl_config_path": str(to_abs_path(repo_root, rl_config_path)) if rl_config_path else "",
+            "candidate_checkpoint": str(best_checkpoint) if best_checkpoint else "",
+            "metrics_ref": str(run_dir / "metrics.json"),
+            "timeout_sec": int(timeout_sec),
+        }
+        write_json(run_dir / "candidate_train_manifest.json", manifest)
+        write_json(run_dir / "metrics.json", metrics_payload)
+        return {
+            "status": status,
+            "run_id": chosen_run_id,
+            "run_dir": str(run_dir),
+            "candidate_train_manifest": str(run_dir / "candidate_train_manifest.json"),
+            "metrics": str(run_dir / "metrics.json"),
+            "best_checkpoint": str(best_checkpoint) if best_checkpoint else "",
+            "seeds_used": str(run_dir / "seeds_used.json"),
+            "curriculum_plan": str(run_dir / "curriculum_plan.json"),
+            "curriculum_applied": str(curriculum_applied_path),
+            "reward_config": str((run_dir / "rl_train" / "reward_config.json")),
+            "warnings_log": str((run_dir / "rl_train" / "warnings.log")),
+        }
 
     train_cfg = cfg.get("training") if isinstance(cfg.get("training"), dict) else {}
     epochs = int(train_cfg.get("epochs") or 1)
