@@ -4,7 +4,13 @@ import json
 from pathlib import Path
 from typing import Any
 
-from trainer.closed_loop.replay_manifest import count_jsonl_rows, read_json, read_jsonl
+from trainer.closed_loop.replay_manifest import (
+    count_jsonl_rows,
+    infer_generation_method,
+    infer_source_run_id,
+    read_json,
+    read_jsonl,
+)
 
 
 SUPPORTED_SOURCE_TYPES = {
@@ -65,6 +71,54 @@ def _detect_format_hint(path: Path) -> str:
     return "jsonl_unknown"
 
 
+def _peek_jsonl_row(path: Path) -> dict[str, Any] | None:
+    rows = read_jsonl(path, max_rows=1)
+    if rows and isinstance(rows[0], dict):
+        return rows[0]
+    return None
+
+
+def _derive_lineage_fields(
+    *,
+    source_type: str,
+    path: Path,
+    preview_row: dict[str, Any] | None,
+    extra_meta: dict[str, Any] | None,
+) -> dict[str, Any]:
+    row = preview_row if isinstance(preview_row, dict) else {}
+    meta = extra_meta if isinstance(extra_meta, dict) else {}
+
+    source_seed = str(row.get("seed") or meta.get("seed") or "").strip()
+    episode_id = str(row.get("episode_id") or "").strip()
+    if not episode_id:
+        policy_id = str(row.get("policy_id") or "").strip()
+        episode_index = row.get("episode_index")
+        if policy_id and source_seed and episode_index is not None:
+            episode_id = f"{policy_id}|{source_seed}|{episode_index}"
+    step_id = row.get("step_id")
+    if step_id is None:
+        step_id = row.get("step_index")
+    if step_id is None:
+        step_id = row.get("t")
+
+    valid_for_training = row.get("valid_for_training")
+    if valid_for_training is None:
+        valid_for_training = meta.get("valid_for_training")
+    if valid_for_training is None:
+        valid_for_training = True
+    valid_for_training = bool(valid_for_training)
+
+    return {
+        "source_run_id": infer_source_run_id(path),
+        "source_seed": source_seed,
+        "episode_id": episode_id,
+        "step_id": step_id if step_id is not None else "",
+        "generation_method": infer_generation_method(source_type, str(path), meta),
+        "valid_for_training": valid_for_training,
+        "preview_row": row if row else {},
+    }
+
+
 def _jsonl_record(
     path: Path,
     *,
@@ -73,7 +127,14 @@ def _jsonl_record(
     source_id: str,
     extra_meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    preview = _peek_jsonl_row(path)
     line_count, truncated = count_jsonl_rows(path, max_scan_rows=max(0, int(scan_limit)))
+    lineage = _derive_lineage_fields(
+        source_type=source_type,
+        path=path,
+        preview_row=preview,
+        extra_meta=extra_meta,
+    )
     return {
         "source_type": source_type,
         "source_id": source_id,
@@ -82,6 +143,13 @@ def _jsonl_record(
         "estimated_count": bool(truncated),
         "format_hint": _detect_format_hint(path),
         "metadata": extra_meta or {},
+        "source_run_id": str(lineage.get("source_run_id") or ""),
+        "source_seed": str(lineage.get("source_seed") or ""),
+        "episode_id": str(lineage.get("episode_id") or ""),
+        "step_id": lineage.get("step_id") if lineage.get("step_id") is not None else "",
+        "generation_method": str(lineage.get("generation_method") or "unknown"),
+        "valid_for_training": bool(lineage.get("valid_for_training", True)),
+        "preview_row": lineage.get("preview_row") if isinstance(lineage.get("preview_row"), dict) else {},
     }
 
 

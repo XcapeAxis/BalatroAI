@@ -15,6 +15,12 @@ from typing import Any
 
 from sim.pybind.sim_env import SimEnvBackend
 from trainer import action_space, action_space_shop
+from trainer.common.slices import (
+    as_legacy_action_bucket,
+    as_legacy_ante_bucket,
+    as_legacy_risk_bucket,
+    compute_slice_labels,
+)
 from trainer.policy_arena.adapters import HeuristicAdapter, HybridAdapter, ModelAdapter, SearchAdapter
 from trainer.policy_arena.arena_metrics import summarize_bucket_metrics, summarize_policy_rows
 from trainer.policy_arena.arena_report import write_bucket_metrics, write_episode_records, write_summary_table
@@ -77,68 +83,11 @@ def _legal_actions_hint(state: dict[str, Any]) -> list[dict[str, Any]] | None:
     return None
 
 
-def _ante_bucket(state: dict[str, Any]) -> str:
-    ante = _safe_int(state.get("ante_num"), 0)
-    if ante <= 0:
-        round_num = _safe_int(state.get("round_num"), 1)
-        ante = max(1, ((round_num - 1) // 3) + 1)
-    if ante <= 2:
-        return "ante_1_2"
-    if ante <= 4:
-        return "ante_3_4"
-    return "ante_5_plus"
-
-
-def _risk_bucket(state: dict[str, Any]) -> str:
-    money = _safe_float(state.get("money"), 0.0)
-    round_info = state.get("round") if isinstance(state.get("round"), dict) else {}
-    hands_left = _safe_int(round_info.get("hands_left"), 0)
-    discards_left = _safe_int(round_info.get("discards_left"), 0)
-    if money <= 4.0 or hands_left <= 1 or discards_left <= 1:
-        return "resource_tight"
-    if money >= 15.0 and hands_left >= 2:
-        return "resource_relaxed"
-    return "resource_balanced"
-
-
-def _is_position_sensitive_state(state: dict[str, Any]) -> bool:
-    tags = state.get("tags") if isinstance(state.get("tags"), list) else []
-    joined_tags = " ".join([str(x).lower() for x in tags])
-    if any(k in joined_tags for k in ("left", "right", "position", "order")):
-        return True
-
-    jokers = state.get("jokers") if isinstance(state.get("jokers"), list) else []
-    for joker in jokers:
-        if not isinstance(joker, dict):
-            continue
-        key = str(joker.get("key") or joker.get("joker_id") or "").lower()
-        if any(k in key for k in ("photograph", "hanging_chad", "blueprint", "brainstorm")):
-            return True
-
-    consumables = (state.get("consumables") or {}).get("cards") if isinstance(state.get("consumables"), dict) else []
-    for card in consumables if isinstance(consumables, list) else []:
-        if not isinstance(card, dict):
-            continue
-        key = str(card.get("key") or "").lower()
-        if any(k in key for k in ("left", "right", "swap", "reorder")):
-            return True
-    return False
-
-
-def _action_bucket(action_type: str, phase: str) -> str:
-    at = str(action_type or "").upper()
-    ph = str(phase or "").upper()
-    if at in {"PLAY", "DISCARD"}:
-        return at
-    if at in {"SHOP_REROLL", "SHOP_BUY", "SELL", "NEXT_ROUND"} or ph == "SHOP":
-        return "SHOP"
-    if at in {"CONSUMABLE_USE"}:
-        return "CONSUMABLE"
-    if at in {"MOVE_HAND_CARD", "MOVE_JOKER", "SWAP_HAND_CARD", "SWAP_JOKER", "REORDER_HAND", "REORDER_JOKERS"}:
-        return "POSITION"
-    if at == "PACK_OPEN" or "PACK" in ph or "BOOSTER" in ph:
-        return "PACK"
-    return "OTHER"
+def _dominant_bucket_value(counts: dict[str, int]) -> str:
+    if not counts:
+        return "unknown"
+    ordered = sorted(counts.items(), key=lambda kv: (-int(kv[1]), kv[0]))
+    return str(ordered[0][0])
 
 
 def _build_policy_adapter(policy_id: str, *, model_path: str = "") -> BasePolicyAdapter:
@@ -201,9 +150,25 @@ def _run_episode(
     steps = 0
     for step_idx in range(max(1, int(max_steps))):
         phase = phase_from_obs(state)
-        bucket_counts["ante"][_ante_bucket(state)] += 1
-        bucket_counts["risk"][_risk_bucket(state)] += 1
-        bucket_counts["position_sensitive"]["yes" if _is_position_sensitive_state(state) else "no"] += 1
+        pre_action_slices = compute_slice_labels({"state": state, "phase": phase, "action_type": "WAIT"})
+        bucket_counts["ante"][as_legacy_ante_bucket(str(pre_action_slices.get("slice_stage") or "unknown"))] += 1
+        bucket_counts["risk"][as_legacy_risk_bucket(str(pre_action_slices.get("slice_resource_pressure") or "unknown"))] += 1
+        pos_token = pre_action_slices.get("slice_position_sensitive")
+        if pos_token is True:
+            bucket_counts["position_sensitive"]["yes"] += 1
+        elif pos_token is False:
+            bucket_counts["position_sensitive"]["no"] += 1
+        else:
+            bucket_counts["position_sensitive"]["unknown"] += 1
+        # Unified P41 slices (kept in addition to legacy buckets for backward compatibility).
+        for key in (
+            "slice_stage",
+            "slice_resource_pressure",
+            "slice_position_sensitive",
+            "slice_stateful_joker_present",
+        ):
+            token = str(pre_action_slices.get(key) if pre_action_slices.get(key) is not None else "unknown")
+            bucket_counts[key][token] += 1
 
         legal_actions = _legal_actions_hint(state)
         try:
@@ -217,7 +182,9 @@ def _run_episode(
         action = normalize_action(action, phase=phase)
         action_type = str(action.get("action_type") or "WAIT").upper()
         action_counter[action_type] += 1
-        bucket_counts["action_type"][_action_bucket(action_type, phase)] += 1
+        step_slices = compute_slice_labels({"state": state, "phase": phase, "action_type": action_type})
+        bucket_counts["action_type"][as_legacy_action_bucket(str(step_slices.get("slice_action_type") or "unknown"))] += 1
+        bucket_counts["slice_action_type"][str(step_slices.get("slice_action_type") or "unknown")] += 1
 
         try:
             next_state, _reward, done, _info = backend.step(action)
@@ -251,6 +218,13 @@ def _run_episode(
     invalid_action_rate = float(invalid_action_count) / float(max(1, steps))
     timeout_rate = float(timeout_count) / float(max(1, steps))
     win_proxy = 1.0 if rounds_survived >= 3 else 0.0
+    episode_slice_labels = {
+        "slice_stage": _dominant_bucket_value(bucket_counts.get("slice_stage", {})),
+        "slice_resource_pressure": _dominant_bucket_value(bucket_counts.get("slice_resource_pressure", {})),
+        "slice_action_type": _dominant_bucket_value(bucket_counts.get("slice_action_type", {})),
+        "slice_position_sensitive": _dominant_bucket_value(bucket_counts.get("slice_position_sensitive", {})),
+        "slice_stateful_joker_present": _dominant_bucket_value(bucket_counts.get("slice_stateful_joker_present", {})),
+    }
 
     return {
         "policy_id": policy_id,
@@ -269,6 +243,7 @@ def _run_episode(
         "invalid_action_rate": float(invalid_action_rate),
         "timeout_rate": float(timeout_rate),
         "win_proxy": float(win_proxy),
+        "slice_labels": episode_slice_labels,
         "bucket_counts": {k: dict(v) for k, v in bucket_counts.items()},
         "action_counts": {k: int(v) for k, v in action_counter.items()},
         "mode": mode,
@@ -429,4 +404,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

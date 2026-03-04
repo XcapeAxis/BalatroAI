@@ -115,7 +115,7 @@ def write_bucket_metrics(out_dir: Path, payload: dict[str, Any]) -> dict[str, st
 
     json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    lines = ["# P39 Policy Arena Bucket Metrics", ""]
+    lines = ["# Policy Arena Bucket and Slice Metrics", ""]
     for policy_row in payload.get("policies") if isinstance(payload.get("policies"), list) else []:
         if not isinstance(policy_row, dict):
             continue
@@ -138,6 +138,28 @@ def write_bucket_metrics(out_dir: Path, payload: dict[str, Any]) -> dict[str, st
                     )
                 )
             lines.append("")
+        slice_metrics = policy_row.get("slice_metrics") if isinstance(policy_row.get("slice_metrics"), dict) else {}
+        if slice_metrics:
+            lines.append("### slice_metrics")
+            lines.append("")
+            for slice_key, rows in slice_metrics.items():
+                lines.append(f"#### {slice_key}")
+                lines.append("")
+                lines.append("| slice_label | count | mean_total_score | std_total_score | mean_rounds_survived | win_rate |")
+                lines.append("|---|---:|---:|---:|---:|---:|")
+                for row in rows if isinstance(rows, list) else []:
+                    if not isinstance(row, dict):
+                        continue
+                    lines.append(
+                        "| {slice_label} | {count} | {mean_total_score} | {std_total_score} | {mean_rounds_survived} | {win_rate} |".format(
+                            slice_label=row.get("slice_label"),
+                            count=int(row.get("count") or 0),
+                            mean_total_score=_safe_float(row.get("mean_total_score")),
+                            std_total_score=_safe_float(row.get("std_total_score")),
+                            mean_rounds_survived=_safe_float(row.get("mean_rounds_survived")),
+                            win_rate=_safe_float(row.get("win_rate")),
+                        )
+                    )
+                lines.append("")
     md_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
     return {"json": str(json_path), "md": str(md_path)}
-

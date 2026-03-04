@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -91,6 +92,49 @@ def stable_seed_hash(seeds: list[str]) -> str:
     return hashlib.sha256(packed.encode("utf-8")).hexdigest()
 
 
+def stable_hash_text(text: str) -> str:
+    return hashlib.sha256(str(text).encode("utf-8")).hexdigest()
+
+
+_RUN_ID_PATTERN = re.compile(r"^\d{8}-\d{6}$")
+
+
+def infer_source_run_id(path: str | Path) -> str:
+    p = Path(path)
+    for part in reversed(p.parts):
+        token = str(part).strip()
+        if _RUN_ID_PATTERN.match(token):
+            return token
+        if token.startswith("champion_eval_"):
+            return token
+    return ""
+
+
+def infer_generation_method(source_type: str, path: str, metadata: dict[str, Any] | None = None) -> str:
+    md = metadata if isinstance(metadata, dict) else {}
+    explicit = str(md.get("generation_method") or "").strip()
+    if explicit:
+        return explicit
+    st = str(source_type or "").strip().lower()
+    low = str(path or "").lower()
+    if st == "p10_long_episode":
+        return "oracle_trace"
+    if st == "p13_dagger_or_real":
+        if "dagger" in low:
+            return "dagger_collect"
+        return "real_trace_to_fixture"
+    if st == "selfsup_replay":
+        return "selfsup_replay_build"
+    if st == "arena_failures":
+        return "arena_failure_mining"
+    return "unknown"
+
+
+def make_sample_id(parts: list[str]) -> str:
+    packed = json.dumps([str(x) for x in parts], ensure_ascii=False, separators=(",", ":"))
+    return stable_hash_text(packed)[:24]
+
+
 def build_seeds_payload(seeds: list[str], *, seed_policy_version: str = "p40.explicit") -> dict[str, Any]:
     normalized = [str(s).strip() for s in seeds if str(s).strip()]
     return {
@@ -101,4 +145,3 @@ def build_seeds_payload(seeds: list[str], *, seed_policy_version: str = "p40.exp
         "seed_hash": stable_seed_hash(normalized),
         "seeds": normalized,
     }
-

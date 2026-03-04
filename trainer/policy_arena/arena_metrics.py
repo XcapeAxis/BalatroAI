@@ -49,6 +49,43 @@ def _merge_nested_counts(dst: dict[str, dict[str, int]], src: dict[str, dict[str
             target[key_text] = int(target.get(key_text, 0)) + int(_safe_float(val, 0.0))
 
 
+def _extract_slice_label(record: dict[str, Any], slice_key: str) -> str:
+    labels = record.get("slice_labels") if isinstance(record.get("slice_labels"), dict) else {}
+    token = labels.get(slice_key)
+    if token not in {None, ""}:
+        return str(token)
+    bucket_counts = record.get("bucket_counts") if isinstance(record.get("bucket_counts"), dict) else {}
+    bucket = bucket_counts.get(slice_key) if isinstance(bucket_counts.get(slice_key), dict) else {}
+    if not bucket:
+        return "unknown"
+    ordered = sorted(bucket.items(), key=lambda kv: (-int(_safe_float(kv[1], 0.0)), str(kv[0])))
+    return str(ordered[0][0]) if ordered else "unknown"
+
+
+def _slice_rows(records: list[dict[str, Any]], slice_key: str) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in records:
+        grouped[_extract_slice_label(row, slice_key)].append(row)
+    out: list[dict[str, Any]] = []
+    for label in sorted(grouped.keys()):
+        rows = grouped[label]
+        scores = [_safe_float(x.get("total_score")) for x in rows]
+        rounds = [_safe_float(x.get("rounds_survived")) for x in rows]
+        wins = [_safe_float(x.get("win_proxy")) for x in rows]
+        out.append(
+            {
+                "slice_label": label,
+                "count": int(len(rows)),
+                "mean_total_score": _mean(scores),
+                "std_total_score": _std(scores),
+                "mean_rounds_survived": _mean(rounds),
+                "win_rate": _mean(wins),
+            }
+        )
+    out.sort(key=lambda x: (-int(x.get("count") or 0), str(x.get("slice_label") or "")))
+    return out
+
+
 def summarize_policy_rows(episode_records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for record in episode_records:
@@ -113,6 +150,7 @@ def summarize_bucket_metrics(episode_records: list[dict[str, Any]]) -> dict[str,
     policies_payload: list[dict[str, Any]] = []
     for policy_id in sorted(per_policy.keys()):
         buckets = per_policy[policy_id]
+        records = [row for row in episode_records if str(row.get("policy_id") or "unknown") == policy_id]
         normalized: dict[str, list[dict[str, Any]]] = {}
         for bucket_name, counts in buckets.items():
             total = int(sum(int(v) for v in counts.values()))
@@ -126,7 +164,13 @@ def summarize_bucket_metrics(episode_records: list[dict[str, Any]]) -> dict[str,
                     }
                 )
             normalized[bucket_name] = rows
-        policies_payload.append({"policy_id": policy_id, "buckets": normalized})
+        slice_metrics = {
+            "slice_stage": _slice_rows(records, "slice_stage"),
+            "slice_resource_pressure": _slice_rows(records, "slice_resource_pressure"),
+            "slice_action_type": _slice_rows(records, "slice_action_type"),
+            "slice_position_sensitive": _slice_rows(records, "slice_position_sensitive"),
+            "slice_stateful_joker_present": _slice_rows(records, "slice_stateful_joker_present"),
+        }
+        policies_payload.append({"policy_id": policy_id, "buckets": normalized, "slice_metrics": slice_metrics})
 
-    return {"schema": "p39_bucket_metrics_v1", "policies": policies_payload}
-
+    return {"schema": "p41_bucket_metrics_v2", "policies": policies_payload}

@@ -24,6 +24,7 @@ from trainer.closed_loop.replay_manifest import (
     write_json,
     write_markdown,
 )
+from trainer.closed_loop.replay_lineage import LINEAGE_VERSION, build_lineage_entry, write_lineage_summary
 from trainer.closed_loop.replay_sources import dump_source_resolution_json, resolve_replay_sources
 
 
@@ -169,6 +170,7 @@ def _build_selected_entries(
                     "source_id": source_id,
                     "source_type": source_type,
                     "path": str(record.get("path") or ""),
+                    "source_artifact_path": str(record.get("path") or ""),
                     "format_hint": str(record.get("format_hint") or ""),
                     "sample_count": int(take),
                     "sampled_subset": bool(int(record.get("sample_count") or 0) > int(take)),
@@ -180,6 +182,7 @@ def _build_selected_entries(
                     "estimated_count": bool(record.get("estimated_count")),
                     "metadata": record.get("metadata") if isinstance(record.get("metadata"), dict) else {},
                 }
+                entry = build_lineage_entry(entry=entry, record=record)
                 if not dry_run:
                     selected_entries.append(entry)
                 else:
@@ -303,7 +306,7 @@ def run_replay_mixer(
 
     status = "ok" if int(totals.get("selected_samples") or 0) > 0 else "stub"
     manifest = {
-        "schema": "p40_replay_mix_manifest_v1",
+        "schema": "p41_replay_mix_manifest_v2",
         "generated_at": now_iso(),
         "run_id": chosen_run_id,
         "status": status,
@@ -314,6 +317,7 @@ def run_replay_mixer(
         "split": split,
         "seeds": list(seeds),
         "seed_hash": seeds_payload.get("seed_hash"),
+        "lineage_version": LINEAGE_VERSION,
         "sources": source_stats,
         "selected_entries": selected_entries,
         "totals": totals,
@@ -335,6 +339,22 @@ def run_replay_mixer(
     write_markdown(run_dir / "replay_mix_stats.md", stats_md)
     write_json(run_dir / "seeds_used.json", seeds_payload)
 
+    lineage_root_cfg = str(
+        (cfg.get("lineage_output") if isinstance(cfg.get("lineage_output"), dict) else {}).get("artifacts_root")
+        or "docs/artifacts/p41/replay_lineage"
+    )
+    lineage_dir = to_abs_path(repo_root, lineage_root_cfg) / chosen_run_id
+    lineage_summary_ref = write_lineage_summary(
+        out_dir=lineage_dir,
+        run_id=chosen_run_id,
+        entries=selected_entries,
+        source_stats=source_stats,
+        seeds=seeds,
+        warnings=warnings,
+    )
+    manifest["lineage_summary_ref"] = lineage_summary_ref
+    write_json(run_dir / "replay_mix_manifest.json", manifest)
+
     return {
         "status": status,
         "run_id": chosen_run_id,
@@ -342,6 +362,8 @@ def run_replay_mixer(
         "replay_mix_manifest": str(run_dir / "replay_mix_manifest.json"),
         "replay_mix_stats": str(run_dir / "replay_mix_stats.json"),
         "seeds_used": str(run_dir / "seeds_used.json"),
+        "lineage_summary_json": str(lineage_dir / "replay_lineage_summary.json"),
+        "lineage_summary_md": str(lineage_dir / "replay_lineage_summary.md"),
         "selected_samples": int(totals.get("selected_samples") or 0),
         "warnings_count": len(warnings),
     }
