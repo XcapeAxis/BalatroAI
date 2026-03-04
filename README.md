@@ -9,7 +9,7 @@
 [![Seed Governance](https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16)](configs/experiments/seeds_p23.yaml)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Trend Warehouse](https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16)](docs/TREND_WAREHOUSE_P26.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P40-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P41-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -110,7 +110,7 @@ powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP37
 powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP38
 ```
 
-7. Run the P22 quick orchestration matrix (includes `quick_selfsup_pretrain`, `quick_selfsup_p33`, P36 rows `quick_selfsup_future_value` / `quick_selfsup_action_type`, P37 SSL rows `quick_ssl_pretrain_v1` / `quick_ssl_probe_v1`, RL smoke `rl_ppo_smoke`, P39 arena smoke `p39_policy_arena_smoke`, and P40 closed-loop smoke `p40_closed_loop_smoke`).
+7. Run the P22 quick orchestration matrix (includes `quick_selfsup_pretrain`, `quick_selfsup_p33`, P36 rows `quick_selfsup_future_value` / `quick_selfsup_action_type`, P37 SSL rows `quick_ssl_pretrain_v1` / `quick_ssl_probe_v1`, RL smoke `rl_ppo_smoke`, P39 arena smoke `p39_policy_arena_smoke`, P40 closed-loop smoke `p40_closed_loop_smoke`, and P41 closed-loop v2 smoke `p41_closed_loop_v2_smoke`).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
@@ -152,6 +152,12 @@ Optional P40 closed-loop smoke:
 python -m trainer.closed_loop.closed_loop_runner --quick
 ```
 
+Optional P41 closed-loop v2 smoke:
+
+```powershell
+python -m trainer.closed_loop.closed_loop_runner --config configs/experiments/p41_closed_loop_v2_smoke.yaml --quick
+```
+
 8. Inspect generated artifacts.
 
 - `docs/artifacts/p22/runs/<run_id>/summary_table.md`
@@ -176,8 +182,9 @@ Expected console excerpt (trimmed):
 [P22] Experiment 8/11: quick_ssl_probe_v1 (seeds 2, mode=gate)
 [P22] Experiment 9/11: rl_ppo_smoke (seeds 2, mode=gate)
 [P22] Experiment 10/11: p39_policy_arena_smoke (seeds 2, mode=gate)
-[P22] Experiment 11/11: p40_closed_loop_smoke (seeds 2, mode=gate)
-[P22] Completed 11/11: p40_closed_loop_smoke status=passed | avg_ante=... win_rate=... hand_top1=... hand_top3=... shop_top1=... illegal=...
+[P22] Experiment 11/12: p40_closed_loop_smoke (seeds 2, mode=gate)
+[P22] Experiment 12/12: p41_closed_loop_v2_smoke (seeds 2, mode=gate)
+[P22] Completed 12/12: p41_closed_loop_v2_smoke status=passed | avg_ante=... win_rate=... hand_top1=... hand_top3=... shop_top1=... illegal=...
 [P23] run_id=20260303-005315 mode=gate status=PASS
 [P23] live_snapshot=.../docs/artifacts/p22/runs/20260303-005315/live_summary_snapshot.json
 [P23] summary_json=.../docs/artifacts/p22/runs/20260303-005315/summary_table.json
@@ -195,6 +202,7 @@ More details:
 - [docs/RL_OVERVIEW.md](docs/RL_OVERVIEW.md)
 - [docs/REPRODUCIBILITY_P25.md](docs/REPRODUCIBILITY_P25.md)
 - [docs/P40_CLOSED_LOOP_IMPROVEMENT.md](docs/P40_CLOSED_LOOP_IMPROVEMENT.md)
+- [docs/P41_CLOSED_LOOP_V2.md](docs/P41_CLOSED_LOOP_V2.md)
 
 ## Architecture Overview
 
@@ -240,6 +248,9 @@ All BC/DAgger/Self-Supervised (P33/P36) experiment paths now normalize actions t
 - P40 closed-loop improvement:
   - quick: `python -m trainer.closed_loop.closed_loop_runner --quick`
   - signal: replay-mix + failure-pack + candidate-train + arena-gated promotion recommendation
+- P41 closed-loop v2:
+  - quick: `python -m trainer.closed_loop.closed_loop_runner --config configs/experiments/p41_closed_loop_v2_smoke.yaml --quick`
+  - signal: replay-lineage + curriculum schedule + slice-aware gating + regression triage
 
 ## How to Compare Policies
 
@@ -265,6 +276,10 @@ Closed-loop artifacts:
 - `docs/artifacts/p40/closed_loop_runs/<run_id>/run_manifest.json`
 - `docs/artifacts/p40/closed_loop_runs/<run_id>/promotion_decision.json`
 - `docs/artifacts/p40/closed_loop_runs/<run_id>/summary_table.{json,csv,md}`
+- `docs/artifacts/p41/closed_loop_runs/<run_id>/run_manifest.json`
+- `docs/artifacts/p41/closed_loop_runs/<run_id>/promotion_decision.json`
+- `docs/artifacts/p41/closed_loop_runs/<run_id>/triage_report.json`
+- `docs/artifacts/p41/closed_loop_runs/<run_id>/summary_table.{json,csv,md}`
 
 ## Champion/Candidate Workflow
 
@@ -273,20 +288,21 @@ Closed-loop artifacts:
 - apply `trainer.policy_arena.champion_rules` for machine-readable recommendation
 - review `candidate_decision.json` before any manual champion switch
 
-## Training and Improvement Loop (P40)
+## Closed-loop Training v2 (P41)
 
-P40 adds an end-to-end candidate-improvement loop:
+P41 extends the P40 candidate-improvement loop with traceable replay lineage, slice-aware gating, and regression triage:
 
-1. `ReplayMixer` builds one training manifest from P10/P13/P36 and mined arena failures.
-2. `FailureMining` turns P39 weak episodes into hard-failure replay packs.
-3. `CandidateTrain` runs configurable candidate training (v1 focuses on BC finetune + stub fallback).
-4. `ArenaEval` compares candidate vs champion under P39 arena settings.
-5. `PromotionDecision` emits recommendation JSON/MD without auto-swapping champion.
+1. `ReplayMixer + Lineage` builds one training manifest from P10/P13/P36/P39-failure data with per-sample source traceability.
+2. `SliceLabeling` tags replay and arena records using one shared semantic rule set.
+3. `CurriculumScheduler` changes source/slice sampling weights across training stages.
+4. `CandidateTrain` runs staged candidate training and records applied curriculum plans.
+5. `ArenaEval + Slice-aware Champion Rules` compares candidate vs champion with bootstrap/CI-aware safeguards.
+6. `RegressionTriage` attributes regressions to slices, replay sources, and curriculum drift.
 
 Fast smoke:
 
 ```powershell
-python -m trainer.closed_loop.closed_loop_runner --quick
+python -m trainer.closed_loop.closed_loop_runner --config configs/experiments/p41_closed_loop_v2_smoke.yaml --quick
 ```
 
 Or through P22:
@@ -297,17 +313,18 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
 
 Primary outputs:
 
-- `docs/artifacts/p40/replay_mixer/<run_id>/`
-- `docs/artifacts/p40/failure_mining/<run_id>/`
-- `docs/artifacts/p40/candidate_train/<run_id>/`
-- `docs/artifacts/p40/closed_loop_runs/<run_id>/`
+- `docs/artifacts/p41/replay_mixer/<run_id>/`
+- `docs/artifacts/p41/replay_lineage/<run_id>/`
+- `docs/artifacts/p41/failure_mining/<run_id>/`
+- `docs/artifacts/p41/candidate_train/<run_id>/`
+- `docs/artifacts/p41/closed_loop_runs/<run_id>/`
 
 ## Maturity and Boundaries
 
-- P40 v1 only produces promotion recommendations; it does not auto-replace champion metadata.
-- Candidate training modes are intentionally narrow at v1 (BC-first path with graceful fallback when unavailable).
-- If a data source (for example P10 traces or P39 arena outputs) is missing, P40 degrades to `stub/skipped` outputs instead of failing the whole run.
-- RL/self-play lines can be plugged into the same closed-loop envelope in later milestones.
+- P41 v2 still produces recommendation-only promotion outputs; champion switching remains manual.
+- Candidate training is staged and curriculum-driven, but full RL/self-play optimization is not part of P41 scope.
+- Slice-aware bootstrap/CI conclusions depend on sample size; low-sample slices degrade to `observe`/`insufficient_samples`.
+- Missing data sources degrade to `stub/skipped/warn` outputs with explicit reports instead of full-pipeline crashes.
 
 ## Core Workflows
 
@@ -477,6 +494,22 @@ P40 closed-loop improvement reproducibility:
 - reference docs:
   - [docs/P40_CLOSED_LOOP_IMPROVEMENT.md](docs/P40_CLOSED_LOOP_IMPROVEMENT.md)
 
+P41 closed-loop v2 reproducibility:
+
+- standalone quick:
+  - `python -m trainer.closed_loop.closed_loop_runner --config configs/experiments/p41_closed_loop_v2_smoke.yaml --quick`
+- standalone configurable run:
+  - `python -m trainer.closed_loop.closed_loop_runner --config configs/experiments/p41_closed_loop_v2_nightly.yaml`
+- replay lineage check:
+  - `python -m trainer.closed_loop.check_replay_lineage --manifest docs/artifacts/p41/replay_mixer/<run_id>/replay_mix_manifest.json --out-dir docs/artifacts/p41/replay_lineage/<run_id>`
+- standalone candidate curriculum smoke:
+  - `python -m trainer.closed_loop.candidate_train --config configs/experiments/p41_candidate_smoke.yaml --quick`
+- P22 rows:
+  - `p41_closed_loop_v2_smoke`
+  - `p41_closed_loop_v2_nightly`
+- reference docs:
+  - [docs/P41_CLOSED_LOOP_V2.md](docs/P41_CLOSED_LOOP_V2.md)
+
 ## Reinforcement Learning (P37)
 
 P37 adds a research skeleton for RL iteration without claiming a fully optimized agent:
@@ -503,7 +536,7 @@ This path is for experiment plumbing and reproducibility; it is not yet a produc
 - trend_rows_count: 20115
 - champion: quick_risk_aware (champion)
 - candidate:  (decision: hold)
-- docs_coverage: P15-P40
+- docs_coverage: P15-P41
 <!-- README_STATUS:END -->
 <!-- STATUS:END -->
 
@@ -597,12 +630,13 @@ Milestone maturity snapshot:
 | P37 (single-action fidelity + probability parity audit framework) | shipped |
 | P38 (long-horizon statistical consistency framework) | shipped |
 | P39 (policy arena + champion decision rules) | shipped |
-| P40 (closed-loop improvement: replay mix + failure mining + arena-gated promotion) | active |
+| P40 (closed-loop improvement: replay mix + failure mining + arena-gated promotion) | shipped |
+| P41 (closed-loop v2: lineage + curriculum + slice-aware gating + regression triage) | active |
 
 Near-term:
 
-- harden P40 training quality and richer candidate model policy checkpoints
-- extend long-horizon self-play + correction loops (P41)
+- harden P41 training quality and richer candidate model policy checkpoints
+- extend long-horizon self-play + correction loops (P42)
 - scale self-supervised representation transfer into downstream policy stacks (P42+)
 
 Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
@@ -623,6 +657,8 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - P38 aggregate thresholds are currently warning-level for statistical drift and should be interpreted with sample-budget context.
 - P40 candidate loop currently defaults to recommendation-only promotion flow; champion auto-switch remains manual by design.
 - P40 failure mining and replay mixing are only as complete as locally available P10/P13/P36/P39 artifacts.
+- P41 slice-aware CI/bootstrapping can be inconclusive on low-count slices and should be read with `ci_status`.
+- P41 regression triage attribution is best-effort and depends on lineage completeness from upstream sources.
 
 ## Further Reading
 
@@ -633,6 +669,7 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/EXPERIMENTS_P33.md](docs/EXPERIMENTS_P33.md)
 - [docs/P36_SELF_SUP_LEARNING.md](docs/P36_SELF_SUP_LEARNING.md)
 - [docs/P40_CLOSED_LOOP_IMPROVEMENT.md](docs/P40_CLOSED_LOOP_IMPROVEMENT.md)
+- [docs/P41_CLOSED_LOOP_V2.md](docs/P41_CLOSED_LOOP_V2.md)
 - [docs/RL_OVERVIEW.md](docs/RL_OVERVIEW.md)
 - [docs/EXPERIMENTS_P32_SELF_SUPERVISED.md](docs/EXPERIMENTS_P32_SELF_SUPERVISED.md)
 - [docs/ROADMAP.md](docs/ROADMAP.md)
@@ -667,6 +704,7 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/EXPERIMENTS_P33.md](docs/EXPERIMENTS_P33.md)
 - [docs/EXPERIMENTS_P32_SELF_SUPERVISED.md](docs/EXPERIMENTS_P32_SELF_SUPERVISED.md)
 - [docs/P40_CLOSED_LOOP_IMPROVEMENT.md](docs/P40_CLOSED_LOOP_IMPROVEMENT.md)
+- [docs/P41_CLOSED_LOOP_V2.md](docs/P41_CLOSED_LOOP_V2.md)
 - [docs/RL_OVERVIEW.md](docs/RL_OVERVIEW.md)
 - [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/P32_REAL_ACTION_CONTRACT_STATUS.md](docs/P32_REAL_ACTION_CONTRACT_STATUS.md)

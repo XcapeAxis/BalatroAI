@@ -40,12 +40,18 @@ Global metrics per policy:
 - `timeout_rate`
 - economy counters (`mean_money_earned`, `mean_rerolls_count`, `mean_packs_opened`, `mean_consumables_used`)
 
-Bucket metrics (v1):
+Bucket metrics / slice metrics:
 
 - ante buckets: `ante_1_2`, `ante_3_4`, `ante_5_plus`
 - risk buckets (proxy): `resource_tight`, `resource_balanced`, `resource_relaxed`
 - action-type buckets: `PLAY`, `DISCARD`, `SHOP`, `CONSUMABLE`, `PACK`, `POSITION`, `OTHER`
 - position-sensitive state exposure: `yes/no`
+- unified slice labels (shared with P41 replay pipeline):
+  - `slice_stage` (`early/mid/late/unknown`)
+  - `slice_resource_pressure` (`low/medium/high/unknown`)
+  - `slice_action_type` (`play/discard/shop/consumable/transition/unknown`)
+  - `slice_position_sensitive` (`true/false/unknown`)
+  - `slice_stateful_joker_present` (`true/false/unknown` stub-compatible)
 
 ## Champion Rules (P39 Decision Layer)
 
@@ -61,11 +67,17 @@ Decision logic:
   - win-rate improves while score does not regress beyond tolerance
 - sample-size guard:
   - if `seed_count < min_seeds`, return `observe` (not promote)
+- slice-aware guard (P41-compatible):
+  - evaluates candidate vs champion by slice using bootstrap CI
+  - blocks/softens promotion when critical slices show significant degradation
+  - returns `ci_status=insufficient_samples` for low-count slices and keeps conservative recommendation
 
 Outputs:
 
 - `candidate_decision.json`
 - `candidate_decision.md`
+- `slice_decision_breakdown.json`
+- `slice_decision_breakdown.md`
 
 ## Run Commands
 
@@ -78,7 +90,7 @@ python -m trainer.policy_arena.arena_runner --quick
 Standalone champion decision:
 
 ```powershell
-python -m trainer.policy_arena.champion_rules --summary-json docs/artifacts/p39/arena_runs/<run_id>/summary_table.json --out-dir docs/artifacts/p39
+python -m trainer.policy_arena.champion_rules --summary-json docs/artifacts/p39/arena_runs/<run_id>/summary_table.json --episode-records-jsonl docs/artifacts/p39/arena_runs/<run_id>/episode_records.jsonl --bucket-metrics-json docs/artifacts/p39/arena_runs/<run_id>/bucket_metrics.json --out-dir docs/artifacts/p39
 ```
 
 P22 smoke row:
@@ -107,6 +119,8 @@ Champion evaluation:
 
 - `docs/artifacts/p39/champion_eval_<timestamp>/candidate_decision.json`
 - `docs/artifacts/p39/champion_eval_<timestamp>/candidate_decision.md`
+- `docs/artifacts/p39/champion_eval_<timestamp>/slice_decision_breakdown.json`
+- `docs/artifacts/p39/champion_eval_<timestamp>/slice_decision_breakdown.md`
 
 P22 integration:
 

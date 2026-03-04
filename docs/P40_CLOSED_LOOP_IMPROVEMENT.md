@@ -1,6 +1,9 @@
 # P40 Closed-loop Improvement v1
 
 P40 adds a runnable improvement loop that unifies replay mixing, arena failure mining, candidate training, and arena-gated promotion recommendation.
+P41 builds on top of this foundation and adds replay lineage, curriculum scheduling, slice-aware gating, and regression triage.
+
+See also: `docs/P41_CLOSED_LOOP_V2.md`.
 
 ## Architecture
 
@@ -55,6 +58,22 @@ P40 reuses P39 `trainer.policy_arena.champion_rules` outputs, then applies a con
 
 P40 v1 only emits recommendations. It does **not** auto-replace champion metadata.
 
+## Relationship to P41
+
+P40 remains the baseline closed-loop contract:
+
+- replay mix, failure pack, candidate train, arena eval, recommendation output
+- conservative "observe-first" promotion stance
+- graceful degrade behavior when data/artifacts are missing
+
+P41 extends the same loop with:
+
+- sample-level replay lineage and health checks
+- shared slice labels across replay and arena
+- curriculum-based staged mixing during candidate training
+- slice-aware champion rules with CI/bootstrap safeguards
+- regression triage reports for degraded candidates
+
 ## Run Modes
 
 Quick smoke:
@@ -81,4 +100,3 @@ python -m trainer.closed_loop.closed_loop_runner --config configs/experiments/p4
 - `bc_finetune` requires BC-compatible rows and PyTorch; otherwise candidate training degrades to `stub_checkpoint`.
 - `model_policy` adapter in P39 currently keeps a stable fallback path; arena deltas should be interpreted as infrastructure smoke unless model inference path is fully wired.
 - closed-loop runner continues with `arena_status=skipped` when arena execution is disabled or unavailable.
-
