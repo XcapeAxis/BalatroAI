@@ -8,6 +8,7 @@ if __package__ is None or __package__ == "":
 
 import argparse
 import json
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,13 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return float(value)
     except Exception:
         return float(default)
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return int(default)
 
 
 def _read_json(path: Path) -> dict[str, Any] | list[Any] | None:
@@ -77,10 +85,26 @@ def _curriculum_signature(candidate_manifest: dict[str, Any]) -> dict[str, Any]:
     return {"phase_count": len(rows), "phases": rows}
 
 
-def _source_attribution(replay_manifest: dict[str, Any], degraded_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _entry_slice_value(entry: dict[str, Any], slice_key: str) -> str:
+    if slice_key in entry and entry.get(slice_key) not in {None, ""}:
+        return str(entry.get(slice_key))
+    labels = entry.get("slice_labels") if isinstance(entry.get("slice_labels"), dict) else {}
+    token = labels.get(slice_key)
+    if token in {None, ""}:
+        return "unknown"
+    return str(token)
+
+
+def _source_attribution(
+    replay_manifest: dict[str, Any],
+    degraded_rows: list[dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
     entries = replay_manifest.get("selected_entries") if isinstance(replay_manifest.get("selected_entries"), list) else []
     source_totals: dict[str, int] = {}
     source_degraded: dict[str, int] = {}
+    seed_totals: dict[str, int] = {}
+    seed_degraded: dict[str, int] = {}
+    source_seed_degraded: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     degrade_matchers = []
     for row in degraded_rows:
         if not isinstance(row, dict):
@@ -91,27 +115,64 @@ def _source_attribution(replay_manifest: dict[str, Any], degraded_rows: list[dic
         if not isinstance(entry, dict):
             continue
         source_type = str(entry.get("source_type") or "unknown")
-        sample_count = int(entry.get("sample_count") or 0)
+        source_seed = str(entry.get("source_seed") or "unknown")
+        sample_count = max(0, int(entry.get("sample_count") or 0))
+        if sample_count <= 0:
+            continue
         source_totals[source_type] = int(source_totals.get(source_type, 0)) + sample_count
-        for slice_key, slice_label in degrade_matchers:
-            if slice_key and str(entry.get(slice_key) if slice_key in entry else ((entry.get("slice_labels") or {}).get(slice_key) if isinstance(entry.get("slice_labels"), dict) else "")) == slice_label:
-                source_degraded[source_type] = int(source_degraded.get(source_type, 0)) + sample_count
-                break
+        seed_totals[source_seed] = int(seed_totals.get(source_seed, 0)) + sample_count
 
-    rows: list[dict[str, Any]] = []
+        matched_degraded = False
+        for slice_key, slice_label in degrade_matchers:
+            if slice_key and _entry_slice_value(entry, slice_key) == slice_label:
+                matched_degraded = True
+                break
+        if matched_degraded:
+            source_degraded[source_type] = int(source_degraded.get(source_type, 0)) + sample_count
+            seed_degraded[source_seed] = int(seed_degraded.get(source_seed, 0)) + sample_count
+            source_seed_degraded[source_type][source_seed] += sample_count
+
+    source_rows: list[dict[str, Any]] = []
     for source_type in sorted(source_totals.keys()):
         total = int(source_totals[source_type])
         deg = int(source_degraded.get(source_type, 0))
-        rows.append(
+        seed_rows = []
+        for seed, deg_count in sorted(source_seed_degraded.get(source_type, {}).items(), key=lambda kv: (-int(kv[1]), kv[0]))[:5]:
+            seed_rows.append(
+                {
+                    "seed": str(seed),
+                    "degraded_slice_sample_count": int(deg_count),
+                }
+            )
+        source_rows.append(
             {
                 "source_type": source_type,
                 "sample_count": total,
                 "degraded_slice_sample_count": deg,
                 "degraded_slice_ratio": (float(deg) / total) if total > 0 else 0.0,
+                "top_degraded_seeds": seed_rows,
             }
         )
-    rows.sort(key=lambda r: (-float(r.get("degraded_slice_sample_count") or 0.0), str(r.get("source_type") or "")))
-    return rows
+    source_rows.sort(key=lambda r: (-float(r.get("degraded_slice_sample_count") or 0.0), str(r.get("source_type") or "")))
+
+    seed_rows: list[dict[str, Any]] = []
+    for seed in sorted(seed_totals.keys()):
+        total = int(seed_totals.get(seed, 0))
+        deg = int(seed_degraded.get(seed, 0))
+        seed_rows.append(
+            {
+                "source_seed": str(seed),
+                "sample_count": total,
+                "degraded_slice_sample_count": deg,
+                "degraded_slice_ratio": (float(deg) / total) if total > 0 else 0.0,
+            }
+        )
+    seed_rows.sort(key=lambda r: (-float(r.get("degraded_slice_sample_count") or 0.0), str(r.get("source_seed") or "")))
+
+    return {
+        "source_rows": source_rows,
+        "seed_rows": seed_rows,
+    }
 
 
 def _lineage_quality(replay_manifest: dict[str, Any]) -> dict[str, Any]:
@@ -123,6 +184,42 @@ def _lineage_quality(replay_manifest: dict[str, Any]) -> dict[str, Any]:
         if isinstance(entry, dict) and not bool(entry.get("valid_for_training", True)):
             invalid += 1
     return {"entry_count": len(entries), "invalid_ratio": float(invalid) / max(1, len(entries))}
+
+
+def _extract_lineage_health(run_dir: Path | None) -> dict[str, Any]:
+    if run_dir is None:
+        return {
+            "status": "baseline_missing",
+            "lineage_health_json": "",
+            "required_field_missing_ratio": 0.0,
+            "missing_source_paths": 0,
+        }
+    ref_path = run_dir / "replay_lineage_health_ref.json"
+    ref_payload = _read_json(ref_path)
+    if not isinstance(ref_payload, dict):
+        return {
+            "status": "missing",
+            "lineage_health_json": "",
+            "required_field_missing_ratio": 0.0,
+            "missing_source_paths": 0,
+        }
+    summary = ref_payload.get("summary") if isinstance(ref_payload.get("summary"), dict) else {}
+    lineage_health_json = str(summary.get("lineage_health_json") or "")
+    status = str(summary.get("status") or "unknown")
+    required_field_missing_ratio = 0.0
+    missing_source_paths = 0
+    if lineage_health_json:
+        loaded = _read_json(Path(lineage_health_json))
+        if isinstance(loaded, dict):
+            status = str(loaded.get("status") or status)
+            required_field_missing_ratio = _safe_float(loaded.get("required_field_missing_ratio"), 0.0)
+            missing_source_paths = _safe_int(loaded.get("missing_source_paths"), 0)
+    return {
+        "status": status,
+        "lineage_health_json": lineage_health_json,
+        "required_field_missing_ratio": required_field_missing_ratio,
+        "missing_source_paths": missing_source_paths,
+    }
 
 
 def run_regression_triage(
@@ -197,7 +294,9 @@ def run_regression_triage(
     ]
     degraded_rows = degraded_rows[:5]
 
-    current_source_attr = _source_attribution(current_replay_manifest, degraded_rows)
+    attribution = _source_attribution(current_replay_manifest, degraded_rows)
+    current_source_attr = attribution.get("source_rows") if isinstance(attribution.get("source_rows"), list) else []
+    current_seed_attr = attribution.get("seed_rows") if isinstance(attribution.get("seed_rows"), list) else []
     curr_signature = _curriculum_signature(current_candidate_manifest)
     prev_signature = _curriculum_signature(baseline_candidate_manifest)
 
@@ -212,6 +311,26 @@ def run_regression_triage(
     current_quality = _lineage_quality(current_replay_manifest)
     baseline_quality = _lineage_quality(baseline_replay_manifest)
     quality_delta = _safe_float(current_quality.get("invalid_ratio")) - _safe_float(baseline_quality.get("invalid_ratio"))
+    current_lineage_health = _extract_lineage_health(current_dir)
+    baseline_lineage_health = _extract_lineage_health(baseline_dir)
+    lineage_missing_ratio_delta = _safe_float(current_lineage_health.get("required_field_missing_ratio"), 0.0) - _safe_float(
+        baseline_lineage_health.get("required_field_missing_ratio"),
+        0.0,
+    )
+    lineage_missing_paths_delta = _safe_int(current_lineage_health.get("missing_source_paths"), 0) - _safe_int(
+        baseline_lineage_health.get("missing_source_paths"),
+        0,
+    )
+
+    quality_warnings: list[str] = []
+    if quality_delta > 0.01:
+        quality_warnings.append("invalid_for_training_ratio_increased")
+    if lineage_missing_ratio_delta > 0.01:
+        quality_warnings.append("lineage_required_field_missing_ratio_increased")
+    if lineage_missing_paths_delta > 0:
+        quality_warnings.append("lineage_missing_source_paths_increased")
+    if str(current_lineage_health.get("status") or "").lower() in {"warn", "error"}:
+        quality_warnings.append("current_lineage_health_non_ok")
 
     overall = {
         "current_candidate_score": _safe_float(current_decision_dict.get("candidate_score"), 0.0),
@@ -232,16 +351,25 @@ def run_regression_triage(
         "overall": overall,
         "degraded_slices_topk": degraded_rows,
         "source_attribution": current_source_attr,
+        "seed_attribution": current_seed_attr,
         "curriculum_change": curriculum_change,
         "data_quality": {
             "current": current_quality,
             "baseline": baseline_quality,
             "invalid_ratio_delta": quality_delta,
+            "lineage_health": {
+                "current": current_lineage_health,
+                "baseline": baseline_lineage_health,
+                "required_field_missing_ratio_delta": lineage_missing_ratio_delta,
+                "missing_source_paths_delta": lineage_missing_paths_delta,
+            },
+            "warnings": quality_warnings,
         },
         "refs": {
             "current_run_manifest": str(current_dir / "run_manifest.json"),
             "current_promotion_decision": str(current_dir / "promotion_decision.json"),
             "current_slice_breakdown": str(current_decision_dict.get("slice_decision_breakdown_json") or ""),
+            "current_lineage_health_ref": str(current_dir / "replay_lineage_health_ref.json"),
         },
     }
 
@@ -297,6 +425,21 @@ def run_regression_triage(
             )
     else:
         md_lines.append("- none")
+    md_lines.extend(["", "## Seed Attribution"])
+    if current_seed_attr:
+        for row in current_seed_attr[:10]:
+            if not isinstance(row, dict):
+                continue
+            md_lines.append(
+                "- {seed}: samples={samples}, degraded_slice_samples={deg}, ratio={ratio:.3f}".format(
+                    seed=row.get("source_seed"),
+                    samples=int(row.get("sample_count") or 0),
+                    deg=int(row.get("degraded_slice_sample_count") or 0),
+                    ratio=float(row.get("degraded_slice_ratio") or 0.0),
+                )
+            )
+    else:
+        md_lines.append("- none")
     md_lines.extend(
         [
             "",
@@ -309,8 +452,16 @@ def run_regression_triage(
             f"- current_invalid_ratio: {float((current_quality or {}).get('invalid_ratio') or 0.0):.6f}",
             f"- baseline_invalid_ratio: {float((baseline_quality or {}).get('invalid_ratio') or 0.0):.6f}",
             f"- invalid_ratio_delta: {float(quality_delta):.6f}",
+            f"- current_lineage_health_status: `{current_lineage_health.get('status')}`",
+            f"- baseline_lineage_health_status: `{baseline_lineage_health.get('status')}`",
+            "- lineage_required_field_missing_ratio_delta: {0:.6f}".format(float(lineage_missing_ratio_delta)),
+            "- lineage_missing_source_paths_delta: {0}".format(int(lineage_missing_paths_delta)),
         ]
     )
+    if quality_warnings:
+        md_lines.extend(["", "## Data Quality Warnings"])
+        for warning in quality_warnings:
+            md_lines.append(f"- {warning}")
     write_markdown(md_path, md_lines)
     return {
         "status": "ok",
@@ -341,4 +492,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

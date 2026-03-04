@@ -693,6 +693,7 @@ matrix:
       eval: true
     sanity_compile:
       - trainer/common/slices.py
+      - trainer/closed_loop/slice_smoke.py
       - trainer/closed_loop/replay_mixer.py
       - trainer/closed_loop/check_replay_lineage.py
       - trainer/closed_loop/curriculum_scheduler.py
@@ -732,6 +733,7 @@ matrix:
       eval: true
     sanity_compile:
       - trainer/common/slices.py
+      - trainer/closed_loop/slice_smoke.py
       - trainer/closed_loop/replay_mixer.py
       - trainer/closed_loop/check_replay_lineage.py
       - trainer/closed_loop/curriculum_scheduler.py
