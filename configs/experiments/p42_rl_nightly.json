@@ -1,0 +1,51 @@
+{
+  "schema": "p42_ppo_lite_config_v1",
+  "output_artifacts_root": "docs/artifacts/p42/rl_train",
+  "seeds": [
+    "AAAAAAA",
+    "BBBBBBB",
+    "CCCCCCC",
+    "DDDDDDD"
+  ],
+  "env": {
+    "backend": "sim",
+    "timeout_sec": 8.0,
+    "max_steps_per_episode": 260,
+    "max_auto_steps": 10,
+    "max_ante": 0,
+    "auto_advance": true,
+    "reward": {
+      "score_delta_weight": 1.0,
+      "survival_bonus": 0.01,
+      "terminal_win_bonus": 0.8,
+      "terminal_loss_penalty": 0.8,
+      "invalid_action_penalty": 0.1,
+      "clip_abs": 3.0,
+      "penalize_requested_invalid": true,
+      "invalid_action_mode": "fallback_first_legal"
+    }
+  },
+  "rollout": {
+    "episodes_per_seed": 2,
+    "max_steps_per_episode": 140,
+    "total_steps_cap": 1800,
+    "early_stop_invalid_rate": 0.4,
+    "min_steps_before_early_stop": 96
+  },
+  "train": {
+    "ppo_epochs": 2,
+    "minibatch_size": 128,
+    "clip_range": 0.2,
+    "gamma": 0.99,
+    "gae_lambda": 0.95,
+    "entropy_coef": 0.01,
+    "value_coef": 0.5,
+    "lr": 0.0002,
+    "grad_clip_norm": 0.5,
+    "normalize_advantage": true,
+    "max_updates": 4,
+    "invalid_action_warn_threshold": 0.12,
+    "max_kl_warn": 0.15,
+    "nan_fail_fast": true
+  }
+}

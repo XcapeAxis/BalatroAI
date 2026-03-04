@@ -117,6 +117,21 @@ experiment_groups:
           - BBBBBBB
           - CCCCCCC
           - DDDDDDD
+  rl_candidate_pipeline_v1:
+    description: "P42 RL candidate pipeline (env adapter + rollout + PPO-lite + closed-loop gating)"
+    variants:
+      - id: p42_rl_candidate_smoke
+        algo: rl_candidate_v1
+        seeds:
+          - AAAAAAA
+          - BBBBBBB
+      - id: p42_rl_candidate_nightly
+        algo: rl_candidate_v1
+        seeds:
+          - AAAAAAA
+          - BBBBBBB
+          - CCCCCCC
+          - DDDDDDD
 
 matrix:
   - id: quick_baseline
@@ -745,6 +760,82 @@ matrix:
       config: configs/experiments/p41_closed_loop_v2_nightly.yaml
       quick: false
       timeout_sec: 9000
+      candidate_policy: model_policy
+      champion_policy: heuristic_baseline
+
+  - id: p42_rl_candidate_smoke
+    name: p42_rl_candidate_smoke
+    backend: sim
+    policy: rl_candidate
+    experiment_type: closed_loop_rl_candidate
+    seed_mode: regression_fixed
+    seed_set_name: contract_regression
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+    gate_flag: RunP22
+    modes:
+      quick: true
+      gate: true
+      nightly: true
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/rl/env_adapter.py
+      - trainer/rl/action_mask.py
+      - trainer/rl/reward_config.py
+      - trainer/rl/rollout_collector.py
+      - trainer/rl/ppo_lite.py
+      - trainer/closed_loop/candidate_train.py
+      - trainer/closed_loop/closed_loop_runner.py
+      - trainer/policy_arena/champion_rules.py
+    eval:
+      config: configs/experiments/p42_closed_loop_rl_smoke.yaml
+      quick: true
+      timeout_sec: 4800
+      candidate_policy: model_policy
+      champion_policy: heuristic_baseline
+
+  - id: p42_rl_candidate_nightly
+    name: p42_rl_candidate_nightly
+    backend: sim
+    policy: rl_candidate
+    experiment_type: closed_loop_rl_candidate
+    seed_mode: nightly
+    seed_set_name: eval_default
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+      - CCCCCCC
+      - DDDDDDD
+    gate_flag: RunP22
+    modes:
+      quick: false
+      gate: false
+      nightly: true
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/rl/env_adapter.py
+      - trainer/rl/action_mask.py
+      - trainer/rl/reward_config.py
+      - trainer/rl/rollout_collector.py
+      - trainer/rl/ppo_lite.py
+      - trainer/closed_loop/candidate_train.py
+      - trainer/closed_loop/closed_loop_runner.py
+      - trainer/policy_arena/champion_rules.py
+    eval:
+      config: configs/experiments/p42_closed_loop_rl_nightly.yaml
+      quick: false
+      timeout_sec: 10800
       candidate_policy: model_policy
       champion_policy: heuristic_baseline
 
