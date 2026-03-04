@@ -41,7 +41,7 @@ BalatroAI exists to make policy development and validation for Balatro engineeri
 Suitable for:
 
 - simulator parity and canonical trace alignment work
-- offline-online policy iteration (Search -> BC -> DAgger -> Self-Supervised (P33/P36) -> RL)
+- offline-online policy iteration (mainline: Self-Supervised -> RL -> Closed-loop; legacy BC/DAgger retained for probes)
 - regression-gated experiment automation (P22+ / P23+ / P24+)
 - engineering workflows around champion/candidate decisions
 
@@ -52,21 +52,23 @@ Not suitable for:
 - interpreting metrics outside seed/budget/config/version context
 - claiming universal performance without reproducible gate artifacts
 
-## Learning Modes
+## Training Strategy (Mainline vs Legacy)
 
-Current learning modes are complementary rather than mutually exclusive:
+P43 refocuses training into two explicit lanes:
 
-- BC (`train_bc.py`): supervised imitation on curated datasets; fast baseline policy shaping.
-- DAgger (`dagger_collect.py` + BC refresh): interactive correction with policy-in-the-loop traces.
-- Self-Supervised P36 (`trainer/selfsup/*`): representation pretraining from trace artifacts without teacher labels.
-- Self-Supervised P37 SSL (`trainer/experiments/ssl_*`): next-step contrastive state encoder pretraining + frozen linear probe.
-- RL (existing pilot paths): downstream policy improvement after stable encoder/policy initialization.
+- Mainline (default): Self-Supervised + RL candidate + Closed-loop promotion (`P40/P41/P42`).
+- Legacy baseline (opt-in): BC/DAgger (`trainer/train_bc.py`, `trainer/dagger_collect*.py`) for baseline/probe/warm-start only.
 
-Data dependency by stage:
+Why this shift:
 
-- early bootstrap: sim traces + oracle fixtures
-- alignment-informed iteration: real/P13/P32 replay-compatible traces
-- larger-scale policy comparison: P22 orchestrator multi-seed matrix + gate reports
+- high-quality expert data is still scarce and expensive to maintain,
+- real-session annotation/recording friction remains high for continuous scale-up,
+- replay-centric self-supervised and RL loops now have better tooling, artifacts, and gate integration.
+
+Data dependency by lane:
+
+- mainline: replay-mixer + failure-mining + SSL/selfsup traces + RL rollouts.
+- legacy baseline: targeted BC/DAgger smoke/probe datasets for sanity and comparisons.
 
 ## Quick Start (Windows + PowerShell, < 5 min)
 
@@ -110,7 +112,7 @@ powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP37
 powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP38
 ```
 
-7. Run the P22 quick orchestration matrix (includes `quick_selfsup_pretrain`, `quick_selfsup_p33`, P36 rows `quick_selfsup_future_value` / `quick_selfsup_action_type`, P37 SSL rows `quick_ssl_pretrain_v1` / `quick_ssl_probe_v1`, RL smoke `rl_ppo_smoke`, P39 arena smoke `p39_policy_arena_smoke`, P40 closed-loop smoke `p40_closed_loop_smoke`, P41 closed-loop v2 smoke `p41_closed_loop_v2_smoke`, and P42 RL candidate smoke `p42_rl_candidate_smoke`).
+7. Run the P22 quick orchestration matrix (mainline default: no BC/DAgger rows).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
@@ -120,6 +122,12 @@ Optional verbose progress:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -VerboseLogs
+```
+
+Optional include legacy baseline probe (BC/DAgger category):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -IncludeLegacy
 ```
 
 Optional multi-seed comparison smoke (2 experiments x 3 seeds):
@@ -212,6 +220,7 @@ More details:
 - [docs/P40_CLOSED_LOOP_IMPROVEMENT.md](docs/P40_CLOSED_LOOP_IMPROVEMENT.md)
 - [docs/P41_CLOSED_LOOP_V2.md](docs/P41_CLOSED_LOOP_V2.md)
 - [docs/P42_RL_CANDIDATE_PIPELINE.md](docs/P42_RL_CANDIDATE_PIPELINE.md)
+- [docs/P43_TRAINING_STRATEGY_REFOCUS.md](docs/P43_TRAINING_STRATEGY_REFOCUS.md)
 
 ## Architecture Overview
 
@@ -379,6 +388,8 @@ Safety / stability notes:
 - P41 v2 still produces recommendation-only promotion outputs; champion switching remains manual.
 - Candidate training is staged and curriculum-driven, but full RL/self-play optimization is not part of P41 scope.
 - P42 RL candidate pipeline is v1/research-grade; it prioritizes run stability and traceability over peak policy strength.
+- BC/DAgger paths are retained as legacy baselines; they are not default mainline training routes.
+- Legacy baseline checks are lightweight smoke/probe checks unless explicitly requested.
 - low-sample CI/bootstrap outcomes remain observation-level and should not be treated as decisive promotion proof.
 - Slice-aware bootstrap/CI conclusions depend on sample size; low-sample slices degrade to `observe`/`insufficient_samples`.
 - Regression triage source/seed attribution is best-effort and depends on replay lineage completeness.
@@ -749,6 +760,7 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/P40_CLOSED_LOOP_IMPROVEMENT.md](docs/P40_CLOSED_LOOP_IMPROVEMENT.md)
 - [docs/P41_CLOSED_LOOP_V2.md](docs/P41_CLOSED_LOOP_V2.md)
 - [docs/P42_RL_CANDIDATE_PIPELINE.md](docs/P42_RL_CANDIDATE_PIPELINE.md)
+- [docs/P43_TRAINING_STRATEGY_REFOCUS.md](docs/P43_TRAINING_STRATEGY_REFOCUS.md)
 - [docs/RL_OVERVIEW.md](docs/RL_OVERVIEW.md)
 - [docs/EXPERIMENTS_P32_SELF_SUPERVISED.md](docs/EXPERIMENTS_P32_SELF_SUPERVISED.md)
 - [docs/ROADMAP.md](docs/ROADMAP.md)
@@ -784,6 +796,8 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/EXPERIMENTS_P32_SELF_SUPERVISED.md](docs/EXPERIMENTS_P32_SELF_SUPERVISED.md)
 - [docs/P40_CLOSED_LOOP_IMPROVEMENT.md](docs/P40_CLOSED_LOOP_IMPROVEMENT.md)
 - [docs/P41_CLOSED_LOOP_V2.md](docs/P41_CLOSED_LOOP_V2.md)
+- [docs/P42_RL_CANDIDATE_PIPELINE.md](docs/P42_RL_CANDIDATE_PIPELINE.md)
+- [docs/P43_TRAINING_STRATEGY_REFOCUS.md](docs/P43_TRAINING_STRATEGY_REFOCUS.md)
 - [docs/RL_OVERVIEW.md](docs/RL_OVERVIEW.md)
 - [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/P32_REAL_ACTION_CONTRACT_STATUS.md](docs/P32_REAL_ACTION_CONTRACT_STATUS.md)

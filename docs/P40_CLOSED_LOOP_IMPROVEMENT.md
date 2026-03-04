@@ -13,7 +13,7 @@ flowchart LR
   A["ReplayMixer\n(p10/p13/p36/p40-failure-pack)"] --> B["Mixed Replay Manifest\nreplay_mix_manifest.json"]
   C["Failure Mining\n(from P39 arena artifacts)"] --> D["Hard-failure pack\nfailure_pack_manifest.json"]
   D --> A
-  B --> E["Candidate Trainer v1\n(bc_finetune + stub fallback)"]
+  B --> E["Candidate Trainer v1\n(mainline-first: rl_ppo_lite/selfsup_warm_bc)"]
   E --> F["Candidate checkpoint\nbest_checkpoint.txt"]
   F --> G["P39 Arena Runner\n(candidate vs champion)"]
   G --> H["P39 Champion Rules"]
@@ -34,7 +34,7 @@ flowchart LR
 
 - replay mix: `sources[]`, `selected_entries[]`, `totals`, `seed_hash`
 - failure pack: `candidate_policy`, `champion_policy`, `low_score_threshold`, `failures[]`, `replay_jsonl_path`
-- candidate train: `mode`, `seed_results[]`, `candidate_checkpoint`
+- candidate train: `training_mode`, `training_mode_category`, `fallback_used`, `fallback_reason`, `legacy_paths_used`, `seed_results[]`, `candidate_checkpoint`
 - promotion decision: `recommendation`, `recommend_promotion`, `arena_status`, `candidate_score`, `champion_score`, `score_delta`, `reasons[]`
 
 ## Failure Mining Logic (v1)
@@ -58,6 +58,12 @@ P40 reuses P39 `trainer.policy_arena.champion_rules` outputs, then applies a con
 - no clear uplift (score delta <= 0 and win delta <= 0) -> force `observe`
 
 P40 v1 only emits recommendations. It does **not** auto-replace champion metadata.
+
+## Mainline vs Legacy (P43)
+
+- default candidate route is now mainline (`rl_ppo_lite` first, optional `selfsup_warm_bc` placeholder)
+- legacy BC/DAgger (`bc_finetune` / `dagger_refresh`) are retained for opt-in baseline/probe use
+- fallback to legacy is explicit and recorded in manifests (`fallback_used`, `fallback_reason`)
 
 ## Relationship to P41
 
@@ -104,6 +110,6 @@ python -m trainer.closed_loop.closed_loop_runner --config configs/experiments/p4
 ## Known Gaps / Degrade Paths
 
 - `p10_long_episode` source can be `stub` if local P10 runtime traces are missing.
-- `bc_finetune` requires BC-compatible rows and PyTorch; otherwise candidate training degrades to `stub_checkpoint`.
+- legacy `bc_finetune` requires BC-compatible rows and PyTorch; otherwise candidate training degrades to `stub_checkpoint`.
 - `model_policy` adapter in P39 currently keeps a stable fallback path; arena deltas should be interpreted as infrastructure smoke unless model inference path is fully wired.
 - closed-loop runner continues with `arena_status=skipped` when arena execution is disabled or unavailable.

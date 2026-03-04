@@ -29,6 +29,8 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 |---|---|---|
 | Plan only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -DryRun` | validates matrix + writes plan/report |
 | Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | 13 experiments x 2 seeds (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row + P40 closed-loop smoke row + P41 closed-loop v2 smoke row + P42 RL candidate smoke row) |
+| Fast smoke + legacy probe | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -IncludeLegacy` | adds opt-in legacy BC/DAgger probe row(s) |
+| Legacy only quick | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -LegacyOnly` | runs only legacy baseline probe row(s) |
 | Multi-seed quick compare | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline,quick_candidate -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | 2 strategies x 3 seeds |
 | Fast smoke (verbose) | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -VerboseLogs` | adds per-seed/per-stage console logs |
 | Nightly style | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Nightly -Resume` | larger seed set + resume |
@@ -58,6 +60,8 @@ Key sections:
   - `nightly_extra_random`
 - `matrix[]`:
   - `id`, `name`
+  - `category` (`mainline`, `legacy_baseline`, `required_validation`, ...)
+  - `default_enabled` (`false` rows are excluded unless explicitly requested)
   - `backend`, `policy`
   - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`, `selfsup_future_value`, `selfsup_action_type`, `ssl_pretrain`, `ssl_probe`, `rl_selfplay`, `policy_arena`, `closed_loop_improvement`, `closed_loop_improvement_v2`)
   - `seed_mode` (`regression_fixed` or `nightly`)
@@ -69,6 +73,20 @@ Key sections:
   - `primary_metric`
   - `gates.baseline_gate`
   - `promotion.min_delta`
+
+## Training Lane Policy (P43)
+
+- Default lane: `mainline` (+ `required_validation` support rows).
+- Legacy lane: `legacy_baseline` rows are opt-in and disabled by default.
+- New wrapper flags:
+  - `-IncludeLegacy`: include `legacy_baseline` rows
+  - `-LegacyOnly`: run only `legacy_baseline` rows
+- `run_plan.json` now records:
+  - `selected_categories`
+  - `include_legacy`
+  - `legacy_only`
+  - per-experiment `category` and `default_enabled`
+- `summary_table.{csv,json,md}` now includes category/default columns for triage.
 
 ## Seed Policy and "AAAAAAA" Clarification
 
@@ -425,7 +443,7 @@ A dedicated config/wrapper is now available for representation pretrain stubs:
 - wrapper: `scripts/run_p32_self_supervised.ps1`
 - docs: `docs/EXPERIMENTS_P32_SELF_SUPERVISED.md`
 
-This line is intentionally experimental and does not replace BC/DAgger gates.
+This line is intentionally experimental and remains part of the mainline lane; BC/DAgger are now legacy-baseline probes.
 
 Quick viewer helper:
 

@@ -11,21 +11,22 @@
 | P39 | Policy Arena v1 (multi-policy adapters, bucketed evaluation, champion rule input) | done |
 | P40 | Closed-loop improvement v1 (replay mix + failure mining + arena-gated promotion recommendation) | done |
 | P41 | Closed-loop improvement v2 (lineage + curriculum + slice-aware gating + regression triage) | done |
-| P42 | RL candidate pipeline v1 (env adapter + rollout collector + PPO-lite + closed-loop integration) | active |
+| P42 | RL candidate pipeline v1 (env adapter + rollout collector + PPO-lite + closed-loop integration) | done |
+| P43 | Training strategy refocus (mainline selfsup+RL, BC/DAgger demoted to legacy baseline) | active |
 
-## Current Focus: P42 Stabilization
+## Current Focus: P43 Mainline Consolidation
 
-1. Stabilize P42 RL smoke/nightly rows under P22 orchestration.
-2. Improve PPO-lite training quality while preserving action-mask and invalid-action safety controls.
-3. Expand slice coverage so P41/P42 CI/bootstrap decisions are less frequently sample-limited.
-4. Keep recommendation-only promotion discipline while candidate quality improves.
+1. Keep P22 defaults fully aligned with mainline-only execution and explicit legacy opt-in.
+2. Increase stability/quality of RL-first candidate training while preserving lineage/triage clarity.
+3. Expand self-supervised warm-start integration beyond stub mode in closed-loop candidate training.
+4. Maintain lightweight but reliable legacy BC/DAgger smoke for baseline integrity checks.
 
 ## Next Milestones
 
 | Milestone | Target | Exit Signal |
 |---|---|---|
-| P43 | RL scaling and richer opponent/self-play schedules | RL candidate line shows repeatable seed-robust gains over heuristic/search baselines. |
-| P44 | Self-supervised transfer + long-horizon robustness scaling | Representation + policy lines sustain gains under larger-budget multi-seed gating. |
+| P44 | RL scaling and richer opponent/self-play schedules | RL candidate line shows repeatable seed-robust gains over heuristic/search baselines. |
+| P45 | Self-supervised transfer + long-horizon robustness scaling | Representation + policy lines sustain gains under larger-budget multi-seed gating. |
 
 ## Constraints
 

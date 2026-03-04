@@ -9,7 +9,7 @@ P41 upgrades P40 from a runnable loop into an explainable and stability-oriented
 - regression triage with source/slice/curriculum attribution
 
 P41 keeps P40's conservative promotion stance: recommendation-only, no automatic champion swap.
-P42 reuses this exact closed-loop shell and adds an RL candidate training mode (`rl_ppo_lite`).
+P42 reuses this exact closed-loop shell and promotes RL candidate training (`rl_ppo_lite`) to default mainline mode.
 
 ## Architecture
 
@@ -68,6 +68,18 @@ Lineage health checker reports:
 - required-field missing ratio
 - source path existence checks (`warning` when cleaned/missing)
 - overall status (`ok` / `warn` / `error`)
+
+## Training Mode Contract (P43)
+
+P41/P42 closed-loop outputs now persist lane-aware training metadata:
+
+- `training_mode`
+- `training_mode_category` (`mainline` / `legacy_baseline`)
+- `fallback_used`
+- `fallback_reason`
+- `legacy_paths_used`
+
+These fields are emitted in candidate manifests, closed-loop `run_manifest.json`, and summary tables.
 
 ## Unified Slice Labels
 
@@ -178,6 +190,6 @@ python -m trainer.closed_loop.slice_smoke
 - Missing replay sources keep the loop runnable (`stub/warn`) but reduce attribution quality.
 - Slice CI/bootstrap conclusions on low-count slices degrade to `insufficient_samples`.
 - `model_policy` inference quality depends on checkpoint/runtime availability.
-- Candidate training modes remain intentionally limited (BC/DAgger-first plumbing).
+- Candidate training is mainline-first (RL/selfsup order), while BC/DAgger remain opt-in legacy baselines.
 - P41 does not auto-apply champion replacement; recommendation remains manual-gated.
 - P42 extends candidate training with PPO-lite but keeps the same recommendation-only promotion boundary.

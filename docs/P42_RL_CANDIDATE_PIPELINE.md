@@ -9,6 +9,7 @@ P42 adds a runnable RL candidate path on top of P40/P41 closed-loop operations:
 - P22 integration (`p42_rl_candidate_smoke` / `p42_rl_candidate_nightly`)
 
 P42 is research-grade v1. It emphasizes stable execution and explainability over peak policy quality.
+Under P43 policy, P42 RL candidate is the default mainline training lane for closed-loop candidate generation.
 
 ## Architecture
 
@@ -53,7 +54,8 @@ flowchart LR
   - gradient clipping, KL logging, NaN fail-fast
   - outputs per-seed checkpoints (`best.pt`, `last.pt`) and run-level manifests
 - `trainer/closed_loop/candidate_train.py`
-  - new `mode: rl_ppo_lite`
+  - mainline-first `candidate_modes` ordering (`rl_ppo_lite` first)
+  - explicit optional legacy fallback controls (`allow_legacy_fallback`, `legacy_fallback_modes`)
   - emits P42-compatible candidate manifest while preserving closed-loop interfaces
 - `trainer/experiments/orchestrator.py`
   - supports P42 experiment types:
@@ -78,6 +80,18 @@ flowchart LR
   - `curriculum_plan.json` with `enabled=false` and explicit reason
   - `candidate_train_manifest.json` including RL train refs
 - When a component is unavailable, closed-loop keeps explicit status/reason instead of hard crashing.
+
+### Required Training-Mode Manifest Fields (P43)
+
+Closed-loop/candidate artifacts now include:
+
+- `training_mode`
+- `training_mode_category`
+- `fallback_used`
+- `fallback_reason`
+- `legacy_paths_used`
+
+This enables fast triage of whether a candidate came from mainline RL/selfsup or a legacy fallback path.
 
 ## Commands
 
@@ -137,3 +151,4 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
 - PPO-lite intentionally omits advanced PPO/distributed features (opponent pools, large-batch parallel rollouts).
 - Current implementation is single-process and local-budget oriented.
 - Model quality is sensitive to replay/arena budget; quick mode is for plumbing validation, not final policy claims.
+- Legacy BC/DAgger paths are retained for baseline probes, but are no longer default candidate-training routes.
