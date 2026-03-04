@@ -2,6 +2,7 @@
 
 P40 adds a runnable improvement loop that unifies replay mixing, arena failure mining, candidate training, and arena-gated promotion recommendation.
 P41 builds on top of this foundation and adds replay lineage, curriculum scheduling, slice-aware gating, and regression triage.
+P42 keeps the same closed-loop control flow and adds RL candidate training (`rl_ppo_lite`) as an additional training mode.
 
 See also: `docs/P41_CLOSED_LOOP_V2.md`.
 
@@ -73,6 +74,12 @@ P41 extends the same loop with:
 - curriculum-based staged mixing during candidate training
 - slice-aware champion rules with CI/bootstrap safeguards
 - regression triage reports for degraded candidates (including source + seed attribution)
+
+P42 extends candidate training mode options with:
+
+- sim-aligned RL env adapter + online rollouts
+- PPO-lite trainer with action-mask and invalid-action guards
+- closed-loop-compatible RL candidate manifest output
 
 ## Run Modes
 

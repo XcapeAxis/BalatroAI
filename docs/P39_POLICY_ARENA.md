@@ -138,3 +138,8 @@ P40 closed-loop dependency:
 - optional file used when present:
   - `docs/artifacts/p39/champion_eval_<timestamp>/candidate_decision.json`
 - if these are missing, P40 degrades to `status=stub`/`arena_status=skipped` instead of failing the full pipeline.
+
+P42 RL candidate dependency:
+
+- P42 closed-loop RL rows also use P39 arena outputs plus champion rules for post-training gating.
+- P22 P42 rows emit per-seed P42 summaries that reference arena summary/decision paths for the same seed run.

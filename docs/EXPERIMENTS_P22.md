@@ -28,7 +28,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | Scenario | Command | Notes |
 |---|---|---|
 | Plan only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -DryRun` | validates matrix + writes plan/report |
-| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | 12 experiments x 2 seeds (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row + P40 closed-loop smoke row + P41 closed-loop v2 smoke row) |
+| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | 13 experiments x 2 seeds (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row + P40 closed-loop smoke row + P41 closed-loop v2 smoke row + P42 RL candidate smoke row) |
 | Multi-seed quick compare | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline,quick_candidate -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | 2 strategies x 3 seeds |
 | Fast smoke (verbose) | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -VerboseLogs` | adds per-seed/per-stage console logs |
 | Nightly style | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Nightly -Resume` | larger seed set + resume |
@@ -327,6 +327,38 @@ Operational notes:
 - per-seed `triage_report.json` includes both `source_attribution` and `seed_attribution`.
 - P41 keeps conservative recommendation-only promotion behavior; no automatic champion replacement.
 
+## P42 RL Candidate Pipeline Integration
+
+P42 introduces `experiment_type: closed_loop_rl_candidate` so P22 can orchestrate RL candidate training inside the existing closed-loop shell.
+
+Reference rows in `configs/experiments/p22.yaml`:
+
+- `p42_rl_candidate_smoke` (quick/gate)
+- `p42_rl_candidate_nightly` (nightly)
+
+Key eval fields:
+
+- `config`: closed-loop config path (`configs/experiments/p42_closed_loop_rl_smoke.yaml` / `...nightly.yaml`)
+- `quick`: reduced-budget mode for local smoke
+- `timeout_sec`: per-seed closed-loop timeout
+- `candidate_policy` / `champion_policy`: arena comparison focus
+
+Generated artifacts:
+
+- `docs/artifacts/p22/runs/<run_id>/p42_summary.json`
+- `docs/artifacts/p22/runs/<run_id>/p42_rl_candidate_smoke/closed_loop_runs/seed_*/run_manifest.json`
+- `docs/artifacts/p22/runs/<run_id>/p42_rl_candidate_smoke/closed_loop_runs/seed_*/promotion_decision.json`
+- `docs/artifacts/p22/runs/<run_id>/p42_rl_candidate_smoke/closed_loop_runs/seed_*/triage_report.json`
+- `docs/artifacts/p22/runs/<run_id>/p42_rl_candidate_smoke/closed_loop_runs/seed_*/candidate_train/rl_train/reward_config.json`
+- `docs/artifacts/p22/runs/<run_id>/p42_rl_candidate_smoke/closed_loop_runs/seed_*/candidate_train/rl_train/warnings.log`
+
+Operational notes:
+
+- `scripts/run_p22.ps1 -Quick` includes `p42_rl_candidate_smoke` by default.
+- multi-seed materialization remains mandatory (`seeds_used.json` per experiment).
+- P42 reuses P41 slice-aware champion rules and regression triage outputs.
+- RL candidate path is v1/research-grade and still guarded by recommendation-only promotion flow.
+
 ## Runtime Observability (During Execution)
 
 P22 emits both per-experiment and run-level observability artifacts:
@@ -465,3 +497,5 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_selfsup
 - [EXPERIMENTS_P32_SELF_SUPERVISED.md](EXPERIMENTS_P32_SELF_SUPERVISED.md)
 - [P36_SELF_SUP_LEARNING.md](P36_SELF_SUP_LEARNING.md)
 - [P40_CLOSED_LOOP_IMPROVEMENT.md](P40_CLOSED_LOOP_IMPROVEMENT.md)
+- [P41_CLOSED_LOOP_V2.md](P41_CLOSED_LOOP_V2.md)
+- [P42_RL_CANDIDATE_PIPELINE.md](P42_RL_CANDIDATE_PIPELINE.md)

@@ -9,6 +9,7 @@ P41 upgrades P40 from a runnable loop into an explainable and stability-oriented
 - regression triage with source/slice/curriculum attribution
 
 P41 keeps P40's conservative promotion stance: recommendation-only, no automatic champion swap.
+P42 reuses this exact closed-loop shell and adds an RL candidate training mode (`rl_ppo_lite`).
 
 ## Architecture
 
@@ -134,6 +135,12 @@ P22 quick (includes P41 smoke row):
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
 ```
 
+P42 RL candidate quick (same closed-loop shell, RL training mode):
+
+```powershell
+python -m trainer.closed_loop.closed_loop_runner --config configs/experiments/p42_closed_loop_rl_smoke.yaml --quick
+```
+
 Nightly style:
 
 ```powershell
@@ -173,3 +180,4 @@ python -m trainer.closed_loop.slice_smoke
 - `model_policy` inference quality depends on checkpoint/runtime availability.
 - Candidate training modes remain intentionally limited (BC/DAgger-first plumbing).
 - P41 does not auto-apply champion replacement; recommendation remains manual-gated.
+- P42 extends candidate training with PPO-lite but keeps the same recommendation-only promotion boundary.

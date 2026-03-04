@@ -11,20 +11,21 @@
 | P39 | Policy Arena v1 (multi-policy adapters, bucketed evaluation, champion rule input) | done |
 | P40 | Closed-loop improvement v1 (replay mix + failure mining + arena-gated promotion recommendation) | done |
 | P41 | Closed-loop improvement v2 (lineage + curriculum + slice-aware gating + regression triage) | done |
+| P42 | RL candidate pipeline v1 (env adapter + rollout collector + PPO-lite + closed-loop integration) | active |
 
-## Current Focus: P42 Preparation
+## Current Focus: P42 Stabilization
 
-1. Keep P41 quick/nightly gates stable and artifact-complete under P22 orchestration.
-2. Raise slice sample coverage so CI/bootstrap outputs are decisive more often.
-3. Improve candidate policy quality while preserving conservative promotion controls.
-4. Prepare longer-horizon robustness checks and UI-level parity work for P42.
+1. Stabilize P42 RL smoke/nightly rows under P22 orchestration.
+2. Improve PPO-lite training quality while preserving action-mask and invalid-action safety controls.
+3. Expand slice coverage so P41/P42 CI/bootstrap decisions are less frequently sample-limited.
+4. Keep recommendation-only promotion discipline while candidate quality improves.
 
 ## Next Milestones
 
 | Milestone | Target | Exit Signal |
 |---|---|---|
-| P42 | Full UI-level parity and long-horizon policy robustness | Policy behavior remains stable under longer horizons and richer UI/action mechanics. |
-| P43 | Self-supervised transfer and self-play scaling | Representation + policy lines show reproducible seed-robust gains with gate-backed evidence. |
+| P43 | RL scaling and richer opponent/self-play schedules | RL candidate line shows repeatable seed-robust gains over heuristic/search baselines. |
+| P44 | Self-supervised transfer + long-horizon robustness scaling | Representation + policy lines sustain gains under larger-budget multi-seed gating. |
 
 ## Constraints
 
