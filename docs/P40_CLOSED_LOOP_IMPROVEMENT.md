@@ -72,7 +72,7 @@ P41 extends the same loop with:
 - shared slice labels across replay and arena
 - curriculum-based staged mixing during candidate training
 - slice-aware champion rules with CI/bootstrap safeguards
-- regression triage reports for degraded candidates
+- regression triage reports for degraded candidates (including source + seed attribution)
 
 ## Run Modes
 

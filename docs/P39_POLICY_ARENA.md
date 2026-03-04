@@ -52,6 +52,7 @@ Bucket metrics / slice metrics:
   - `slice_action_type` (`play/discard/shop/consumable/transition/unknown`)
   - `slice_position_sensitive` (`true/false/unknown`)
   - `slice_stateful_joker_present` (`true/false/unknown` stub-compatible)
+- shared slice rules can be smoke-checked via `python -m trainer.closed_loop.slice_smoke`
 
 ## Champion Rules (P39 Decision Layer)
 

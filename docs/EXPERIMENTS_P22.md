@@ -310,7 +310,7 @@ Key eval fields:
 - `quick`: reduced-budget mode for local smoke
 - `timeout_sec`: per-seed closed-loop timeout
 - `candidate_policy` / `champion_policy`: promotion comparison focus
-- `enable_regression_triage`: whether to emit triage attribution output
+- regression triage switch is configured inside the closed-loop config (`regression_triage.enabled`)
 
 Generated artifacts:
 
@@ -324,6 +324,7 @@ Operational notes:
 
 - `scripts/run_p22.ps1 -Quick` includes `p41_closed_loop_v2_smoke` by default.
 - multi-seed materialization remains in `seeds_used.json` per experiment.
+- per-seed `triage_report.json` includes both `source_attribution` and `seed_attribution`.
 - P41 keeps conservative recommendation-only promotion behavior; no automatic champion replacement.
 
 ## Runtime Observability (During Execution)

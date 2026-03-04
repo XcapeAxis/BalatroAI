@@ -114,7 +114,7 @@ Triggered after arena decision, triage reports:
 
 1. overall degraded metrics
 2. top regressed slices
-3. likely source attribution (replay sources/seeds from lineage)
+3. likely source attribution (replay sources and source seeds from lineage)
 4. curriculum drift vs baseline run
 5. data quality anomalies (`lineage_health`, `invalid_for_training` shifts)
 
@@ -146,6 +146,12 @@ Lineage check:
 python -m trainer.closed_loop.check_replay_lineage --manifest docs/artifacts/p41/replay_mixer/<run_id>/replay_mix_manifest.json --out-dir docs/artifacts/p41/replay_lineage/<run_id>
 ```
 
+Slice label smoke:
+
+```powershell
+python -m trainer.closed_loop.slice_smoke
+```
+
 ## Artifact Layout
 
 - `docs/artifacts/p41/replay_mixer/<run_id>/`
@@ -158,6 +164,7 @@ python -m trainer.closed_loop.check_replay_lineage --manifest docs/artifacts/p41
   - `slice_decision_breakdown.json/.md`
   - `triage_report.json/.md`
   - `summary_table.{json,csv,md}`
+- `docs/artifacts/p41/slice_smoke_<timestamp>.json`
 
 ## Known Gaps / Degrade Paths
 

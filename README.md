@@ -297,7 +297,7 @@ P41 extends the P40 candidate-improvement loop with traceable replay lineage, sl
 3. `CurriculumScheduler` changes source/slice sampling weights across training stages.
 4. `CandidateTrain` runs staged candidate training and records applied curriculum plans.
 5. `ArenaEval + Slice-aware Champion Rules` compares candidate vs champion with bootstrap/CI-aware safeguards.
-6. `RegressionTriage` attributes regressions to slices, replay sources, and curriculum drift.
+6. `RegressionTriage` attributes regressions to slices, replay sources/seeds, curriculum drift, and lineage-health anomalies.
 
 Fast smoke:
 
@@ -309,6 +309,12 @@ Or through P22:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
+```
+
+Slice label smoke (shared replay/arena semantics):
+
+```powershell
+python -m trainer.closed_loop.slice_smoke
 ```
 
 Primary outputs:
@@ -324,6 +330,7 @@ Primary outputs:
 - P41 v2 still produces recommendation-only promotion outputs; champion switching remains manual.
 - Candidate training is staged and curriculum-driven, but full RL/self-play optimization is not part of P41 scope.
 - Slice-aware bootstrap/CI conclusions depend on sample size; low-sample slices degrade to `observe`/`insufficient_samples`.
+- Regression triage source/seed attribution is best-effort and depends on replay lineage completeness.
 - Missing data sources degrade to `stub/skipped/warn` outputs with explicit reports instead of full-pipeline crashes.
 
 ## Core Workflows
