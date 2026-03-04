@@ -1,0 +1,27 @@
+schema: p41_candidate_train_config_v2
+mode: bc_finetune
+
+output:
+  artifacts_root: docs/artifacts/p41/candidate_train
+
+replay_mix_manifest: ""
+
+seeds:
+  - AAAAAAA
+  - BBBBBBB
+  - CCCCCCC
+  - DDDDDDD
+
+curriculum_config: configs/experiments/p41_curriculum_nightly.yaml
+
+training:
+  epochs: 2
+  batch_size: 96
+  lr: 0.0008
+  timeout_sec: 5400
+  max_rows_per_seed: 2000
+  prefer_source_types:
+    - p13_dagger_or_real
+    - arena_failures
+    - selfsup_replay
+

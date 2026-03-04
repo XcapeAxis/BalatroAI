@@ -1368,6 +1368,28 @@ def _append_p40_orchestrator_summary(ctx: RunContext, payload: dict[str, Any]) -
     )
 
 
+def _append_p41_orchestrator_summary(ctx: RunContext, payload: dict[str, Any]) -> None:
+    path = ctx.run_root / "p41_summary.json"
+    existing = read_json(path)
+    rows: list[dict[str, Any]] = []
+    if isinstance(existing, dict):
+        raw_rows = existing.get("rows")
+        if isinstance(raw_rows, list):
+            for item in raw_rows:
+                if isinstance(item, dict):
+                    rows.append(item)
+    rows.append(payload)
+    write_json(
+        path,
+        {
+            "schema": "p41_orchestrator_summary_v1",
+            "generated_at": now_iso(),
+            "run_id": ctx.run_id,
+            "rows": rows,
+        },
+    )
+
+
 def _pick_arena_focus_row(summary_rows: list[dict[str, Any]], focus_policy: str) -> dict[str, Any] | None:
     token = str(focus_policy or "").strip().lower()
     if token:
@@ -1563,7 +1585,13 @@ def _run_closed_loop_seed_experiment(
     seed_total: int,
 ) -> dict[str, Any]:
     eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
-    cfg_rel = str(eval_cfg.get("config") or exp.get("closed_loop_config") or "configs/experiments/p40_closed_loop_smoke.yaml")
+    exp_type = str(exp.get("experiment_type") or "").strip().lower()
+    is_v2 = exp_type in {"closed_loop_improvement_v2", "p41_closed_loop_v2", "closed_loop_v2"}
+    cfg_rel = str(
+        eval_cfg.get("config")
+        or exp.get("closed_loop_config")
+        or ("configs/experiments/p41_closed_loop_v2_smoke.yaml" if is_v2 else "configs/experiments/p40_closed_loop_smoke.yaml")
+    )
     cfg_path = (ctx.repo_root / cfg_rel).resolve()
     out_dir = exp_dir / "closed_loop_runs" / f"seed_{seed_idx:03d}_{seed}"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1617,18 +1645,31 @@ def _run_closed_loop_seed_experiment(
         "hand_top3": 0.0,
         "shop_top1": max(0.0, 1.0 - min(1.0, invalid_rate)),
         "illegal_action_rate": invalid_rate,
-        "p40_candidate_score": candidate_score,
-        "p40_champion_score": champion_score,
-        "p40_score_delta": score_delta,
-        "p40_recommendation": recommendation,
-        "p40_recommend_promotion": 1.0 if recommend_promotion else 0.0,
-        "p40_run_dir": str(out_dir),
-        "p40_run_manifest": str(run_manifest_path),
-        "p40_promotion_decision": str(decision_path),
+        ("p41_candidate_score" if is_v2 else "p40_candidate_score"): candidate_score,
+        ("p41_champion_score" if is_v2 else "p40_champion_score"): champion_score,
+        ("p41_score_delta" if is_v2 else "p40_score_delta"): score_delta,
+        ("p41_recommendation" if is_v2 else "p40_recommendation"): recommendation,
+        ("p41_recommend_promotion" if is_v2 else "p40_recommend_promotion"): 1.0 if recommend_promotion else 0.0,
+        ("p41_run_dir" if is_v2 else "p40_run_dir"): str(out_dir),
+        ("p41_run_manifest" if is_v2 else "p40_run_manifest"): str(run_manifest_path),
+        ("p41_promotion_decision" if is_v2 else "p40_promotion_decision"): str(decision_path),
     }
+    if is_v2 and isinstance(run_manifest, dict):
+        steps = run_manifest.get("steps") if isinstance(run_manifest.get("steps"), dict) else {}
+        replay = steps.get("replay_mixer") if isinstance(steps.get("replay_mixer"), dict) else {}
+        triage = steps.get("regression_triage") if isinstance(steps.get("regression_triage"), dict) else {}
+        metrics.update(
+            {
+                "p41_lineage_summary_json": str(replay.get("lineage_summary_json") or ""),
+                "p41_curriculum_plan_json": str(
+                    ((steps.get("candidate_train") if isinstance(steps.get("candidate_train"), dict) else {}).get("curriculum_plan") or "")
+                ),
+                "p41_triage_report_json": str(triage.get("triage_report_json") or ""),
+            }
+        )
 
     payload = {
-        "schema": "p40_orchestrator_seed_summary_v1",
+        "schema": "p41_orchestrator_seed_summary_v1" if is_v2 else "p40_orchestrator_seed_summary_v1",
         "generated_at": now_iso(),
         "exp_id": str(exp.get("id") or ""),
         "seed": seed,
@@ -1643,7 +1684,10 @@ def _run_closed_loop_seed_experiment(
         "summary_row": summary_row if isinstance(summary_row, dict) else {},
         "metrics": metrics,
     }
-    _append_p40_orchestrator_summary(ctx, payload)
+    if is_v2:
+        _append_p41_orchestrator_summary(ctx, payload)
+    else:
+        _append_p40_orchestrator_summary(ctx, payload)
 
     status = "ok" if int(result.get("returncode") or 0) == 0 and run_manifest_path.exists() else "failed"
     return {
@@ -2051,10 +2095,15 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "champion_policy": str(eval_cfg.get("champion_policy") or ""),
             "focus_policy": str(eval_cfg.get("focus_policy") or eval_cfg.get("candidate_policy") or ""),
         }
-    elif exp_type in {"closed_loop_improvement", "closed_loop", "p40_closed_loop"}:
+    elif exp_type in {"closed_loop_improvement", "closed_loop", "p40_closed_loop", "closed_loop_improvement_v2", "p41_closed_loop_v2", "closed_loop_v2"}:
         eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+        is_v2 = exp_type in {"closed_loop_improvement_v2", "p41_closed_loop_v2", "closed_loop_v2"}
         manifest["closed_loop"] = {
-            "config": str(eval_cfg.get("config") or exp.get("closed_loop_config") or "configs/experiments/p40_closed_loop_smoke.yaml"),
+            "config": str(
+                eval_cfg.get("config")
+                or exp.get("closed_loop_config")
+                or ("configs/experiments/p41_closed_loop_v2_smoke.yaml" if is_v2 else "configs/experiments/p40_closed_loop_smoke.yaml")
+            ),
             "quick": bool(eval_cfg.get("quick") or False),
             "timeout_sec": int(eval_cfg.get("timeout_sec") or 3600),
             "candidate_policy": str(eval_cfg.get("candidate_policy") or "model_policy"),
@@ -2546,7 +2595,7 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                     message=exp_type,
                     extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
                 )
-            elif exp_type in {"closed_loop_improvement", "closed_loop", "p40_closed_loop"}:
+            elif exp_type in {"closed_loop_improvement", "closed_loop", "p40_closed_loop", "closed_loop_improvement_v2", "p41_closed_loop_v2", "closed_loop_v2"}:
                 try:
                     closed_loop_result = _run_closed_loop_seed_experiment(
                         ctx=ctx,

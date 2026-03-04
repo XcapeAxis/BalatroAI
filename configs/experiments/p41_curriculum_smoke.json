@@ -1,0 +1,84 @@
+{
+  "schema": "p41_curriculum_config_v1",
+  "enabled": true,
+  "phases": [
+    {
+      "name": "stabilize",
+      "epochs": 1,
+      "target_rows": 180,
+      "source_weights": {
+        "p10_long_episode": 1.4,
+        "p13_dagger_or_real": 1.3,
+        "selfsup_replay": 0.9,
+        "arena_failures": 0.4
+      },
+      "slice_weights": {
+        "slice_resource_pressure": {
+          "low": 1.2,
+          "medium": 1.0,
+          "high": 0.8,
+          "unknown": 0.9
+        },
+        "slice_action_type": {
+          "play": 1.2,
+          "discard": 1.1,
+          "shop": 1.0,
+          "consumable": 0.9,
+          "transition": 0.8
+        }
+      }
+    },
+    {
+      "name": "hardening",
+      "epochs": 1,
+      "target_rows": 220,
+      "source_weights": {
+        "p10_long_episode": 0.8,
+        "p13_dagger_or_real": 1.0,
+        "selfsup_replay": 0.8,
+        "arena_failures": 1.8
+      },
+      "slice_weights": {
+        "slice_resource_pressure": {
+          "low": 0.7,
+          "medium": 1.0,
+          "high": 1.8,
+          "unknown": 0.8
+        },
+        "slice_action_type": {
+          "play": 0.9,
+          "discard": 1.0,
+          "shop": 1.2,
+          "consumable": 1.1,
+          "transition": 1.0
+        }
+      }
+    },
+    {
+      "name": "balance",
+      "epochs": 1,
+      "target_rows": 180,
+      "source_weights": {
+        "p10_long_episode": 1.0,
+        "p13_dagger_or_real": 1.1,
+        "selfsup_replay": 1.0,
+        "arena_failures": 1.1
+      },
+      "slice_weights": {
+        "slice_resource_pressure": {
+          "low": 1.0,
+          "medium": 1.0,
+          "high": 1.2,
+          "unknown": 1.0
+        },
+        "slice_action_type": {
+          "play": 1.0,
+          "discard": 1.0,
+          "shop": 1.0,
+          "consumable": 1.0,
+          "transition": 1.0
+        }
+      }
+    }
+  ]
+}

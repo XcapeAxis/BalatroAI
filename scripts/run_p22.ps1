@@ -45,7 +45,7 @@ if ($SeedLimit -gt 0) { $args += @("--seed-limit", "$SeedLimit") }
 if (-not [string]::IsNullOrWhiteSpace($Seeds)) { $args += @("--seeds", $Seeds) }
 
 if ($Quick) {
-  if (-not ($args -contains "--only")) { $args += @("--only", "quick_baseline,quick_candidate,quick_selfsup_pretrain,quick_selfsup_p33,quick_selfsup_future_value,quick_selfsup_action_type,quick_ssl_pretrain_v1,quick_ssl_probe_v1,rl_ppo_smoke,p39_policy_arena_smoke,p40_closed_loop_smoke") }
+  if (-not ($args -contains "--only")) { $args += @("--only", "quick_baseline,quick_candidate,quick_selfsup_pretrain,quick_selfsup_p33,quick_selfsup_future_value,quick_selfsup_action_type,quick_ssl_pretrain_v1,quick_ssl_probe_v1,rl_ppo_smoke,p39_policy_arena_smoke,p40_closed_loop_smoke,p41_closed_loop_v2_smoke") }
   if ($SeedLimit -le 0) { $args += @("--seed-limit", "2") }
 }
 

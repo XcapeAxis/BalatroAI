@@ -102,6 +102,21 @@ experiment_groups:
           - BBBBBBB
           - CCCCCCC
           - DDDDDDD
+  closed_loop_improvement_v2:
+    description: "P41 closed-loop v2 (lineage + curriculum + slice-aware gating + triage)"
+    variants:
+      - id: p41_closed_loop_v2_smoke
+        algo: closed_loop_v2
+        seeds:
+          - AAAAAAA
+          - BBBBBBB
+      - id: p41_closed_loop_v2_nightly
+        algo: closed_loop_v2
+        seeds:
+          - AAAAAAA
+          - BBBBBBB
+          - CCCCCCC
+          - DDDDDDD
 
 matrix:
   - id: quick_baseline
@@ -652,6 +667,82 @@ matrix:
       config: configs/experiments/p40_closed_loop_nightly.yaml
       quick: false
       timeout_sec: 7200
+      candidate_policy: model_policy
+      champion_policy: heuristic_baseline
+
+  - id: p41_closed_loop_v2_smoke
+    name: p41_closed_loop_v2_smoke
+    backend: sim
+    policy: closed_loop_v2
+    experiment_type: closed_loop_improvement_v2
+    seed_mode: regression_fixed
+    seed_set_name: contract_regression
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+    gate_flag: RunP22
+    modes:
+      quick: true
+      gate: true
+      nightly: true
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/common/slices.py
+      - trainer/closed_loop/replay_mixer.py
+      - trainer/closed_loop/check_replay_lineage.py
+      - trainer/closed_loop/curriculum_scheduler.py
+      - trainer/closed_loop/candidate_train.py
+      - trainer/closed_loop/regression_triage.py
+      - trainer/closed_loop/closed_loop_runner.py
+      - trainer/policy_arena/champion_rules.py
+    eval:
+      config: configs/experiments/p41_closed_loop_v2_smoke.yaml
+      quick: true
+      timeout_sec: 4200
+      candidate_policy: model_policy
+      champion_policy: heuristic_baseline
+
+  - id: p41_closed_loop_v2_nightly
+    name: p41_closed_loop_v2_nightly
+    backend: sim
+    policy: closed_loop_v2
+    experiment_type: closed_loop_improvement_v2
+    seed_mode: nightly
+    seed_set_name: eval_default
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+      - CCCCCCC
+      - DDDDDDD
+    gate_flag: RunP22
+    modes:
+      quick: false
+      gate: false
+      nightly: true
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/common/slices.py
+      - trainer/closed_loop/replay_mixer.py
+      - trainer/closed_loop/check_replay_lineage.py
+      - trainer/closed_loop/curriculum_scheduler.py
+      - trainer/closed_loop/candidate_train.py
+      - trainer/closed_loop/regression_triage.py
+      - trainer/closed_loop/closed_loop_runner.py
+      - trainer/policy_arena/champion_rules.py
+    eval:
+      config: configs/experiments/p41_closed_loop_v2_nightly.yaml
+      quick: false
+      timeout_sec: 9000
       candidate_policy: model_policy
       champion_policy: heuristic_baseline
 

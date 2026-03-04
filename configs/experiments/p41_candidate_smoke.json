@@ -1,0 +1,25 @@
+{
+  "schema": "p41_candidate_train_config_v2",
+  "mode": "bc_finetune",
+  "output": {
+    "artifacts_root": "docs/artifacts/p41/candidate_train"
+  },
+  "replay_mix_manifest": "",
+  "seeds": [
+    "AAAAAAA",
+    "BBBBBBB"
+  ],
+  "curriculum_config": "configs/experiments/p41_curriculum_smoke.yaml",
+  "training": {
+    "epochs": 1,
+    "batch_size": 64,
+    "lr": 0.001,
+    "timeout_sec": 1800,
+    "max_rows_per_seed": 320,
+    "prefer_source_types": [
+      "p13_dagger_or_real",
+      "arena_failures",
+      "selfsup_replay"
+    ]
+  }
+}

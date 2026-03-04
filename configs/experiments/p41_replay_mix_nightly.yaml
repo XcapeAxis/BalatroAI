@@ -1,0 +1,42 @@
+schema: p41_replay_mixer_config_v2
+
+output:
+  artifacts_root: docs/artifacts/p41/replay_mixer
+
+lineage_output:
+  artifacts_root: docs/artifacts/p41/replay_lineage
+
+seeds:
+  - AAAAAAA
+  - BBBBBBB
+  - CCCCCCC
+  - DDDDDDD
+
+split:
+  train: 0.88
+  val: 0.12
+
+sources:
+  - id: p10_long_episode
+    type: p10_long_episode
+    weight: 0.22
+    max_samples: 1400
+  - id: p13_dagger_or_real
+    type: p13_dagger_or_real
+    weight: 0.32
+    max_samples: 1800
+    roots:
+      - docs/artifacts/p13
+      - docs/artifacts/p16
+  - id: selfsup_replay
+    type: selfsup_replay
+    weight: 0.26
+    max_samples: 1600
+    roots:
+      - docs/artifacts/p36
+  - id: arena_failures
+    type: arena_failures
+    weight: 0.20
+    max_samples: 1200
+    failure_pack_manifest: ""
+
