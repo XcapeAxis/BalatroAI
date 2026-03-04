@@ -1,10 +1,10 @@
 ﻿# COVERAGE P37 STATUS
 
 - timestamp: 
-2026-03-04 03:00:38
+2026-03-04 14:20:22
 - baseline_gate: RunP32
 - run_p32_invoked: 
-False
+True
 - fixtures_total: 
 6
 - fixtures_pass: 

@@ -28,7 +28,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | Scenario | Command | Notes |
 |---|---|---|
 | Plan only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -DryRun` | validates matrix + writes plan/report |
-| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | 10 experiments x 2 seeds (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row) |
+| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | 11 experiments x 2 seeds (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row + P40 closed-loop smoke row) |
 | Multi-seed quick compare | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline,quick_candidate -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | 2 strategies x 3 seeds |
 | Fast smoke (verbose) | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -VerboseLogs` | adds per-seed/per-stage console logs |
 | Nightly style | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Nightly -Resume` | larger seed set + resume |
@@ -59,7 +59,7 @@ Key sections:
 - `matrix[]`:
   - `id`, `name`
   - `backend`, `policy`
-  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`, `selfsup_future_value`, `selfsup_action_type`, `ssl_pretrain`, `ssl_probe`, `rl_selfplay`, `policy_arena`)
+  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`, `selfsup_future_value`, `selfsup_action_type`, `ssl_pretrain`, `ssl_probe`, `rl_selfplay`, `policy_arena`, `closed_loop_improvement`)
   - `seed_mode` (`regression_fixed` or `nightly`)
   - `seeds` (optional explicit seed override list)
   - `gate_flag` (passed to `scripts/run_regressions.ps1`)
@@ -266,6 +266,35 @@ Generated artifacts:
 - `docs/artifacts/p22/runs/<run_id>/p39_policy_arena_smoke/policy_arena_runs/seed_*/arena_runs/<seed_run_id>/bucket_metrics.json`
 - optional champion decision outputs under `.../champion_eval/`
 
+## P40 Closed-loop Improvement Integration
+
+P40 introduces `experiment_type: closed_loop_improvement` so P22 can orchestrate replay-mix -> failure-mining -> candidate-train -> arena-gated recommendation in one experiment row.
+
+Reference rows in `configs/experiments/p22.yaml`:
+
+- `p40_closed_loop_smoke` (quick/gate)
+- `p40_closed_loop_nightly` (nightly)
+
+Key eval fields:
+
+- `config`: closed-loop config path (`configs/experiments/p40_closed_loop_smoke.yaml` / `...nightly.yaml`)
+- `quick`: whether to run reduced budgets inside the loop
+- `timeout_sec`: per-seed closed-loop timeout
+- `candidate_policy` / `champion_policy`: promotion comparison focus
+
+Generated artifacts:
+
+- `docs/artifacts/p22/runs/<run_id>/p40_summary.json`
+- `docs/artifacts/p22/runs/<run_id>/p40_closed_loop_smoke/closed_loop_runs/seed_*/run_manifest.json`
+- `docs/artifacts/p22/runs/<run_id>/p40_closed_loop_smoke/closed_loop_runs/seed_*/promotion_decision.json`
+- `docs/artifacts/p22/runs/<run_id>/p40_closed_loop_smoke/closed_loop_runs/seed_*/summary_table.json`
+
+Operational notes:
+
+- `scripts/run_p22.ps1 -Quick` includes `p40_closed_loop_smoke` by default.
+- `seeds_used.json` is still recorded per experiment; closed-loop internals also emit per-module seed manifests.
+- P40 v1 does not auto-replace champion metadata; output is recommendation-only.
+
 ## Runtime Observability (During Execution)
 
 P22 emits both per-experiment and run-level observability artifacts:
@@ -403,3 +432,4 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_selfsup
 - [EXPERIMENTS_P31.md](EXPERIMENTS_P31.md)
 - [EXPERIMENTS_P32_SELF_SUPERVISED.md](EXPERIMENTS_P32_SELF_SUPERVISED.md)
 - [P36_SELF_SUP_LEARNING.md](P36_SELF_SUP_LEARNING.md)
+- [P40_CLOSED_LOOP_IMPROVEMENT.md](P40_CLOSED_LOOP_IMPROVEMENT.md)

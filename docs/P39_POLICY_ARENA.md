@@ -113,3 +113,13 @@ P22 integration:
 - `docs/artifacts/p22/runs/<run_id>/p39_summary.json`
 - `docs/artifacts/p22/runs/<run_id>/p39_policy_arena_smoke/**`
 
+P40 closed-loop dependency:
+
+- `trainer.closed_loop.failure_mining` consumes P39 arena outputs as hard-failure mining inputs.
+- required files for full P40 mining path:
+  - `docs/artifacts/p39/arena_runs/<run_id>/episode_records.jsonl`
+  - `docs/artifacts/p39/arena_runs/<run_id>/summary_table.json`
+  - `docs/artifacts/p39/arena_runs/<run_id>/bucket_metrics.json`
+- optional file used when present:
+  - `docs/artifacts/p39/champion_eval_<timestamp>/candidate_decision.json`
+- if these are missing, P40 degrades to `status=stub`/`arena_status=skipped` instead of failing the full pipeline.
