@@ -87,6 +87,21 @@ experiment_groups:
           - AAAAAAA
           - BBBBBBB
           - CCCCCCC
+  closed_loop_improvement_v1:
+    description: "P40 closed-loop improvement (replay mix + failure mining + arena-gated candidate training)"
+    variants:
+      - id: p40_closed_loop_smoke
+        algo: closed_loop_v1
+        seeds:
+          - AAAAAAA
+          - BBBBBBB
+      - id: p40_closed_loop_nightly
+        algo: closed_loop_v1
+        seeds:
+          - AAAAAAA
+          - BBBBBBB
+          - CCCCCCC
+          - DDDDDDD
 
 matrix:
   - id: quick_baseline
@@ -571,6 +586,74 @@ matrix:
       episodes_per_seed: 4
       max_steps: 240
       enable_champion_rules: true
+
+  - id: p40_closed_loop_smoke
+    name: p40_closed_loop_smoke
+    backend: sim
+    policy: closed_loop
+    experiment_type: closed_loop_improvement
+    seed_mode: regression_fixed
+    seed_set_name: contract_regression
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+    gate_flag: RunP22
+    modes:
+      quick: true
+      gate: true
+      nightly: true
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/closed_loop/replay_mixer.py
+      - trainer/closed_loop/failure_mining.py
+      - trainer/closed_loop/candidate_train.py
+      - trainer/closed_loop/closed_loop_runner.py
+    eval:
+      config: configs/experiments/p40_closed_loop_smoke.yaml
+      quick: true
+      timeout_sec: 3600
+      candidate_policy: model_policy
+      champion_policy: heuristic_baseline
+
+  - id: p40_closed_loop_nightly
+    name: p40_closed_loop_nightly
+    backend: sim
+    policy: closed_loop
+    experiment_type: closed_loop_improvement
+    seed_mode: nightly
+    seed_set_name: eval_default
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+      - CCCCCCC
+      - DDDDDDD
+    gate_flag: RunP22
+    modes:
+      quick: false
+      gate: false
+      nightly: true
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/closed_loop/replay_mixer.py
+      - trainer/closed_loop/failure_mining.py
+      - trainer/closed_loop/candidate_train.py
+      - trainer/closed_loop/closed_loop_runner.py
+    eval:
+      config: configs/experiments/p40_closed_loop_nightly.yaml
+      quick: false
+      timeout_sec: 7200
+      candidate_policy: model_policy
+      champion_policy: heuristic_baseline
 
 evaluation:
   primary_metric: score

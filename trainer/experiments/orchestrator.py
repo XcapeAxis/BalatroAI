@@ -1346,6 +1346,28 @@ def _append_p39_orchestrator_summary(ctx: RunContext, payload: dict[str, Any]) -
     )
 
 
+def _append_p40_orchestrator_summary(ctx: RunContext, payload: dict[str, Any]) -> None:
+    path = ctx.run_root / "p40_summary.json"
+    existing = read_json(path)
+    rows: list[dict[str, Any]] = []
+    if isinstance(existing, dict):
+        raw_rows = existing.get("rows")
+        if isinstance(raw_rows, list):
+            for item in raw_rows:
+                if isinstance(item, dict):
+                    rows.append(item)
+    rows.append(payload)
+    write_json(
+        path,
+        {
+            "schema": "p40_orchestrator_summary_v1",
+            "generated_at": now_iso(),
+            "run_id": ctx.run_id,
+            "rows": rows,
+        },
+    )
+
+
 def _pick_arena_focus_row(summary_rows: list[dict[str, Any]], focus_policy: str) -> dict[str, Any] | None:
     token = str(focus_policy or "").strip().lower()
     if token:
@@ -1527,6 +1549,111 @@ def _run_policy_arena_seed_experiment(
             "arena": arena_result,
             "champion_rules": champion_result,
             "payload": summary_payload,
+        },
+    }
+
+
+def _run_closed_loop_seed_experiment(
+    *,
+    ctx: RunContext,
+    exp: dict[str, Any],
+    exp_dir: Path,
+    seed: str,
+    seed_idx: int,
+    seed_total: int,
+) -> dict[str, Any]:
+    eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+    cfg_rel = str(eval_cfg.get("config") or exp.get("closed_loop_config") or "configs/experiments/p40_closed_loop_smoke.yaml")
+    cfg_path = (ctx.repo_root / cfg_rel).resolve()
+    out_dir = exp_dir / "closed_loop_runs" / f"seed_{seed_idx:03d}_{seed}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    run_id = f"seed_{seed_idx:03d}_{seed}"
+
+    cmd = [
+        sys.executable,
+        "-B",
+        "-m",
+        "trainer.closed_loop.closed_loop_runner",
+        "--config",
+        str(cfg_path),
+        "--out-dir",
+        str(out_dir),
+        "--run-id",
+        run_id,
+        "--seeds",
+        seed,
+    ]
+    if bool(eval_cfg.get("quick", False)) or ctx.mode == "quick":
+        cmd.append("--quick")
+
+    timeout_sec = int(eval_cfg.get("timeout_sec") or 3600)
+    result = run_process(cmd, cwd=ctx.repo_root, timeout_sec=max(600, timeout_sec))
+
+    run_manifest_path = out_dir / "run_manifest.json"
+    summary_table_path = out_dir / "summary_table.json"
+    decision_path = out_dir / "promotion_decision.json"
+
+    run_manifest = read_json(run_manifest_path) or {}
+    decision_payload = read_json(decision_path) or {}
+    summary_rows = _read_json_list(summary_table_path)
+    summary_row = summary_rows[0] if summary_rows else {}
+
+    candidate_score = _as_number(decision_payload.get("candidate_score"))
+    champion_score = _as_number(decision_payload.get("champion_score"))
+    score_delta = _as_number(decision_payload.get("score_delta"))
+    candidate_win = _as_number(decision_payload.get("candidate_win_rate"))
+    invalid_rate = _as_number(decision_payload.get("candidate_invalid_action_rate"))
+    recommendation = str(decision_payload.get("recommendation") or "")
+    recommend_promotion = bool(decision_payload.get("recommend_promotion", False))
+
+    metrics = {
+        "score": candidate_score,
+        "avg_reward": candidate_score,
+        "best_episode_reward": max(candidate_score, champion_score),
+        "avg_ante_reached": candidate_score,
+        "median_ante": candidate_score,
+        "win_rate": candidate_win,
+        "hand_top1": 0.0,
+        "hand_top3": 0.0,
+        "shop_top1": max(0.0, 1.0 - min(1.0, invalid_rate)),
+        "illegal_action_rate": invalid_rate,
+        "p40_candidate_score": candidate_score,
+        "p40_champion_score": champion_score,
+        "p40_score_delta": score_delta,
+        "p40_recommendation": recommendation,
+        "p40_recommend_promotion": 1.0 if recommend_promotion else 0.0,
+        "p40_run_dir": str(out_dir),
+        "p40_run_manifest": str(run_manifest_path),
+        "p40_promotion_decision": str(decision_path),
+    }
+
+    payload = {
+        "schema": "p40_orchestrator_seed_summary_v1",
+        "generated_at": now_iso(),
+        "exp_id": str(exp.get("id") or ""),
+        "seed": seed,
+        "seed_index": seed_idx,
+        "seed_total": seed_total,
+        "closed_loop_config": str(cfg_path),
+        "closed_loop_returncode": int(result.get("returncode") or 0),
+        "run_dir": str(out_dir),
+        "run_manifest_path": str(run_manifest_path),
+        "summary_table_path": str(summary_table_path),
+        "promotion_decision_path": str(decision_path),
+        "summary_row": summary_row if isinstance(summary_row, dict) else {},
+        "metrics": metrics,
+    }
+    _append_p40_orchestrator_summary(ctx, payload)
+
+    status = "ok" if int(result.get("returncode") or 0) == 0 and run_manifest_path.exists() else "failed"
+    return {
+        "status": status,
+        "metrics": metrics,
+        "summary": {
+            "closed_loop": result,
+            "payload": payload,
+            "run_manifest": run_manifest,
+            "decision": decision_payload,
         },
     }
 
@@ -1923,6 +2050,15 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "candidate_policy": str(eval_cfg.get("candidate_policy") or ""),
             "champion_policy": str(eval_cfg.get("champion_policy") or ""),
             "focus_policy": str(eval_cfg.get("focus_policy") or eval_cfg.get("candidate_policy") or ""),
+        }
+    elif exp_type in {"closed_loop_improvement", "closed_loop", "p40_closed_loop"}:
+        eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+        manifest["closed_loop"] = {
+            "config": str(eval_cfg.get("config") or exp.get("closed_loop_config") or "configs/experiments/p40_closed_loop_smoke.yaml"),
+            "quick": bool(eval_cfg.get("quick") or False),
+            "timeout_sec": int(eval_cfg.get("timeout_sec") or 3600),
+            "candidate_policy": str(eval_cfg.get("candidate_policy") or "model_policy"),
+            "champion_policy": str(eval_cfg.get("champion_policy") or "heuristic_baseline"),
         }
     write_json(exp_dir / "run_manifest.json", manifest)
     print(
@@ -2394,6 +2530,52 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                             "elapsed_sec": elapsed(),
                             "metrics": dict(arena_result.get("metrics") or {}),
                             "policy_arena_summary": arena_result.get("summary") or {},
+                        }
+                    )
+                append_experiment_progress_event(
+                    progress_path,
+                    run_id=ctx.run_id,
+                    exp_id=exp_id,
+                    phase="eval",
+                    stage="eval",
+                    status=str(seed_results[-1].get("status")),
+                    seed=seed,
+                    step_or_epoch=seed_idx,
+                    elapsed_sec=elapsed(),
+                    metrics=seed_results[-1].get("metrics") or {},
+                    message=exp_type,
+                    extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
+                )
+            elif exp_type in {"closed_loop_improvement", "closed_loop", "p40_closed_loop"}:
+                try:
+                    closed_loop_result = _run_closed_loop_seed_experiment(
+                        ctx=ctx,
+                        exp=exp,
+                        exp_dir=exp_dir,
+                        seed=seed,
+                        seed_idx=seed_idx,
+                        seed_total=len(seeds),
+                    )
+                except Exception as exc:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "failed",
+                            "stage": "eval",
+                            "error": f"closed_loop_exception: {exc}",
+                            "elapsed_sec": elapsed(),
+                            "metrics": {},
+                        }
+                    )
+                else:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "ok" if closed_loop_result["status"] == "ok" else "failed",
+                            "stage": "eval",
+                            "elapsed_sec": elapsed(),
+                            "metrics": dict(closed_loop_result.get("metrics") or {}),
+                            "closed_loop_summary": closed_loop_result.get("summary") or {},
                         }
                     )
                 append_experiment_progress_event(
