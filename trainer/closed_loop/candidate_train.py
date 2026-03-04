@@ -30,6 +30,7 @@ from trainer.closed_loop.replay_manifest import (
     to_abs_path,
     write_json,
 )
+from trainer.closed_loop.curriculum_scheduler import build_curriculum_plan, build_phase_allocations
 
 
 def _read_yaml_or_json(path: Path) -> dict[str, Any]:
@@ -181,6 +182,56 @@ def _build_subset_dataset(
     return {"kept_rows": kept, "scanned_rows": scanned, "source_files": source_files}
 
 
+def _build_subset_dataset_from_allocations(
+    *,
+    allocations: list[dict[str, Any]],
+    out_path: Path,
+    max_rows: int,
+) -> dict[str, Any]:
+    kept = 0
+    scanned = 0
+    source_files: list[str] = []
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", encoding="utf-8", newline="\n") as out_fp:
+        for alloc in allocations:
+            src_raw = str(alloc.get("path") or "").strip()
+            if not src_raw:
+                continue
+            src = Path(src_raw)
+            if not src.exists():
+                continue
+            source_files.append(str(src))
+            take_rows = max(0, int(alloc.get("take_rows") or 0))
+            if take_rows <= 0:
+                continue
+            written_for_entry = 0
+            with src.open("r", encoding="utf-8", errors="replace") as in_fp:
+                for line in in_fp:
+                    text = line.strip()
+                    if not text:
+                        continue
+                    scanned += 1
+                    try:
+                        obj = json.loads(text)
+                    except Exception:
+                        continue
+                    if not isinstance(obj, dict):
+                        continue
+                    phase = str(obj.get("phase") or "")
+                    has_hand_label = obj.get("expert_action_id") is not None and phase == "SELECTING_HAND"
+                    has_shop_label = obj.get("shop_expert_action_id") is not None and phase in {"SHOP", "SMODS_BOOSTER_OPENED"}
+                    if not (has_hand_label or has_shop_label):
+                        continue
+                    out_fp.write(json.dumps(obj, ensure_ascii=False) + "\n")
+                    kept += 1
+                    written_for_entry += 1
+                    if written_for_entry >= take_rows:
+                        break
+                    if max_rows > 0 and kept >= max_rows:
+                        return {"kept_rows": kept, "scanned_rows": scanned, "source_files": source_files}
+    return {"kept_rows": kept, "scanned_rows": scanned, "source_files": source_files}
+
+
 def _read_train_metrics(path: Path) -> dict[str, Any]:
     payload = read_json(path)
     if not isinstance(payload, dict):
@@ -248,6 +299,21 @@ def run_candidate_training(
         raise RuntimeError(f"invalid replay manifest: {replay_manifest_path}")
     replay_entries = _pick_bc_entries(replay_manifest, prefer_source_types=[str(x) for x in prefer_sources])
 
+    curriculum_cfg = cfg.get("curriculum") if isinstance(cfg.get("curriculum"), dict) else {}
+    curriculum_cfg_path = str(cfg.get("curriculum_config") or "").strip()
+    if curriculum_cfg_path:
+        loaded_curriculum = _read_yaml_or_json(to_abs_path(repo_root, curriculum_cfg_path))
+        if isinstance(loaded_curriculum, dict):
+            curriculum_cfg = loaded_curriculum
+    curriculum_plan = build_curriculum_plan(
+        curriculum_cfg=curriculum_cfg,
+        default_epochs=max(1, epochs),
+        quick=bool(quick),
+        seeds=seeds,
+    )
+    write_json(run_dir / "curriculum_plan.json", curriculum_plan)
+    curriculum_applied_path = run_dir / "curriculum_applied.jsonl"
+
     progress_path = run_dir / "progress.jsonl"
     seed_results: list[dict[str, Any]] = []
     best_checkpoint: Path | None = None
@@ -269,13 +335,85 @@ def run_candidate_training(
         seed_dir = run_dir / "seed_runs" / f"seed_{idx:03d}_{seed}"
         seed_dir.mkdir(parents=True, exist_ok=True)
         subset_path = seed_dir / "train_subset.jsonl"
-        subset_meta = _build_subset_dataset(entries=replay_entries, out_path=subset_path, max_rows=max_rows_per_seed)
+        per_seed_curriculum: list[dict[str, Any]] = []
+        if bool(curriculum_plan.get("enabled")) and isinstance(curriculum_plan.get("phases"), list):
+            phase_datasets: list[Path] = []
+            for phase in curriculum_plan.get("phases") or []:
+                if not isinstance(phase, dict):
+                    continue
+                phase_name = str(phase.get("name") or f"phase_{len(phase_datasets)+1}")
+                phase_idx = int(phase.get("phase_index") or (len(phase_datasets) + 1))
+                phase_rows_cap = int(phase.get("target_rows") or 0) or max_rows_per_seed
+                allocations = build_phase_allocations(
+                    entries=replay_entries,
+                    phase=phase,
+                    default_target_rows=phase_rows_cap,
+                )
+                phase_dataset_path = seed_dir / "curriculum_phases" / f"{phase_idx:02d}_{phase_name}" / "dataset.jsonl"
+                phase_meta = _build_subset_dataset_from_allocations(
+                    allocations=allocations,
+                    out_path=phase_dataset_path,
+                    max_rows=phase_rows_cap,
+                )
+                phase_sources: dict[str, int] = {}
+                for alloc in allocations:
+                    st = str(alloc.get("source_type") or "unknown")
+                    phase_sources[st] = int(phase_sources.get(st, 0)) + int(alloc.get("take_rows") or 0)
+                phase_summary = {
+                    "schema": "p41_curriculum_applied_v1",
+                    "ts": now_iso(),
+                    "run_id": chosen_run_id,
+                    "seed": seed,
+                    "phase_index": phase_idx,
+                    "phase_name": phase_name,
+                    "target_rows": phase_rows_cap,
+                    "actual_rows": int(phase_meta.get("kept_rows") or 0),
+                    "source_weights": phase.get("source_weights") if isinstance(phase.get("source_weights"), dict) else {},
+                    "slice_weights": phase.get("slice_weights") if isinstance(phase.get("slice_weights"), dict) else {},
+                    "source_row_allocation": phase_sources,
+                }
+                append_jsonl(curriculum_applied_path, phase_summary)
+                append_jsonl(
+                    progress_path,
+                    {
+                        **event_base,
+                        "stage": "curriculum_phase",
+                        "status": "ok",
+                        "phase_index": phase_idx,
+                        "phase_name": phase_name,
+                        "target_rows": phase_rows_cap,
+                        "actual_rows": int(phase_meta.get("kept_rows") or 0),
+                    },
+                )
+                per_seed_curriculum.append(phase_summary)
+                if int(phase_meta.get("kept_rows") or 0) > 0:
+                    phase_datasets.append(phase_dataset_path)
+
+            subset_path.parent.mkdir(parents=True, exist_ok=True)
+            with subset_path.open("w", encoding="utf-8", newline="\n") as out_fp:
+                for phase_dataset in phase_datasets:
+                    if not phase_dataset.exists():
+                        continue
+                    for line in phase_dataset.read_text(encoding="utf-8", errors="replace").splitlines():
+                        if line.strip():
+                            out_fp.write(line.strip() + "\n")
+            subset_rows = 0
+            if subset_path.exists():
+                subset_rows = len([line for line in subset_path.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip()])
+            subset_meta = {
+                "kept_rows": subset_rows,
+                "scanned_rows": 0,
+                "source_files": [str(p) for p in phase_datasets],
+            }
+        else:
+            subset_meta = _build_subset_dataset(entries=replay_entries, out_path=subset_path, max_rows=max_rows_per_seed)
 
         if dry_run:
             seed_result = {
                 "seed": seed,
                 "status": "dry_run",
                 "subset_rows": int(subset_meta.get("kept_rows") or 0),
+                "curriculum_phases": per_seed_curriculum,
                 "metrics": {},
                 "run_dir": str(seed_dir),
             }
@@ -289,6 +427,7 @@ def run_candidate_training(
                 "seed": seed,
                 "status": "stub",
                 "subset_rows": int(subset_meta.get("kept_rows") or 0),
+                "curriculum_phases": per_seed_curriculum,
                 "metrics": {},
                 "run_dir": str(seed_dir),
                 "reason": stub_reason,
@@ -303,6 +442,7 @@ def run_candidate_training(
                 "seed": seed,
                 "status": "stub",
                 "subset_rows": 0,
+                "curriculum_phases": per_seed_curriculum,
                 "metrics": {},
                 "run_dir": str(seed_dir),
                 "reason": stub_reason,
@@ -318,7 +458,16 @@ def run_candidate_training(
             "--train-jsonl",
             str(subset_path),
             "--epochs",
-            str(max(1, epochs)),
+            str(
+                max(
+                    1,
+                    int(
+                        sum(int(p.get("epochs") or 1) for p in (curriculum_plan.get("phases") or []) if isinstance(p, dict))
+                    )
+                    if bool(curriculum_plan.get("enabled"))
+                    else epochs
+                )
+            ),
             "--batch-size",
             str(max(1, batch_size)),
             "--lr",
@@ -340,6 +489,7 @@ def run_candidate_training(
             "seed": seed,
             "status": status,
             "subset_rows": int(subset_meta.get("kept_rows") or 0),
+            "curriculum_phases": per_seed_curriculum,
             "metrics": metrics,
             "final_loss": float(final_loss),
             "checkpoint": str(checkpoint) if checkpoint.exists() else "",
@@ -407,11 +557,13 @@ def run_candidate_training(
 
     status = "ok" if ok_rows else ("dry_run" if dry_run else "stub")
     metrics_payload = {
-        "schema": "p40_candidate_train_metrics_v1",
+        "schema": "p41_candidate_train_metrics_v2",
         "generated_at": now_iso(),
         "run_id": chosen_run_id,
         "status": status,
         "mode": mode,
+        "curriculum_enabled": bool(curriculum_plan.get("enabled")),
+        "curriculum_phase_count": int(curriculum_plan.get("phase_count") or len(curriculum_plan.get("phases") or [])),
         "seed_count": len(seeds),
         "ok_seed_count": len(ok_rows),
         "hand_top1": mean_hand_top1,
@@ -422,7 +574,7 @@ def run_candidate_training(
         "candidate_checkpoint": str(best_checkpoint),
     }
     manifest = {
-        "schema": "p40_candidate_train_manifest_v1",
+        "schema": "p41_candidate_train_manifest_v2",
         "generated_at": now_iso(),
         "run_id": chosen_run_id,
         "status": status,
@@ -433,6 +585,9 @@ def run_candidate_training(
         "dry_run": bool(dry_run),
         "replay_mix_manifest": str(replay_manifest_path),
         "replay_selected_entries": len(replay_entries),
+        "curriculum_plan": curriculum_plan,
+        "curriculum_config_path": curriculum_cfg_path,
+        "curriculum_applied": str(curriculum_applied_path),
         "seed_results": seed_results,
         "candidate_checkpoint": str(best_checkpoint),
         "metrics_ref": str(run_dir / "metrics.json"),
@@ -449,6 +604,8 @@ def run_candidate_training(
         "metrics": str(run_dir / "metrics.json"),
         "best_checkpoint": str(best_checkpoint),
         "seeds_used": str(run_dir / "seeds_used.json"),
+        "curriculum_plan": str(run_dir / "curriculum_plan.json"),
+        "curriculum_applied": str(curriculum_applied_path),
     }
 
 
