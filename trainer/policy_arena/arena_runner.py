@@ -21,7 +21,14 @@ from trainer.common.slices import (
     as_legacy_risk_bucket,
     compute_slice_labels,
 )
-from trainer.policy_arena.adapters import HeuristicAdapter, HybridAdapter, ModelAdapter, SearchAdapter, WorldModelAssistAdapter
+from trainer.policy_arena.adapters import (
+    HeuristicAdapter,
+    HybridAdapter,
+    ModelAdapter,
+    SearchAdapter,
+    WMRerankAdapter,
+    WorldModelAssistAdapter,
+)
 from trainer.policy_arena.arena_metrics import summarize_bucket_metrics, summarize_policy_rows
 from trainer.policy_arena.arena_report import write_bucket_metrics, write_episode_records, write_summary_table
 from trainer.policy_arena.policy_adapter import BasePolicyAdapter, normalize_action, phase_default_action, phase_from_obs
@@ -105,6 +112,7 @@ def _build_policy_adapter(
     *,
     model_path: str = "",
     model_paths: dict[str, str] | None = None,
+    assist_config: dict[str, Any] | None = None,
     world_model_checkpoint: str = "",
     world_model_assist_mode: str = "one_step_heuristic",
     world_model_weight: float = 0.35,
@@ -112,14 +120,16 @@ def _build_policy_adapter(
 ) -> BasePolicyAdapter:
     token = str(policy_id or "").strip().lower()
     model_map = model_paths if isinstance(model_paths, dict) else {}
-    resolved_model_path = str(model_map.get(policy_id) or model_path or "")
+    assist = assist_config if isinstance(assist_config, dict) else {}
+    resolved_model_path = str(assist.get("model_path") or model_map.get(policy_id) or model_path or "")
+    resolved_wm_checkpoint = str(assist.get("world_model_checkpoint") or world_model_checkpoint or "")
     if token in {"heuristic", "heuristic_baseline", "baseline", "rule"}:
         return HeuristicAdapter(name=policy_id)
-    if token in {"heuristic_wm_assist", "baseline_wm_assist", "wm_assist", "world_model_assist"}:
+    if token in {"heuristic_wm_assist", "baseline_wm_assist", "wm_assist", "world_model_assist"} or "wm_assist" in token:
         return WorldModelAssistAdapter(
             name=policy_id,
             base_policy="heuristic_baseline",
-            world_model_checkpoint=world_model_checkpoint,
+            world_model_checkpoint=resolved_wm_checkpoint,
             assist_mode=world_model_assist_mode,
             weight=float(world_model_weight),
             uncertainty_penalty=float(world_model_uncertainty_penalty),
@@ -128,6 +138,39 @@ def _build_policy_adapter(
         return SearchAdapter(name=policy_id)
     if token in {"hybrid", "hybrid_search_heuristic"}:
         return HybridAdapter(name=policy_id)
+    if token in {
+        "heuristic_wm_rerank",
+        "heuristic_plus_wm_rerank",
+        "search_wm_rerank",
+        "search_plus_wm_rerank",
+        "policy_wm_rerank",
+        "policy_plus_wm_rerank",
+        "model_wm_rerank",
+        "baseline_wm_rerank",
+    } or "wm_rerank" in token:
+        default_base = "heuristic_baseline"
+        if token.startswith("search"):
+            default_base = "search_expert"
+        elif token.startswith("policy") or token.startswith("model"):
+            default_base = "model_policy"
+        return WMRerankAdapter(
+            name=policy_id,
+            base_policy=str(assist.get("base_policy") or default_base),
+            candidate_source=str(assist.get("candidate_source") or assist.get("base_policy") or default_base),
+            model_path=resolved_model_path,
+            world_model_checkpoint=resolved_wm_checkpoint,
+            top_k=_safe_int(assist.get("top_k"), 4),
+            horizon=_safe_int(assist.get("horizon"), 1),
+            gamma=_safe_float(assist.get("gamma"), 0.95),
+            uncertainty_penalty=_safe_float(assist.get("uncertainty_penalty"), world_model_uncertainty_penalty),
+            reward_weight=_safe_float(assist.get("reward_weight"), 1.0),
+            score_weight=_safe_float(assist.get("score_weight"), 0.5),
+            value_weight=_safe_float(assist.get("value_weight"), 0.15),
+            terminal_bonus=_safe_float(assist.get("terminal_bonus"), 0.0),
+            search_max_branch=_safe_int(assist.get("search_max_branch"), 80),
+            search_max_depth=_safe_int(assist.get("search_max_depth"), 2),
+            search_time_budget_ms=_safe_float(assist.get("search_time_budget_ms"), 15.0),
+        )
     if policy_id in model_map or token in {"model", "model_policy", "bc", "pv", "dagger", "risk_aware", "deploy_student"}:
         return ModelAdapter(name=policy_id, model_path=resolved_model_path, strategy=token or "bc")
     raise ValueError(f"unsupported policy id: {policy_id}")
@@ -289,6 +332,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--policies", default="heuristic_baseline,search_expert,model_policy")
     parser.add_argument("--model-path", default="")
     parser.add_argument("--policy-model-map-json", default="")
+    parser.add_argument("--policy-assist-map-json", default="")
     parser.add_argument("--world-model-checkpoint", default="")
     parser.add_argument("--world-model-assist-mode", default="one_step_heuristic")
     parser.add_argument("--world-model-weight", type=float, default=0.35)
@@ -345,15 +389,23 @@ def main() -> int:
     adapters: dict[str, BasePolicyAdapter] = {}
     adapter_descriptions: dict[str, dict[str, Any]] = {}
     policy_model_map: dict[str, str] = {}
+    policy_assist_map: dict[str, dict[str, Any]] = {}
     if str(args.policy_model_map_json or "").strip():
         policy_model_map = _read_json(Path(str(args.policy_model_map_json)).resolve())
         policy_model_map = {str(key): str(value) for key, value in policy_model_map.items() if str(value).strip()}
+    if str(args.policy_assist_map_json or "").strip():
+        loaded_assist = _read_json(Path(str(args.policy_assist_map_json)).resolve())
+        if isinstance(loaded_assist, dict):
+            for key, value in loaded_assist.items():
+                if isinstance(value, dict):
+                    policy_assist_map[str(key)] = dict(value)
     for policy_id in policies:
         try:
             adapter = _build_policy_adapter(
                 policy_id,
                 model_path=str(args.model_path or ""),
                 model_paths=policy_model_map,
+                assist_config=policy_assist_map.get(policy_id),
                 world_model_checkpoint=str(args.world_model_checkpoint or ""),
                 world_model_assist_mode=str(args.world_model_assist_mode or "one_step_heuristic"),
                 world_model_weight=float(args.world_model_weight),
@@ -428,6 +480,8 @@ def main() -> int:
             "world_model_uncertainty_penalty": float(args.world_model_uncertainty_penalty),
             "policy_model_map_json": str(args.policy_model_map_json or ""),
             "policy_model_map": policy_model_map,
+            "policy_assist_map_json": str(args.policy_assist_map_json or ""),
+            "policy_assist_map": policy_assist_map,
         },
         "adapters": adapter_descriptions,
         "paths": {
