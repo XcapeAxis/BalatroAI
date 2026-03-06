@@ -40,6 +40,8 @@ from trainer.experiments.training_modes import (
     MODE_CATEGORY_LEGACY_BASELINE,
     MODE_CATEGORY_MAINLINE,
 )
+from trainer.monitoring.progress_schema import append_progress_event as append_p49_progress_event
+from trainer.monitoring.progress_schema import build_progress_event as build_p49_progress_event
 
 
 MODE_CATEGORY_REQUIRED_VALIDATION = "required_validation"
@@ -169,6 +171,8 @@ def normalize_experiment_category(exp: dict[str, Any]) -> str:
         "p47_wm_search",
         "hybrid_controller_eval",
         "p48_hybrid_controller",
+        "gpu_mainline_eval",
+        "p49_gpu_mainline",
     }:
         return MODE_CATEGORY_MAINLINE
     if exp_type == "standard" and policy in {"baseline", "candidate"}:
@@ -544,6 +548,24 @@ def emit_progress(
         "message": message,
     }
     append_jsonl(ctx.telemetry_path, event)
+    append_p49_progress_event(
+        ctx.unified_progress_path,
+        build_p49_progress_event(
+            run_id=ctx.run_id,
+            component="p22_orchestrator",
+            phase=str(phase or "orchestrator"),
+            status=str(status or "running"),
+            step=seed_index if seed_index is not None else None,
+            epoch_or_iter=stage,
+            seed=seed,
+            metrics=metrics or {},
+            learner_device="",
+            rollout_device="",
+            eta_sec=eta_sec,
+            warning=message,
+            extra={"exp_id": exp_id, "stage": stage, "seed_total": seed_total},
+        ),
+    )
     row = ctx.queue_state.get(exp_id) or {"exp_id": exp_id}
     row.update(
         {
@@ -630,6 +652,7 @@ class RunContext:
     verbose: bool
     telemetry_path: Path
     live_summary_path: Path
+    unified_progress_path: Path
     run_started_ts: float
     queue_state: dict[str, dict[str, Any]]
     cli_seeds: list[str] | None
@@ -2001,6 +2024,247 @@ def _run_hybrid_controller_seed_experiment(
     }
 
 
+def _resolve_component_config_path(
+    *,
+    ctx: RunContext,
+    cfg: dict[str, Any],
+    component_id: str,
+) -> Path:
+    components = cfg.get("components") if isinstance(cfg.get("components"), dict) else {}
+    component_cfg = components.get(component_id) if isinstance(components.get(component_id), dict) else {}
+    default_map = {
+        "p42": (
+            "configs/experiments/p42_closed_loop_rl_smoke.yaml"
+            if ctx.mode == "quick"
+            else "configs/experiments/p42_closed_loop_rl_nightly.yaml"
+        ),
+        "p44": (
+            "configs/experiments/p44_closed_loop_rl_smoke.yaml"
+            if ctx.mode == "quick"
+            else "configs/experiments/p44_closed_loop_rl_nightly.yaml"
+        ),
+        "p45": (
+            "configs/experiments/p45_world_model_smoke.yaml"
+            if ctx.mode == "quick"
+            else "configs/experiments/p45_world_model_nightly.yaml"
+        ),
+        "p46": (
+            "configs/experiments/p46_imagination_smoke.yaml"
+            if ctx.mode == "quick"
+            else "configs/experiments/p46_imagination_nightly.yaml"
+        ),
+    }
+    raw = str(component_cfg.get("config") or default_map.get(component_id) or "").strip()
+    if not raw:
+        raise ValueError(f"missing config for component {component_id}")
+    return (ctx.repo_root / raw).resolve()
+
+
+def _gpu_component_enabled(cfg: dict[str, Any], component_id: str, *, default: bool) -> bool:
+    components = cfg.get("components") if isinstance(cfg.get("components"), dict) else {}
+    component_cfg = components.get(component_id) if isinstance(components.get(component_id), dict) else {}
+    return bool(component_cfg.get("enabled", default))
+
+
+def _prepare_gpu_component_config(
+    *,
+    ctx: RunContext,
+    source_config_path: Path,
+    out_path: Path,
+    seed: str,
+    device_profile_name: str,
+    component_id: str,
+) -> Path:
+    payload = _read_yaml_or_json(source_config_path)
+    payload["device_profile"] = device_profile_name
+    runtime_block = payload.get("runtime") if isinstance(payload.get("runtime"), dict) else {}
+    runtime_block["device_profile"] = device_profile_name
+    payload["runtime"] = runtime_block
+    payload["seeds"] = [str(seed)]
+    if component_id == "p46":
+        imagination = payload.get("imagination") if isinstance(payload.get("imagination"), dict) else {}
+        imagination["seeds"] = [str(seed)]
+        payload["imagination"] = imagination
+    write_json(out_path, payload)
+    return out_path
+
+
+def _read_closed_loop_score(summary: dict[str, Any]) -> float:
+    payload = read_json(Path(str(summary.get("promotion_decision") or "")))
+    if not isinstance(payload, dict):
+        return 0.0
+    return float(payload.get("candidate_score") or 0.0)
+
+
+def _run_p49_gpu_mainline_seed_experiment(
+    *,
+    ctx: RunContext,
+    exp: dict[str, Any],
+    exp_dir: Path,
+    seed: str,
+    seed_idx: int,
+    seed_total: int,
+) -> dict[str, Any]:
+    from trainer.closed_loop.closed_loop_runner import run_closed_loop
+    from trainer.world_model.imagination_pipeline import run_imagination_pipeline
+    from trainer.world_model.train import run_world_model_train
+
+    eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+    cfg_rel = str(
+        eval_cfg.get("config")
+        or exp.get("gpu_mainline_config")
+        or (
+            "configs/experiments/p49_gpu_mainline_smoke.yaml"
+            if ctx.mode == "quick"
+            else "configs/experiments/p49_gpu_mainline_nightly.yaml"
+        )
+    )
+    cfg_path = (ctx.repo_root / cfg_rel).resolve()
+    cfg = _read_yaml_or_json(cfg_path)
+    quick_flag = bool(eval_cfg.get("quick", False) or ctx.mode == "quick")
+    device_profile_name = str(
+        cfg.get("device_profile")
+        or ((cfg.get("runtime") or {}).get("device_profile") if isinstance(cfg.get("runtime"), dict) else "")
+        or exp.get("device_profile")
+        or "single_gpu_mainline"
+    ).strip()
+
+    run_root = exp_dir / "gpu_mainline_runs" / f"seed_{seed_idx:03d}_{seed}"
+    run_root.mkdir(parents=True, exist_ok=True)
+    generated_root = run_root / "generated_configs"
+    generated_root.mkdir(parents=True, exist_ok=True)
+
+    component_runs: dict[str, Any] = {}
+    component_scores: list[float] = []
+    component_failures: list[str] = []
+
+    if _gpu_component_enabled(cfg, "p42", default=True):
+        p42_cfg = _prepare_gpu_component_config(
+            ctx=ctx,
+            source_config_path=_resolve_component_config_path(ctx=ctx, cfg=cfg, component_id="p42"),
+            out_path=generated_root / "p42.json",
+            seed=seed,
+            device_profile_name=device_profile_name,
+            component_id="p42",
+        )
+        p42_summary = run_closed_loop(
+            config_path=p42_cfg,
+            out_dir=run_root / "p42",
+            run_id=f"p49-{seed}-p42",
+            quick=quick_flag,
+            dry_run=bool(ctx.dry_run),
+            seeds_override=[seed],
+        )
+        component_runs["p42"] = p42_summary
+        component_scores.append(_read_closed_loop_score(p42_summary))
+        if str(p42_summary.get("status") or "") not in {"ok", "stub"}:
+            component_failures.append("p42")
+
+    if _gpu_component_enabled(cfg, "p44", default=not quick_flag):
+        p44_cfg = _prepare_gpu_component_config(
+            ctx=ctx,
+            source_config_path=_resolve_component_config_path(ctx=ctx, cfg=cfg, component_id="p44"),
+            out_path=generated_root / "p44.json",
+            seed=seed,
+            device_profile_name=device_profile_name,
+            component_id="p44",
+        )
+        p44_summary = run_closed_loop(
+            config_path=p44_cfg,
+            out_dir=run_root / "p44",
+            run_id=f"p49-{seed}-p44",
+            quick=quick_flag,
+            dry_run=bool(ctx.dry_run),
+            seeds_override=[seed],
+        )
+        component_runs["p44"] = p44_summary
+        component_scores.append(_read_closed_loop_score(p44_summary))
+        if str(p44_summary.get("status") or "") not in {"ok", "stub"}:
+            component_failures.append("p44")
+
+    if _gpu_component_enabled(cfg, "p45", default=True):
+        p45_cfg = _prepare_gpu_component_config(
+            ctx=ctx,
+            source_config_path=_resolve_component_config_path(ctx=ctx, cfg=cfg, component_id="p45"),
+            out_path=generated_root / "p45.json",
+            seed=seed,
+            device_profile_name=device_profile_name,
+            component_id="p45",
+        )
+        p45_summary = run_world_model_train(
+            config_path=p45_cfg,
+            out_dir=run_root / "p45",
+            run_id=f"p49-{seed}-p45",
+            quick=quick_flag,
+            seed_override=_seed_to_int(seed),
+        )
+        component_runs["p45"] = p45_summary
+        p45_metrics = read_json(Path(str(p45_summary.get("metrics_json") or ""))) or {}
+        p45_best_metric = float((p45_metrics or {}).get("best_metric") or 0.0)
+        component_scores.append(float(1.0 / (1.0 + max(0.0, p45_best_metric))))
+        if str(p45_summary.get("status") or "") not in {"ok", "stub"}:
+            component_failures.append("p45")
+
+    if _gpu_component_enabled(cfg, "p46", default=not quick_flag):
+        p46_cfg = _prepare_gpu_component_config(
+            ctx=ctx,
+            source_config_path=_resolve_component_config_path(ctx=ctx, cfg=cfg, component_id="p46"),
+            out_path=generated_root / "p46.json",
+            seed=seed,
+            device_profile_name=device_profile_name,
+            component_id="p46",
+        )
+        p46_summary = run_imagination_pipeline(
+            config_path=p46_cfg,
+            out_dir=run_root / "p46",
+            run_id=f"p49-{seed}-p46",
+            quick=quick_flag,
+            dry_run=bool(ctx.dry_run),
+            seeds_override=[seed],
+        )
+        component_runs["p46"] = p46_summary
+        p46_metrics = p46_summary.get("metrics") if isinstance(p46_summary.get("metrics"), dict) else {}
+        component_scores.append(float((p46_metrics or {}).get("score") or 0.0))
+        if str(p46_summary.get("status") or "") not in {"ok", "stub"}:
+            component_failures.append("p46")
+
+    aggregate_score = float(sum(component_scores) / max(1, len(component_scores)))
+    summary_payload = {
+        "schema": "p49_gpu_mainline_seed_summary_v1",
+        "generated_at": now_iso(),
+        "seed": str(seed),
+        "device_profile": device_profile_name,
+        "run_dir": str(run_root),
+        "component_runs": component_runs,
+        "aggregate_score": aggregate_score,
+        "component_failures": component_failures,
+        "dashboard_path": str((ctx.repo_root / "docs/artifacts/dashboard/latest/index.html").resolve()),
+    }
+    write_json(run_root / "gpu_mainline_summary.json", summary_payload)
+    result_metrics = {
+        "score": aggregate_score,
+        "avg_reward": aggregate_score,
+        "best_episode_reward": max(component_scores or [0.0]),
+        "avg_ante_reached": aggregate_score,
+        "median_ante": aggregate_score,
+        "win_rate": 0.0,
+        "hand_top1": 0.0,
+        "hand_top3": 0.0,
+        "shop_top1": 0.0,
+        "illegal_action_rate": 0.0,
+        "p49_component_count": len(component_runs),
+        "p49_component_failures": len(component_failures),
+        "p49_device_profile": device_profile_name,
+        "p49_summary_json": str(run_root / "gpu_mainline_summary.json"),
+        "p49_dashboard_path": str((ctx.repo_root / "docs/artifacts/dashboard/latest/index.html").resolve()),
+    }
+    return {
+        "status": "ok" if not component_failures else "failed",
+        "metrics": result_metrics,
+        "summary": summary_payload,
+    }
+
+
 def _run_closed_loop_seed_experiment(
     *,
     ctx: RunContext,
@@ -2697,6 +2961,22 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "candidate_policy": str(eval_cfg.get("candidate_policy") or "hybrid_controller_v1"),
             "champion_policy": str(eval_cfg.get("champion_policy") or "policy_baseline"),
         }
+    elif exp_type in {"gpu_mainline_eval", "p49_gpu_mainline"}:
+        eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+        manifest["gpu_mainline"] = {
+            "config": str(
+                eval_cfg.get("config")
+                or exp.get("gpu_mainline_config")
+                or (
+                    "configs/experiments/p49_gpu_mainline_smoke.yaml"
+                    if ctx.mode == "quick"
+                    else "configs/experiments/p49_gpu_mainline_nightly.yaml"
+                )
+            ),
+            "quick": bool(eval_cfg.get("quick") or False),
+            "device_profile": str(exp.get("device_profile") or "single_gpu_mainline"),
+            "dashboard_path": str((ctx.repo_root / "docs/artifacts/dashboard/latest/index.html").resolve()),
+        }
     write_json(exp_dir / "run_manifest.json", manifest)
     print(
         "[P22] Experiment {idx}/{total}: {exp_id} (seeds {seed_count}, mode={mode})".format(
@@ -3371,6 +3651,52 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                     message=exp_type,
                     extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
                 )
+            elif exp_type in {"gpu_mainline_eval", "p49_gpu_mainline"}:
+                try:
+                    p49_result = _run_p49_gpu_mainline_seed_experiment(
+                        ctx=ctx,
+                        exp=exp,
+                        exp_dir=exp_dir,
+                        seed=seed,
+                        seed_idx=seed_idx,
+                        seed_total=len(seeds),
+                    )
+                except Exception as exc:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "failed",
+                            "stage": "eval",
+                            "error": f"gpu_mainline_exception: {exc}",
+                            "elapsed_sec": elapsed(),
+                            "metrics": {},
+                        }
+                    )
+                else:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "ok" if p49_result["status"] == "ok" else "failed",
+                            "stage": "eval",
+                            "elapsed_sec": elapsed(),
+                            "metrics": dict(p49_result.get("metrics") or {}),
+                            "gpu_mainline_summary": p49_result.get("summary") or {},
+                        }
+                    )
+                append_experiment_progress_event(
+                    progress_path,
+                    run_id=ctx.run_id,
+                    exp_id=exp_id,
+                    phase="eval",
+                    stage="eval",
+                    status=str(seed_results[-1].get("status")),
+                    seed=seed,
+                    step_or_epoch=seed_idx,
+                    elapsed_sec=elapsed(),
+                    metrics=seed_results[-1].get("metrics") or {},
+                    message=exp_type,
+                    extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
+                )
             elif exp_type in {"closed_loop_improvement", "closed_loop", "p40_closed_loop", "closed_loop_improvement_v2", "p41_closed_loop_v2", "closed_loop_v2", "closed_loop_rl_candidate", "rl_candidate_pipeline", "p42_rl_candidate", "p42_rl_candidate_pipeline", "p44_distributed_rl"}:
                 try:
                     closed_loop_result = _run_closed_loop_seed_experiment(
@@ -3879,6 +4205,7 @@ def main() -> int:
         verbose=bool(args.verbose),
         telemetry_path=run_root / "telemetry.jsonl",
         live_summary_path=run_root / "live_summary_snapshot.json",
+        unified_progress_path=run_root / "progress.unified.jsonl",
         run_started_ts=time.time(),
         queue_state=queue_state,
         cli_seeds=cli_seed_override,
@@ -4026,6 +4353,7 @@ def main() -> int:
 
     print(f"[P23] run_id={run_id} mode={mode} status={final_payload['status']}")
     print(f"[P23] telemetry={ctx.telemetry_path}")
+    print(f"[P23] unified_progress={ctx.unified_progress_path}")
     print(f"[P23] live_snapshot={ctx.live_summary_path}")
     print(f"[P23] summary_json={summary_paths['json']}")
     print(f"[P23] report_md={report_path}")

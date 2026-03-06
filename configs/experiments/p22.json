@@ -271,6 +271,29 @@
         }
       ]
     },
+    "gpu_mainline_v1": {
+      "description": "P49 GPU mainline templates with CPU rollout/GPU learner, readiness guard, and dashboards",
+      "variants": [
+        {
+          "id": "p49_gpu_mainline_smoke",
+          "algo": "gpu_mainline_eval",
+          "seeds": [
+            "AAAAAAA",
+            "BBBBBBB"
+          ]
+        },
+        {
+          "id": "p49_gpu_mainline_nightly",
+          "algo": "gpu_mainline_eval",
+          "seeds": [
+            "AAAAAAA",
+            "BBBBBBB",
+            "CCCCCCC",
+            "DDDDDDD"
+          ]
+        }
+      ]
+    },
     "legacy_bc_dagger_probe": {
       "description": "Legacy BC/DAgger baseline probes (non-default)",
       "variants": [
@@ -1557,6 +1580,96 @@
         "timeout_sec": 18000,
         "candidate_policy": "hybrid_controller_v1",
         "champion_policy": "policy_baseline"
+      }
+    },
+    {
+      "id": "p49_gpu_mainline_smoke",
+      "name": "p49_gpu_mainline_smoke",
+      "backend": "sim",
+      "policy": "gpu_mainline",
+      "experiment_type": "gpu_mainline_eval",
+      "seed_mode": "regression_fixed",
+      "seed_set_name": "contract_regression",
+      "device_profile": "single_gpu_mainline",
+      "seeds": [
+        "AAAAAAA",
+        "BBBBBBB"
+      ],
+      "gate_flag": "RunP22",
+      "modes": {
+        "quick": true,
+        "gate": true,
+        "nightly": false
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "sanity_compile": [
+        "trainer/runtime/device_profile.py",
+        "trainer/runtime/runtime_profile.py",
+        "trainer/runtime/service_readiness.py",
+        "trainer/monitoring/progress_schema.py",
+        "trainer/monitoring/live_dashboard.py",
+        "trainer/monitoring/dashboard_build.py",
+        "trainer/rl/ppo_lite.py",
+        "trainer/world_model/train.py",
+        "trainer/world_model/eval.py",
+        "trainer/world_model/imagination_rollout.py"
+      ],
+      "eval": {
+        "config": "configs/experiments/p49_gpu_mainline_smoke.yaml",
+        "quick": true,
+        "timeout_sec": 14400
+      }
+    },
+    {
+      "id": "p49_gpu_mainline_nightly",
+      "name": "p49_gpu_mainline_nightly",
+      "backend": "sim",
+      "policy": "gpu_mainline",
+      "experiment_type": "gpu_mainline_eval",
+      "seed_mode": "nightly",
+      "seed_set_name": "eval_default",
+      "device_profile": "single_gpu_mainline",
+      "seeds": [
+        "AAAAAAA",
+        "BBBBBBB",
+        "CCCCCCC",
+        "DDDDDDD"
+      ],
+      "gate_flag": "RunP22",
+      "modes": {
+        "quick": false,
+        "gate": false,
+        "nightly": true
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "sanity_compile": [
+        "trainer/runtime/device_profile.py",
+        "trainer/runtime/runtime_profile.py",
+        "trainer/runtime/service_readiness.py",
+        "trainer/monitoring/progress_schema.py",
+        "trainer/monitoring/live_dashboard.py",
+        "trainer/monitoring/dashboard_build.py",
+        "trainer/rl/ppo_lite.py",
+        "trainer/world_model/train.py",
+        "trainer/world_model/eval.py",
+        "trainer/world_model/imagination_rollout.py"
+      ],
+      "eval": {
+        "config": "configs/experiments/p49_gpu_mainline_nightly.yaml",
+        "quick": false,
+        "timeout_sec": 21600
       }
     },
     {
