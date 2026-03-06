@@ -415,6 +415,153 @@ def _p47_world_model_assist_impact(
     return impact, uncertainty_rows, horizon_rows, top_slices
 
 
+def _p48_manifest_block(run_manifest: dict[str, Any]) -> dict[str, Any]:
+    if isinstance(run_manifest.get("hybrid_controller"), dict):
+        return dict(run_manifest.get("hybrid_controller") or {})
+    return {}
+
+
+def _p48_routing_summary(run_dir: Path, hybrid_block: dict[str, Any]) -> dict[str, Any]:
+    raw = str(hybrid_block.get("routing_summary_json") or "").strip()
+    path = Path(raw).resolve() if raw else (run_dir / "routing_summary.json")
+    payload = _read_json(path)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _p48_trace_rows(run_dir: Path) -> list[dict[str, Any]]:
+    candidates = sorted(run_dir.glob("router_traces/**/routing_trace.jsonl"), key=lambda path: str(path))
+    if not candidates:
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in candidates[-1].read_text(encoding="utf-8-sig").splitlines():
+        text = line.strip()
+        if not text:
+            continue
+        try:
+            payload = json.loads(text)
+        except Exception:
+            continue
+        if isinstance(payload, dict):
+            rows.append(payload)
+    return rows
+
+
+def _p48_hybrid_impact(
+    run_manifest: dict[str, Any],
+    run_dir: Path,
+    current_decision: dict[str, Any],
+    degraded_rows: list[dict[str, Any]],
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    hybrid_block = _p48_manifest_block(run_manifest)
+    if not hybrid_block:
+        return (
+            {
+                "hybrid_enabled": False,
+                "baseline_policy": "",
+                "hybrid_policy": "",
+                "search_policy": "",
+                "wm_policy": "",
+            },
+            [],
+            [],
+            {"selection_distribution": [], "fallback_rate": 0.0},
+        )
+
+    summary_rows = _p47_summary_rows(run_manifest, run_dir)
+    baseline_policy = str(current_decision.get("champion_policy_id") or "policy_baseline")
+    hybrid_policy = str(current_decision.get("candidate_policy_id") or "hybrid_controller_v1")
+    search_policy = "search_baseline"
+    wm_policy = "policy_plus_wm_rerank"
+    baseline_row = _find_policy_row(summary_rows, baseline_policy)
+    hybrid_row = _find_policy_row(summary_rows, hybrid_policy)
+    search_row = _find_policy_row(summary_rows, search_policy)
+    wm_row = _find_policy_row(summary_rows, wm_policy)
+    baseline_score = _safe_float(baseline_row.get("mean_total_score"), 0.0)
+
+    routing_summary = _p48_routing_summary(run_dir, hybrid_block)
+    trace_rows = _p48_trace_rows(run_dir)
+    selection_distribution = routing_summary.get("controller_selection_distribution") if isinstance(routing_summary.get("controller_selection_distribution"), list) else []
+    fallback_rate = _safe_float(((routing_summary.get("routing_decision_impact") or {}).get("fallback_rate")) if isinstance(routing_summary.get("routing_decision_impact"), dict) else 0.0, 0.0)
+    if not selection_distribution and trace_rows:
+        counts = defaultdict(int)
+        for row in trace_rows:
+            counts[str(row.get("selected_controller") or "unknown")] += 1
+        total = sum(counts.values())
+        selection_distribution = [
+            {"controller_id": key, "count": int(value), "ratio": float(value) / max(1, total)}
+            for key, value in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        ]
+        fallback_rate = float(sum(1 for row in trace_rows if bool(row.get("fallback_used")))) / max(1, len(trace_rows))
+
+    top_slices = [
+        {
+            "slice_key": str(row.get("slice_key") or ""),
+            "slice_label": str(row.get("slice_label") or ""),
+            "score_delta": _safe_float(((row.get("metrics") or {}).get("mean_total_score_delta")) if isinstance(row.get("metrics"), dict) else 0.0, 0.0),
+            "win_rate_delta": _safe_float(((row.get("metrics") or {}).get("win_rate_delta")) if isinstance(row.get("metrics"), dict) else 0.0, 0.0),
+        }
+        for row in degraded_rows
+        if isinstance(row, dict)
+    ][:5]
+
+    search_selected_ratio = 0.0
+    wm_disabled_count = 0
+    for row in selection_distribution:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("controller_id") or "") == "search_baseline":
+            search_selected_ratio = _safe_float(row.get("ratio"), 0.0)
+    for row in trace_rows:
+        reason = str(row.get("routing_reason") or "")
+        if "wm" in reason and "uncertainty" in reason:
+            wm_disabled_count += 1
+        explainability = row.get("features") if isinstance(row.get("features"), dict) else {}
+        if _safe_float(explainability.get("wm_uncertainty"), 0.0) >= 1.2:
+            wm_disabled_count += 0
+
+    routing_decision_impact = {
+        "hybrid_enabled": True,
+        "baseline_policy": baseline_policy,
+        "hybrid_policy": hybrid_policy,
+        "search_policy": search_policy,
+        "wm_policy": wm_policy,
+        "hybrid_score_delta_vs_baseline": _safe_float(hybrid_row.get("mean_total_score"), 0.0) - baseline_score,
+        "hybrid_score_delta_vs_search": _safe_float(hybrid_row.get("mean_total_score"), 0.0) - _safe_float(search_row.get("mean_total_score"), 0.0),
+        "hybrid_score_delta_vs_wm_rerank": _safe_float(hybrid_row.get("mean_total_score"), 0.0) - _safe_float(wm_row.get("mean_total_score"), 0.0),
+        "fallback_rate": fallback_rate,
+    }
+    search_budget_sensitivity = [
+        {
+            "policy_id": search_policy,
+            "score_delta_vs_hybrid": _safe_float(search_row.get("mean_total_score"), 0.0) - _safe_float(hybrid_row.get("mean_total_score"), 0.0),
+            "search_selected_ratio": search_selected_ratio,
+        }
+    ]
+    wm_gate_impact = [
+        {
+            "wm_uncertainty_gate_trigger_count": int(wm_disabled_count),
+            "decision_count": len(trace_rows),
+            "wm_selected_ratio": next(
+                (
+                    _safe_float(row.get("ratio"), 0.0)
+                    for row in selection_distribution
+                    if isinstance(row, dict) and str(row.get("controller_id") or "") == "policy_plus_wm_rerank"
+                ),
+                0.0,
+            ),
+        }
+    ]
+    controller_distribution = {
+        "selection_distribution": selection_distribution,
+        "fallback_rate": fallback_rate,
+    }
+    return routing_decision_impact, selection_distribution, top_slices, {
+        "search_budget_sensitivity": search_budget_sensitivity,
+        "wm_uncertainty_gate_impact": wm_gate_impact,
+        "controller_distribution": controller_distribution,
+    }
+
+
 def run_regression_triage(
     *,
     current_run_dir: str | Path,
@@ -502,6 +649,14 @@ def run_regression_triage(
         current_decision_dict,
         degraded_rows,
     )
+    routing_decision_impact, controller_selection_distribution, top_degrading_slices_for_hybrid, hybrid_aux = _p48_hybrid_impact(
+        current_manifest if isinstance(current_manifest, dict) else {},
+        current_dir,
+        current_decision_dict,
+        degraded_rows,
+    )
+    search_budget_sensitivity = hybrid_aux.get("search_budget_sensitivity") if isinstance(hybrid_aux, dict) else []
+    wm_uncertainty_gate_impact = hybrid_aux.get("wm_uncertainty_gate_impact") if isinstance(hybrid_aux, dict) else []
     curr_signature = _curriculum_signature(current_candidate_manifest)
     prev_signature = _curriculum_signature(baseline_candidate_manifest)
 
@@ -564,6 +719,11 @@ def run_regression_triage(
         "uncertainty_penalty_sensitivity": uncertainty_penalty_sensitivity,
         "horizon_sensitivity": horizon_sensitivity,
         "top_degrading_slices_with_wm": top_degrading_slices_with_wm,
+        "routing_decision_impact": routing_decision_impact,
+        "controller_selection_distribution": controller_selection_distribution,
+        "top_degrading_slices_for_hybrid": top_degrading_slices_for_hybrid,
+        "search_budget_sensitivity": search_budget_sensitivity,
+        "wm_uncertainty_gate_impact": wm_uncertainty_gate_impact,
         "curriculum_change": curriculum_change,
         "data_quality": {
             "current": current_quality,
@@ -711,6 +871,65 @@ def run_regression_triage(
                     label=row.get("slice_label"),
                     score=float(row.get("score_delta") or 0.0),
                     win=float(row.get("win_rate_delta") or 0.0),
+                )
+            )
+    md_lines.extend(["", "## Hybrid Routing Impact"])
+    md_lines.append(
+        "- enabled={enabled} baseline={baseline} hybrid={hybrid} delta_vs_baseline={delta:.6f} delta_vs_search={search_delta:.6f}".format(
+            enabled=str(bool(routing_decision_impact.get("hybrid_enabled"))).lower(),
+            baseline=routing_decision_impact.get("baseline_policy"),
+            hybrid=routing_decision_impact.get("hybrid_policy"),
+            delta=float(routing_decision_impact.get("hybrid_score_delta_vs_baseline") or 0.0),
+            search_delta=float(routing_decision_impact.get("hybrid_score_delta_vs_search") or 0.0),
+        )
+    )
+    if controller_selection_distribution:
+        md_lines.extend(["", "## Controller Selection Distribution"])
+        for row in controller_selection_distribution:
+            if not isinstance(row, dict):
+                continue
+            md_lines.append(
+                "- {controller}: count={count} ratio={ratio:.3f}".format(
+                    controller=row.get("controller_id"),
+                    count=int(row.get("count") or 0),
+                    ratio=float(row.get("ratio") or 0.0),
+                )
+            )
+    if top_degrading_slices_for_hybrid:
+        md_lines.extend(["", "## Top Degrading Slices For Hybrid"])
+        for row in top_degrading_slices_for_hybrid:
+            if not isinstance(row, dict):
+                continue
+            md_lines.append(
+                "- {key}:{label} score_delta={score:.6f} win_delta={win:.6f}".format(
+                    key=row.get("slice_key"),
+                    label=row.get("slice_label"),
+                    score=float(row.get("score_delta") or 0.0),
+                    win=float(row.get("win_rate_delta") or 0.0),
+                )
+            )
+    if search_budget_sensitivity:
+        md_lines.extend(["", "## Search Budget Sensitivity"])
+        for row in search_budget_sensitivity:
+            if not isinstance(row, dict):
+                continue
+            md_lines.append(
+                "- {policy}: score_delta_vs_hybrid={score:.6f} search_selected_ratio={ratio:.3f}".format(
+                    policy=row.get("policy_id"),
+                    score=float(row.get("score_delta_vs_hybrid") or 0.0),
+                    ratio=float(row.get("search_selected_ratio") or 0.0),
+                )
+            )
+    if wm_uncertainty_gate_impact:
+        md_lines.extend(["", "## WM Uncertainty Gate Impact"])
+        for row in wm_uncertainty_gate_impact:
+            if not isinstance(row, dict):
+                continue
+            md_lines.append(
+                "- trigger_count={count} decision_count={decisions} wm_selected_ratio={ratio:.3f}".format(
+                    count=int(row.get("wm_uncertainty_gate_trigger_count") or 0),
+                    decisions=int(row.get("decision_count") or 0),
+                    ratio=float(row.get("wm_selected_ratio") or 0.0),
                 )
             )
     md_lines.extend(["", "## Seed Attribution"])
