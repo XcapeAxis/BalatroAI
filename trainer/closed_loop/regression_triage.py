@@ -298,6 +298,123 @@ def _extract_lineage_health(run_dir: Path | None) -> dict[str, Any]:
     }
 
 
+def _p47_manifest_block(run_manifest: dict[str, Any]) -> dict[str, Any]:
+    if isinstance(run_manifest.get("world_model_rerank"), dict):
+        return dict(run_manifest.get("world_model_rerank") or {})
+    if isinstance(run_manifest.get("model_based_search"), dict):
+        return dict(run_manifest.get("model_based_search") or {})
+    return {}
+
+
+def _p47_summary_rows(run_manifest: dict[str, Any], run_dir: Path) -> list[dict[str, Any]]:
+    paths = run_manifest.get("paths") if isinstance(run_manifest.get("paths"), dict) else {}
+    raw = str(paths.get("summary_table_json") or "").strip()
+    path = Path(raw).resolve() if raw else (run_dir / "summary_table.json")
+    payload = _read_json(path)
+    return [row for row in payload if isinstance(row, dict)] if isinstance(payload, list) else []
+
+
+def _find_policy_row(rows: list[dict[str, Any]], policy_id: str) -> dict[str, Any]:
+    token = str(policy_id or "").strip()
+    for row in rows:
+        if str(row.get("policy_id") or "") == token:
+            return row
+    return {}
+
+
+def _p47_assist_map(wm_block: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    path_raw = str(wm_block.get("policy_assist_map_json") or "").strip()
+    if not path_raw:
+        return {}
+    payload = _read_json(Path(path_raw))
+    if not isinstance(payload, dict):
+        return {}
+    return {str(key): dict(value) for key, value in payload.items() if isinstance(value, dict)}
+
+
+def _p47_world_model_assist_impact(
+    run_manifest: dict[str, Any],
+    run_dir: Path,
+    current_decision: dict[str, Any],
+    degraded_rows: list[dict[str, Any]],
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    wm_block = _p47_manifest_block(run_manifest)
+    if not wm_block:
+        return (
+            {
+                "wm_assist_enabled": False,
+                "wm_checkpoint": "",
+                "wm_eval_ref": "",
+                "baseline_policy": "",
+                "candidate_policy": "",
+            },
+            [],
+            [],
+            [],
+        )
+
+    summary_rows = _p47_summary_rows(run_manifest, run_dir)
+    assist_map = _p47_assist_map(wm_block)
+    baseline_policy = str(wm_block.get("baseline_policy") or current_decision.get("champion_policy_id") or "")
+    candidate_policy = str(wm_block.get("candidate_policy") or current_decision.get("candidate_policy_id") or "")
+    baseline_row = _find_policy_row(summary_rows, baseline_policy)
+    candidate_row = _find_policy_row(summary_rows, candidate_policy)
+    baseline_score = _safe_float(baseline_row.get("mean_total_score"), 0.0)
+    best_variant_row = max(
+        [row for row in summary_rows if str(row.get("policy_id") or "") != baseline_policy],
+        key=lambda row: _safe_float(row.get("mean_total_score"), 0.0),
+        default={},
+    )
+
+    uncertainty_rows: list[dict[str, Any]] = []
+    horizon_rows: list[dict[str, Any]] = []
+    for policy_id, config in assist_map.items():
+        row = _find_policy_row(summary_rows, policy_id)
+        delta = _safe_float(row.get("mean_total_score"), 0.0) - baseline_score
+        uncertainty_rows.append(
+            {
+                "policy_id": policy_id,
+                "uncertainty_penalty": _safe_float(config.get("uncertainty_penalty"), 0.0),
+                "score_delta_vs_baseline": delta,
+                "invalid_delta_vs_baseline": _safe_float(row.get("invalid_action_rate"), 0.0) - _safe_float(baseline_row.get("invalid_action_rate"), 0.0),
+            }
+        )
+        horizon_rows.append(
+            {
+                "policy_id": policy_id,
+                "horizon": _safe_int(config.get("horizon"), 0),
+                "score_delta_vs_baseline": delta,
+                "invalid_delta_vs_baseline": _safe_float(row.get("invalid_action_rate"), 0.0) - _safe_float(baseline_row.get("invalid_action_rate"), 0.0),
+            }
+        )
+    uncertainty_rows.sort(key=lambda row: (float(row.get("uncertainty_penalty") or 0.0), str(row.get("policy_id") or "")))
+    horizon_rows.sort(key=lambda row: (int(row.get("horizon") or 0), str(row.get("policy_id") or "")))
+
+    top_slices = [
+        {
+            "slice_key": str(row.get("slice_key") or ""),
+            "slice_label": str(row.get("slice_label") or ""),
+            "score_delta": _safe_float(((row.get("metrics") or {}).get("mean_total_score_delta")) if isinstance(row.get("metrics"), dict) else 0.0, 0.0),
+            "win_rate_delta": _safe_float(((row.get("metrics") or {}).get("win_rate_delta")) if isinstance(row.get("metrics"), dict) else 0.0, 0.0),
+        }
+        for row in degraded_rows
+        if isinstance(row, dict)
+    ][:5]
+
+    impact = {
+        "wm_assist_enabled": True,
+        "wm_checkpoint": str(wm_block.get("wm_checkpoint") or ""),
+        "wm_eval_ref": str(wm_block.get("wm_eval_ref") or ""),
+        "baseline_policy": baseline_policy,
+        "candidate_policy": candidate_policy,
+        "candidate_score_delta_vs_baseline": _safe_float(candidate_row.get("mean_total_score"), 0.0) - baseline_score,
+        "candidate_invalid_delta_vs_baseline": _safe_float(candidate_row.get("invalid_action_rate"), 0.0) - _safe_float(baseline_row.get("invalid_action_rate"), 0.0),
+        "best_variant_policy": str(best_variant_row.get("policy_id") or ""),
+        "best_variant_score_delta_vs_baseline": _safe_float(best_variant_row.get("mean_total_score"), 0.0) - baseline_score,
+    }
+    return impact, uncertainty_rows, horizon_rows, top_slices
+
+
 def run_regression_triage(
     *,
     current_run_dir: str | Path,
@@ -379,6 +496,12 @@ def run_regression_triage(
         degraded_rows,
         current_source_attr,
     )
+    world_model_assist_impact, uncertainty_penalty_sensitivity, horizon_sensitivity, top_degrading_slices_with_wm = _p47_world_model_assist_impact(
+        current_manifest if isinstance(current_manifest, dict) else {},
+        current_dir,
+        current_decision_dict,
+        degraded_rows,
+    )
     curr_signature = _curriculum_signature(current_candidate_manifest)
     prev_signature = _curriculum_signature(baseline_candidate_manifest)
 
@@ -437,6 +560,10 @@ def run_regression_triage(
         "imagined_source_impact": imagined_source_impact,
         "top_degrading_imagined_slices": top_degrading_imagined_slices,
         "suggested_imagination_adjustments": suggested_imagination_adjustments,
+        "world_model_assist_impact": world_model_assist_impact,
+        "uncertainty_penalty_sensitivity": uncertainty_penalty_sensitivity,
+        "horizon_sensitivity": horizon_sensitivity,
+        "top_degrading_slices_with_wm": top_degrading_slices_with_wm,
         "curriculum_change": curriculum_change,
         "data_quality": {
             "current": current_quality,
@@ -536,6 +663,56 @@ def run_regression_triage(
         md_lines.extend(["", "## Suggested Imagination Adjustments"])
         for item in suggested_imagination_adjustments:
             md_lines.append(f"- {item}")
+    md_lines.extend(["", "## World Model Assist Impact"])
+    md_lines.append(
+        "- enabled={enabled} baseline={baseline} candidate={candidate} delta_vs_baseline={delta:.6f} best_variant={best} best_delta={best_delta:.6f}".format(
+            enabled=str(bool(world_model_assist_impact.get("wm_assist_enabled"))).lower(),
+            baseline=world_model_assist_impact.get("baseline_policy"),
+            candidate=world_model_assist_impact.get("candidate_policy"),
+            delta=float(world_model_assist_impact.get("candidate_score_delta_vs_baseline") or 0.0),
+            best=world_model_assist_impact.get("best_variant_policy"),
+            best_delta=float(world_model_assist_impact.get("best_variant_score_delta_vs_baseline") or 0.0),
+        )
+    )
+    if uncertainty_penalty_sensitivity:
+        md_lines.extend(["", "## Uncertainty Penalty Sensitivity"])
+        for row in uncertainty_penalty_sensitivity:
+            if not isinstance(row, dict):
+                continue
+            md_lines.append(
+                "- {policy}: unc_penalty={unc:.3f} score_delta={score:.6f} invalid_delta={invalid:.6f}".format(
+                    policy=row.get("policy_id"),
+                    unc=float(row.get("uncertainty_penalty") or 0.0),
+                    score=float(row.get("score_delta_vs_baseline") or 0.0),
+                    invalid=float(row.get("invalid_delta_vs_baseline") or 0.0),
+                )
+            )
+    if horizon_sensitivity:
+        md_lines.extend(["", "## Horizon Sensitivity"])
+        for row in horizon_sensitivity:
+            if not isinstance(row, dict):
+                continue
+            md_lines.append(
+                "- {policy}: horizon={horizon} score_delta={score:.6f} invalid_delta={invalid:.6f}".format(
+                    policy=row.get("policy_id"),
+                    horizon=int(row.get("horizon") or 0),
+                    score=float(row.get("score_delta_vs_baseline") or 0.0),
+                    invalid=float(row.get("invalid_delta_vs_baseline") or 0.0),
+                )
+            )
+    if top_degrading_slices_with_wm:
+        md_lines.extend(["", "## Top Degrading Slices With WM"])
+        for row in top_degrading_slices_with_wm:
+            if not isinstance(row, dict):
+                continue
+            md_lines.append(
+                "- {key}:{label} score_delta={score:.6f} win_delta={win:.6f}".format(
+                    key=row.get("slice_key"),
+                    label=row.get("slice_label"),
+                    score=float(row.get("score_delta") or 0.0),
+                    win=float(row.get("win_rate_delta") or 0.0),
+                )
+            )
     md_lines.extend(["", "## Seed Attribution"])
     if current_seed_attr:
         for row in current_seed_attr[:10]:
