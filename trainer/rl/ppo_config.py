@@ -76,6 +76,13 @@ class PPODiagnosticsConfig:
 
 
 @dataclass
+class PPOWorldModelAuxConfig:
+    enabled: bool = False
+    checkpoint: str = ""
+    loss_weight: float = 0.0
+
+
+@dataclass
 class PPOEnvConfig:
     backend: str = "sim"
     timeout_sec: float = 8.0
@@ -98,6 +105,7 @@ class PPOConfig:
     distributed: PPODistributedConfig = field(default_factory=PPODistributedConfig)
     evaluation: PPOEvaluationConfig = field(default_factory=PPOEvaluationConfig)
     diagnostics: PPODiagnosticsConfig = field(default_factory=PPODiagnosticsConfig)
+    world_model_aux: PPOWorldModelAuxConfig = field(default_factory=PPOWorldModelAuxConfig)
     train: PPOTrainConfig = field(default_factory=PPOTrainConfig)
 
     @classmethod
@@ -108,6 +116,7 @@ class PPOConfig:
         distributed_raw = payload.get("distributed") if isinstance(payload.get("distributed"), dict) else {}
         evaluation_raw = payload.get("evaluation") if isinstance(payload.get("evaluation"), dict) else {}
         diagnostics_raw = payload.get("diagnostics") if isinstance(payload.get("diagnostics"), dict) else {}
+        world_model_aux_raw = payload.get("world_model_aux") if isinstance(payload.get("world_model_aux"), dict) else {}
         train_raw = payload.get("train") if isinstance(payload.get("train"), dict) else {}
 
         env_cfg = PPOEnvConfig(
@@ -158,6 +167,11 @@ class PPOConfig:
             out_root=str(diagnostics_raw.get("out_root") or "docs/artifacts/p44/diagnostics"),
             action_topk=max(1, _safe_int(diagnostics_raw.get("action_topk"), 16)),
         )
+        world_model_aux_cfg = PPOWorldModelAuxConfig(
+            enabled=bool(world_model_aux_raw.get("enabled", False)),
+            checkpoint=str(world_model_aux_raw.get("checkpoint") or ""),
+            loss_weight=max(0.0, _safe_float(world_model_aux_raw.get("loss_weight"), 0.0)),
+        )
         train_cfg = PPOTrainConfig(
             ppo_epochs=max(1, _safe_int(train_raw.get("ppo_epochs"), 2)),
             minibatch_size=max(8, _safe_int(train_raw.get("minibatch_size"), 128)),
@@ -192,6 +206,7 @@ class PPOConfig:
             distributed=distributed_cfg,
             evaluation=evaluation_cfg,
             diagnostics=diagnostics_cfg,
+            world_model_aux=world_model_aux_cfg,
             train=train_cfg,
         )
 

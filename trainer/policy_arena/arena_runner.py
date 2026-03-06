@@ -21,7 +21,7 @@ from trainer.common.slices import (
     as_legacy_risk_bucket,
     compute_slice_labels,
 )
-from trainer.policy_arena.adapters import HeuristicAdapter, HybridAdapter, ModelAdapter, SearchAdapter
+from trainer.policy_arena.adapters import HeuristicAdapter, HybridAdapter, ModelAdapter, SearchAdapter, WorldModelAssistAdapter
 from trainer.policy_arena.arena_metrics import summarize_bucket_metrics, summarize_policy_rows
 from trainer.policy_arena.arena_report import write_bucket_metrics, write_episode_records, write_summary_table
 from trainer.policy_arena.policy_adapter import BasePolicyAdapter, normalize_action, phase_default_action, phase_from_obs
@@ -90,10 +90,27 @@ def _dominant_bucket_value(counts: dict[str, int]) -> str:
     return str(ordered[0][0])
 
 
-def _build_policy_adapter(policy_id: str, *, model_path: str = "") -> BasePolicyAdapter:
+def _build_policy_adapter(
+    policy_id: str,
+    *,
+    model_path: str = "",
+    world_model_checkpoint: str = "",
+    world_model_assist_mode: str = "one_step_heuristic",
+    world_model_weight: float = 0.35,
+    world_model_uncertainty_penalty: float = 0.5,
+) -> BasePolicyAdapter:
     token = str(policy_id or "").strip().lower()
     if token in {"heuristic", "heuristic_baseline", "baseline", "rule"}:
         return HeuristicAdapter(name=policy_id)
+    if token in {"heuristic_wm_assist", "baseline_wm_assist", "wm_assist", "world_model_assist"}:
+        return WorldModelAssistAdapter(
+            name=policy_id,
+            base_policy="heuristic_baseline",
+            world_model_checkpoint=world_model_checkpoint,
+            assist_mode=world_model_assist_mode,
+            weight=float(world_model_weight),
+            uncertainty_penalty=float(world_model_uncertainty_penalty),
+        )
     if token in {"search", "search_expert"}:
         return SearchAdapter(name=policy_id)
     if token in {"hybrid", "hybrid_search_heuristic"}:
@@ -258,6 +275,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--mode", choices=["long_episode", "state_benchmark", "mixed"], default="long_episode")
     parser.add_argument("--policies", default="heuristic_baseline,search_expert,model_policy")
     parser.add_argument("--model-path", default="")
+    parser.add_argument("--world-model-checkpoint", default="")
+    parser.add_argument("--world-model-assist-mode", default="one_step_heuristic")
+    parser.add_argument("--world-model-weight", type=float, default=0.35)
+    parser.add_argument("--world-model-uncertainty-penalty", type=float, default=0.5)
     parser.add_argument("--seeds", default="AAAAAAA,BBBBBBB,CCCCCCC")
     parser.add_argument("--episodes-per-seed", type=int, default=2)
     parser.add_argument("--max-steps", type=int, default=260)
@@ -307,7 +328,14 @@ def main() -> int:
     adapter_descriptions: dict[str, dict[str, Any]] = {}
     for policy_id in policies:
         try:
-            adapter = _build_policy_adapter(policy_id, model_path=str(args.model_path or ""))
+            adapter = _build_policy_adapter(
+                policy_id,
+                model_path=str(args.model_path or ""),
+                world_model_checkpoint=str(args.world_model_checkpoint or ""),
+                world_model_assist_mode=str(args.world_model_assist_mode or "one_step_heuristic"),
+                world_model_weight=float(args.world_model_weight),
+                world_model_uncertainty_penalty=float(args.world_model_uncertainty_penalty),
+            )
             desc = adapter.describe()
             adapter_descriptions[policy_id] = desc
             if args.skip_unavailable and str((desc.get("adapter") or {}).get("status") or "") == "stub":
@@ -371,6 +399,10 @@ def main() -> int:
             "episodes_per_seed": episodes_per_seed,
             "max_steps": max_steps,
             "quick": bool(args.quick),
+            "world_model_checkpoint": str(args.world_model_checkpoint or ""),
+            "world_model_assist_mode": str(args.world_model_assist_mode or "one_step_heuristic"),
+            "world_model_weight": float(args.world_model_weight),
+            "world_model_uncertainty_penalty": float(args.world_model_uncertainty_penalty),
         },
         "adapters": adapter_descriptions,
         "paths": {

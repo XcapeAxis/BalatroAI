@@ -363,6 +363,12 @@ def run_closed_loop(
     decision_payload: dict[str, Any] = {}
     candidate_policy = str(arena_cfg.get("candidate_policy") or "model_policy")
     champion_policy = str(arena_cfg.get("champion_policy") or "heuristic_baseline")
+    world_model_cfg = cfg.get("world_model") if isinstance(cfg.get("world_model"), dict) else {}
+    world_model_enabled = bool(world_model_cfg.get("enabled", False))
+    world_model_checkpoint = str(world_model_cfg.get("checkpoint") or "")
+    world_model_assist_mode = str(world_model_cfg.get("assist_mode") or "one_step_heuristic")
+    world_model_weight = float(world_model_cfg.get("weight") or 0.35)
+    world_model_uncertainty_penalty = float(world_model_cfg.get("uncertainty_penalty") or 0.5)
 
     candidate_checkpoint = str(candidate_summary.get("best_checkpoint") or "")
     multi_seed_eval_json = str(candidate_summary.get("multi_seed_eval") or "")
@@ -411,6 +417,19 @@ def run_closed_loop(
         ]
         if candidate_policy == "model_policy" and candidate_checkpoint:
             arena_cmd.extend(["--model-path", candidate_checkpoint])
+        if world_model_enabled and world_model_checkpoint:
+            arena_cmd.extend(
+                [
+                    "--world-model-checkpoint",
+                    world_model_checkpoint,
+                    "--world-model-assist-mode",
+                    world_model_assist_mode,
+                    "--world-model-weight",
+                    str(world_model_weight),
+                    "--world-model-uncertainty-penalty",
+                    str(world_model_uncertainty_penalty),
+                ]
+            )
         if quick:
             arena_cmd.append("--quick")
 
@@ -433,6 +452,9 @@ def run_closed_loop(
             "candidate_checkpoint": candidate_checkpoint,
             "multi_seed_eval_json": multi_seed_eval_json,
             "diagnostics_json": diagnostics_json,
+            "world_model_assist": bool(world_model_enabled and world_model_checkpoint),
+            "world_model_checkpoint": world_model_checkpoint,
+            "world_model_assist_mode": world_model_assist_mode if world_model_enabled else "",
             "arena_command": arena_cmd,
             "arena_returncode": int(arena_result.get("returncode") or 0),
             "arena_elapsed_sec": float(arena_result.get("elapsed_sec") or 0.0),
@@ -704,6 +726,13 @@ def run_closed_loop(
             "arena_eval": arena_summary_ref,
             "promotion_decision": promotion_decision,
             "regression_triage": triage_summary,
+        },
+        "auxiliary_assets": {
+            "world_model_enabled": bool(world_model_enabled and world_model_checkpoint),
+            "world_model_checkpoint": world_model_checkpoint,
+            "world_model_assist_mode": world_model_assist_mode if world_model_enabled else "",
+            "world_model_weight": world_model_weight if world_model_enabled else 0.0,
+            "world_model_uncertainty_penalty": world_model_uncertainty_penalty if world_model_enabled else 0.0,
         },
         "summary_table_paths": summary_paths,
     }
