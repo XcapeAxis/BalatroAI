@@ -61,6 +61,16 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return float(default)
 
 
+def _read_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
 def _legal_actions_hint(state: dict[str, Any]) -> list[dict[str, Any]] | None:
     phase = phase_from_obs(state)
     if phase == "SELECTING_HAND":
@@ -94,12 +104,15 @@ def _build_policy_adapter(
     policy_id: str,
     *,
     model_path: str = "",
+    model_paths: dict[str, str] | None = None,
     world_model_checkpoint: str = "",
     world_model_assist_mode: str = "one_step_heuristic",
     world_model_weight: float = 0.35,
     world_model_uncertainty_penalty: float = 0.5,
 ) -> BasePolicyAdapter:
     token = str(policy_id or "").strip().lower()
+    model_map = model_paths if isinstance(model_paths, dict) else {}
+    resolved_model_path = str(model_map.get(policy_id) or model_path or "")
     if token in {"heuristic", "heuristic_baseline", "baseline", "rule"}:
         return HeuristicAdapter(name=policy_id)
     if token in {"heuristic_wm_assist", "baseline_wm_assist", "wm_assist", "world_model_assist"}:
@@ -115,8 +128,8 @@ def _build_policy_adapter(
         return SearchAdapter(name=policy_id)
     if token in {"hybrid", "hybrid_search_heuristic"}:
         return HybridAdapter(name=policy_id)
-    if token in {"model", "model_policy", "bc", "pv", "dagger", "risk_aware", "deploy_student"}:
-        return ModelAdapter(name=policy_id, model_path=model_path, strategy=token)
+    if policy_id in model_map or token in {"model", "model_policy", "bc", "pv", "dagger", "risk_aware", "deploy_student"}:
+        return ModelAdapter(name=policy_id, model_path=resolved_model_path, strategy=token or "bc")
     raise ValueError(f"unsupported policy id: {policy_id}")
 
 
@@ -275,6 +288,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--mode", choices=["long_episode", "state_benchmark", "mixed"], default="long_episode")
     parser.add_argument("--policies", default="heuristic_baseline,search_expert,model_policy")
     parser.add_argument("--model-path", default="")
+    parser.add_argument("--policy-model-map-json", default="")
     parser.add_argument("--world-model-checkpoint", default="")
     parser.add_argument("--world-model-assist-mode", default="one_step_heuristic")
     parser.add_argument("--world-model-weight", type=float, default=0.35)
@@ -302,6 +316,8 @@ def main() -> int:
     mode = str(args.mode or "long_episode")
     policies = _parse_csv(args.policies)
     seeds = _parse_csv(args.seeds)
+    explicit_policies = bool(str(args.policies or "").strip())
+    explicit_seeds = bool(str(args.seeds or "").strip())
     episodes_per_seed = max(1, int(args.episodes_per_seed))
     max_steps = max(1, int(args.max_steps))
 
@@ -309,10 +325,12 @@ def main() -> int:
         mode = "long_episode"
         if not policies:
             policies = ["heuristic_baseline", "search_expert"]
-        policies = policies[:2]
-        if len(seeds) < 2:
+        elif not explicit_policies and len(policies) > 2:
+            policies = policies[:2]
+        if not explicit_seeds and len(seeds) < 2:
             seeds = ["AAAAAAA", "BBBBBBB"]
-        seeds = seeds[:2]
+        if len(seeds) > 2:
+            seeds = seeds[:2]
         episodes_per_seed = min(2, episodes_per_seed)
         max_steps = min(max_steps, 120)
 
@@ -326,11 +344,16 @@ def main() -> int:
     warnings: list[str] = []
     adapters: dict[str, BasePolicyAdapter] = {}
     adapter_descriptions: dict[str, dict[str, Any]] = {}
+    policy_model_map: dict[str, str] = {}
+    if str(args.policy_model_map_json or "").strip():
+        policy_model_map = _read_json(Path(str(args.policy_model_map_json)).resolve())
+        policy_model_map = {str(key): str(value) for key, value in policy_model_map.items() if str(value).strip()}
     for policy_id in policies:
         try:
             adapter = _build_policy_adapter(
                 policy_id,
                 model_path=str(args.model_path or ""),
+                model_paths=policy_model_map,
                 world_model_checkpoint=str(args.world_model_checkpoint or ""),
                 world_model_assist_mode=str(args.world_model_assist_mode or "one_step_heuristic"),
                 world_model_weight=float(args.world_model_weight),
@@ -403,6 +426,8 @@ def main() -> int:
             "world_model_assist_mode": str(args.world_model_assist_mode or "one_step_heuristic"),
             "world_model_weight": float(args.world_model_weight),
             "world_model_uncertainty_penalty": float(args.world_model_uncertainty_penalty),
+            "policy_model_map_json": str(args.policy_model_map_json or ""),
+            "policy_model_map": policy_model_map,
         },
         "adapters": adapter_descriptions,
         "paths": {

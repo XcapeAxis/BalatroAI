@@ -175,6 +175,82 @@ def _source_attribution(
     }
 
 
+def _imagined_source_impact(
+    replay_manifest: dict[str, Any],
+    candidate_manifest: dict[str, Any],
+    degraded_rows: list[dict[str, Any]],
+    source_rows: list[dict[str, Any]],
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[str]]:
+    entries = replay_manifest.get("selected_entries") if isinstance(replay_manifest.get("selected_entries"), list) else []
+    imagined_entries = [entry for entry in entries if isinstance(entry, dict) and str(entry.get("source_type") or "") == "imagined_world_model"]
+    imagined_sample_count = int(sum(int(entry.get("sample_count") or 0) for entry in imagined_entries))
+    uncertainty_values: list[float] = []
+    gate_true = 0
+    gate_false = 0
+    for entry in imagined_entries:
+        try:
+            uncertainty_values.append(float(entry.get("uncertainty_score") or 0.0))
+        except Exception:
+            pass
+        if entry.get("uncertainty_gate_passed") is True:
+            gate_true += 1
+        elif entry.get("uncertainty_gate_passed") is False:
+            gate_false += 1
+
+    imagined_source_row = next(
+        (row for row in source_rows if isinstance(row, dict) and str(row.get("source_type") or "") == "imagined_world_model"),
+        {},
+    )
+    top_slices: list[dict[str, Any]] = []
+    for row in degraded_rows:
+        if not isinstance(row, dict):
+            continue
+        slice_key = str(row.get("slice_key") or "")
+        slice_label = str(row.get("slice_label") or "")
+        matched = 0
+        for entry in imagined_entries:
+            if _entry_slice_value(entry, slice_key) == slice_label:
+                matched += int(entry.get("sample_count") or 0)
+        if matched <= 0:
+            continue
+        top_slices.append(
+            {
+                "slice_key": slice_key,
+                "slice_label": slice_label,
+                "imagined_sample_count": int(matched),
+            }
+        )
+    top_slices.sort(key=lambda item: (-int(item.get("imagined_sample_count") or 0), str(item.get("slice_key") or "")))
+
+    filter_mode = str(candidate_manifest.get("imagined_filter_mode") or "")
+    imagination_recipe = str(candidate_manifest.get("imagination_recipe") or "")
+    imagined_fraction = _safe_float(candidate_manifest.get("imagined_fraction"), 0.0)
+    suggestions: list[str] = []
+    degraded_ratio = _safe_float(imagined_source_row.get("degraded_slice_ratio"), 0.0)
+    if imagined_sample_count > 0 and degraded_ratio > 0.4:
+        suggestions.append("reduce_imagined_fraction")
+    if imagined_sample_count > 0 and filter_mode not in {"uncertainty_gate", "filtered"}:
+        suggestions.append("enable_uncertainty_filter")
+    if top_slices:
+        suggestions.append("review_top_degrading_imagined_slices")
+    if gate_false > gate_true and imagined_sample_count > 0:
+        suggestions.append("tighten_uncertainty_threshold")
+
+    impact = {
+        "imagined_enabled": bool(candidate_manifest.get("imagined_enabled")) or imagined_sample_count > 0,
+        "imagination_recipe": imagination_recipe,
+        "imagined_filter_mode": filter_mode,
+        "imagined_fraction": imagined_fraction,
+        "imagined_sample_count": imagined_sample_count,
+        "degraded_slice_sample_count": int(imagined_source_row.get("degraded_slice_sample_count") or 0),
+        "degraded_slice_ratio": degraded_ratio,
+        "mean_uncertainty": (sum(uncertainty_values) / max(1, len(uncertainty_values))),
+        "uncertainty_gate_true": int(gate_true),
+        "uncertainty_gate_false": int(gate_false),
+    }
+    return impact, top_slices[:5], suggestions
+
+
 def _lineage_quality(replay_manifest: dict[str, Any]) -> dict[str, Any]:
     entries = replay_manifest.get("selected_entries") if isinstance(replay_manifest.get("selected_entries"), list) else []
     if not entries:
@@ -297,6 +373,12 @@ def run_regression_triage(
     attribution = _source_attribution(current_replay_manifest, degraded_rows)
     current_source_attr = attribution.get("source_rows") if isinstance(attribution.get("source_rows"), list) else []
     current_seed_attr = attribution.get("seed_rows") if isinstance(attribution.get("seed_rows"), list) else []
+    imagined_source_impact, top_degrading_imagined_slices, suggested_imagination_adjustments = _imagined_source_impact(
+        current_replay_manifest,
+        current_candidate_manifest,
+        degraded_rows,
+        current_source_attr,
+    )
     curr_signature = _curriculum_signature(current_candidate_manifest)
     prev_signature = _curriculum_signature(baseline_candidate_manifest)
 
@@ -352,6 +434,9 @@ def run_regression_triage(
         "degraded_slices_topk": degraded_rows,
         "source_attribution": current_source_attr,
         "seed_attribution": current_seed_attr,
+        "imagined_source_impact": imagined_source_impact,
+        "top_degrading_imagined_slices": top_degrading_imagined_slices,
+        "suggested_imagination_adjustments": suggested_imagination_adjustments,
         "curriculum_change": curriculum_change,
         "data_quality": {
             "current": current_quality,
@@ -425,6 +510,32 @@ def run_regression_triage(
             )
     else:
         md_lines.append("- none")
+    md_lines.extend(["", "## Imagined Source Impact"])
+    md_lines.append(
+        "- enabled={enabled} recipe={recipe} filter={filter_mode} fraction={fraction:.3f} degraded_ratio={ratio:.3f} mean_uncertainty={unc:.4f}".format(
+            enabled=str(bool(imagined_source_impact.get("imagined_enabled"))).lower(),
+            recipe=imagined_source_impact.get("imagination_recipe"),
+            filter_mode=imagined_source_impact.get("imagined_filter_mode"),
+            fraction=float(imagined_source_impact.get("imagined_fraction") or 0.0),
+            ratio=float(imagined_source_impact.get("degraded_slice_ratio") or 0.0),
+            unc=float(imagined_source_impact.get("mean_uncertainty") or 0.0),
+        )
+    )
+    if top_degrading_imagined_slices:
+        for row in top_degrading_imagined_slices:
+            if not isinstance(row, dict):
+                continue
+            md_lines.append(
+                "- top_imagined_slice {key}:{label} samples={count}".format(
+                    key=row.get("slice_key"),
+                    label=row.get("slice_label"),
+                    count=int(row.get("imagined_sample_count") or 0),
+                )
+            )
+    if suggested_imagination_adjustments:
+        md_lines.extend(["", "## Suggested Imagination Adjustments"])
+        for item in suggested_imagination_adjustments:
+            md_lines.append(f"- {item}")
     md_lines.extend(["", "## Seed Attribution"])
     if current_seed_attr:
         for row in current_seed_attr[:10]:

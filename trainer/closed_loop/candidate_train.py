@@ -211,6 +211,74 @@ def _pick_bc_entries(
     return rows
 
 
+def _entry_source_type(entry: dict[str, Any]) -> str:
+    return str(entry.get("source_type") or "").strip().lower()
+
+
+def _is_imagined_entry(entry: dict[str, Any]) -> bool:
+    return _entry_source_type(entry) == "imagined_world_model"
+
+
+def _normalize_imagination_config(cfg: dict[str, Any], replay_manifest: dict[str, Any]) -> dict[str, Any]:
+    raw = cfg.get("imagination") if isinstance(cfg.get("imagination"), dict) else {}
+    recipe = str(raw.get("recipe") or cfg.get("training_recipe") or "real_only").strip().lower() or "real_only"
+    filter_mode = str(raw.get("filter_mode") or "").strip().lower()
+    if not filter_mode:
+        if recipe == "real_only":
+            filter_mode = "disabled"
+        elif recipe.endswith("filtered"):
+            filter_mode = "uncertainty_gate"
+        else:
+            filter_mode = "none"
+    require_gate = bool(raw.get("require_uncertainty_gate_passed", filter_mode in {"uncertainty_gate", "filtered"}))
+    max_horizon = max(1, int(raw.get("max_imagination_horizon") or 1))
+    manifest_sources = replay_manifest.get("sources") if isinstance(replay_manifest.get("sources"), list) else []
+    imagined_source_rows = [
+        row
+        for row in manifest_sources
+        if isinstance(row, dict) and str(row.get("source_type") or "").strip().lower() == "imagined_world_model"
+    ]
+    imagined_selected = sum(int(row.get("selected_samples") or 0) for row in imagined_source_rows)
+    total_selected = int(((replay_manifest.get("totals") or {}).get("selected_samples") if isinstance(replay_manifest.get("totals"), dict) else 0) or 0)
+    inferred_fraction = float(imagined_selected) / max(1, total_selected)
+    requested_fraction = float(raw.get("imagined_fraction") or raw.get("max_imagined_fraction") or inferred_fraction)
+    return {
+        "recipe": recipe,
+        "enabled": recipe != "real_only",
+        "filter_mode": filter_mode,
+        "require_uncertainty_gate_passed": require_gate,
+        "max_imagination_horizon": max_horizon,
+        "imagined_fraction": float(requested_fraction),
+        "imagined_selected_samples": int(imagined_selected),
+        "source_count": len(imagined_source_rows),
+    }
+
+
+def _is_bc_labeled_row(obj: dict[str, Any]) -> bool:
+    phase = str(obj.get("phase") or "")
+    has_hand_label = obj.get("expert_action_id") is not None and phase == "SELECTING_HAND"
+    has_shop_label = obj.get("shop_expert_action_id") is not None and phase in {"SHOP", "SMODS_BOOSTER_OPENED"}
+    return bool(has_hand_label or has_shop_label)
+
+
+def _row_allowed_for_recipe(obj: dict[str, Any], *, entry: dict[str, Any], imagination_cfg: dict[str, Any]) -> tuple[bool, str]:
+    if not _is_bc_labeled_row(obj):
+        return False, "not_bc_labeled"
+    if not _is_imagined_entry(entry):
+        return True, "real"
+    recipe = str(imagination_cfg.get("recipe") or "real_only")
+    if recipe == "real_only":
+        return False, "imagined_disabled"
+    if not bool(obj.get("valid_for_training", True)):
+        return False, "imagined_invalid_for_training"
+    if int(obj.get("imagined_step_idx") or 1) > int(imagination_cfg.get("max_imagination_horizon") or 1):
+        return False, "imagined_horizon_filtered"
+    filter_mode = str(imagination_cfg.get("filter_mode") or "none")
+    if filter_mode in {"uncertainty_gate", "filtered"} and not bool(obj.get("uncertainty_gate_passed", False)):
+        return False, "imagined_uncertainty_gate"
+    return True, "imagined"
+
+
 def _extract_replay_line_limit(entry: dict[str, Any]) -> int:
     span = entry.get("sample_span") if isinstance(entry.get("sample_span"), dict) else {}
     line_end = int(span.get("line_end") or entry.get("sample_count") or 0)
@@ -222,10 +290,14 @@ def _build_subset_dataset(
     entries: list[dict[str, Any]],
     out_path: Path,
     max_rows: int,
+    imagination_cfg: dict[str, Any],
 ) -> dict[str, Any]:
     kept = 0
     scanned = 0
     source_files: list[str] = []
+    source_breakdown: dict[str, int] = {}
+    imagined_filtered_breakdown: dict[str, int] = {}
+    uncertainty_values: list[float] = []
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8", newline="\n") as out_fp:
         for entry in entries:
@@ -251,16 +323,33 @@ def _build_subset_dataset(
                         continue
                     if not isinstance(obj, dict):
                         continue
-                    phase = str(obj.get("phase") or "")
-                    has_hand_label = obj.get("expert_action_id") is not None and phase == "SELECTING_HAND"
-                    has_shop_label = obj.get("shop_expert_action_id") is not None and phase in {"SHOP", "SMODS_BOOSTER_OPENED"}
-                    if not (has_hand_label or has_shop_label):
+                    allowed, reason = _row_allowed_for_recipe(obj, entry=entry, imagination_cfg=imagination_cfg)
+                    if not allowed:
+                        imagined_filtered_breakdown[reason] = int(imagined_filtered_breakdown.get(reason, 0)) + 1
                         continue
                     out_fp.write(json.dumps(obj, ensure_ascii=False) + "\n")
                     kept += 1
+                    source_key = _entry_source_type(entry) or "unknown"
+                    source_breakdown[source_key] = int(source_breakdown.get(source_key, 0)) + 1
+                    if source_key == "imagined_world_model":
+                        uncertainty_values.append(float(obj.get("uncertainty_score") or 0.0))
                     if max_rows > 0 and kept >= max_rows:
-                        return {"kept_rows": kept, "scanned_rows": scanned, "source_files": source_files}
-    return {"kept_rows": kept, "scanned_rows": scanned, "source_files": source_files}
+                        return {
+                            "kept_rows": kept,
+                            "scanned_rows": scanned,
+                            "source_files": source_files,
+                            "source_breakdown": source_breakdown,
+                            "imagined_filtered_breakdown": imagined_filtered_breakdown,
+                            "imagined_mean_uncertainty": (sum(uncertainty_values) / max(1, len(uncertainty_values))),
+                        }
+    return {
+        "kept_rows": kept,
+        "scanned_rows": scanned,
+        "source_files": source_files,
+        "source_breakdown": source_breakdown,
+        "imagined_filtered_breakdown": imagined_filtered_breakdown,
+        "imagined_mean_uncertainty": (sum(uncertainty_values) / max(1, len(uncertainty_values))),
+    }
 
 
 def _build_subset_dataset_from_allocations(
@@ -268,10 +357,14 @@ def _build_subset_dataset_from_allocations(
     allocations: list[dict[str, Any]],
     out_path: Path,
     max_rows: int,
+    imagination_cfg: dict[str, Any],
 ) -> dict[str, Any]:
     kept = 0
     scanned = 0
     source_files: list[str] = []
+    source_breakdown: dict[str, int] = {}
+    imagined_filtered_breakdown: dict[str, int] = {}
+    uncertainty_values: list[float] = []
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8", newline="\n") as out_fp:
         for alloc in allocations:
@@ -298,19 +391,37 @@ def _build_subset_dataset_from_allocations(
                         continue
                     if not isinstance(obj, dict):
                         continue
-                    phase = str(obj.get("phase") or "")
-                    has_hand_label = obj.get("expert_action_id") is not None and phase == "SELECTING_HAND"
-                    has_shop_label = obj.get("shop_expert_action_id") is not None and phase in {"SHOP", "SMODS_BOOSTER_OPENED"}
-                    if not (has_hand_label or has_shop_label):
+                    entry_like = {"source_type": str(alloc.get("source_type") or "")}
+                    allowed, reason = _row_allowed_for_recipe(obj, entry=entry_like, imagination_cfg=imagination_cfg)
+                    if not allowed:
+                        imagined_filtered_breakdown[reason] = int(imagined_filtered_breakdown.get(reason, 0)) + 1
                         continue
                     out_fp.write(json.dumps(obj, ensure_ascii=False) + "\n")
                     kept += 1
                     written_for_entry += 1
+                    source_key = _entry_source_type(entry_like) or "unknown"
+                    source_breakdown[source_key] = int(source_breakdown.get(source_key, 0)) + 1
+                    if source_key == "imagined_world_model":
+                        uncertainty_values.append(float(obj.get("uncertainty_score") or 0.0))
                     if written_for_entry >= take_rows:
                         break
                     if max_rows > 0 and kept >= max_rows:
-                        return {"kept_rows": kept, "scanned_rows": scanned, "source_files": source_files}
-    return {"kept_rows": kept, "scanned_rows": scanned, "source_files": source_files}
+                        return {
+                            "kept_rows": kept,
+                            "scanned_rows": scanned,
+                            "source_files": source_files,
+                            "source_breakdown": source_breakdown,
+                            "imagined_filtered_breakdown": imagined_filtered_breakdown,
+                            "imagined_mean_uncertainty": (sum(uncertainty_values) / max(1, len(uncertainty_values))),
+                        }
+    return {
+        "kept_rows": kept,
+        "scanned_rows": scanned,
+        "source_files": source_files,
+        "source_breakdown": source_breakdown,
+        "imagined_filtered_breakdown": imagined_filtered_breakdown,
+        "imagined_mean_uncertainty": (sum(uncertainty_values) / max(1, len(uncertainty_values))),
+    }
 
 
 def _read_train_metrics(path: Path) -> dict[str, Any]:
@@ -595,6 +706,7 @@ def run_candidate_training(
     if not isinstance(replay_manifest, dict):
         raise RuntimeError(f"invalid replay manifest: {replay_manifest_path}")
     replay_entries = _pick_bc_entries(replay_manifest, prefer_source_types=[str(x) for x in prefer_sources])
+    imagination_cfg = _normalize_imagination_config(cfg, replay_manifest)
 
     curriculum_cfg = cfg.get("curriculum") if isinstance(cfg.get("curriculum"), dict) else {}
     curriculum_cfg_path = str(cfg.get("curriculum_config") or "").strip()
@@ -651,6 +763,7 @@ def run_candidate_training(
                     allocations=allocations,
                     out_path=phase_dataset_path,
                     max_rows=phase_rows_cap,
+                    imagination_cfg=imagination_cfg,
                 )
                 phase_sources: dict[str, int] = {}
                 for alloc in allocations:
@@ -697,19 +810,36 @@ def run_candidate_training(
             subset_rows = 0
             if subset_path.exists():
                 subset_rows = len([line for line in subset_path.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip()])
+            aggregate_breakdown: dict[str, int] = {}
+            for phase_summary in per_seed_curriculum:
+                if not isinstance(phase_summary, dict):
+                    continue
+                allocation = phase_summary.get("source_row_allocation") if isinstance(phase_summary.get("source_row_allocation"), dict) else {}
+                for source_type, count in allocation.items():
+                    aggregate_breakdown[str(source_type)] = int(aggregate_breakdown.get(str(source_type), 0)) + int(count or 0)
             subset_meta = {
                 "kept_rows": subset_rows,
                 "scanned_rows": 0,
                 "source_files": [str(p) for p in phase_datasets],
+                "source_breakdown": aggregate_breakdown,
+                "imagined_filtered_breakdown": {},
+                "imagined_mean_uncertainty": 0.0,
             }
         else:
-            subset_meta = _build_subset_dataset(entries=replay_entries, out_path=subset_path, max_rows=max_rows_per_seed)
+            subset_meta = _build_subset_dataset(
+                entries=replay_entries,
+                out_path=subset_path,
+                max_rows=max_rows_per_seed,
+                imagination_cfg=imagination_cfg,
+            )
 
         if dry_run:
             seed_result = {
                 "seed": seed,
                 "status": "dry_run",
                 "subset_rows": int(subset_meta.get("kept_rows") or 0),
+                "source_breakdown": subset_meta.get("source_breakdown") if isinstance(subset_meta.get("source_breakdown"), dict) else {},
+                "imagined_filtered_breakdown": subset_meta.get("imagined_filtered_breakdown") if isinstance(subset_meta.get("imagined_filtered_breakdown"), dict) else {},
                 "curriculum_phases": per_seed_curriculum,
                 "metrics": {},
                 "run_dir": str(seed_dir),
@@ -724,6 +854,8 @@ def run_candidate_training(
                 "seed": seed,
                 "status": "stub",
                 "subset_rows": int(subset_meta.get("kept_rows") or 0),
+                "source_breakdown": subset_meta.get("source_breakdown") if isinstance(subset_meta.get("source_breakdown"), dict) else {},
+                "imagined_filtered_breakdown": subset_meta.get("imagined_filtered_breakdown") if isinstance(subset_meta.get("imagined_filtered_breakdown"), dict) else {},
                 "curriculum_phases": per_seed_curriculum,
                 "metrics": {},
                 "run_dir": str(seed_dir),
@@ -739,6 +871,8 @@ def run_candidate_training(
                 "seed": seed,
                 "status": "stub",
                 "subset_rows": 0,
+                "source_breakdown": subset_meta.get("source_breakdown") if isinstance(subset_meta.get("source_breakdown"), dict) else {},
+                "imagined_filtered_breakdown": subset_meta.get("imagined_filtered_breakdown") if isinstance(subset_meta.get("imagined_filtered_breakdown"), dict) else {},
                 "curriculum_phases": per_seed_curriculum,
                 "metrics": {},
                 "run_dir": str(seed_dir),
@@ -786,6 +920,9 @@ def run_candidate_training(
             "seed": seed,
             "status": status,
             "subset_rows": int(subset_meta.get("kept_rows") or 0),
+            "source_breakdown": subset_meta.get("source_breakdown") if isinstance(subset_meta.get("source_breakdown"), dict) else {},
+            "imagined_filtered_breakdown": subset_meta.get("imagined_filtered_breakdown") if isinstance(subset_meta.get("imagined_filtered_breakdown"), dict) else {},
+            "imagined_mean_uncertainty": float(subset_meta.get("imagined_mean_uncertainty") or 0.0),
             "curriculum_phases": per_seed_curriculum,
             "metrics": metrics,
             "final_loss": float(final_loss),
@@ -851,6 +988,13 @@ def run_candidate_training(
         if metric_rows
         else 0.0
     )
+    imagined_rows_total = sum(
+        int(((row.get("source_breakdown") or {}).get("imagined_world_model") if isinstance(row.get("source_breakdown"), dict) else 0) or 0)
+        for row in seed_results
+        if isinstance(row, dict)
+    )
+    subset_rows_total = sum(int(row.get("subset_rows") or 0) for row in seed_results if isinstance(row, dict))
+    imagined_fraction = float(imagined_rows_total) / max(1, subset_rows_total)
 
     status = "ok" if ok_rows else ("dry_run" if dry_run else "stub")
     metrics_payload = {
@@ -873,6 +1017,10 @@ def run_candidate_training(
         "shop_top1": mean_shop_top1,
         "illegal_action_rate": mean_illegal,
         "final_loss": mean_loss,
+        "imagined_enabled": bool(imagination_cfg.get("enabled")),
+        "imagined_filter_mode": str(imagination_cfg.get("filter_mode") or ""),
+        "imagined_fraction": float(imagined_fraction),
+        "imagination_recipe": str(imagination_cfg.get("recipe") or "real_only"),
         "candidate_checkpoint": str(best_checkpoint),
     }
     manifest = {
@@ -894,6 +1042,11 @@ def run_candidate_training(
         "dry_run": bool(dry_run),
         "replay_mix_manifest": str(replay_manifest_path),
         "replay_selected_entries": len(replay_entries),
+        "imagined_enabled": bool(imagination_cfg.get("enabled")),
+        "imagined_filter_mode": str(imagination_cfg.get("filter_mode") or ""),
+        "imagined_fraction": float(imagined_fraction),
+        "imagined_requested_fraction": float(imagination_cfg.get("imagined_fraction") or 0.0),
+        "imagination_recipe": str(imagination_cfg.get("recipe") or "real_only"),
         "curriculum_plan": curriculum_plan,
         "curriculum_config_path": curriculum_cfg_path,
         "curriculum_applied": str(curriculum_applied_path),
@@ -920,6 +1073,8 @@ def run_candidate_training(
         "seeds_used": str(run_dir / "seeds_used.json"),
         "curriculum_plan": str(run_dir / "curriculum_plan.json"),
         "curriculum_applied": str(curriculum_applied_path),
+        "imagination_recipe": str(imagination_cfg.get("recipe") or "real_only"),
+        "imagined_fraction": float(imagined_fraction),
     }
 
 
