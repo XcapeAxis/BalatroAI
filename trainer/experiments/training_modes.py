@@ -65,7 +65,7 @@ _REGISTRY: dict[str, TrainingMode] = {
     "rl_ppo_lite": TrainingMode(
         mode_id="rl_ppo_lite",
         category=MODE_CATEGORY_MAINLINE,
-        description="P42 PPO-lite RL candidate training.",
+        description="P44 PPO-lite RL candidate training with distributed rollout and curriculum.",
         default_enabled=True,
         supports_closed_loop=True,
         supports_p22_quick=True,

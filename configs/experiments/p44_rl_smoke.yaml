@@ -1,0 +1,69 @@
+schema: p44_ppo_lite_config_v1
+
+output_artifacts_root: docs/artifacts/p44/rl_train
+curriculum_config: configs/experiments/p44_curriculum.yaml
+
+seeds:
+  - AAAAAAA
+  - BBBBBBB
+
+env:
+  backend: sim
+  timeout_sec: 8.0
+  max_steps_per_episode: 220
+  max_auto_steps: 8
+  max_ante: 0
+  auto_advance: true
+  reward:
+    score_delta_weight: 1.0
+    survival_bonus: 0.25
+    terminal_win_bonus: 0.8
+    terminal_loss_penalty: 0.8
+    invalid_action_penalty: 0.1
+    clip_abs: 2.0
+    penalize_requested_invalid: true
+    invalid_action_mode: fallback_first_legal
+
+rollout:
+  total_steps_cap: 1600
+  early_stop_invalid_rate: 0.45
+  min_steps_before_early_stop: 64
+
+distributed:
+  num_workers: 2
+  seeds:
+    - AAAAAAA
+    - BBBBBBB
+  episodes_per_worker: 10
+  max_steps_per_episode: 80
+
+evaluation:
+  seeds:
+    - AAAAAAA
+    - BBBBBBB
+    - CCCCCCC
+    - DDDDDDD
+  episodes_per_seed: 1
+  max_steps_per_episode: 120
+  greedy: true
+  out_root: docs/artifacts/p44/eval
+
+diagnostics:
+  out_root: docs/artifacts/p44/diagnostics
+  action_topk: 16
+
+train:
+  ppo_epochs: 1
+  minibatch_size: 128
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  entropy_coef: 0.01
+  value_coef: 0.5
+  lr: 0.0003
+  grad_clip_norm: 0.5
+  normalize_advantage: true
+  max_updates: 3
+  invalid_action_warn_threshold: 0.18
+  max_kl_warn: 0.20
+  nan_fail_fast: true
