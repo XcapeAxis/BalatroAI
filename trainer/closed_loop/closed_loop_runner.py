@@ -365,6 +365,8 @@ def run_closed_loop(
     champion_policy = str(arena_cfg.get("champion_policy") or "heuristic_baseline")
 
     candidate_checkpoint = str(candidate_summary.get("best_checkpoint") or "")
+    multi_seed_eval_json = str(candidate_summary.get("multi_seed_eval") or "")
+    diagnostics_json = str(candidate_summary.get("diagnostics_json") or "")
     if arena_enabled and not dry_run:
         arena_out = run_dir / "arena_eval"
         arena_root = arena_out / "arena_runs"
@@ -427,6 +429,10 @@ def run_closed_loop(
             "generated_at": now_iso(),
             "arena_status": arena_status,
             "arena_reason": arena_reason,
+            "training_mode": training_mode,
+            "candidate_checkpoint": candidate_checkpoint,
+            "multi_seed_eval_json": multi_seed_eval_json,
+            "diagnostics_json": diagnostics_json,
             "arena_command": arena_cmd,
             "arena_returncode": int(arena_result.get("returncode") or 0),
             "arena_elapsed_sec": float(arena_result.get("elapsed_sec") or 0.0),
@@ -527,6 +533,10 @@ def run_closed_loop(
             "generated_at": now_iso(),
             "arena_status": arena_status,
             "arena_reason": arena_reason,
+            "training_mode": training_mode,
+            "candidate_checkpoint": candidate_checkpoint,
+            "multi_seed_eval_json": multi_seed_eval_json,
+            "diagnostics_json": diagnostics_json,
         }
         decision_payload = {
             "schema": "p40_promotion_decision_v1",
@@ -539,6 +549,7 @@ def run_closed_loop(
         }
 
     write_json(run_dir / "arena_summary_ref.json", arena_summary_ref)
+    write_json(run_dir / "arena_summary.json", arena_summary_ref)
 
     decision_token = str(decision_payload.get("decision") or "").lower()
     recommendation = "reject"
@@ -709,6 +720,7 @@ def run_closed_loop(
         "legacy_paths_used": legacy_paths_used,
         "run_manifest": str(run_dir / "run_manifest.json"),
         "promotion_decision": str(run_dir / "promotion_decision.json"),
+        "arena_summary": str(run_dir / "arena_summary.json"),
         "summary_table_json": summary_paths["json"],
     }
 

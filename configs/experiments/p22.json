@@ -179,6 +179,29 @@
         }
       ]
     },
+    "distributed_rl_candidate_v1": {
+      "description": "P44 distributed self-play RL + curriculum + arena-gated evaluation",
+      "variants": [
+        {
+          "id": "p44_rl_smoke",
+          "algo": "p44_distributed_rl",
+          "seeds": [
+            "AAAAAAA",
+            "BBBBBBB"
+          ]
+        },
+        {
+          "id": "p44_rl_nightly",
+          "algo": "p44_distributed_rl",
+          "seeds": [
+            "AAAAAAA",
+            "BBBBBBB",
+            "CCCCCCC",
+            "DDDDDDD"
+          ]
+        }
+      ]
+    },
     "legacy_bc_dagger_probe": {
       "description": "Legacy BC/DAgger baseline probes (non-default)",
       "variants": [
@@ -1027,6 +1050,94 @@
         "config": "configs/experiments/p42_closed_loop_rl_nightly.yaml",
         "quick": false,
         "timeout_sec": 10800,
+        "candidate_policy": "model_policy",
+        "champion_policy": "heuristic_baseline"
+      }
+    },
+    {
+      "id": "p44_rl_smoke",
+      "name": "p44_rl_smoke",
+      "backend": "sim",
+      "policy": "rl_candidate",
+      "experiment_type": "p44_distributed_rl",
+      "seed_mode": "regression_fixed",
+      "seed_set_name": "contract_regression",
+      "seeds": [
+        "AAAAAAA",
+        "BBBBBBB"
+      ],
+      "gate_flag": "RunP22",
+      "modes": {
+        "quick": true,
+        "gate": true,
+        "nightly": true
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "sanity_compile": [
+        "trainer/rl/distributed_rollout.py",
+        "trainer/rl/curriculum_rl.py",
+        "trainer/rl/eval_multi_seed.py",
+        "trainer/rl/diagnostics.py",
+        "trainer/rl/ppo_lite.py",
+        "trainer/closed_loop/candidate_train.py",
+        "trainer/closed_loop/closed_loop_runner.py",
+        "trainer/policy_arena/champion_rules.py"
+      ],
+      "eval": {
+        "config": "configs/experiments/p44_closed_loop_rl_smoke.yaml",
+        "quick": false,
+        "timeout_sec": 7200,
+        "candidate_policy": "model_policy",
+        "champion_policy": "heuristic_baseline"
+      }
+    },
+    {
+      "id": "p44_rl_nightly",
+      "name": "p44_rl_nightly",
+      "backend": "sim",
+      "policy": "rl_candidate",
+      "experiment_type": "p44_distributed_rl",
+      "seed_mode": "nightly",
+      "seed_set_name": "eval_default",
+      "seeds": [
+        "AAAAAAA",
+        "BBBBBBB",
+        "CCCCCCC",
+        "DDDDDDD"
+      ],
+      "gate_flag": "RunP22",
+      "modes": {
+        "quick": false,
+        "gate": false,
+        "nightly": true
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "sanity_compile": [
+        "trainer/rl/distributed_rollout.py",
+        "trainer/rl/curriculum_rl.py",
+        "trainer/rl/eval_multi_seed.py",
+        "trainer/rl/diagnostics.py",
+        "trainer/rl/ppo_lite.py",
+        "trainer/closed_loop/candidate_train.py",
+        "trainer/closed_loop/closed_loop_runner.py",
+        "trainer/policy_arena/champion_rules.py"
+      ],
+      "eval": {
+        "config": "configs/experiments/p44_closed_loop_rl_nightly.yaml",
+        "quick": false,
+        "timeout_sec": 14400,
         "candidate_policy": "model_policy",
         "champion_policy": "heuristic_baseline"
       }

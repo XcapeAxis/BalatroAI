@@ -1,0 +1,52 @@
+schema: p44_closed_loop_rl_config_v1
+
+output:
+  artifacts_root: docs/artifacts/p44/closed_loop_runs
+
+seeds:
+  - AAAAAAA
+  - BBBBBBB
+  - CCCCCCC
+  - DDDDDDD
+
+replay_mixer:
+  config: configs/experiments/p41_replay_mix_nightly.yaml
+  quick: false
+
+failure_mining:
+  enabled: true
+  config: configs/experiments/p41_failure_mining_smoke.yaml
+  quick: false
+
+candidate_train:
+  config: configs/experiments/p44_candidate_rl_nightly.yaml
+  quick: false
+
+arena_eval:
+  enabled: true
+  backend: sim
+  mode: long_episode
+  policies:
+    - heuristic_baseline
+    - model_policy
+  candidate_policy: model_policy
+  champion_policy: heuristic_baseline
+  episodes_per_seed: 2
+  max_steps: 220
+  timeout_sec: 10800
+
+champion_rules:
+  enabled: true
+  champion_json: docs/artifacts/p22/champion.json
+  min_seeds: 3
+  max_invalid_increase: 0.02
+  max_timeout_increase: 0.01
+  min_score_improvement: 0.01
+  max_score_regression: 0.02
+  min_win_improvement: 0.0
+  bootstrap_iterations: 400
+  slice_min_samples: 3
+
+regression_triage:
+  enabled: true
+  baseline_run_dir: ""

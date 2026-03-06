@@ -9,6 +9,7 @@ param(
   [switch]$Resume,
   [switch]$KeepIntermediate,
   [switch]$VerboseLogs,
+  [switch]$RunP44,
   [string]$Only = "",
   [string]$Exclude = "",
   [int]$MaxParallel = 1,
@@ -43,6 +44,9 @@ if ($LegacyOnly) { $args += "--legacy-only" }
 if ($Resume) { $args += "--resume" }
 if ($KeepIntermediate) { $args += "--keep-intermediate" }
 if ($VerboseLogs) { $args += "--verbose" }
+if ($RunP44 -and [string]::IsNullOrWhiteSpace($Only)) {
+  $Only = if ($Nightly) { "p44_rl_nightly" } else { "p44_rl_smoke" }
+}
 if (-not [string]::IsNullOrWhiteSpace($Only)) { $args += @("--only", $Only) }
 if (-not [string]::IsNullOrWhiteSpace($Exclude)) { $args += @("--exclude", $Exclude) }
 if ($SeedLimit -gt 0) { $args += @("--seed-limit", "$SeedLimit") }

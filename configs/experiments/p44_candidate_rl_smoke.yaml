@@ -1,0 +1,17 @@
+schema: p44_candidate_train_config_v1
+
+candidate_modes:
+  - rl_ppo_lite
+allow_legacy_fallback: false
+
+output:
+  artifacts_root: docs/artifacts/p44/candidate_train
+
+seeds:
+  - AAAAAAA
+  - BBBBBBB
+
+rl_config: configs/experiments/p44_rl_smoke.yaml
+
+training:
+  timeout_sec: 5400

@@ -372,19 +372,6 @@ def run_candidate_training(
     write_json(run_dir / "seeds_used.json", seeds_payload)
 
     if mode == "rl_ppo_lite":
-        curriculum_plan = {
-            "enabled": False,
-            "phase_count": 0,
-            "phases": [],
-            "seeds": list(seeds),
-            "reason": "not_applicable_for_rl_ppo_lite",
-        }
-        write_json(run_dir / "curriculum_plan.json", curriculum_plan)
-        curriculum_applied_path = run_dir / "curriculum_applied.jsonl"
-        curriculum_applied_path.parent.mkdir(parents=True, exist_ok=True)
-        if not curriculum_applied_path.exists():
-            curriculum_applied_path.write_text("", encoding="utf-8")
-
         rl_config_path = str(cfg.get("rl_config") or "").strip()
         rl_config_payload: dict[str, Any] | None = None
         if rl_config_path:
@@ -406,7 +393,7 @@ def run_candidate_training(
         metrics_payload = read_json(Path(str(rl_summary.get("metrics") or "")))
         if not isinstance(metrics_payload, dict):
             metrics_payload = {
-                "schema": "p42_candidate_train_metrics_v1",
+                "schema": "p44_candidate_train_metrics_v1",
                 "generated_at": now_iso(),
                 "run_id": chosen_run_id,
                 "status": str(rl_summary.get("status") or "stub"),
@@ -416,8 +403,12 @@ def run_candidate_training(
                 "seed_count": len(seeds),
                 "ok_seed_count": 0,
                 "mean_reward": 0.0,
+                "mean_score": 0.0,
                 "invalid_action_rate": 0.0,
-                "final_loss": 0.0,
+                "policy_loss": 0.0,
+                "value_loss": 0.0,
+                "entropy": 0.0,
+                "kl_divergence": 0.0,
                 "candidate_checkpoint": str(rl_summary.get("best_checkpoint") or ""),
             }
         metrics_payload["training_mode"] = mode
@@ -429,9 +420,22 @@ def run_candidate_training(
         best_checkpoint = Path(str(rl_summary.get("best_checkpoint") or "")) if str(rl_summary.get("best_checkpoint") or "").strip() else None
         best_checkpoint_txt = run_dir / "best_checkpoint.txt"
         best_checkpoint_txt.write_text((str(best_checkpoint) if best_checkpoint else "") + "\n", encoding="utf-8")
+        loaded_curriculum = read_json(Path(str(rl_summary.get("curriculum_plan") or "")))
+        curriculum_plan = loaded_curriculum if isinstance(loaded_curriculum, dict) else {
+            "enabled": False,
+            "phase_count": 0,
+            "phases": [],
+            "seeds": list(seeds),
+            "reason": "curriculum_plan_missing",
+        }
+        write_json(run_dir / "curriculum_plan.json", curriculum_plan)
+        curriculum_applied_path = Path(str(rl_summary.get("curriculum_applied") or run_dir / "curriculum_applied.jsonl"))
+        if not curriculum_applied_path.exists():
+            curriculum_applied_path.parent.mkdir(parents=True, exist_ok=True)
+            curriculum_applied_path.write_text("", encoding="utf-8")
 
         manifest = {
-            "schema": "p42_candidate_train_manifest_v1",
+            "schema": "p44_candidate_train_manifest_v1",
             "generated_at": now_iso(),
             "run_id": chosen_run_id,
             "status": status,
@@ -457,6 +461,9 @@ def run_candidate_training(
             "candidate_checkpoint": str(best_checkpoint) if best_checkpoint else "",
             "metrics_ref": str(run_dir / "metrics.json"),
             "timeout_sec": int(timeout_sec),
+            "multi_seed_eval": str(rl_summary.get("eval_seed_results") or ""),
+            "diagnostics_json": str(rl_summary.get("diagnostics_json") or ""),
+            "diagnostics_report_md": str(rl_summary.get("diagnostics_report_md") or ""),
         }
         write_json(run_dir / "candidate_train_manifest.json", manifest)
         write_json(run_dir / "metrics.json", metrics_payload)
@@ -477,6 +484,9 @@ def run_candidate_training(
             "curriculum_applied": str(curriculum_applied_path),
             "reward_config": str((run_dir / "rl_train" / "reward_config.json")),
             "warnings_log": str((run_dir / "rl_train" / "warnings.log")),
+            "multi_seed_eval": str(rl_summary.get("eval_seed_results") or ""),
+            "diagnostics_json": str(rl_summary.get("diagnostics_json") or ""),
+            "diagnostics_report_md": str(rl_summary.get("diagnostics_report_md") or ""),
         }
 
     if mode == "selfsup_warm_bc":

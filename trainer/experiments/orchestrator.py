@@ -158,6 +158,7 @@ def normalize_experiment_category(exp: dict[str, Any]) -> str:
         "rl_candidate_pipeline",
         "p42_rl_candidate",
         "p42_rl_candidate_pipeline",
+        "p44_distributed_rl",
     }:
         return MODE_CATEGORY_MAINLINE
     if exp_type == "standard" and policy in {"baseline", "candidate"}:
@@ -1690,15 +1691,20 @@ def _run_closed_loop_seed_experiment(
 ) -> dict[str, Any]:
     eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
     exp_type = str(exp.get("experiment_type") or "").strip().lower()
+    is_p44 = exp_type in {"p44_distributed_rl"}
     is_p42 = exp_type in {"closed_loop_rl_candidate", "rl_candidate_pipeline", "p42_rl_candidate", "p42_rl_candidate_pipeline"}
-    is_v2 = is_p42 or exp_type in {"closed_loop_improvement_v2", "p41_closed_loop_v2", "closed_loop_v2"}
+    is_v2 = is_p44 or is_p42 or exp_type in {"closed_loop_improvement_v2", "p41_closed_loop_v2", "closed_loop_v2"}
     cfg_rel = str(
         eval_cfg.get("config")
         or exp.get("closed_loop_config")
         or (
-            "configs/experiments/p42_closed_loop_rl_smoke.yaml"
-            if is_p42
+            "configs/experiments/p44_closed_loop_rl_smoke.yaml"
+            if is_p44
+            else (
+                "configs/experiments/p42_closed_loop_rl_smoke.yaml"
+                if is_p42
             else ("configs/experiments/p41_closed_loop_v2_smoke.yaml" if is_v2 else "configs/experiments/p40_closed_loop_smoke.yaml")
+            )
         )
     )
     cfg_path = (ctx.repo_root / cfg_rel).resolve()
@@ -1755,10 +1761,14 @@ def _run_closed_loop_seed_experiment(
             "summary_table_path": str(summary_table_path),
             "promotion_decision_path": str(decision_path),
             "summary_row": summary_row if isinstance(summary_row, dict) else {},
-            "pipeline_type": "p42_rl_candidate" if is_p42 else ("p41_closed_loop_v2" if is_v2 else "p40_closed_loop_v1"),
+            "pipeline_type": (
+                "p44_distributed_rl"
+                if is_p44
+                else ("p42_rl_candidate" if is_p42 else ("p41_closed_loop_v2" if is_v2 else "p40_closed_loop_v1"))
+            ),
             "metrics": {},
         }
-        if is_p42:
+        if is_p44 or is_p42:
             _append_p42_orchestrator_summary(ctx, payload)
         elif is_v2:
             _append_p41_orchestrator_summary(ctx, payload)
@@ -1787,7 +1797,7 @@ def _run_closed_loop_seed_experiment(
     invalid_rate_num = invalid_rate if invalid_rate is not None else 0.0
     recommendation = str(decision_payload.get("recommendation") or "")
     recommend_promotion = bool(decision_payload.get("recommend_promotion", False))
-    key_prefix = "p42" if is_p42 else ("p41" if is_v2 else "p40")
+    key_prefix = "p44" if is_p44 else ("p42" if is_p42 else ("p41" if is_v2 else "p40"))
 
     metrics = {
         "score": candidate_score_num,
@@ -1823,6 +1833,8 @@ def _run_closed_loop_seed_experiment(
                 f"{key_prefix}_triage_report_json": str(triage.get("triage_report_json") or ""),
                 f"{key_prefix}_reward_config_json": str(candidate_step.get("reward_config") or ""),
                 f"{key_prefix}_warnings_log": str(candidate_step.get("warnings_log") or ""),
+                f"{key_prefix}_multi_seed_eval_json": str(candidate_step.get("multi_seed_eval") or ""),
+                f"{key_prefix}_diagnostics_json": str(candidate_step.get("diagnostics_json") or ""),
             }
         )
 
@@ -1844,10 +1856,14 @@ def _run_closed_loop_seed_experiment(
         "summary_table_path": str(summary_table_path),
         "promotion_decision_path": str(decision_path),
         "summary_row": summary_row if isinstance(summary_row, dict) else {},
-        "pipeline_type": "p42_rl_candidate" if is_p42 else ("p41_closed_loop_v2" if is_v2 else "p40_closed_loop_v1"),
+        "pipeline_type": (
+            "p44_distributed_rl"
+            if is_p44
+            else ("p42_rl_candidate" if is_p42 else ("p41_closed_loop_v2" if is_v2 else "p40_closed_loop_v1"))
+        ),
         "metrics": metrics,
     }
-    if is_p42:
+    if is_p44 or is_p42:
         _append_p42_orchestrator_summary(ctx, payload)
     elif is_v2:
         _append_p41_orchestrator_summary(ctx, payload)
@@ -2270,25 +2286,30 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "champion_policy": str(eval_cfg.get("champion_policy") or ""),
             "focus_policy": str(eval_cfg.get("focus_policy") or eval_cfg.get("candidate_policy") or ""),
         }
-    elif exp_type in {"closed_loop_improvement", "closed_loop", "p40_closed_loop", "closed_loop_improvement_v2", "p41_closed_loop_v2", "closed_loop_v2", "closed_loop_rl_candidate", "rl_candidate_pipeline", "p42_rl_candidate", "p42_rl_candidate_pipeline"}:
+    elif exp_type in {"closed_loop_improvement", "closed_loop", "p40_closed_loop", "closed_loop_improvement_v2", "p41_closed_loop_v2", "closed_loop_v2", "closed_loop_rl_candidate", "rl_candidate_pipeline", "p42_rl_candidate", "p42_rl_candidate_pipeline", "p44_distributed_rl"}:
         eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+        is_p44 = exp_type in {"p44_distributed_rl"}
         is_p42 = exp_type in {"closed_loop_rl_candidate", "rl_candidate_pipeline", "p42_rl_candidate", "p42_rl_candidate_pipeline"}
-        is_v2 = is_p42 or exp_type in {"closed_loop_improvement_v2", "p41_closed_loop_v2", "closed_loop_v2"}
+        is_v2 = is_p44 or is_p42 or exp_type in {"closed_loop_improvement_v2", "p41_closed_loop_v2", "closed_loop_v2"}
         manifest["closed_loop"] = {
             "config": str(
                 eval_cfg.get("config")
                 or exp.get("closed_loop_config")
                 or (
-                    "configs/experiments/p42_closed_loop_rl_smoke.yaml"
-                    if is_p42
+                    "configs/experiments/p44_closed_loop_rl_smoke.yaml"
+                    if is_p44
+                    else (
+                        "configs/experiments/p42_closed_loop_rl_smoke.yaml"
+                        if is_p42
                     else ("configs/experiments/p41_closed_loop_v2_smoke.yaml" if is_v2 else "configs/experiments/p40_closed_loop_smoke.yaml")
+                    )
                 )
             ),
             "quick": bool(eval_cfg.get("quick") or False),
             "timeout_sec": int(eval_cfg.get("timeout_sec") or 3600),
             "candidate_policy": str(eval_cfg.get("candidate_policy") or "model_policy"),
             "champion_policy": str(eval_cfg.get("champion_policy") or "heuristic_baseline"),
-            "pipeline_type": ("rl_candidate_v1" if is_p42 else ("closed_loop_v2" if is_v2 else "closed_loop_v1")),
+            "pipeline_type": ("p44_distributed_rl" if is_p44 else ("rl_candidate_v1" if is_p42 else ("closed_loop_v2" if is_v2 else "closed_loop_v1"))),
         }
     write_json(exp_dir / "run_manifest.json", manifest)
     print(
@@ -2780,7 +2801,7 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                     message=exp_type,
                     extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
                 )
-            elif exp_type in {"closed_loop_improvement", "closed_loop", "p40_closed_loop", "closed_loop_improvement_v2", "p41_closed_loop_v2", "closed_loop_v2", "closed_loop_rl_candidate", "rl_candidate_pipeline", "p42_rl_candidate", "p42_rl_candidate_pipeline"}:
+            elif exp_type in {"closed_loop_improvement", "closed_loop", "p40_closed_loop", "closed_loop_improvement_v2", "p41_closed_loop_v2", "closed_loop_v2", "closed_loop_rl_candidate", "rl_candidate_pipeline", "p42_rl_candidate", "p42_rl_candidate_pipeline", "p44_distributed_rl"}:
                 try:
                     closed_loop_result = _run_closed_loop_seed_experiment(
                         ctx=ctx,
