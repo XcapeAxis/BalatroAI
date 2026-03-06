@@ -167,6 +167,8 @@ def normalize_experiment_category(exp: dict[str, Any]) -> str:
         "p46_imagination",
         "world_model_rerank_eval",
         "p47_wm_search",
+        "hybrid_controller_eval",
+        "p48_hybrid_controller",
     }:
         return MODE_CATEGORY_MAINLINE
     if exp_type == "standard" and policy in {"baseline", "candidate"}:
@@ -1934,6 +1936,71 @@ def _run_model_based_search_seed_experiment(
     }
 
 
+def _run_hybrid_controller_seed_experiment(
+    *,
+    ctx: RunContext,
+    exp: dict[str, Any],
+    exp_dir: Path,
+    seed: str,
+    seed_idx: int,
+    seed_total: int,
+) -> dict[str, Any]:
+    from trainer.hybrid.hybrid_controller import run_hybrid_controller_pipeline
+
+    eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+    cfg_rel = str(
+        eval_cfg.get("config")
+        or exp.get("hybrid_controller_config")
+        or (
+            "configs/experiments/p48_hybrid_controller_smoke.yaml"
+            if ctx.mode == "quick"
+            else "configs/experiments/p48_hybrid_controller_nightly.yaml"
+        )
+    )
+    cfg_path = (ctx.repo_root / cfg_rel).resolve()
+    run_root = exp_dir / "hybrid_controller_runs" / f"seed_{seed_idx:03d}_{seed}"
+    run_root.mkdir(parents=True, exist_ok=True)
+    run_name = f"seed_{seed_idx:03d}_{seed}"
+
+    summary = run_hybrid_controller_pipeline(
+        config_path=cfg_path,
+        out_dir=run_root,
+        run_id=run_name,
+        quick=bool(eval_cfg.get("quick", False) or ctx.mode == "quick"),
+        dry_run=bool(ctx.dry_run),
+        seeds_override=[seed],
+    )
+    hybrid_score = float(summary.get("hybrid_score") or summary.get("score") or 0.0)
+    baseline_score = float(summary.get("baseline_score") or 0.0)
+    wm_score = float(summary.get("wm_rerank_score") or 0.0)
+    search_score = float(summary.get("search_score") or 0.0)
+    result_metrics = {
+        "score": hybrid_score if hybrid_score > 0.0 else baseline_score,
+        "avg_reward": hybrid_score if hybrid_score > 0.0 else baseline_score,
+        "best_episode_reward": max(hybrid_score, baseline_score, wm_score, search_score),
+        "avg_ante_reached": hybrid_score if hybrid_score > 0.0 else baseline_score,
+        "median_ante": hybrid_score if hybrid_score > 0.0 else baseline_score,
+        "win_rate": float(summary.get("win_rate") or 0.0),
+        "hand_top1": 0.0,
+        "hand_top3": 0.0,
+        "shop_top1": 0.0,
+        "illegal_action_rate": float(summary.get("illegal_action_rate") or 0.0),
+        "p48_baseline_score": baseline_score,
+        "p48_hybrid_score": hybrid_score,
+        "p48_wm_rerank_score": wm_score,
+        "p48_search_score": search_score,
+        "p48_hybrid_delta_vs_baseline": float(summary.get("hybrid_delta_vs_baseline") or (hybrid_score - baseline_score)),
+        "p48_pipeline_summary_json": str(summary.get("pipeline_summary_json") or ""),
+        "p48_promotion_decision_json": str(summary.get("promotion_decision_json") or ""),
+        "p48_triage_report_json": str(summary.get("triage_report_json") or ""),
+    }
+    return {
+        "status": "ok" if str(summary.get("status") or "") == "ok" else "failed",
+        "metrics": result_metrics,
+        "summary": summary,
+    }
+
+
 def _run_closed_loop_seed_experiment(
     *,
     ctx: RunContext,
@@ -2614,6 +2681,22 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "candidate_policy": str(eval_cfg.get("candidate_policy") or "heuristic_wm_rerank_h1"),
             "champion_policy": str(eval_cfg.get("champion_policy") or "heuristic_baseline"),
         }
+    elif exp_type in {"hybrid_controller_eval", "p48_hybrid_controller"}:
+        eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+        manifest["hybrid_controller"] = {
+            "config": str(
+                eval_cfg.get("config")
+                or exp.get("hybrid_controller_config")
+                or (
+                    "configs/experiments/p48_hybrid_controller_smoke.yaml"
+                    if ctx.mode == "quick"
+                    else "configs/experiments/p48_hybrid_controller_nightly.yaml"
+                )
+            ),
+            "quick": bool(eval_cfg.get("quick") or False),
+            "candidate_policy": str(eval_cfg.get("candidate_policy") or "hybrid_controller_v1"),
+            "champion_policy": str(eval_cfg.get("champion_policy") or "policy_baseline"),
+        }
     write_json(exp_dir / "run_manifest.json", manifest)
     print(
         "[P22] Experiment {idx}/{total}: {exp_id} (seeds {seed_count}, mode={mode})".format(
@@ -3226,6 +3309,52 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                             "elapsed_sec": elapsed(),
                             "metrics": dict(p47_result.get("metrics") or {}),
                             "model_based_search_summary": p47_result.get("summary") or {},
+                        }
+                    )
+                append_experiment_progress_event(
+                    progress_path,
+                    run_id=ctx.run_id,
+                    exp_id=exp_id,
+                    phase="eval",
+                    stage="eval",
+                    status=str(seed_results[-1].get("status")),
+                    seed=seed,
+                    step_or_epoch=seed_idx,
+                    elapsed_sec=elapsed(),
+                    metrics=seed_results[-1].get("metrics") or {},
+                    message=exp_type,
+                    extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
+                )
+            elif exp_type in {"hybrid_controller_eval", "p48_hybrid_controller"}:
+                try:
+                    p48_result = _run_hybrid_controller_seed_experiment(
+                        ctx=ctx,
+                        exp=exp,
+                        exp_dir=exp_dir,
+                        seed=seed,
+                        seed_idx=seed_idx,
+                        seed_total=len(seeds),
+                    )
+                except Exception as exc:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "failed",
+                            "stage": "eval",
+                            "error": f"hybrid_controller_exception: {exc}",
+                            "elapsed_sec": elapsed(),
+                            "metrics": {},
+                        }
+                    )
+                else:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "ok" if p48_result["status"] == "ok" else "failed",
+                            "stage": "eval",
+                            "elapsed_sec": elapsed(),
+                            "metrics": dict(p48_result.get("metrics") or {}),
+                            "hybrid_controller_summary": p48_result.get("summary") or {},
                         }
                     )
                 append_experiment_progress_event(

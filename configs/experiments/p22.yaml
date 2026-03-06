@@ -177,6 +177,21 @@ experiment_groups:
           - BBBBBBB
           - CCCCCCC
           - DDDDDDD
+  adaptive_hybrid_controller_v1:
+    description: "P48 adaptive hybrid routing across policy, search, heuristic, and wm-rerank"
+    variants:
+      - id: p48_hybrid_controller_smoke
+        algo: hybrid_controller_eval
+        seeds:
+          - AAAAAAA
+          - BBBBBBB
+      - id: p48_hybrid_controller_nightly
+        algo: hybrid_controller_eval
+        seeds:
+          - AAAAAAA
+          - BBBBBBB
+          - CCCCCCC
+          - DDDDDDD
   legacy_bc_dagger_probe:
     description: "Legacy BC/DAgger baseline probes (non-default)"
     variants:
@@ -1202,6 +1217,78 @@ matrix:
       timeout_sec: 18000
       candidate_policy: heuristic_wm_rerank_h2
       champion_policy: heuristic_baseline
+
+  - id: p48_hybrid_controller_smoke
+    name: p48_hybrid_controller_smoke
+    backend: sim
+    policy: hybrid_controller
+    experiment_type: hybrid_controller_eval
+    seed_mode: regression_fixed
+    seed_set_name: contract_regression
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+    gate_flag: RunP22
+    modes:
+      quick: true
+      gate: true
+      nightly: false
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/hybrid/controller_registry.py
+      - trainer/hybrid/routing_features.py
+      - trainer/hybrid/router.py
+      - trainer/hybrid/hybrid_controller.py
+      - trainer/policy_arena/arena_runner.py
+      - trainer/closed_loop/regression_triage.py
+    eval:
+      config: configs/experiments/p48_hybrid_controller_smoke.yaml
+      quick: true
+      timeout_sec: 10800
+      candidate_policy: hybrid_controller_v1
+      champion_policy: policy_baseline
+
+  - id: p48_hybrid_controller_nightly
+    name: p48_hybrid_controller_nightly
+    backend: sim
+    policy: hybrid_controller
+    experiment_type: hybrid_controller_eval
+    seed_mode: nightly
+    seed_set_name: eval_default
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+      - CCCCCCC
+      - DDDDDDD
+    gate_flag: RunP22
+    modes:
+      quick: false
+      gate: false
+      nightly: true
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/hybrid/controller_registry.py
+      - trainer/hybrid/routing_features.py
+      - trainer/hybrid/router.py
+      - trainer/hybrid/hybrid_controller.py
+      - trainer/policy_arena/arena_runner.py
+      - trainer/closed_loop/regression_triage.py
+    eval:
+      config: configs/experiments/p48_hybrid_controller_nightly.yaml
+      quick: false
+      timeout_sec: 18000
+      candidate_policy: hybrid_controller_v1
+      champion_policy: policy_baseline
 
   - id: legacy_bc_dagger_probe
     name: legacy_bc_dagger_probe

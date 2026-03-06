@@ -1,0 +1,56 @@
+schema: p48_hybrid_controller_config_v1
+
+seeds:
+  - AAAAAAA
+  - BBBBBBB
+  - CCCCCCC
+  - DDDDDDD
+
+controllers:
+  policy_model_path: ""
+  world_model_checkpoint: ""
+  search:
+    max_branch: 96
+    max_depth: 2
+    time_budget_ms: 20.0
+  wm_rerank:
+    top_k: 5
+    horizon: 1
+    uncertainty_penalty: 0.60
+
+routing:
+  feature_smoke_states: 8
+  router_smoke_states: 8
+  hybrid_smoke_states: 10
+  router:
+    policy_margin_high: 0.22
+    policy_margin_low: 0.07
+    policy_entropy_high: 1.20
+    wm_uncertainty_prefer_max: 0.75
+    wm_uncertainty_disable: 1.10
+    search_budget_min_level: medium
+    high_risk_search_bonus: 0.85
+    late_stage_search_bonus: 0.60
+    wm_reward_bonus_scale: 0.25
+
+arena_compare:
+  backend: sim
+  mode: long_episode
+  policy_baseline: policy_baseline
+  wm_rerank_baseline: policy_plus_wm_rerank
+  hybrid_policy: hybrid_controller_v1
+  search_baseline: search_baseline
+  heuristic_baseline: heuristic_baseline
+  champion_policy: policy_baseline
+  candidate_policy: hybrid_controller_v1
+  episodes_per_seed: 2
+  max_steps: 180
+  timeout_sec: 5400
+  enable_champion_rules: true
+  champion_json: docs/artifacts/p22/champion.json
+
+triage:
+  output_artifacts_root: docs/artifacts/p48/triage
+
+output:
+  artifacts_root: docs/artifacts/p48/arena_ablation
