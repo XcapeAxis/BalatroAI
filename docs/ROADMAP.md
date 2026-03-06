@@ -15,21 +15,22 @@
 | P43 | Training strategy refocus (mainline selfsup+RL, BC/DAgger demoted to legacy baseline) | done |
 | P44 | Distributed RL training (rollout workers + curriculum + multi-seed gating) | done |
 | P45 | World model / latent planning v1 (dataset + dynamics + uncertainty + planning hook) | done |
-| P46 | Dyna / imagination loop v1 (short imagined rollouts + replay augmentation + ablation gating) | active |
+| P46 | Dyna / imagination loop v1 (short imagined rollouts + replay augmentation + ablation gating) | done |
+| P47 | Uncertainty-aware model-based search v1 (candidate rerank + short lookahead + arena ablation) | active |
 
-## Current Focus: P46 Imagination Hardening
+## Current Focus: P47 Model-Based Search Hardening
 
-1. Improve uncertainty calibration and gating quality on larger multi-seed imagined-rollout runs.
-2. Keep imagined fraction conservative while expanding ablation coverage and slice-aware triage.
-3. Align P22 quick/nightly summaries with imagination metrics, lineage, and promotion decisions.
-4. Explore future model-based hooks without weakening simulator-first promotion gates.
+1. Improve world-model uncertainty calibration for rerank decisions on larger multi-seed arena budgets.
+2. Stress-test horizon and uncertainty-penalty sensitivity before enabling broader default use.
+3. Keep P22 quick/nightly summaries aligned with planner traces, arena ablations, and triage outputs.
+4. Preserve simulator-first promotion gates while exploring deeper model-based hooks.
 
-## Near-Term After P46
+## Near-Term After P47
 
 - broader imagined-root coverage beyond the current replay families
 - tighter P42/P45 coupling through auxiliary losses and rollout-value proxies
-- higher-budget nightly comparisons for wm-assisted arena variants
-- careful expansion beyond horizon-1/2 while preserving uncertainty controls
+- RL-policy candidate-source support for rerank-assisted inference
+- careful expansion beyond horizon-1/2 while preserving uncertainty controls and arena-first evaluation
 
 ## Constraints
 

@@ -12,6 +12,7 @@ P41 keeps P40's conservative promotion stance: recommendation-only, no automatic
 P42 reuses this exact closed-loop shell and promotes RL candidate training (`rl_ppo_lite`) to default mainline mode.
 P45 can plug into the same shell as an auxiliary world-model asset for wm-assisted arena comparisons.
 P46 reuses the same lineage, replay-mix, arena, and triage surfaces for imagined replay augmentation.
+P47 reuses the same arena and triage surfaces for uncertainty-aware world-model rerank ablations.
 
 ## Architecture
 
@@ -105,6 +106,17 @@ Closed-loop manifests now also reserve `auxiliary_assets` for optional P45 depen
 
 This keeps the dependency chain explicit when a candidate or arena compare uses `heuristic_wm_assist` or another wm-assisted policy variant.
 
+## Model-Based Search Contract (P47)
+
+P47 keeps replay/training untouched but extends arena/triage manifests with:
+
+- `wm_assist_enabled`
+- `wm_checkpoint`
+- `wm_eval_ref`
+- `assist_mode=rerank`
+- `policy_assist_map_json`
+- `candidate_policy` / `baseline_policy` for rerank ablations
+
 ## Imagination Augmentation Contract (P46)
 
 When P46 replay augmentation is enabled, candidate and replay artifacts also record:
@@ -173,6 +185,13 @@ P46-specific triage fields:
 - `imagined_source_impact`
 - `top_degrading_imagined_slices`
 - `suggested_imagination_adjustments`
+
+P47-specific triage fields:
+
+- `world_model_assist_impact`
+- `uncertainty_penalty_sensitivity`
+- `horizon_sensitivity`
+- `top_degrading_slices_with_wm`
 
 ## Run Commands
 
@@ -245,3 +264,4 @@ python -m trainer.closed_loop.slice_smoke
 - P42 extends candidate training with PPO-lite but keeps the same recommendation-only promotion boundary.
 - P45 world-model assist remains optional and heuristic-only; P41/P42 still rely on real arena outcomes for final gating.
 - P46 imagined replay attribution is best-effort and only as good as world-model uncertainty plus replay-lineage completeness.
+- P47 rerank attribution is summary-table based and does not claim causal proof; it is meant to highlight suspicious horizons and uncertainty settings for follow-up runs.

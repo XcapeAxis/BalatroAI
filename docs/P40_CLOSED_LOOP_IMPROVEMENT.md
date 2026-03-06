@@ -5,6 +5,7 @@ P41 builds on top of this foundation and adds replay lineage, curriculum schedul
 P42 keeps the same closed-loop control flow and adds RL candidate training (`rl_ppo_lite`) as an additional training mode.
 P45 can attach a world-model checkpoint as an auxiliary asset so arena evaluation can compare wm-assisted policy variants without changing the closed-loop promotion contract.
 P46 keeps the same closed-loop shell but adds `imagined_world_model` as a replay augmentation source with explicit lineage and filter controls.
+P47 keeps the same arena/champion/triage governance but uses the world model at decision time for short-horizon rerank ablations.
 
 See also: `docs/P41_CLOSED_LOOP_V2.md`.
 
@@ -107,6 +108,14 @@ P46 extends the same shell with synthetic replay controls:
 - replay-mix stats: imagined acceptance rate, average uncertainty, and fraction cap
 - triage attribution: imagined-source impact and suggested imagination adjustments
 
+P47 extends the same shell on the evaluation side with:
+
+- `wm_assist_enabled`
+- `wm_checkpoint`
+- `wm_eval_ref`
+- `policy_assist_map.json` for per-policy horizon / uncertainty settings
+- triage summary rows for `world_model_assist_impact`, `uncertainty_penalty_sensitivity`, and `horizon_sensitivity`
+
 ## Run Modes
 
 Quick smoke:
@@ -135,3 +144,4 @@ python -m trainer.closed_loop.closed_loop_runner --config configs/experiments/p4
 - closed-loop runner continues with `arena_status=skipped` when arena execution is disabled or unavailable.
 - world-model assist is heuristic-only; it can influence candidate action ranking during arena evaluation, but it does not replace simulator rollouts or promotion gates.
 - P46 imagined replay remains auxiliary and capped; it should not be interpreted as a simulator replacement or promotion signal by itself.
+- P47 rerank remains an auxiliary decision layer only; it should not be interpreted as full model-based search or a replacement for arena-based promotion evidence.

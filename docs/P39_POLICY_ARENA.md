@@ -20,6 +20,7 @@ Goals:
   - `trainer/policy_arena/adapters/model_adapter.py` (loads BC-style checkpoints when available; falls back to heuristic when unavailable)
   - `trainer/policy_arena/adapters/hybrid_adapter.py`
   - `trainer/policy_arena/adapters/world_model_assist_adapter.py`
+  - `trainer/policy_arena/adapters/wm_rerank_adapter.py`
 - arena execution:
   - `trainer/policy_arena/arena_runner.py`
   - `trainer/policy_arena/arena_metrics.py`
@@ -119,6 +120,12 @@ P46 imagination ablation compare:
 powershell -ExecutionPolicy Bypass -File scripts/run_p22.ps1 -RunP46
 ```
 
+P47 world-model rerank compare:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_p22.ps1 -RunP47
+```
+
 ## World Model Assist (P45)
 
 P45 adds an optional arena adapter that reranks legal actions with a one-step world-model score while keeping the simulator as the execution authority.
@@ -145,6 +152,26 @@ Behavior:
 - run manifest records checkpoint path and assist parameters under `config` / `adapters`
 
 P46 also reuses the arena for candidate-vs-candidate ablations by supplying a `policy_model_map.json` so names like `candidate_real_only` and `candidate_real_plus_imagined_filtered` behave like normal arena policies.
+
+## Model-Based Rerank (P47)
+
+P47 keeps the same arena execution path but adds per-policy rerank configs through `policy_assist_map.json`.
+
+Supported patterns:
+
+- `heuristic_wm_rerank_*`
+- `search_wm_rerank_*`
+- model-backed variants when a `model_path` is supplied
+
+Recorded fields:
+
+- `world_model_assist=true`
+- `assist_mode=rerank`
+- `world_model_checkpoint`
+- `horizon`
+- `uncertainty_penalty`
+
+P47 ablations still run through normal arena episodes and champion rules. The world model only changes candidate ordering before action selection.
 
 ## Artifacts
 
@@ -194,3 +221,8 @@ P46 imagination dependency:
 
 - P46 combined arena compare writes results under `docs/artifacts/p46/arena_compare/<run_id>/`.
 - champion rules and slice metrics remain unchanged because imagined augmentation is evaluated through the same real simulator episodes.
+
+P47 rerank dependency:
+
+- P47 ablations write results under `docs/artifacts/p47/arena_ablation/<run_id>/`.
+- `policy_assist_map.json` and `run_manifest.json` make world-model rerank settings explicit for each policy variant.

@@ -7,7 +7,7 @@ P42 adds a runnable RL candidate path on top of P40/P41 closed-loop operations:
 - PPO-lite trainer with stability guards
 - closed-loop integration (arena eval + slice-aware champion rules + regression triage)
 - P22 integration (`p42_rl_candidate_smoke` / `p42_rl_candidate_nightly`)
-- P45/P46-ready integration point for future world-model auxiliary losses, planning hooks, and imagined replay support
+- P45/P46/P47-ready integration point for future world-model auxiliary losses, planning hooks, imagined replay, and rerank-assisted inference
 
 P42 is research-grade v1. It emphasizes stable execution and explainability over peak policy quality.
 Under P43 policy, P42 RL candidate is the default mainline training lane for closed-loop candidate generation.
@@ -103,6 +103,7 @@ This enables fast triage of whether a candidate came from mainline RL/selfsup or
 - P42 keeps a placeholder `world_model_aux_loss=false` style path in config only; PPO-lite does not yet optimize against world-model losses by default.
 - wm-assisted arena policies can still be evaluated through the shared P39/P41/P42 closed-loop shell once a P45 checkpoint is available.
 - P46 uses the same P39/P41 governance shell for imagined-replay ablations, but P42 itself still does not train on imagined rollouts by default.
+- P47 extends that same governance shell to decision-time rerank ablations; future RL-policy inference can reuse the same candidate-source and rerank hooks.
 
 ## Commands
 
@@ -165,3 +166,4 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
 - Legacy BC/DAgger paths are retained for baseline probes, but are no longer default candidate-training routes.
 - P45 world-model coupling is currently a reserved extension point, not an active training loss in the shipped P42 update loop.
 - P46 does not yet convert PPO-lite into a model-based RL trainer; imagined replay remains a separate research lane.
+- P47 does not yet turn PPO-lite into a model-based search policy; rerank-assisted RL inference remains a reserved extension point.

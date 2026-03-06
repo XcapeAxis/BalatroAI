@@ -2,6 +2,11 @@
 
 P46 adds a conservative imagined-rollout path on top of P45 world models. The goal is not to replace the simulator. The goal is to create a traceable, uncertainty-gated synthetic replay source that can be evaluated with the same arena and triage stack used for real candidates.
 
+P47 is the complementary lane on top of the same world model:
+
+- P46 uses the world model for training-time replay augmentation
+- P47 uses the world model for decision-time candidate reranking
+
 ## Architecture
 
 ```mermaid
@@ -146,6 +151,7 @@ P46 does not add a new simulator. It reuses:
 - P45 planning/value proxy outputs inside the imagination generator
 - P39 arena for real-policy comparison
 - P41 triage for imagined-source attribution
+- P47 later reuses the same P45 checkpoint for short-horizon rerank ablations, but keeps that logic separate from replay augmentation
 
 Arena compare can include:
 
@@ -159,5 +165,6 @@ Arena compare can include:
 - no long-horizon imagined rollout governance
 - uncertainty is still approximate
 - imagined rows currently serve replay augmentation, not full model-based planning
+- if you want decision-time model assistance, use the separate P47 rerank lane instead of overloading imagined replay
 - quick smoke runs are plumbing checks and can be too small to show uplift
 - simulator/oracle traces remain the final judge for promotion and regression decisions

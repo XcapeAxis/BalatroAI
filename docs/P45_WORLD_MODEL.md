@@ -52,6 +52,7 @@ flowchart LR
   - uncertainty/error correlation and worst-sample reports
 - `trainer/world_model/planning_hook.py`
   - uncertainty-aware one-step reranking helper for arena policies
+  - foundation for the richer P47 rerank planner
 
 ## Dataset Construction
 
@@ -246,6 +247,7 @@ P22 rows:
 - `p45_world_model_smoke`
 - `p45_world_model_nightly`
 - `p46_imagination_smoke` / `p46_imagination_nightly` consume P45 checkpoints through P22 once available
+- `p47_wm_search_smoke` / `p47_wm_search_nightly` consume the same checkpoints for decision-time rerank ablations
 
 Commands:
 
@@ -274,6 +276,9 @@ Quick mode:
 - P46:
   - uses P45 checkpoints to generate short, uncertainty-gated imagined replay under `docs/artifacts/p46/`
   - keeps synthetic rows lineage-separated and real-arena-gated
+- P47:
+  - uses P45 checkpoints for uncertainty-aware candidate reranking under `docs/artifacts/p47/`
+  - keeps world-model use in the decision loop only as a short-horizon assist; real arena outcomes remain authoritative
 
 ## Configs
 
@@ -292,4 +297,5 @@ Because `.venv_trainer` may not always have `PyYAML`, matching `.json` sidecars 
 - no direct RL training loss from the world model in the shipped P42 loop
 - wm-assisted arena compare currently targets heuristic baseline first; broader policy families are future work
 - P46 short-horizon imagination does not upgrade P45 into full model-based RL; simulator/oracle authority remains unchanged
+- P47 short-horizon rerank does not upgrade P45 into full model-based search; no latent tree expansion or simulator replacement is shipped
 - simulator/oracle traces remain the final authority for promotion and regression decisions
