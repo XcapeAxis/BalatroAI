@@ -163,6 +163,8 @@ def normalize_experiment_category(exp: dict[str, Any]) -> str:
         "world_model_eval",
         "world_model_assist_compare",
         "p45_world_model",
+        "imagination_augmented_candidate",
+        "p46_imagination",
     }:
         return MODE_CATEGORY_MAINLINE
     if exp_type == "standard" and policy in {"baseline", "candidate"}:
@@ -1800,6 +1802,71 @@ def _run_world_model_seed_experiment(
     }
 
 
+def _run_imagination_seed_experiment(
+    *,
+    ctx: RunContext,
+    exp: dict[str, Any],
+    exp_dir: Path,
+    seed: str,
+    seed_idx: int,
+    seed_total: int,
+) -> dict[str, Any]:
+    from trainer.world_model.imagination_pipeline import run_imagination_pipeline
+
+    eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+    cfg_rel = str(
+        eval_cfg.get("config")
+        or exp.get("imagination_config")
+        or (
+            "configs/experiments/p46_imagination_smoke.yaml"
+            if ctx.mode == "quick"
+            else "configs/experiments/p46_imagination_nightly.yaml"
+        )
+    )
+    cfg_path = (ctx.repo_root / cfg_rel).resolve()
+    imag_root = exp_dir / "imagination_runs" / f"seed_{seed_idx:03d}_{seed}"
+    imag_root.mkdir(parents=True, exist_ok=True)
+    run_name = f"seed_{seed_idx:03d}_{seed}"
+
+    summary = run_imagination_pipeline(
+        config_path=cfg_path,
+        out_dir=imag_root,
+        run_id=run_name,
+        quick=bool(eval_cfg.get("quick", False) or ctx.mode == "quick"),
+        dry_run=bool(ctx.dry_run),
+        seeds_override=[seed],
+    )
+    metrics = summary.get("metrics") if isinstance(summary.get("metrics"), dict) else {}
+    filtered_score = float(metrics.get("p46_filtered_score") or metrics.get("score") or 0.0)
+    real_score = float(metrics.get("p46_real_only_score") or 0.0)
+    acceptance_rate = float(metrics.get("p46_imagined_acceptance_rate") or 0.0)
+    result_metrics = {
+        "score": filtered_score if filtered_score > 0.0 else real_score,
+        "avg_reward": filtered_score if filtered_score > 0.0 else real_score,
+        "best_episode_reward": max(filtered_score, real_score),
+        "avg_ante_reached": filtered_score if filtered_score > 0.0 else real_score,
+        "median_ante": filtered_score if filtered_score > 0.0 else real_score,
+        "win_rate": float(metrics.get("win_rate") or 0.0),
+        "hand_top1": 0.0,
+        "hand_top3": 0.0,
+        "shop_top1": max(0.0, 1.0 - float(metrics.get("illegal_action_rate") or 0.0)),
+        "illegal_action_rate": float(metrics.get("illegal_action_rate") or 0.0),
+        "p46_real_only_score": real_score,
+        "p46_filtered_score": filtered_score,
+        "p46_filtered_delta_vs_real_only": float(metrics.get("p46_filtered_delta_vs_real_only") or 0.0),
+        "p46_imagined_acceptance_rate": acceptance_rate,
+        "p46_imagined_sample_count": float(metrics.get("p46_imagined_sample_count") or 0.0),
+        "p46_pipeline_summary_json": str(summary.get("pipeline_summary_json") or ""),
+        "p46_promotion_decision_json": str(summary.get("promotion_decision_json") or ""),
+        "p46_triage_report_json": str(summary.get("triage_report_json") or ""),
+    }
+    return {
+        "status": "ok" if str(summary.get("status") or "") == "ok" else "failed",
+        "metrics": result_metrics,
+        "summary": summary,
+    }
+
+
 def _run_closed_loop_seed_experiment(
     *,
     ctx: RunContext,
@@ -2448,6 +2515,22 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "candidate_policy": str(eval_cfg.get("candidate_policy") or "heuristic_wm_assist"),
             "checkpoint": str(eval_cfg.get("checkpoint") or exp.get("checkpoint") or ""),
         }
+    elif exp_type in {"imagination_augmented_candidate", "p46_imagination"}:
+        eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+        manifest["imagination"] = {
+            "config": str(
+                eval_cfg.get("config")
+                or exp.get("imagination_config")
+                or (
+                    "configs/experiments/p46_imagination_smoke.yaml"
+                    if ctx.mode == "quick"
+                    else "configs/experiments/p46_imagination_nightly.yaml"
+                )
+            ),
+            "quick": bool(eval_cfg.get("quick") or False),
+            "candidate_policy": str(eval_cfg.get("candidate_policy") or "candidate_real_plus_imagined_filtered"),
+            "champion_policy": str(eval_cfg.get("champion_policy") or "heuristic_baseline"),
+        }
     write_json(exp_dir / "run_manifest.json", manifest)
     print(
         "[P22] Experiment {idx}/{total}: {exp_id} (seeds {seed_count}, mode={mode})".format(
@@ -2968,6 +3051,52 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                             "elapsed_sec": elapsed(),
                             "metrics": dict(world_model_result.get("metrics") or {}),
                             "world_model_summary": world_model_result.get("summary") or {},
+                        }
+                    )
+                append_experiment_progress_event(
+                    progress_path,
+                    run_id=ctx.run_id,
+                    exp_id=exp_id,
+                    phase="eval",
+                    stage="eval",
+                    status=str(seed_results[-1].get("status")),
+                    seed=seed,
+                    step_or_epoch=seed_idx,
+                    elapsed_sec=elapsed(),
+                    metrics=seed_results[-1].get("metrics") or {},
+                    message=exp_type,
+                    extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
+                )
+            elif exp_type in {"imagination_augmented_candidate", "p46_imagination"}:
+                try:
+                    imagination_result = _run_imagination_seed_experiment(
+                        ctx=ctx,
+                        exp=exp,
+                        exp_dir=exp_dir,
+                        seed=seed,
+                        seed_idx=seed_idx,
+                        seed_total=len(seeds),
+                    )
+                except Exception as exc:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "failed",
+                            "stage": "eval",
+                            "error": f"imagination_exception: {exc}",
+                            "elapsed_sec": elapsed(),
+                            "metrics": {},
+                        }
+                    )
+                else:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "ok" if imagination_result["status"] == "ok" else "failed",
+                            "stage": "eval",
+                            "elapsed_sec": elapsed(),
+                            "metrics": dict(imagination_result.get("metrics") or {}),
+                            "imagination_summary": imagination_result.get("summary") or {},
                         }
                     )
                 append_experiment_progress_event(

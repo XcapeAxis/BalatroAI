@@ -147,6 +147,21 @@ experiment_groups:
           - BBBBBBB
           - CCCCCCC
           - DDDDDDD
+  imagination_augmented_candidate_v1:
+    description: "P46 Dyna-style imagination augmentation with uncertainty-gated world-model rollouts"
+    variants:
+      - id: p46_imagination_smoke
+        algo: imagination_augmented_candidate
+        seeds:
+          - AAAAAAA
+          - BBBBBBB
+      - id: p46_imagination_nightly
+        algo: imagination_augmented_candidate
+        seeds:
+          - AAAAAAA
+          - BBBBBBB
+          - CCCCCCC
+          - DDDDDDD
   legacy_bc_dagger_probe:
     description: "Legacy BC/DAgger baseline probes (non-default)"
     variants:
@@ -1024,6 +1039,82 @@ matrix:
       quick: false
       timeout_sec: 14400
       candidate_policy: heuristic_wm_assist
+
+  - id: p46_imagination_smoke
+    name: p46_imagination_smoke
+    backend: sim
+    policy: imagination
+    experiment_type: imagination_augmented_candidate
+    seed_mode: regression_fixed
+    seed_set_name: contract_regression
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+    gate_flag: RunP22
+    modes:
+      quick: true
+      gate: true
+      nightly: false
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/world_model/imagination_schema.py
+      - trainer/world_model/imagination_rollout.py
+      - trainer/world_model/imagination_pipeline.py
+      - trainer/closed_loop/replay_mixer.py
+      - trainer/closed_loop/candidate_train.py
+      - trainer/closed_loop/regression_triage.py
+      - trainer/policy_arena/adapters/model_adapter.py
+      - trainer/policy_arena/arena_runner.py
+    eval:
+      config: configs/experiments/p46_imagination_smoke.yaml
+      quick: true
+      timeout_sec: 10800
+      candidate_policy: candidate_real_plus_imagined_filtered
+      champion_policy: heuristic_baseline
+
+  - id: p46_imagination_nightly
+    name: p46_imagination_nightly
+    backend: sim
+    policy: imagination
+    experiment_type: imagination_augmented_candidate
+    seed_mode: nightly
+    seed_set_name: eval_default
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+      - CCCCCCC
+      - DDDDDDD
+    gate_flag: RunP22
+    modes:
+      quick: false
+      gate: false
+      nightly: true
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/world_model/imagination_schema.py
+      - trainer/world_model/imagination_rollout.py
+      - trainer/world_model/imagination_pipeline.py
+      - trainer/closed_loop/replay_mixer.py
+      - trainer/closed_loop/candidate_train.py
+      - trainer/closed_loop/regression_triage.py
+      - trainer/policy_arena/adapters/model_adapter.py
+      - trainer/policy_arena/arena_runner.py
+    eval:
+      config: configs/experiments/p46_imagination_nightly.yaml
+      quick: false
+      timeout_sec: 18000
+      candidate_policy: candidate_real_plus_imagined_filtered
+      champion_policy: heuristic_baseline
 
   - id: legacy_bc_dagger_probe
     name: legacy_bc_dagger_probe

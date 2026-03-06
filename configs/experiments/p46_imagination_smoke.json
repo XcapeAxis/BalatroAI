@@ -1,0 +1,107 @@
+{
+  "schema": "p46_imagination_config_v1",
+  "seeds": [
+    "AAAAAAA",
+    "BBBBBBB"
+  ],
+  "world_model": {
+    "config": "configs/experiments/p45_world_model_smoke.yaml",
+    "checkpoint": "",
+    "auto_train_if_missing": true
+  },
+  "imagination": {
+    "horizon": 1,
+    "num_imagined_per_root": 1,
+    "uncertainty_threshold": 0.75,
+    "max_samples": 96,
+    "max_roots": 96,
+    "output_artifacts_root": "docs/artifacts/p46/imagination_rollouts",
+    "seeds": [
+      "AAAAAAA",
+      "BBBBBBB"
+    ],
+    "root_source": {
+      "path": "docs/artifacts/p16",
+      "source_type": "p13_dagger_or_real",
+      "patterns": [
+        "**/*dagger*.jsonl"
+      ],
+      "max_files": 1
+    }
+  },
+  "closed_loop": {
+    "base_config": "configs/experiments/p41_closed_loop_v2_smoke.yaml",
+    "base_replay_config": "configs/experiments/p41_replay_mix_smoke.yaml",
+    "base_candidate_config": "configs/experiments/p41_candidate_smoke.yaml"
+  },
+  "recipes": [
+    {
+      "id": "real_only",
+      "enabled": true,
+      "run_closed_loop": true,
+      "replay": {
+        "enabled": false,
+        "imagined_weight": 0.0,
+        "max_samples": 0,
+        "require_uncertainty_gate_passed": true,
+        "max_imagined_fraction": 0.0,
+        "max_imagination_horizon": 1
+      },
+      "candidate": {
+        "filter_mode": "disabled"
+      }
+    },
+    {
+      "id": "real_plus_imagined",
+      "enabled": true,
+      "run_closed_loop": false,
+      "replay": {
+        "enabled": true,
+        "imagined_weight": 0.1,
+        "max_samples": 48,
+        "require_uncertainty_gate_passed": false,
+        "max_imagined_fraction": 0.1,
+        "max_imagination_horizon": 1
+      },
+      "candidate": {
+        "filter_mode": "none"
+      }
+    },
+    {
+      "id": "real_plus_imagined_filtered",
+      "enabled": true,
+      "run_closed_loop": true,
+      "replay": {
+        "enabled": true,
+        "imagined_weight": 0.1,
+        "max_samples": 48,
+        "require_uncertainty_gate_passed": true,
+        "max_imagined_fraction": 0.1,
+        "max_imagination_horizon": 1
+      },
+      "candidate": {
+        "filter_mode": "uncertainty_gate"
+      }
+    }
+  ],
+  "arena_compare": {
+    "enabled": true,
+    "mode": "long_episode",
+    "champion_policy": "heuristic_baseline",
+    "include_unfiltered": false,
+    "episodes_per_seed": 1,
+    "max_steps": 120,
+    "timeout_sec": 3600,
+    "output_artifacts_root": "docs/artifacts/p46/arena_compare",
+    "champion_rules": {
+      "enabled": true,
+      "champion_json": "docs/artifacts/p22/champion.json"
+    }
+  },
+  "triage": {
+    "output_artifacts_root": "docs/artifacts/p46/triage"
+  },
+  "output": {
+    "artifacts_root": "docs/artifacts/p46/imagination_pipeline"
+  }
+}

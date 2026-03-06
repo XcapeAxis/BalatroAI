@@ -11,6 +11,7 @@ param(
   [switch]$VerboseLogs,
   [switch]$RunP44,
   [switch]$RunP45,
+  [switch]$RunP46,
   [string]$Only = "",
   [string]$Exclude = "",
   [int]$MaxParallel = 1,
@@ -45,10 +46,11 @@ if ($LegacyOnly) { $args += "--legacy-only" }
 if ($Resume) { $args += "--resume" }
 if ($KeepIntermediate) { $args += "--keep-intermediate" }
 if ($VerboseLogs) { $args += "--verbose" }
-if (($RunP44 -or $RunP45) -and [string]::IsNullOrWhiteSpace($Only)) {
+if (($RunP44 -or $RunP45 -or $RunP46) -and [string]::IsNullOrWhiteSpace($Only)) {
   $selected = @()
   if ($RunP44) { $selected += if ($Nightly) { "p44_rl_nightly" } else { "p44_rl_smoke" } }
   if ($RunP45) { $selected += if ($Nightly) { "p45_world_model_nightly" } else { "p45_world_model_smoke" } }
+  if ($RunP46) { $selected += if ($Nightly) { "p46_imagination_nightly" } else { "p46_imagination_smoke" } }
   $Only = ($selected -join ",")
 }
 if (-not [string]::IsNullOrWhiteSpace($Only)) { $args += @("--only", $Only) }
@@ -72,7 +74,8 @@ if ($Quick) {
       "p40_closed_loop_smoke",
       "p41_closed_loop_v2_smoke",
       "p42_rl_candidate_smoke",
-      "p45_world_model_smoke"
+      "p45_world_model_smoke",
+      "p46_imagination_smoke"
     )
     if ($IncludeLegacy -or $LegacyOnly) {
       $quickIds += @("legacy_bc_dagger_probe")
