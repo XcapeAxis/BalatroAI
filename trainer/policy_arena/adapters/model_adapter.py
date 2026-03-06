@@ -231,6 +231,59 @@ class ModelAdapter(BasePolicyAdapter):
             phase="SELECTING_HAND",
         )
 
+    def _candidate_rows_hand(
+        self,
+        obs: dict[str, Any],
+        legal_actions: list[dict[str, Any]] | None,
+        *,
+        top_k: int,
+    ) -> list[dict[str, Any]]:
+        torch, _nn = _require_torch()
+        if self._model is None:
+            raise RuntimeError("model_unavailable")
+        features = extract_features(obs)
+        hand_size = max(1, _safe_int(features.get("hand_size"), 1))
+        legal_ids = [aid for aid in self._legal_hand_ids(obs, legal_actions) if 0 <= aid < self._max_actions]
+        if not legal_ids:
+            return []
+        batch = {
+            "rank": torch.tensor([list(features.get("card_rank_ids") or [])], dtype=torch.long),
+            "suit": torch.tensor([list(features.get("card_suit_ids") or [])], dtype=torch.long),
+            "chip": torch.tensor([list(features.get("card_chip_hint") or [])], dtype=torch.float32),
+            "enh": torch.tensor([list(features.get("card_has_enhancement") or [])], dtype=torch.float32),
+            "edt": torch.tensor([list(features.get("card_has_edition") or [])], dtype=torch.float32),
+            "seal": torch.tensor([list(features.get("card_has_seal") or [])], dtype=torch.float32),
+            "pad": torch.tensor([list(features.get("hand_pad_mask") or [])], dtype=torch.float32),
+            "context": torch.tensor([list(features.get("context") or [])], dtype=torch.float32),
+        }
+        legal_mask = torch.zeros((1, self._max_actions), dtype=torch.float32)
+        for aid in legal_ids:
+            legal_mask[0, aid] = 1.0
+        with torch.no_grad():
+            logits = self._model.forward_hand(batch)
+            masked_logits = torch.where(legal_mask > 0, logits, torch.full_like(logits, -1e9))
+            probs = torch.softmax(masked_logits, dim=1)
+            count = min(max(1, int(top_k)), len(legal_ids))
+            values, indices = torch.topk(masked_logits, k=count, dim=1)
+        rows: list[dict[str, Any]] = []
+        for rank, (logit, action_id) in enumerate(zip(values[0].tolist(), indices[0].tolist()), start=1):
+            aid = int(action_id)
+            action_type, mask = action_space.decode(hand_size, aid)
+            rows.append(
+                {
+                    "action": normalize_action(
+                        {"action_type": action_type, "indices": action_space.mask_to_indices(mask, hand_size), "id": aid},
+                        phase="SELECTING_HAND",
+                    ),
+                    "source": "policy_topk",
+                    "source_rank": int(rank),
+                    "source_score": float(logit),
+                    "legal": True,
+                    "metadata": {"probability": float(probs[0, aid].item())},
+                }
+            )
+        return rows
+
     def _act_shop(self, obs: dict[str, Any], legal_actions: list[dict[str, Any]] | None) -> dict[str, Any]:
         torch, _nn = _require_torch()
         if self._model is None:
@@ -253,6 +306,50 @@ class ModelAdapter(BasePolicyAdapter):
         action["id"] = action_id
         return normalize_action(action, phase=phase_from_obs(obs))
 
+    def _candidate_rows_shop(
+        self,
+        obs: dict[str, Any],
+        legal_actions: list[dict[str, Any]] | None,
+        *,
+        top_k: int,
+    ) -> list[dict[str, Any]]:
+        torch, _nn = _require_torch()
+        if self._model is None:
+            raise RuntimeError("model_unavailable")
+        shop_features = extract_shop_features(obs)
+        legal_ids = [aid for aid in self._legal_shop_ids(obs, legal_actions) if 0 <= aid < self._max_shop_actions]
+        if not legal_ids:
+            return []
+        batch = {
+            "shop_context": torch.tensor([list(shop_features.get("shop_context") or [])], dtype=torch.float32),
+        }
+        legal_mask = torch.zeros((1, self._max_shop_actions), dtype=torch.float32)
+        for aid in legal_ids:
+            legal_mask[0, aid] = 1.0
+        with torch.no_grad():
+            logits = self._model.forward_shop(batch)
+            masked_logits = torch.where(legal_mask > 0, logits, torch.full_like(logits, -1e9))
+            probs = torch.softmax(masked_logits, dim=1)
+            count = min(max(1, int(top_k)), len(legal_ids))
+            values, indices = torch.topk(masked_logits, k=count, dim=1)
+        rows: list[dict[str, Any]] = []
+        phase = phase_from_obs(obs)
+        for rank, (logit, action_id) in enumerate(zip(values[0].tolist(), indices[0].tolist()), start=1):
+            aid = int(action_id)
+            action = action_space_shop.action_from_id(obs, aid)
+            action["id"] = aid
+            rows.append(
+                {
+                    "action": normalize_action(action, phase=phase),
+                    "source": "policy_topk",
+                    "source_rank": int(rank),
+                    "source_score": float(logit),
+                    "legal": True,
+                    "metadata": {"probability": float(probs[0, aid].item())},
+                }
+            )
+        return rows
+
     def act(self, obs: dict[str, Any], legal_actions: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         phase = phase_from_obs(obs)
         if not self._available or self._model is None:
@@ -267,6 +364,29 @@ class ModelAdapter(BasePolicyAdapter):
             pass
         action = self._fallback.act(obs, legal_actions=legal_actions)
         return normalize_action(action, phase=phase)
+
+    def candidate_actions(
+        self,
+        obs: dict[str, Any],
+        legal_actions: list[dict[str, Any]] | None = None,
+        *,
+        top_k: int = 4,
+    ) -> list[dict[str, Any]]:
+        phase = phase_from_obs(obs)
+        if not self._available or self._model is None:
+            return self._fallback.candidate_actions(obs, legal_actions=legal_actions, top_k=top_k)
+        try:
+            if phase == "SELECTING_HAND":
+                rows = self._candidate_rows_hand(obs, legal_actions, top_k=top_k)
+                if rows:
+                    return rows
+            if phase in action_space_shop.SHOP_PHASES:
+                rows = self._candidate_rows_shop(obs, legal_actions, top_k=top_k)
+                if rows:
+                    return rows
+        except Exception:
+            pass
+        return self._fallback.candidate_actions(obs, legal_actions=legal_actions, top_k=top_k)
 
     def close(self) -> None:
         self._fallback.close()

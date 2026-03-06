@@ -140,6 +140,24 @@ class BasePolicyAdapter:
     def act(self, obs: dict[str, Any], legal_actions: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         raise NotImplementedError("BasePolicyAdapter.act must be implemented by subclass")
 
+    def candidate_actions(
+        self,
+        obs: dict[str, Any],
+        legal_actions: list[dict[str, Any]] | None = None,
+        *,
+        top_k: int = 1,
+    ) -> list[dict[str, Any]]:
+        action = normalize_action(self.act(obs, legal_actions=legal_actions), phase=phase_from_obs(obs))
+        return [
+            {
+                "action": action,
+                "source": self.name,
+                "source_rank": 1,
+                "source_score": 0.0,
+                "legal": True,
+            }
+        ][: max(1, int(top_k))]
+
     def act_batch(
         self,
         obs_batch: list[dict[str, Any]],

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from trainer import action_space
+from trainer.candidates_hand import generate_hand_candidates
 from trainer.expert_policy import choose_action as choose_hand_action
 from trainer.expert_policy_shop import choose_shop_action
 from trainer.policy_arena.policy_adapter import AdapterDescriptor, BasePolicyAdapter, normalize_action, phase_default_action
@@ -69,3 +70,37 @@ class HeuristicAdapter(BasePolicyAdapter):
 
         return phase_default_action(obs, seed=self._seed)
 
+    def candidate_actions(
+        self,
+        obs: dict[str, Any],
+        legal_actions: list[dict[str, Any]] | None = None,
+        *,
+        top_k: int = 4,
+    ) -> list[dict[str, Any]]:
+        phase = str(obs.get("state") or "UNKNOWN").upper()
+        limit = max(1, int(top_k))
+        if phase == "SELECTING_HAND":
+            rows: list[dict[str, Any]] = []
+            for rank, action in enumerate(generate_hand_candidates(obs, max_candidates=limit), start=1):
+                rows.append(
+                    {
+                        "action": normalize_action(action, phase=phase),
+                        "source": "heuristic_candidates",
+                        "source_rank": int(rank),
+                        "source_score": float(limit - rank + 1),
+                        "legal": True,
+                    }
+                )
+            if rows:
+                return rows
+
+        action = self.act(obs, legal_actions=legal_actions)
+        return [
+            {
+                "action": normalize_action(action, phase=phase),
+                "source": "heuristic_candidates",
+                "source_rank": 1,
+                "source_score": 1.0,
+                "legal": True,
+            }
+        ]
