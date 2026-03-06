@@ -28,7 +28,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | Scenario | Command | Notes |
 |---|---|---|
 | Plan only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -DryRun` | validates matrix + writes plan/report |
-| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | mainline smoke set with multi-seed materialization (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row + P40/P41/P42 + P45 world-model smoke row + P46 imagination smoke row + P47 model-based search smoke row + P48 hybrid-controller smoke row) |
+| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | mainline smoke set with multi-seed materialization (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row + P40/P41/P42 + P45 world-model smoke row + P46 imagination smoke row + P47 model-based search smoke row + P48 hybrid-controller smoke row + P49 GPU-mainline row) |
 | Fast smoke + legacy probe | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -IncludeLegacy` | adds opt-in legacy BC/DAgger probe row(s) |
 | Legacy only quick | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -LegacyOnly` | runs only legacy baseline probe row(s) |
 | Multi-seed quick compare | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline,quick_candidate -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | 2 strategies x 3 seeds |
@@ -38,6 +38,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | P46 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP46` | runs `p46_imagination_smoke` with orchestrator defaults |
 | P47 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP47` | runs `p47_wm_search_smoke` with orchestrator defaults |
 | P48 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP48` | runs `p48_hybrid_controller_smoke` with orchestrator defaults |
+| P49 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP49` | runs `p49_gpu_mainline_smoke` with readiness guard + dashboard build |
 | Single experiment | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline -Resume` | rerun one exp id |
 | Limit seeds | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -SeedLimit 2` | local-cost control |
 | Custom seeds | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | explicit reproducibility override (recorded to artifacts) |
@@ -530,12 +531,48 @@ Operational notes:
 - multi-seed materialization remains mandatory (`seeds_used.json` per experiment).
 - P48 is an explainable router layer; real arena outcomes remain authoritative.
 
+## P49 GPU Mainline Integration
+
+P49 introduces `experiment_type: gpu_mainline_eval` so P22 can orchestrate a shared runtime-profile lane that bundles:
+
+- service readiness guard
+- CPU-rollout / GPU-learner defaults
+- P42 RL closed-loop smoke
+- P45 world-model smoke
+- optional P44/P46 expansion in nightly config
+- unified progress streams for dashboard consumption
+
+Reference rows in `configs/experiments/p22.yaml`:
+
+- `p49_gpu_mainline_smoke` (quick/gate)
+- `p49_gpu_mainline_nightly` (nightly)
+
+Key eval fields:
+
+- `config`: `configs/experiments/p49_gpu_mainline_smoke.yaml` / `...nightly.yaml`
+- `device_profile`: `single_gpu_mainline`
+- dashboard output: `docs/artifacts/dashboard/latest/index.html`
+
+Generated artifacts:
+
+- `docs/artifacts/p22/runs/<run_id>/p49_gpu_mainline_smoke/gpu_mainline_runs/seed_*/gpu_mainline_summary.json`
+- `docs/artifacts/p49/readiness/<run_id>/service_readiness_report.json`
+- `docs/artifacts/dashboard/latest/index.html`
+
+Operational notes:
+
+- `scripts/run_p22.ps1 -Quick` includes `p49_gpu_mainline_smoke` by default.
+- `scripts/run_p22.ps1 -RunP49` selects `p49_gpu_mainline_smoke` or `p49_gpu_mainline_nightly`.
+- `scripts/run_p22.ps1` now prints readiness-report and dashboard paths after successful runs.
+- no-CUDA hosts degrade to CPU and keep that downgrade in `runtime_profile.json`.
+
 ## Runtime Observability (During Execution)
 
 P22 emits both per-experiment and run-level observability artifacts:
 
 - run-level:
   - `docs/artifacts/p22/runs/<run_id>/telemetry.jsonl`
+  - `docs/artifacts/p22/runs/<run_id>/progress.unified.jsonl`
   - `docs/artifacts/p22/runs/<run_id>/live_summary_snapshot.json`
   - `docs/artifacts/p22/runs/<run_id>/summary_table.{csv,json,md}`
 - per experiment:
@@ -543,6 +580,9 @@ P22 emits both per-experiment and run-level observability artifacts:
   - `docs/artifacts/p22/runs/<run_id>/<exp_id>/progress.jsonl`
   - `docs/artifacts/p22/runs/<run_id>/<exp_id>/status.json`
   - `docs/artifacts/p22/runs/<run_id>/<exp_id>/seeds_used.json`
+- dashboard:
+  - `docs/artifacts/dashboard/latest/index.html`
+  - `docs/artifacts/dashboard/latest/dashboard_data.json`
 
 Telemetry schema notes (P34):
 
@@ -675,3 +715,4 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_selfsup
 - [P46_IMAGINATION_LOOP.md](P46_IMAGINATION_LOOP.md)
 - [P47_MODEL_BASED_SEARCH.md](P47_MODEL_BASED_SEARCH.md)
 - [P48_ADAPTIVE_HYBRID_CONTROLLER.md](P48_ADAPTIVE_HYBRID_CONTROLLER.md)
+- [P49_GPU_MAINLINE_AND_DASHBOARD.md](P49_GPU_MAINLINE_AND_DASHBOARD.md)

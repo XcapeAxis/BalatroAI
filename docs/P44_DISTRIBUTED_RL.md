@@ -119,3 +119,12 @@ Relevant configs:
 - `scripts/run_p22.ps1` maps `-RunP44` to `p44_rl_smoke` by default and `p44_rl_nightly` when `-Nightly` is present.
 - `scripts/cleanup.ps1` already preserves `docs/artifacts`, so P44 artifacts remain after cleanup.
 - In the default repo environment, YAML readers may rely on generated `.json` sidecars; keep them in sync with the YAML configs.
+
+## P49 Runtime Integration
+
+P49 formalizes the intended P44 runtime split:
+
+- rollout workers stay on CPU
+- learner prefers the resolved GPU device from the shared runtime profile
+- distributed rollout artifacts now carry throughput and runtime-profile metadata
+- PPO-lite surfaces rollout steps/sec, learner updates/sec, backlog proxy, sync count, and OOM restart count in metrics/progress outputs

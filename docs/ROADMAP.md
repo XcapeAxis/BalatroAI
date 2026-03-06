@@ -17,21 +17,23 @@
 | P45 | World model / latent planning v1 (dataset + dynamics + uncertainty + planning hook) | done |
 | P46 | Dyna / imagination loop v1 (short imagined rollouts + replay augmentation + ablation gating) | done |
 | P47 | Uncertainty-aware model-based search v1 (candidate rerank + short lookahead + arena ablation) | done |
-| P48 | Adaptive hybrid controller v1 (state-aware routing across policy/search/wm-rerank) | active |
+| P48 | Adaptive hybrid controller v1 (state-aware routing across policy/search/wm-rerank) | done |
+| P49 | GPU mainline + CPU rollout/GPU learner + dashboard + readiness guard | done |
 
-## Current Focus: P48 Adaptive Hybrid Routing
+## Current Focus: P49 GPU Mainline Reliability
 
-1. Stress-test router thresholds and controller-selection heuristics on larger multi-seed arena budgets.
-2. Improve the balance between search cost, policy confidence, and wm uncertainty gating.
-3. Keep P22 quick/nightly summaries aligned with routing traces, arena ablations, and triage outputs.
-4. Preserve simulator-first promotion gates while exploring future learned-router extensions.
+1. Validate shared runtime profiles on real CUDA hardware and tune batch/grad-accum tradeoffs.
+2. Keep readiness guarding enabled on service-dependent paths to avoid cold-start false positives.
+3. Treat unified telemetry and dashboard outputs as first-class artifacts for nightly diagnosis.
+4. Preserve simulator-first promotion gates while runtime plumbing scales underneath them.
 
-## Near-Term After P48
+## Near-Term After P49
 
 - broader imagined-root coverage beyond the current replay families
 - tighter P42/P45/P47 coupling through auxiliary losses, rollout-value proxies, and RL-policy routing
 - learned router experiments once controller telemetry is richer and more stable
 - careful expansion beyond fixed-budget search while preserving uncertainty controls and arena-first evaluation
+- richer GPU telemetry and eventual multi-GPU support once single-GPU runtime remains stable
 
 ## Constraints
 

@@ -289,6 +289,16 @@ Quick mode:
 
 Because `.venv_trainer` may not always have `PyYAML`, matching `.json` sidecars are also maintained for these configs and for `configs/experiments/p22.yaml`.
 
+## P49 Runtime Integration
+
+P49 routes world-model train/eval through the same runtime-profile layer used by RL:
+
+- default profile: `single_gpu_mainline`
+- no-CUDA hosts degrade to CPU automatically and record that downgrade in `runtime_profile.json`
+- train/eval now emit `progress.unified.jsonl` for dashboard consumption
+- dataloader workers, pin-memory, batch size, and grad accumulation are pulled from the resolved runtime profile
+- conservative OOM handling reduces batch size before failing hard
+
 ## Known Gaps
 
 - one-step only; no long-horizon latent rollout policy gate

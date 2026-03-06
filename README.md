@@ -9,7 +9,7 @@
 [![Seed Governance](https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16)](configs/experiments/seeds_p23.yaml)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Trend Warehouse](https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16)](docs/TREND_WAREHOUSE_P26.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P48-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P49-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -19,7 +19,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/XcapeAxis/BalatroAI)](https://github.com/XcapeAxis/BalatroAI/issues)
 <!-- BADGES:END -->
 
-BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, a unified action replay contract, P45 world-model / latent-planning, P46 short-horizon imagination augmentation, P47 uncertainty-aware world-model reranking, and P48 adaptive hybrid routing across policy/search/world-model assist. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised/world-model iteration, not as a cheat injector or memory-hook tool.
+BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, a unified action replay contract, P45 world-model / latent-planning, P46 short-horizon imagination augmentation, P47 uncertainty-aware world-model reranking, P48 adaptive hybrid routing across policy/search/world-model assist, and P49 GPU-mainline runtime profiles with readiness guards and lightweight dashboards. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised/world-model iteration, not as a cheat injector or memory-hook tool.
 
 Badge/status refresh source:
 
@@ -207,6 +207,13 @@ python -m trainer.hybrid.hybrid_controller --quick
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP48
 ```
 
+Optional P49 GPU mainline smoke:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP49
+powershell -ExecutionPolicy Bypass -File scripts\run_dashboard.ps1
+```
+
 8. Inspect generated artifacts.
 
 - `docs/artifacts/p22/runs/<run_id>/summary_table.md`
@@ -217,6 +224,8 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP48
 - `docs/artifacts/p46/{imagination_rollouts,imagination_pipeline,arena_compare,triage}/<run_id>/`
 - `docs/artifacts/p47/{lookahead,arena_ablation,triage}/<run_id>/`
 - `docs/artifacts/p48/{arena_ablation,triage}/<run_id>/`
+- `docs/artifacts/p49/{readiness,rl_cpu_rollout_gpu_learner,wm_gpu_smoke}/`
+- `docs/artifacts/dashboard/latest/index.html`
 - optional live snapshot view: `powershell -ExecutionPolicy Bypass -File scripts\show_p22_live.ps1`
 
 9. Cleanup runtime files when finished.
@@ -265,6 +274,7 @@ More details:
 - [docs/P46_IMAGINATION_LOOP.md](docs/P46_IMAGINATION_LOOP.md)
 - [docs/P47_MODEL_BASED_SEARCH.md](docs/P47_MODEL_BASED_SEARCH.md)
 - [docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md](docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md)
+- [docs/P49_GPU_MAINLINE_AND_DASHBOARD.md](docs/P49_GPU_MAINLINE_AND_DASHBOARD.md)
 - [docs/P43_TRAINING_STRATEGY_REFOCUS.md](docs/P43_TRAINING_STRATEGY_REFOCUS.md)
 
 ## Architecture Overview
@@ -572,6 +582,7 @@ Boundaries / risks:
 Reference docs:
 
 - [docs/P47_MODEL_BASED_SEARCH.md](docs/P47_MODEL_BASED_SEARCH.md)
+- [docs/P49_GPU_MAINLINE_AND_DASHBOARD.md](docs/P49_GPU_MAINLINE_AND_DASHBOARD.md)
 
 ## Adaptive Hybrid Controller (P48)
 
@@ -601,6 +612,40 @@ Boundaries / risks:
 Reference docs:
 
 - [docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md](docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md)
+- [docs/P49_GPU_MAINLINE_AND_DASHBOARD.md](docs/P49_GPU_MAINLINE_AND_DASHBOARD.md)
+
+## GPU Training Mainline (P49)
+
+P49 formalizes the runtime lane used by P42/P44/P45/P46: rollout and environment interaction stay CPU-first, learners prefer GPU when CUDA is available, and the whole path is driven by shared device/runtime profiles instead of per-script CUDA flags.
+
+Quick start:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP49
+powershell -ExecutionPolicy Bypass -File scripts\run_dashboard.ps1
+```
+
+Monitoring / dashboard:
+
+- live terminal view: `python -m trainer.monitoring.live_dashboard --watch docs/artifacts/p22/runs/<run_id> --once`
+- static HTML: `docs/artifacts/dashboard/latest/index.html`
+- unified progress stream: `docs/artifacts/p22/runs/<run_id>/progress.unified.jsonl`
+
+Service readiness guard:
+
+- `scripts/run_regressions.ps1` and `scripts/run_p22.ps1` now call `scripts/wait_for_service_ready.ps1` before service-dependent work.
+- the guard waits through cold-start warm-up and requires repeated `health + gamestate` success before releasing the run.
+
+Boundaries / risks:
+
+- GPU enablement does not remove CPU/env bottlenecks; rollout often remains the slow side.
+- no-CUDA hosts gracefully fall back to CPU and record that downgrade in `runtime_profile.json`.
+- OOM, NaN loss, invalid action spikes, and readiness races remain the operational items to watch.
+
+Reference docs:
+
+- [docs/P49_GPU_MAINLINE_AND_DASHBOARD.md](docs/P49_GPU_MAINLINE_AND_DASHBOARD.md)
 
 ## Maturity and Boundaries
 
@@ -611,6 +656,7 @@ Reference docs:
 - P46 imagination augmentation is v1/research-grade; it provides short-horizon synthetic replay, not trusted model-based evaluation.
 - P47 model-based reranking is v1/research-grade; it provides short-horizon decision support, not full search or trusted model-only evaluation.
 - P48 adaptive hybrid routing is v1/research-grade; routing rules are explainable heuristics and will require recalibration as controller quality shifts.
+- P49 GPU mainline is an execution/operations milestone, not a claim of higher policy quality by itself.
 - BC/DAgger paths are retained as legacy baselines; they are not default mainline training routes.
 - Legacy baseline checks are lightweight smoke/probe checks unless explicitly requested.
 - low-sample CI/bootstrap outcomes remain observation-level and should not be treated as decisive promotion proof.
@@ -971,11 +1017,13 @@ Milestone maturity snapshot:
 | P45 (world model / latent planning v1: dataset + dynamics + uncertainty + planning hook) | shipped |
 | P46 (Dyna-style imagination loop v1: short imagined rollouts + replay augmentation + arena ablation) | shipped |
 | P47 (uncertainty-aware model-based search v1: candidate generation + rerank + arena ablation) | shipped |
-| P48 (adaptive hybrid controller v1: state-aware routing across policy/search/wm-rerank) | active |
+| P48 (adaptive hybrid controller v1: state-aware routing across policy/search/wm-rerank) | shipped |
+| P49 (GPU mainline + CPU rollout/GPU learner + readiness guard + dashboard) | shipped |
 
 Near-term:
 
 - harden P48 routing thresholds and controller-cost heuristics on larger multi-seed budgets
+- push P49 runtime profiles onto a real CUDA host and tune batch/grad-accum settings against actual GPU memory ceilings
 - extend adaptive routing toward RL candidate inference without weakening arena-first gating
 - keep simulator-first promotion gates strict while improving model-based diagnostics
 
@@ -1005,6 +1053,7 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - P46 imagined replay can import world-model bias; short horizon and uncertainty filtering reduce but do not remove that risk.
 - P47 rerank quality depends on P45 model quality and candidate-set quality; poor calibration can still degrade decisions, so arena evaluation stays authoritative.
 - P48 routing quality depends on both P47 rerank quality and controller calibration; routing traces and arena ablations must be read together.
+- P49 runtime profiles currently target single-GPU v1; multi-GPU learner sharding and true utilization telemetry are still future work.
 
 ## Further Reading
 
@@ -1022,6 +1071,7 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/P46_IMAGINATION_LOOP.md](docs/P46_IMAGINATION_LOOP.md)
 - [docs/P47_MODEL_BASED_SEARCH.md](docs/P47_MODEL_BASED_SEARCH.md)
 - [docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md](docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md)
+- [docs/P49_GPU_MAINLINE_AND_DASHBOARD.md](docs/P49_GPU_MAINLINE_AND_DASHBOARD.md)
 - [docs/P43_TRAINING_STRATEGY_REFOCUS.md](docs/P43_TRAINING_STRATEGY_REFOCUS.md)
 - [docs/RL_OVERVIEW.md](docs/RL_OVERVIEW.md)
 - [docs/EXPERIMENTS_P32_SELF_SUPERVISED.md](docs/EXPERIMENTS_P32_SELF_SUPERVISED.md)

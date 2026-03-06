@@ -160,6 +160,15 @@ Arena compare can include:
 - `candidate_real_plus_imagined_filtered`
 - optional `candidate_real_plus_imagined`
 
+## P49 Runtime Integration
+
+P49 does not change P46's research boundary, but it does move the imagination generator onto shared runtime plumbing:
+
+- world-model inference device resolves through the runtime profile
+- imagined rollout artifacts record `runtime_profile.json`
+- unified progress events make P46 visible in the live/static dashboards
+- `p49_gpu_mainline_nightly` can include the P46 lane while still keeping imagined replay auxiliary and uncertainty-gated
+
 ## Known Gaps
 
 - no long-horizon imagined rollout governance

@@ -158,6 +158,16 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
   - `docs/artifacts/p42/closed_loop_runs/<run_id>/promotion_decision.json`
   - `docs/artifacts/p42/closed_loop_runs/<run_id>/triage_report.json`
 
+## P49 Runtime Integration
+
+P49 moves the P42 learner path onto the shared runtime/device layer:
+
+- runtime selection now comes from `trainer.runtime.runtime_profile`
+- default profile is `single_gpu_mainline`
+- rollout stays CPU-first while the learner prefers GPU when CUDA exists
+- runs now emit `progress.unified.jsonl` and `runtime_profile.json`
+- `scripts/run_p22.ps1` and `scripts/run_regressions.ps1` both pass through the readiness guard before service-dependent execution
+
 ## Known Gaps
 
 - PPO-lite intentionally omits advanced PPO/distributed features (opponent pools, large-batch parallel rollouts).
