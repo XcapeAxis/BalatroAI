@@ -127,6 +127,8 @@ def infer_generation_method(source_type: str, path: str, metadata: dict[str, Any
         return "selfsup_replay_build"
     if st == "arena_failures":
         return "arena_failure_mining"
+    if st == "imagined_world_model":
+        return "world_model_imagination"
     return "unknown"
 
 

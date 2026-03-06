@@ -87,6 +87,67 @@ def _pick_sources(cfg: dict[str, Any]) -> list[dict[str, Any]]:
     return _default_sources()
 
 
+def _planned_selected_count(source: dict[str, Any], *, quick: bool, quick_cap_per_source: int) -> int:
+    status = str(source.get("status") or "stub")
+    available = int(source.get("available_samples") or 0)
+    records = source.get("records") if isinstance(source.get("records"), list) else []
+    if status != "ok" or available <= 0 or not records:
+        return 0
+    max_samples = int(source.get("max_samples") or 0)
+    if quick:
+        max_samples = min(max_samples if max_samples > 0 else quick_cap_per_source, quick_cap_per_source)
+    if max_samples <= 0:
+        max_samples = available
+    return min(available, max_samples)
+
+
+def _apply_imagined_caps(
+    *,
+    source_rows: list[dict[str, Any]],
+    quick: bool,
+    quick_cap_per_source: int,
+) -> dict[str, int]:
+    planned = {
+        str(source.get("source_id") or ""): _planned_selected_count(
+            source,
+            quick=quick,
+            quick_cap_per_source=quick_cap_per_source,
+        )
+        for source in source_rows
+        if isinstance(source, dict)
+    }
+    real_total = sum(
+        count
+        for source_id, count in planned.items()
+        if str(next((src.get("source_type") for src in source_rows if str(src.get("source_id") or "") == source_id), "")).lower()
+        != "imagined_world_model"
+    )
+    adjusted = dict(planned)
+    for source in source_rows:
+        if not isinstance(source, dict):
+            continue
+        if str(source.get("source_type") or "").strip().lower() != "imagined_world_model":
+            continue
+        source_id = str(source.get("source_id") or "")
+        fraction = float(source.get("max_imagined_fraction") or 0.0)
+        metadata_fraction = 0.0
+        records = source.get("records") if isinstance(source.get("records"), list) else []
+        if records:
+            metadata_fraction = float(
+                (((records[0].get("metadata") or {}) if isinstance(records[0], dict) else {}).get("max_imagined_fraction") or 0.0)
+            )
+        fraction = fraction if fraction > 0.0 else metadata_fraction
+        if fraction <= 0.0:
+            adjusted[source_id] = 0
+            continue
+        if real_total <= 0:
+            adjusted[source_id] = 0
+            continue
+        cap = int((fraction * float(real_total)) / max(1e-6, 1.0 - fraction))
+        adjusted[source_id] = max(0, min(int(planned.get(source_id) or 0), cap))
+    return adjusted
+
+
 def _allocate_record_samples(
     *,
     records: list[dict[str, Any]],
@@ -138,6 +199,11 @@ def _build_selected_entries(
     total_train = 0
     total_val = 0
     total_selected = 0
+    planned_selected = _apply_imagined_caps(
+        source_rows=source_rows,
+        quick=quick,
+        quick_cap_per_source=quick_cap_per_source,
+    )
 
     for source in source_rows:
         source_id = str(source.get("source_id") or "")
@@ -145,21 +211,31 @@ def _build_selected_entries(
         status = str(source.get("status") or "stub")
         available = int(source.get("available_samples") or 0)
         records = source.get("records") if isinstance(source.get("records"), list) else []
-        max_samples = int(source.get("max_samples") or 0)
-        if quick:
-            max_samples = min(max_samples if max_samples > 0 else quick_cap_per_source, quick_cap_per_source)
         selected = 0
         train_count = 0
         val_count = 0
+        imagined_acceptance_rate = 0.0
+        imagined_average_uncertainty = 0.0
+        imagined_gate_required = False
+        max_imagined_fraction = float(source.get("max_imagined_fraction") or 0.0)
 
         if status == "ok" and available > 0 and records:
-            if max_samples <= 0:
-                max_samples = available
-            planned = min(available, max_samples)
+            planned = int(planned_selected.get(source_id) or 0)
+            if planned <= 0 and source_type != "imagined_world_model":
+                planned = _planned_selected_count(
+                    source,
+                    quick=quick,
+                    quick_cap_per_source=quick_cap_per_source,
+                )
             allocations = _allocate_record_samples(records=records, selected_total=planned)
             for record, take in allocations:
                 if take <= 0:
                     continue
+                metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
+                imagined_acceptance_rate = float(metadata.get("acceptance_rate") or imagined_acceptance_rate or 0.0)
+                imagined_average_uncertainty = float(metadata.get("average_uncertainty") or imagined_average_uncertainty or 0.0)
+                imagined_gate_required = bool(metadata.get("require_uncertainty_gate_passed", imagined_gate_required))
+                max_imagined_fraction = float(metadata.get("max_imagined_fraction") or max_imagined_fraction or 0.0)
                 split_train = int(round(float(take) * float(split["train"])))
                 split_train = max(0, min(split_train, take))
                 split_val = take - split_train
@@ -180,7 +256,10 @@ def _build_selected_entries(
                     },
                     "split_counts": {"train": int(split_train), "val": int(split_val)},
                     "estimated_count": bool(record.get("estimated_count")),
-                    "metadata": record.get("metadata") if isinstance(record.get("metadata"), dict) else {},
+                    "metadata": {
+                        **(record.get("metadata") if isinstance(record.get("metadata"), dict) else {}),
+                        "selected_samples": int(take),
+                    },
                 }
                 entry = build_lineage_entry(entry=entry, record=record)
                 if not dry_run:
@@ -202,6 +281,10 @@ def _build_selected_entries(
                 "train_samples": int(train_count),
                 "val_samples": int(val_count),
                 "record_count": int(len(records)),
+                "imagined_acceptance_rate": float(imagined_acceptance_rate),
+                "imagined_average_uncertainty": float(imagined_average_uncertainty),
+                "imagined_gate_required": bool(imagined_gate_required),
+                "max_imagined_fraction": float(max_imagined_fraction),
             }
         )
         total_selected += selected
@@ -213,6 +296,9 @@ def _build_selected_entries(
         "train_samples": int(total_train),
         "val_samples": int(total_val),
         "selected_entries": int(len(selected_entries)),
+        "imagined_selected_samples": int(
+            sum(int(row.get("selected_samples") or 0) for row in source_stats if str(row.get("source_type") or "") == "imagined_world_model")
+        ),
     }
     return selected_entries, source_stats, totals
 
@@ -251,8 +337,22 @@ def _stats_markdown(
             f"- train_samples: {int(totals.get('train_samples') or 0)}",
             f"- val_samples: {int(totals.get('val_samples') or 0)}",
             f"- selected_entries: {int(totals.get('selected_entries') or 0)}",
+            f"- imagined_selected_samples: {int(totals.get('imagined_selected_samples') or 0)}",
         ]
     )
+    imagined_rows = [row for row in source_stats if str(row.get("source_type") or "") == "imagined_world_model"]
+    if imagined_rows:
+        lines.extend(["", "## Imagined Source Stats"])
+        for row in imagined_rows:
+            lines.append(
+                "- {source_id}: acceptance_rate={acc:.3f} avg_uncertainty={unc:.4f} gate_required={gate} max_fraction={frac:.3f}".format(
+                    source_id=row.get("source_id"),
+                    acc=float(row.get("imagined_acceptance_rate") or 0.0),
+                    unc=float(row.get("imagined_average_uncertainty") or 0.0),
+                    gate=str(bool(row.get("imagined_gate_required"))).lower(),
+                    frac=float(row.get("max_imagined_fraction") or 0.0),
+                )
+            )
     if warnings:
         lines.extend(["", "## Warnings"])
         lines.extend([f"- {w}" for w in warnings])

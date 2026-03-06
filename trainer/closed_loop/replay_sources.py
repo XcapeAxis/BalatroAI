@@ -10,6 +10,7 @@ from trainer.closed_loop.replay_manifest import (
     infer_source_run_id,
     read_json,
     read_jsonl,
+    to_abs_path,
 )
 
 
@@ -18,6 +19,7 @@ SUPPORTED_SOURCE_TYPES = {
     "p13_dagger_or_real",
     "selfsup_replay",
     "arena_failures",
+    "imagined_world_model",
 }
 
 
@@ -64,6 +66,8 @@ def _detect_format_hint(path: Path) -> str:
     rows = read_jsonl(path, max_rows=1)
     if rows:
         row = rows[0]
+        if isinstance(row, dict) and str(row.get("source_type") or "").strip().lower() == "imagined_world_model":
+            return "bc_record_v1"
         if isinstance(row, dict) and row.get("expert_action_id") is not None:
             return "bc_record_v1"
         if isinstance(row, dict) and row.get("policy_id") is not None and row.get("episode_index") is not None:
@@ -126,6 +130,7 @@ def _jsonl_record(
     source_type: str,
     source_id: str,
     extra_meta: dict[str, Any] | None = None,
+    sample_count_override: int | None = None,
 ) -> dict[str, Any]:
     preview = _peek_jsonl_row(path)
     line_count, truncated = count_jsonl_rows(path, max_scan_rows=max(0, int(scan_limit)))
@@ -139,7 +144,7 @@ def _jsonl_record(
         "source_type": source_type,
         "source_id": source_id,
         "path": str(path),
-        "sample_count": int(line_count),
+        "sample_count": int(sample_count_override if sample_count_override is not None and int(sample_count_override) >= 0 else line_count),
         "estimated_count": bool(truncated),
         "format_hint": _detect_format_hint(path),
         "metadata": extra_meta or {},
@@ -369,6 +374,75 @@ def _resolve_failure_source(
     return records, [str(manifest_path)], reason
 
 
+def _resolve_imagined_source(
+    *,
+    repo_root: Path,
+    source_cfg: dict[str, Any],
+    scan_limit: int,
+    warnings: list[str],
+) -> tuple[list[dict[str, Any]], list[str], str]:
+    source_id = str(source_cfg.get("id") or "imagined_world_model")
+    roots = _normalize_path_list(repo_root, source_cfg.get("roots"))
+    manifest_raw = str(source_cfg.get("imagination_manifest") or "").strip()
+    manifest_paths: list[Path] = []
+    if manifest_raw:
+        manifest_paths.append((to_abs_path(repo_root, manifest_raw)).resolve())
+    if not roots:
+        roots = [(repo_root / "docs/artifacts/p46/imagination_rollouts").resolve()]
+    patterns = source_cfg.get("patterns")
+    if not isinstance(patterns, list) or not patterns:
+        patterns = ["**/imagined_manifest.json"]
+    for root in roots:
+        manifest_paths.extend(_gather_glob_paths(root, [str(pattern) for pattern in patterns]))
+    manifest_paths = sorted(set(manifest_paths), key=lambda path: str(path), reverse=True)
+
+    records: list[dict[str, Any]] = []
+    consumed_paths: list[str] = []
+    for manifest_path in manifest_paths:
+        payload = read_json(manifest_path)
+        if not isinstance(payload, dict):
+            warnings.append(f"imagined manifest unreadable: {manifest_path}")
+            continue
+        consumed_paths.append(str(manifest_path))
+        jsonl_raw = str(payload.get("imagined_rollouts_jsonl") or payload.get("dataset_jsonl") or "").strip()
+        if not jsonl_raw:
+            warnings.append(f"imagined manifest missing imagined_rollouts_jsonl: {manifest_path}")
+            continue
+        jsonl_path = Path(jsonl_raw)
+        if not jsonl_path.is_absolute():
+            jsonl_path = (manifest_path.parent / jsonl_path).resolve()
+        if not jsonl_path.exists():
+            warnings.append(f"imagined rollouts jsonl missing: {jsonl_path}")
+            continue
+        require_gate = bool(source_cfg.get("require_uncertainty_gate_passed", True))
+        selected_count = int(
+            payload.get("accepted_sample_count")
+            if require_gate
+            else payload.get("total_sample_count", payload.get("accepted_sample_count") or 0)
+        )
+        record = _jsonl_record(
+            jsonl_path,
+            scan_limit=scan_limit,
+            source_type="imagined_world_model",
+            source_id=source_id,
+            sample_count_override=max(0, selected_count),
+            extra_meta={
+                "imagination_manifest": str(manifest_path),
+                "accepted_sample_count": int(payload.get("accepted_sample_count") or 0),
+                "total_sample_count": int(payload.get("total_sample_count") or 0),
+                "acceptance_rate": float(payload.get("acceptance_rate") or 0.0),
+                "average_uncertainty": float(payload.get("average_uncertainty") or 0.0),
+                "uncertainty_threshold": float(payload.get("uncertainty_threshold") or 0.0),
+                "require_uncertainty_gate_passed": require_gate,
+                "max_imagined_fraction": float(source_cfg.get("max_imagined_fraction") or 0.2),
+                "max_imagination_horizon": int(source_cfg.get("max_imagination_horizon") or 1),
+            },
+        )
+        records.append(record)
+    reason = "ok" if records else "imagined manifests not found"
+    return records, consumed_paths, reason
+
+
 def resolve_replay_sources(
     *,
     repo_root: Path,
@@ -391,6 +465,7 @@ def resolve_replay_sources(
         max_samples = int(src.get("max_samples") or 0)
         max_episodes = int(src.get("max_episodes") or 0)
         scan_limit = int(src.get("scan_limit_rows") or scan_limit_default)
+        max_imagined_fraction = float(src.get("max_imagined_fraction") or 0.0)
 
         if source_type not in SUPPORTED_SOURCE_TYPES:
             resolved.append(
@@ -403,6 +478,7 @@ def resolve_replay_sources(
                     "reason": f"unsupported_source_type:{source_type}",
                     "max_samples": max_samples,
                     "max_episodes": max_episodes,
+                    "max_imagined_fraction": max_imagined_fraction,
                     "records": [],
                     "available_samples": 0,
                     "source_paths": [],
@@ -421,6 +497,7 @@ def resolve_replay_sources(
                     "reason": "disabled",
                     "max_samples": max_samples,
                     "max_episodes": max_episodes,
+                    "max_imagined_fraction": max_imagined_fraction,
                     "records": [],
                     "available_samples": 0,
                     "source_paths": [],
@@ -447,8 +524,15 @@ def resolve_replay_sources(
                 source_cfg=src,
                 scan_limit=scan_limit,
             )
-        else:
+        elif source_type == "arena_failures":
             records, paths, reason = _resolve_failure_source(
+                repo_root=repo_root,
+                source_cfg=src,
+                scan_limit=scan_limit,
+                warnings=warnings,
+            )
+        else:
+            records, paths, reason = _resolve_imagined_source(
                 repo_root=repo_root,
                 source_cfg=src,
                 scan_limit=scan_limit,
@@ -471,6 +555,7 @@ def resolve_replay_sources(
                 "reason": reason,
                 "max_samples": max_samples,
                 "max_episodes": max_episodes,
+                "max_imagined_fraction": max_imagined_fraction,
                 "records": records,
                 "available_samples": available_samples,
                 "source_paths": paths,

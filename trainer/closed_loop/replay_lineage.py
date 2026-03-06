@@ -28,6 +28,15 @@ LINEAGE_REQUIRED_FIELDS = [
     "valid_for_training",
     "lineage_version",
 ]
+IMAGINED_OPTIONAL_FIELDS = [
+    "world_model_checkpoint",
+    "imagination_horizon",
+    "uncertainty_score",
+    "uncertainty_gate_passed",
+    "root_sample_id",
+    "imagined_step_idx",
+    "teacher_seed",
+]
 
 
 def _normalize_bool(value: Any, default: bool = True) -> bool:
@@ -112,6 +121,10 @@ def build_lineage_entry(
             "slice_labels": slice_labels,
         }
     )
+    for key in IMAGINED_OPTIONAL_FIELDS:
+        value = rec.get(key, metadata.get(key, preview.get(key)))
+        if value not in {None, ""}:
+            row[key] = value
     for key, val in slice_labels.items():
         row[key] = val
     return row
@@ -134,6 +147,10 @@ def summarize_lineage(
     valid_false = 0
     missing_fields: Counter[str] = Counter()
     slice_counts: dict[str, Counter[str]] = defaultdict(Counter)
+    imagined_uncertainty: list[float] = []
+    imagined_gate_true = 0
+    imagined_gate_false = 0
+    imagined_entries = 0
 
     for entry in entries:
         st = str(entry.get("source_type") or "unknown")
@@ -153,6 +170,17 @@ def summarize_lineage(
             valid_true += 1
         else:
             valid_false += 1
+
+        if st == "imagined_world_model":
+            imagined_entries += 1
+            try:
+                imagined_uncertainty.append(float(entry.get("uncertainty_score") or 0.0))
+            except Exception:
+                pass
+            if entry.get("uncertainty_gate_passed") is True:
+                imagined_gate_true += 1
+            elif entry.get("uncertainty_gate_passed") is False:
+                imagined_gate_false += 1
 
         for req in LINEAGE_REQUIRED_FIELDS:
             val = entry.get(req)
@@ -209,6 +237,13 @@ def summarize_lineage(
             "valid_for_training_false": int(valid_false),
             "invalid_ratio": (float(valid_false) / max(1, len(entries))),
         },
+        "imagined_summary": {
+            "entry_count": int(imagined_entries),
+            "mean_uncertainty": (sum(imagined_uncertainty) / max(1, len(imagined_uncertainty))),
+            "uncertainty_gate_true": int(imagined_gate_true),
+            "uncertainty_gate_false": int(imagined_gate_false),
+            "uncertainty_gate_pass_rate": float(imagined_gate_true) / max(1, imagined_gate_true + imagined_gate_false),
+        },
         "slice_distribution": {
             key: [
                 {"label": label, "count": int(count), "ratio": float(count) / max(1, sum(counter.values()))}
@@ -251,6 +286,7 @@ def lineage_summary_markdown(summary: dict[str, Any]) -> list[str]:
     seed_cov = summary.get("seed_coverage") if isinstance(summary.get("seed_coverage"), dict) else {}
     ep_cov = summary.get("episode_coverage") if isinstance(summary.get("episode_coverage"), dict) else {}
     validity = summary.get("validity") if isinstance(summary.get("validity"), dict) else {}
+    imagined = summary.get("imagined_summary") if isinstance(summary.get("imagined_summary"), dict) else {}
     lines.extend(
         [
             "",
@@ -258,6 +294,8 @@ def lineage_summary_markdown(summary: dict[str, Any]) -> list[str]:
             f"- discovered_seed_count: {int(seed_cov.get('discovered_seed_count') or 0)}",
             f"- unique_episode_count: {int(ep_cov.get('unique_episode_count') or 0)}",
             f"- invalid_ratio: {float(validity.get('invalid_ratio') or 0.0):.4f}",
+            f"- imagined_entry_count: {int(imagined.get('entry_count') or 0)}",
+            f"- imagined_gate_pass_rate: {float(imagined.get('uncertainty_gate_pass_rate') or 0.0):.4f}",
         ]
     )
     missing = summary.get("lineage_missing_fields") if isinstance(summary.get("lineage_missing_fields"), dict) else {}
@@ -299,4 +337,3 @@ def write_lineage_summary(
         "summary_md": str(md_path),
         "entry_count": int(summary.get("entry_count") or 0),
     }
-
