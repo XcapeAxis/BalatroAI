@@ -125,6 +125,8 @@ def _build_policy_adapter(
     resolved_wm_checkpoint = str(assist.get("world_model_checkpoint") or world_model_checkpoint or "")
     if token in {"heuristic", "heuristic_baseline", "baseline", "rule"}:
         return HeuristicAdapter(name=policy_id)
+    if token in {"policy", "policy_baseline", "model_policy", "model"}:
+        return ModelAdapter(name=policy_id, model_path=resolved_model_path, strategy="bc")
     if token in {"heuristic_wm_assist", "baseline_wm_assist", "wm_assist", "world_model_assist"} or "wm_assist" in token:
         return WorldModelAssistAdapter(
             name=policy_id,
@@ -134,10 +136,27 @@ def _build_policy_adapter(
             weight=float(world_model_weight),
             uncertainty_penalty=float(world_model_uncertainty_penalty),
         )
-    if token in {"search", "search_expert"}:
+    if token in {"search", "search_expert", "search_baseline"}:
         return SearchAdapter(name=policy_id)
     if token in {"hybrid", "hybrid_search_heuristic"}:
         return HybridAdapter(name=policy_id)
+    if token in {"hybrid_controller_v1", "adaptive_hybrid", "hybrid_router"} or "hybrid_controller" in token:
+        from trainer.hybrid.hybrid_controller import AdaptiveHybridController
+
+        return AdaptiveHybridController(
+            name=policy_id,
+            model_path=resolved_model_path,
+            world_model_checkpoint=resolved_wm_checkpoint,
+            top_k=_safe_int(assist.get("top_k"), 4),
+            router_config=(assist.get("router_config") if isinstance(assist.get("router_config"), dict) else {}),
+            search_max_branch=_safe_int(assist.get("search_max_branch"), 80),
+            search_max_depth=_safe_int(assist.get("search_max_depth"), 2),
+            search_time_budget_ms=_safe_float(assist.get("search_time_budget_ms"), 15.0),
+            wm_horizon=_safe_int(assist.get("wm_horizon"), _safe_int(assist.get("horizon"), 1)),
+            wm_uncertainty_penalty=_safe_float(assist.get("wm_uncertainty_penalty"), _safe_float(assist.get("uncertainty_penalty"), world_model_uncertainty_penalty)),
+            trace_path=str(assist.get("trace_path") or ""),
+            trace_context=(assist.get("trace_context") if isinstance(assist.get("trace_context"), dict) else {}),
+        )
     if token in {
         "heuristic_wm_rerank",
         "heuristic_plus_wm_rerank",
