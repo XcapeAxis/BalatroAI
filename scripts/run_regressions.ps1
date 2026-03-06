@@ -54,6 +54,7 @@ $safeRunScript = Join-Path $ProjectRoot "scripts/safe_run.ps1"
 if (-not (Test-Path $safeRunScript)) { throw "missing safe_run script: $safeRunScript" }
 $safeRunLogDir = Join-Path $ProjectRoot ".safe_run/regressions"
 if (-not (Test-Path $safeRunLogDir)) { New-Item -ItemType Directory -Path $safeRunLogDir -Force | Out-Null }
+$waitForReadyScript = Join-Path $ProjectRoot "scripts/wait_for_service_ready.ps1"
 
 # P15 gate builds on top of P14.
 if ($RunP15) { $RunP14 = $true }
@@ -260,6 +261,28 @@ function Clear-LovelyDump {
   }
 }
 
+function Invoke-ServiceReadiness([string]$Url, [string]$Reason) {
+  if (-not (Test-Path $waitForReadyScript)) {
+    Write-Host "[svc] readiness script missing, skipping guard"
+    return
+  }
+  $runToken = ("reg-" + $Reason + "-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+  Write-Host ("[svc] readiness guard reason=" + $Reason + " run_id=" + $runToken)
+  & powershell -ExecutionPolicy Bypass -File $waitForReadyScript `
+    -BaseUrl $Url `
+    -OutDir "docs/artifacts/p49/readiness" `
+    -RunId $runToken `
+    -MaxRetries 20 `
+    -RetryIntervalSec 2 `
+    -WarmupGraceSec 8 `
+    -ConsecutiveSuccesses 3 `
+    -TimeoutSec 3 `
+    -ProbeMethod "health_gamestate"
+  if ($LASTEXITCODE -ne 0) {
+    throw ("[svc] readiness guard failed for " + $Reason)
+  }
+}
+
 function Start-ServiceProc([string]$Url) {
   $u = [System.Uri]$Url
   $port = if ($u.IsDefaultPort) { 12346 } else { $u.Port }
@@ -282,7 +305,11 @@ function Start-ServiceProc([string]$Url) {
   Start-Process -FilePath $uvx.Source -ArgumentList $serveArgs -WorkingDirectory $ProjectRoot -WindowStyle Hidden | Out-Null
 
   for ($i = 0; $i -lt 45; $i++) {
-    if (Test-Health -Url $Url -TimeoutSec 3) { Write-Host "[svc] health ok"; return }
+    if (Test-Health -Url $Url -TimeoutSec 3) {
+      Write-Host "[svc] health ok"
+      Invoke-ServiceReadiness -Url $Url -Reason "startup"
+      return
+    }
     Start-Sleep -Seconds 1
   }
   throw "service start timeout"
@@ -290,7 +317,11 @@ function Start-ServiceProc([string]$Url) {
 
 function Ensure-Service([string]$Url, [bool]$ForceRestart = $false) {
   if ($ForceRestart) { Stop-ServiceProc; Start-Sleep -Seconds 2; Clear-LovelyDump }
-  if (Test-Health -Url $Url) { Write-Host "[svc] health ok at $Url"; return }
+  if (Test-Health -Url $Url) {
+    Write-Host "[svc] health ok at $Url"
+    Invoke-ServiceReadiness -Url $Url -Reason $(if ($ForceRestart) { "restart" } else { "ensure" })
+    return
+  }
   Start-ServiceProc -Url $Url
 }
 
