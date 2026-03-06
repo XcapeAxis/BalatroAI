@@ -9,7 +9,7 @@
 [![Seed Governance](https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16)](configs/experiments/seeds_p23.yaml)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Trend Warehouse](https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16)](docs/TREND_WAREHOUSE_P26.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P42-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P44-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -56,7 +56,7 @@ Not suitable for:
 
 P43 refocuses training into two explicit lanes:
 
-- Mainline (default): Self-Supervised + RL candidate + Closed-loop promotion (`P40/P41/P42`).
+- Mainline (default): Self-Supervised + RL candidate + Closed-loop promotion (`P40/P41/P42/P44`).
 - Legacy baseline (opt-in): BC/DAgger (`trainer/train_bc.py`, `trainer/dagger_collect*.py`) for baseline/probe/warm-start only.
 
 Why this shift:
@@ -171,6 +171,12 @@ Optional P42 RL candidate smoke (standalone PPO-lite + closed-loop):
 ```powershell
 python -m trainer.rl.ppo_lite --config configs/experiments/p42_rl_smoke.yaml
 python -m trainer.closed_loop.closed_loop_runner --config configs/experiments/p42_closed_loop_rl_smoke.yaml --quick
+```
+
+Optional P44 distributed RL smoke:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP44
 ```
 
 8. Inspect generated artifacts.
@@ -383,6 +389,33 @@ Safety / stability notes:
 - invalid action handling supports fallback/penalty modes and logs warnings.
 - arena gating is still mandatory; RL training completion does not imply safe promotion.
 
+## Distributed RL Training (P44)
+
+P44 extends the P42 RL lane into a scale-out self-play path:
+
+1. `DistributedRolloutWorkers` launch multiple rollout processes and aggregate `rollout_buffer.jsonl`.
+2. `CurriculumRLScheduler` switches between `stage1_basic`, `stage2_midgame`, and `stage3_highrisk`.
+3. `MultiSeedEval` scores candidate checkpoints before arena promotion.
+4. `ClosedLoopRunner` keeps P39 arena gating, P41 slice-aware champion rules, and regression triage in the loop.
+
+Quick start:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP44
+```
+
+P44 artifacts:
+
+- `docs/artifacts/p44/rollouts/<run_id>/`
+- `docs/artifacts/p44/rl_train/<run_id>/`
+- `docs/artifacts/p44/eval/<run_id>/seed_results.json`
+- `docs/artifacts/p44/diagnostics/<run_id>/{diagnostics.json,diagnostics_report.md}`
+- `docs/artifacts/p44/closed_loop_runs/<run_id>/`
+
+Reference docs:
+
+- [docs/P44_DISTRIBUTED_RL.md](docs/P44_DISTRIBUTED_RL.md)
+
 ## Maturity and Boundaries
 
 - P41 v2 still produces recommendation-only promotion outputs; champion switching remains manual.
@@ -594,6 +627,17 @@ P42 RL candidate pipeline reproducibility:
   - `p42_rl_candidate_nightly`
 - reference docs:
   - [docs/P42_RL_CANDIDATE_PIPELINE.md](docs/P42_RL_CANDIDATE_PIPELINE.md)
+
+P44 distributed RL reproducibility:
+
+- standalone PPO-lite smoke:
+  - `.\.venv_trainer\Scripts\python.exe -m trainer.rl.ppo_lite --config configs/experiments/p44_rl_smoke.yaml --quick`
+- P22 smoke:
+  - `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP44`
+- P22 nightly:
+  - `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP44 -Nightly`
+- reference docs:
+  - [docs/P44_DISTRIBUTED_RL.md](docs/P44_DISTRIBUTED_RL.md)
 
 ## Reinforcement Learning (P37)
 
