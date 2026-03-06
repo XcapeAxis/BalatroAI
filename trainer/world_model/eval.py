@@ -18,6 +18,8 @@ except Exception:  # pragma: no cover
     yaml = None
 
 from trainer.closed_loop.replay_manifest import now_iso, now_stamp, read_json, read_jsonl, write_json
+from trainer.monitoring.progress_schema import append_progress_event, build_progress_event, get_gpu_mem_mb
+from trainer.runtime.runtime_profile import load_runtime_profile
 from trainer.world_model.dataset import build_world_model_dataset
 from trainer.world_model.diagnostics import write_diagnostics
 from trainer.world_model.losses import compute_world_model_losses
@@ -66,6 +68,13 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return float(value)
     except Exception:
         return float(default)
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return int(default)
 
 
 def _resolve_dataset_manifest(
@@ -150,6 +159,7 @@ def run_world_model_eval(
     out_dir: str | Path | None = None,
     run_id: str = "",
     quick: bool = False,
+    runtime_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     repo_root = Path(__file__).resolve().parents[2]
     cfg_path = Path(config_path)
@@ -157,12 +167,11 @@ def run_world_model_eval(
         cfg_path = (repo_root / cfg_path).resolve()
     cfg = _read_yaml_or_json(cfg_path)
     eval_cfg = cfg.get("eval") if isinstance(cfg.get("eval"), dict) else {}
-    model, _model_config, checkpoint_payload = load_world_model_from_checkpoint(checkpoint_path, device="cpu")
     manifest_path = _resolve_dataset_manifest(
         repo_root=repo_root,
         config_path=cfg_path,
         explicit_path=str(dataset_manifest_path or ""),
-        checkpoint_payload=checkpoint_payload,
+        checkpoint_payload=load_world_model_from_checkpoint(checkpoint_path, device="cpu")[2],
         quick=quick,
     )
     manifest_obj = read_json(Path(manifest_path))
@@ -187,9 +196,32 @@ def run_world_model_eval(
     )
     run_dir = out_root / chosen_run_id
     run_dir.mkdir(parents=True, exist_ok=True)
+    runtime_profile_payload = (
+        dict(runtime_profile)
+        if isinstance(runtime_profile, dict)
+        else load_runtime_profile(config=cfg, component="p45_world_model_eval").to_dict()
+    )
+    runtime_resolved = (
+        runtime_profile_payload.get("resolved_profile", {}).get("resolved")
+        if isinstance(runtime_profile_payload.get("resolved_profile"), dict)
+        else {}
+    )
+    learner_device = str((runtime_resolved or {}).get("learner_device") or "cpu")
+    rollout_device = str((runtime_resolved or {}).get("rollout_device") or "cpu")
+    runtime_profile_json = run_dir / "runtime_profile.json"
+    progress_unified_path = run_dir / "progress.unified.jsonl"
+    write_json(runtime_profile_json, runtime_profile_payload)
 
     torch = _require_torch()
-    batch_size = max(8, int(eval_cfg.get("batch_size") or 128))
+    device = learner_device if str(learner_device or "").strip() else "cpu"
+    model, _model_config, checkpoint_payload = load_world_model_from_checkpoint(checkpoint_path, device=device)
+    batch_size = max(
+        8,
+        _safe_int(
+            (runtime_resolved or {}).get("batch_size"),
+            int(eval_cfg.get("batch_size") or 128),
+        ),
+    )
     loss_weights = ((cfg.get("train") or {}).get("loss_weights") if isinstance(cfg.get("train"), dict) else {}) or {}
 
     prediction_rows: list[dict[str, Any]] = []
@@ -268,6 +300,10 @@ def run_world_model_eval(
             "status": "skipped_not_implemented",
             "note": "P45 v1 does not add an explicit done head yet.",
         },
+        "runtime_profile": runtime_profile_payload,
+        "learner_device": learner_device,
+        "rollout_device": rollout_device,
+        "gpu_mem_mb": get_gpu_mem_mb(device),
         "losses": {key: _mean(values) for key, values in totals.items()},
         "slice_eval_json": str(run_dir / "slice_eval.json"),
         "diagnostics_json": str(run_dir / "diagnostics.json"),
@@ -295,6 +331,29 @@ def run_world_model_eval(
     write_json(run_dir / "slice_eval.json", slice_eval)
     _write_jsonl(run_dir / "prediction_rows.jsonl", prediction_rows)
     _write_markdown(run_dir / "eval_metrics.md", lines)
+    append_progress_event(
+        progress_unified_path,
+        build_progress_event(
+            run_id=chosen_run_id,
+            component="p45_wm_eval",
+            phase="eval",
+            status="completed",
+            step=len(prediction_rows),
+            epoch_or_iter=1,
+            metrics={
+                "latent_transition_error": eval_metrics.get("latent_transition_error"),
+                "reward_prediction_error": eval_metrics.get("reward_prediction_error"),
+                "score_delta_prediction_error": eval_metrics.get("score_delta_prediction_error"),
+                "uncertainty_mean": eval_metrics.get("uncertainty_mean"),
+                "sample_count": eval_metrics.get("sample_count"),
+            },
+            device_profile=runtime_profile_payload,
+            learner_device=learner_device,
+            rollout_device=rollout_device,
+            throughput=float(len(prediction_rows)) / max(1.0, float(len(rows) / max(1, batch_size))),
+            gpu_mem_mb=get_gpu_mem_mb(device),
+        ),
+    )
     return {
         "status": "ok",
         "run_id": chosen_run_id,
@@ -304,6 +363,8 @@ def run_world_model_eval(
         "slice_eval_json": str(run_dir / "slice_eval.json"),
         "diagnostics_json": str(run_dir / "diagnostics.json"),
         "prediction_rows_jsonl": str(run_dir / "prediction_rows.jsonl"),
+        "runtime_profile_json": str(runtime_profile_json),
+        "progress_unified_jsonl": str(progress_unified_path),
         "metrics": eval_metrics,
     }
 

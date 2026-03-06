@@ -13,10 +13,13 @@ import math
 import multiprocessing as mp
 import random
 import statistics
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from trainer.monitoring.progress_schema import append_progress_event as append_unified_progress_event
+from trainer.monitoring.progress_schema import build_progress_event, get_gpu_mem_mb
 from trainer.rl.action_mask import action_mask_density
 from trainer.rl.env_adapter import RLEnvAdapter
 from trainer.rl.rollout_schema import RolloutStepRecord
@@ -152,6 +155,7 @@ class SnapshotMaskedRolloutPolicy:
         policy_snapshot: dict[str, Any] | None = None,
         seed: str = "AAAAAAA",
         greedy: bool = False,
+        requested_device: str = "cpu",
     ) -> None:
         self.seed = str(seed)
         self.greedy = bool(greedy)
@@ -162,6 +166,7 @@ class SnapshotMaskedRolloutPolicy:
         self.Categorical = None
         self.device = None
         self.load_meta = {"status": "random_policy", "source_kind": "none"}
+        self.requested_device = str(requested_device or "cpu")
 
         if not isinstance(self.snapshot, dict):
             return
@@ -177,12 +182,18 @@ class SnapshotMaskedRolloutPolicy:
             self.model = model
             self.torch = torch
             self.Categorical = categorical_cls
-            self.device = torch.device("cpu")
+            resolved_device = "cpu"
+            if str(self.requested_device).startswith("cuda") and bool(torch.cuda.is_available()):
+                resolved_device = str(self.requested_device)
+            self.device = torch.device(resolved_device)
+            self.model = self.model.to(self.device)
             self.load_meta = {
                 "status": "ok",
                 "source_kind": "snapshot_dict",
                 "obs_dim": obs_dim,
                 "action_dim": action_dim,
+                "requested_device": self.requested_device,
+                "resolved_device": str(self.device),
             }
         except Exception as exc:
             self.model = None
@@ -247,6 +258,7 @@ def _worker_run(spec: dict[str, Any]) -> None:
         policy_snapshot=snapshot,
         seed=f"worker-{worker_id}-{worker_seeds[0]}",
         greedy=bool(spec.get("greedy")),
+        requested_device=str(spec.get("rollout_device") or "cpu"),
     )
 
     env_kwargs = spec.get("env") if isinstance(spec.get("env"), dict) else {}
@@ -382,6 +394,10 @@ def _worker_run(spec: dict[str, Any]) -> None:
             "rollout_steps_jsonl": str(rollout_steps_path),
             "worker_summary_json": str(worker_summary_path),
         },
+        "runtime": {
+            "rollout_device_requested": str(spec.get("rollout_device") or "cpu"),
+            "rollout_device_resolved": str(policy.load_meta.get("resolved_device") or "cpu"),
+        },
         "episodes": episodes,
     }
     _write_json(worker_summary_path, summary)
@@ -416,7 +432,11 @@ def run_distributed_rollout(
     env_config: dict[str, Any] | None = None,
     greedy: bool = False,
     include_steps_in_result: bool = False,
+    rollout_device: str = "cpu",
+    runtime_profile: dict[str, Any] | None = None,
+    progress_path: str | Path | None = None,
 ) -> dict[str, Any]:
+    started = time.time()
     seed_list = [str(seed).strip() for seed in (seeds or ["AAAAAAA", "BBBBBBB"]) if str(seed).strip()]
     if not seed_list:
         seed_list = ["AAAAAAA", "BBBBBBB"]
@@ -453,6 +473,7 @@ def run_distributed_rollout(
                 "max_steps_per_episode": int(max_steps_per_episode),
                 "worker_step_cap": int(worker_step_cap),
                 "greedy": bool(greedy),
+                "rollout_device": str(rollout_device or "cpu"),
             }
         )
 
@@ -537,6 +558,8 @@ def run_distributed_rollout(
         "invalid_action_count": int(invalid_steps),
         "invalid_action_rate": float(invalid_steps) / float(max(1, step_count)),
         "worker_failure_count": len(worker_failures),
+        "elapsed_sec": time.time() - started,
+        "rollout_steps_per_sec": float(step_count) / max(0.001, (time.time() - started)),
         "action_frequency": {
             key: action_counts[key]
             for key in sorted(action_counts.keys(), key=lambda token: (-action_counts[token], token))[:16]
@@ -556,6 +579,7 @@ def run_distributed_rollout(
             "max_steps_per_episode": int(max_steps_per_episode),
             "total_steps_cap": int(total_steps_cap),
             "greedy": bool(greedy),
+            "rollout_device": str(rollout_device or "cpu"),
         },
         "paths": {
             "rollout_buffer_jsonl": str(rollout_buffer_path),
@@ -571,10 +595,36 @@ def run_distributed_rollout(
             }
             for spec in specs
         ],
+        "runtime_profile": runtime_profile if isinstance(runtime_profile, dict) else {},
     }
     _write_json(worker_stats_path, worker_stats)
     _write_json(rollout_stats_path, stats)
     _write_json(rollout_manifest_path, manifest)
+
+    if progress_path:
+        append_unified_progress_event(
+            progress_path,
+            build_progress_event(
+                run_id=run_token,
+                component="p44_rollout",
+                phase="rollout",
+                status=str(stats.get("status") or "ok"),
+                step=int(step_count),
+                epoch_or_iter=None,
+                seed=",".join(seed_list),
+                metrics={
+                    "step_count": int(step_count),
+                    "episode_count": int(len(episode_ids)),
+                    "invalid_action_rate": float(stats.get("invalid_action_rate") or 0.0),
+                    "worker_failure_count": int(stats.get("worker_failure_count") or 0),
+                },
+                device_profile=runtime_profile if isinstance(runtime_profile, dict) else {},
+                learner_device=str(((runtime_profile or {}).get("resolved") or {}).get("learner_device") or ""),
+                rollout_device=str(rollout_device or "cpu"),
+                throughput=float(stats.get("rollout_steps_per_sec") or 0.0),
+                gpu_mem_mb=get_gpu_mem_mb(None),
+            ),
+        )
 
     result = {
         "status": str(stats.get("status")),
@@ -587,6 +637,8 @@ def run_distributed_rollout(
         "step_count": int(step_count),
         "episode_count": int(len(episode_ids)),
         "invalid_action_rate": float(stats.get("invalid_action_rate") or 0.0),
+        "elapsed_sec": float(stats.get("elapsed_sec") or 0.0),
+        "rollout_steps_per_sec": float(stats.get("rollout_steps_per_sec") or 0.0),
     }
     if include_steps_in_result:
         result["steps"] = all_steps

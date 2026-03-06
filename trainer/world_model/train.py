@@ -7,8 +7,10 @@ if __package__ is None or __package__ == "":
     sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 import argparse
+import functools
 import json
 import random
+import time
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +19,15 @@ try:  # pragma: no cover - optional dependency
 except Exception:  # pragma: no cover
     yaml = None
 
+try:  # pragma: no cover - optional dependency
+    from torch.utils.data import Dataset as TorchDataset
+except Exception:  # pragma: no cover
+    class TorchDataset:  # type: ignore[no-redef]
+        pass
+
 from trainer.closed_loop.replay_manifest import build_seeds_payload, now_iso, now_stamp, read_json, read_jsonl, write_json
+from trainer.monitoring.progress_schema import append_progress_event, build_progress_event, get_gpu_mem_mb
+from trainer.runtime.runtime_profile import load_runtime_profile
 from trainer.world_model.dataset import build_world_model_dataset
 from trainer.world_model.eval import run_world_model_eval
 from trainer.world_model.losses import compute_world_model_losses
@@ -71,6 +81,10 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return int(default)
 
 
+def _is_oom_error(exc: Exception) -> bool:
+    return "out of memory" in str(exc).lower()
+
+
 def _seed_everything(seed: int) -> None:
     torch, _, _ = _require_torch()
     random.seed(seed)
@@ -90,20 +104,40 @@ def _mean(values: list[float]) -> float:
     return float(sum(values) / max(1, len(values)))
 
 
-def _make_dataset_class():
-    torch, _DataLoader, Dataset = _require_torch()
+class RowsDataset(TorchDataset):
+    def __init__(self, rows: list[dict[str, Any]]) -> None:
+        self.rows = list(rows)
 
-    class _RowsDataset(Dataset):
-        def __init__(self, rows: list[dict[str, Any]]) -> None:
-            self.rows = list(rows)
+    def __len__(self) -> int:
+        return len(self.rows)
 
-        def __len__(self) -> int:
-            return len(self.rows)
+    def __getitem__(self, idx: int) -> dict[str, Any]:
+        return dict(self.rows[idx])
 
-        def __getitem__(self, idx: int) -> dict[str, Any]:
-            return dict(self.rows[idx])
 
-    return _RowsDataset
+def _make_loader(
+    rows: list[dict[str, Any]],
+    *,
+    batch_size: int,
+    shuffle: bool,
+    device: Any,
+    runtime_resolved: dict[str, Any],
+):
+    torch, DataLoader, _Dataset = _require_torch()
+    dataset = RowsDataset(rows)
+    pin_memory = bool(runtime_resolved.get("pin_memory", False) and not str(device).startswith("cpu"))
+    num_workers = max(0, _safe_int(runtime_resolved.get("num_dataloader_workers"), 0))
+    prefetch_factor = max(1, _safe_int(runtime_resolved.get("prefetch_factor"), 2))
+    kwargs: dict[str, Any] = {
+        "batch_size": batch_size,
+        "shuffle": shuffle,
+        "collate_fn": functools.partial(_collate_with_device, device=device),
+        "num_workers": num_workers,
+        "pin_memory": pin_memory,
+    }
+    if num_workers > 0:
+        kwargs["prefetch_factor"] = prefetch_factor
+    return DataLoader(dataset, **kwargs)
 
 
 def _collate(items: list[dict[str, Any]], *, device: Any):
@@ -127,6 +161,10 @@ def _collate(items: list[dict[str, Any]], *, device: Any):
         "resource_delta_t": resource_delta_t,
         "latent_t1": latent_t1,
     }
+
+
+def _collate_with_device(items: list[dict[str, Any]], device: Any) -> dict[str, Any]:
+    return _collate(items, device=device)
 
 
 def _run_epoch(
@@ -222,6 +260,17 @@ def run_world_model_train(
     run_dir = out_root / chosen_run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     progress_path = run_dir / "progress.jsonl"
+    progress_unified_path = run_dir / "progress.unified.jsonl"
+    runtime_profile_payload = load_runtime_profile(config=cfg, component="p45_world_model").to_dict()
+    runtime_resolved = (
+        runtime_profile_payload.get("resolved_profile", {}).get("resolved")
+        if isinstance(runtime_profile_payload.get("resolved_profile"), dict)
+        else {}
+    )
+    learner_device = str((runtime_resolved or {}).get("learner_device") or "cpu")
+    rollout_device = str((runtime_resolved or {}).get("rollout_device") or "cpu")
+    runtime_profile_json = run_dir / "runtime_profile.json"
+    write_json(runtime_profile_json, runtime_profile_payload)
 
     model_cfg = WorldModelConfig.from_mapping(
         {
@@ -231,7 +280,11 @@ def run_world_model_train(
         }
     )
     torch, DataLoader, _Dataset = _require_torch()
-    device = torch.device("cpu")
+    try:
+        torch.set_float32_matmul_precision(str((runtime_resolved or {}).get("matmul_precision") or "high"))
+    except Exception:
+        pass
+    device = torch.device(str(learner_device or "cpu"))
     model = build_world_model(model_cfg).to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -239,12 +292,15 @@ def run_world_model_train(
         weight_decay=max(0.0, _safe_float(train_cfg.get("weight_decay"), 1e-5)),
     )
 
-    DatasetCls = _make_dataset_class()
-    batch_size = max(8, _safe_int(train_cfg.get("batch_size"), 64))
+    batch_size = max(
+        8,
+        _safe_int(
+            (runtime_resolved or {}).get("batch_size"),
+            _safe_int(train_cfg.get("batch_size"), 64),
+        ),
+    )
     if quick:
         batch_size = min(batch_size, 64)
-    train_loader = DataLoader(DatasetCls(train_rows), batch_size=batch_size, shuffle=True, collate_fn=lambda items: _collate(items, device=device))
-    val_loader = DataLoader(DatasetCls(val_rows), batch_size=batch_size, shuffle=False, collate_fn=lambda items: _collate(items, device=device))
 
     loss_weights = train_cfg.get("loss_weights") if isinstance(train_cfg.get("loss_weights"), dict) else {}
     epochs = max(1, _safe_int(train_cfg.get("epochs"), 3))
@@ -257,43 +313,116 @@ def run_world_model_train(
     best_epoch = 0
     best_val_metrics: dict[str, Any] = {}
     grad_clip_norm = max(0.0, _safe_float(train_cfg.get("grad_clip_norm"), 1.0))
+    grad_accum_steps = max(1, _safe_int((runtime_resolved or {}).get("grad_accum_steps"), 1))
+    oom_policy = str((runtime_resolved or {}).get("oom_fallback_policy") or "reduce_batch").strip().lower()
+    oom_restart_count = 0
 
     for epoch in range(1, epochs + 1):
-        model.train()
-        metric_store: dict[str, list[float]] = {}
-        for batch in train_loader:
+        epoch_batch_size = batch_size
+        epoch_started = time.time()
+        while True:
+            train_loader = _make_loader(
+                train_rows,
+                batch_size=epoch_batch_size,
+                shuffle=True,
+                device=device,
+                runtime_resolved=runtime_resolved if isinstance(runtime_resolved, dict) else {},
+            )
+            val_loader = _make_loader(
+                val_rows,
+                batch_size=epoch_batch_size,
+                shuffle=False,
+                device=device,
+                runtime_resolved=runtime_resolved if isinstance(runtime_resolved, dict) else {},
+            )
+            model.train()
+            metric_store: dict[str, list[float]] = {}
             optimizer.zero_grad(set_to_none=True)
-            outputs = model(batch["obs_t"], batch["action_id"], batch["obs_t1"])
-            losses = compute_world_model_losses(outputs=outputs, batch=batch, loss_weights=loss_weights)
-            losses["total_loss"].backward()
-            if grad_clip_norm > 0.0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
-            optimizer.step()
-            for key in (
-                "total_loss",
-                "latent_loss",
-                "reward_loss",
-                "score_loss",
-                "resource_loss",
-                "uncertainty_loss",
-                "reward_mae",
-                "score_mae",
-                "resource_mae",
-                "combined_error_mean",
-                "uncertainty_mean",
-            ):
-                metric_store.setdefault(key, []).append(_safe_float(losses[key].detach().cpu().item(), 0.0))
+            try:
+                for batch_idx, batch in enumerate(train_loader, start=1):
+                    outputs = model(batch["obs_t"], batch["action_id"], batch["obs_t1"])
+                    losses = compute_world_model_losses(outputs=outputs, batch=batch, loss_weights=loss_weights)
+                    (losses["total_loss"] / float(grad_accum_steps)).backward()
+                    should_step = (batch_idx % grad_accum_steps == 0) or (batch_idx == len(train_loader))
+                    if should_step:
+                        if grad_clip_norm > 0.0:
+                            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
+                        optimizer.step()
+                        optimizer.zero_grad(set_to_none=True)
+                    for key in (
+                        "total_loss",
+                        "latent_loss",
+                        "reward_loss",
+                        "score_loss",
+                        "resource_loss",
+                        "uncertainty_loss",
+                        "reward_mae",
+                        "score_mae",
+                        "resource_mae",
+                        "combined_error_mean",
+                        "uncertainty_mean",
+                    ):
+                        metric_store.setdefault(key, []).append(_safe_float(losses[key].detach().cpu().item(), 0.0))
+                break
+            except RuntimeError as exc:
+                if not _is_oom_error(exc):
+                    raise
+                oom_restart_count += 1
+                if hasattr(torch, "cuda") and torch.cuda.is_available():
+                    try:
+                        torch.cuda.empty_cache()
+                    except Exception:
+                        pass
+                if oom_policy == "reduce_batch" and epoch_batch_size > 8:
+                    epoch_batch_size = max(8, epoch_batch_size // 2)
+                    continue
+                raise
         train_metrics = {f"train_{key}": _mean(values) for key, values in metric_store.items()}
-        val_metrics = {f"val_{key}": value for key, value in _run_epoch(model=model, loader=val_loader, optimizer=None, device=device, loss_weights=loss_weights).items()}
+        val_metrics = {
+            f"val_{key}": value
+            for key, value in _run_epoch(
+                model=model,
+                loader=val_loader,
+                optimizer=None,
+                device=device,
+                loss_weights=loss_weights,
+            ).items()
+        }
+        samples_per_sec = float(len(train_rows) + len(val_rows)) / max(1e-6, time.time() - epoch_started)
+        gpu_mem_mb = get_gpu_mem_mb(device)
 
         epoch_payload = {
             "schema": "p45_world_model_train_progress_v1",
             "generated_at": now_iso(),
             "run_id": chosen_run_id,
             "epoch": epoch,
-            "metrics": {**train_metrics, **val_metrics},
+            "metrics": {
+                **train_metrics,
+                **val_metrics,
+                "samples_per_sec": samples_per_sec,
+                "oom_restart_count": oom_restart_count,
+                "effective_batch_size": epoch_batch_size,
+            },
+            "runtime_profile": runtime_profile_payload,
         }
         _append_jsonl(progress_path, epoch_payload)
+        append_progress_event(
+            progress_unified_path,
+            build_progress_event(
+                run_id=chosen_run_id,
+                component="p45_wm",
+                phase="train",
+                status="running",
+                step=epoch,
+                epoch_or_iter=epoch,
+                metrics=epoch_payload["metrics"],
+                device_profile=runtime_profile_payload,
+                learner_device=learner_device,
+                rollout_device=rollout_device,
+                throughput=samples_per_sec,
+                gpu_mem_mb=gpu_mem_mb,
+            ),
+        )
 
         current_metric = _safe_float(
             epoch_payload["metrics"].get(best_metric_name),
@@ -304,15 +433,16 @@ def run_world_model_train(
             model=model,
             optimizer=optimizer,
             config=model_cfg,
-            extra={
-                "epoch": epoch,
-                "config_path": str(cfg_path),
-                "dataset_manifest": str(dataset_manifest_path),
-                "dataset_summary": dataset_summary,
-                "train_metrics": train_metrics,
-                "val_metrics": val_metrics,
-            },
-        )
+                extra={
+                    "epoch": epoch,
+                    "config_path": str(cfg_path),
+                    "dataset_manifest": str(dataset_manifest_path),
+                    "dataset_summary": dataset_summary,
+                    "train_metrics": train_metrics,
+                    "val_metrics": val_metrics,
+                    "runtime_profile": runtime_profile_payload,
+                },
+            )
         if current_metric <= best_metric:
             best_metric = current_metric
             best_epoch = epoch
@@ -329,6 +459,7 @@ def run_world_model_train(
                     "dataset_summary": dataset_summary,
                     "train_metrics": train_metrics,
                     "val_metrics": val_metrics,
+                    "runtime_profile": runtime_profile_payload,
                 },
             )
 
@@ -356,6 +487,7 @@ def run_world_model_train(
             dataset_manifest_path=dataset_manifest_path,
             run_id=f"{chosen_run_id}-eval",
             quick=quick,
+            runtime_profile=runtime_profile_payload,
         )
 
     assist_summary = {}
@@ -382,6 +514,10 @@ def run_world_model_train(
         "eval_summary": eval_summary,
         "assist_summary": assist_summary,
         "best_val_metrics": best_val_metrics,
+        "runtime_profile": runtime_profile_payload,
+        "learner_device": learner_device,
+        "rollout_device": rollout_device,
+        "oom_restart_count": oom_restart_count,
     }
     manifest_payload = {
         "schema": "p45_world_model_train_manifest_v1",
@@ -399,12 +535,37 @@ def run_world_model_train(
         },
         "loss_weights_json": str(loss_weights_path.resolve()),
         "progress_jsonl": str(progress_path.resolve()),
+        "progress_unified_jsonl": str(progress_unified_path.resolve()),
+        "runtime_profile_json": str(runtime_profile_json.resolve()),
         "metrics_json": str((run_dir / "metrics.json").resolve()),
         "eval_summary": eval_summary,
         "assist_summary": assist_summary,
+        "runtime_profile": runtime_profile_payload,
     }
     write_json(run_dir / "metrics.json", metrics_payload)
     write_json(run_dir / "train_manifest.json", manifest_payload)
+    append_progress_event(
+        progress_unified_path,
+        build_progress_event(
+            run_id=chosen_run_id,
+            component="p45_wm",
+            phase="train",
+            status="completed",
+            step=epochs,
+            epoch_or_iter=best_epoch,
+            metrics={
+                "best_metric": best_metric,
+                "best_epoch": best_epoch,
+                "train_samples": len(train_rows),
+                "val_samples": len(val_rows),
+                "oom_restart_count": oom_restart_count,
+            },
+            device_profile=runtime_profile_payload,
+            learner_device=learner_device,
+            rollout_device=rollout_device,
+            gpu_mem_mb=get_gpu_mem_mb(device),
+        ),
+    )
 
     return {
         "status": "ok",
@@ -413,6 +574,8 @@ def run_world_model_train(
         "train_manifest_json": str(run_dir / "train_manifest.json"),
         "metrics_json": str(run_dir / "metrics.json"),
         "progress_jsonl": str(progress_path),
+        "progress_unified_jsonl": str(progress_unified_path),
+        "runtime_profile_json": str(runtime_profile_json),
         "best_checkpoint": best_checkpoint_path,
         "eval_summary": eval_summary,
         "assist_summary": assist_summary,

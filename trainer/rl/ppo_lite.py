@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import statistics
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -20,12 +21,15 @@ except Exception:  # pragma: no cover
     yaml = None
 
 from trainer.closed_loop.replay_manifest import build_seeds_payload
+from trainer.monitoring.progress_schema import append_progress_event as append_unified_progress_event
+from trainer.monitoring.progress_schema import build_progress_event, get_gpu_mem_mb
 from trainer.rl.checkpointing import save_torch_checkpoint, write_manifest
 from trainer.rl.curriculum_rl import load_curriculum_scheduler
 from trainer.rl.diagnostics import run_diagnostics
 from trainer.rl.distributed_rollout import run_distributed_rollout
 from trainer.rl.eval_multi_seed import run_multi_seed_evaluation
 from trainer.rl.ppo_config import PPOConfig
+from trainer.runtime.runtime_profile import load_runtime_profile
 
 
 def _now_iso() -> str:
@@ -101,6 +105,24 @@ def _require_torch():
     except Exception as exc:  # pragma: no cover - runtime guarded
         raise RuntimeError("PyTorch is required for trainer.rl.ppo_lite") from exc
     return torch, F, Categorical
+
+
+def _is_oom_error(exc: Exception) -> bool:
+    return "out of memory" in str(exc).lower()
+
+
+def _component_name_for_schema(schema: str) -> str:
+    token = str(schema or "").strip().lower()
+    if token.startswith("p42_"):
+        return "p42_rl"
+    return "p44_rl"
+
+
+def _resolved_runtime_devices(runtime_profile: dict[str, Any]) -> tuple[str, str]:
+    resolved = runtime_profile.get("resolved") if isinstance(runtime_profile.get("resolved"), dict) else {}
+    learner_device = str(resolved.get("learner_device") or resolved.get("device") or "cpu")
+    rollout_device = str(resolved.get("rollout_device") or "cpu")
+    return learner_device, rollout_device
 
 
 def _cpu_model_snapshot(model: Any) -> dict[str, Any]:
@@ -298,16 +320,23 @@ def _train_one_seed(
     scheduler: Any,
     run_dir: Path,
     progress_path: Path,
+    unified_progress_path: Path,
     warnings_log_path: Path,
     curriculum_applied_path: Path,
+    runtime_profile: dict[str, Any],
 ) -> dict[str, Any]:
     torch, _, _ = _require_torch()
     from trainer.rl.policy_value_model import PolicyValueModel
 
     seed_int = int(hashlib.sha256(str(seed).encode("utf-8")).hexdigest()[:8], 16)
     torch.manual_seed(seed_int)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    learner_device, rollout_device = _resolved_runtime_devices(runtime_profile)
+    resolved_runtime = runtime_profile.get("resolved") if isinstance(runtime_profile.get("resolved"), dict) else {}
+    try:
+        torch.set_float32_matmul_precision(str(resolved_runtime.get("matmul_precision") or "high"))
+    except Exception:
+        pass
+    device = torch.device(str(learner_device or "cpu"))
     obs_dim, action_dim = _resolve_env_dimensions(cfg)
     model = PolicyValueModel(obs_dim=obs_dim, action_dim=action_dim).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=float(cfg.train.lr))
@@ -330,10 +359,26 @@ def _train_one_seed(
     best_reward = -1e18
     status = "ok"
     warnings: list[str] = []
+    learner_updates_per_sec_hist: list[float] = []
+    rollout_steps_per_sec_hist: list[float] = []
+    buffer_backlog_hist: list[float] = []
+    gpu_mem_hist: list[float] = []
+    weight_sync_count = 0
+    oom_restart_count = 0
+    component_name = _component_name_for_schema(cfg.schema)
 
     for update_idx in range(1, int(cfg.train.max_updates) + 1):
         applied_cfg_dict, stage_payload = scheduler.apply_to_config(cfg_raw, training_iteration=update_idx)
         applied_cfg = PPOConfig.from_mapping(applied_cfg_dict)
+        resolved_batch = max(
+            8,
+            _safe_int(
+                resolved_runtime.get("micro_batch_size")
+                or resolved_runtime.get("batch_size"),
+                int(applied_cfg.train.minibatch_size),
+            ),
+        )
+        applied_cfg.train.minibatch_size = int(resolved_batch)
         _append_jsonl(
             curriculum_applied_path,
             {
@@ -345,6 +390,7 @@ def _train_one_seed(
         )
 
         distributed_seeds = list(applied_cfg.distributed.seeds) if applied_cfg.distributed.seeds else [str(seed)]
+        update_started = time.time()
         rollout_summary = run_distributed_rollout(
             policy_snapshot=_cpu_model_snapshot(model),
             policy_id="ppo_lite",
@@ -364,6 +410,9 @@ def _train_one_seed(
                 "max_ante": int(applied_cfg.env.max_ante),
                 "auto_advance": bool(applied_cfg.env.auto_advance),
             },
+            rollout_device=rollout_device,
+            runtime_profile=runtime_profile,
+            progress_path=unified_progress_path,
             include_steps_in_result=True,
         )
         rollout_buffers.append(str(rollout_summary.get("rollout_buffer_jsonl") or ""))
@@ -374,13 +423,39 @@ def _train_one_seed(
             warnings.append(f"update_{update_idx}:empty_rollout_steps")
             break
 
-        update_status, update_metrics = _ppo_update_from_steps(
-            model=model,
-            optimizer=optimizer,
-            steps=steps,
-            cfg=applied_cfg,
-            device=device,
-        )
+        oom_policy = str(resolved_runtime.get("oom_fallback_policy") or "reduce_batch").strip().lower()
+        attempt_cfg = applied_cfg
+        active_minibatch = max(8, int(attempt_cfg.train.minibatch_size))
+        while True:
+            attempt_cfg.train.minibatch_size = int(active_minibatch)
+            try:
+                update_status, update_metrics = _ppo_update_from_steps(
+                    model=model,
+                    optimizer=optimizer,
+                    steps=steps,
+                    cfg=attempt_cfg,
+                    device=device,
+                )
+                break
+            except RuntimeError as exc:
+                if not _is_oom_error(exc):
+                    raise
+                oom_restart_count += 1
+                warnings.append(f"update_{update_idx}:oom:minibatch={active_minibatch}")
+                if hasattr(torch, "cuda") and torch.cuda.is_available():
+                    try:
+                        torch.cuda.empty_cache()
+                    except Exception:
+                        pass
+                if oom_policy == "reduce_batch" and active_minibatch > 8:
+                    active_minibatch = max(8, active_minibatch // 2)
+                    continue
+                if oom_policy == "cpu_fallback" and str(device).startswith("cuda"):
+                    device = torch.device("cpu")
+                    learner_device = "cpu"
+                    model = model.to(device)
+                    continue
+                raise
         if update_status != "ok":
             status = update_status
             warnings.append(
@@ -393,6 +468,14 @@ def _train_one_seed(
         mean_reward = float(statistics.mean(reward_values)) if reward_values else 0.0
         mean_score = _safe_float(rollout_stats_payload.get("mean_score"), mean_reward)
         invalid_rate = _safe_float(rollout_summary.get("invalid_action_rate"), 0.0)
+        rollout_steps_per_sec = _safe_float(rollout_summary.get("rollout_steps_per_sec"), 0.0)
+        learner_elapsed = max(1e-6, time.time() - update_started)
+        learner_updates_per_sec = 1.0 / learner_elapsed
+        backlog_steps = max(
+            0.0,
+            float(int(rollout_summary.get("step_count") or 0) - int(attempt_cfg.train.minibatch_size)),
+        )
+        gpu_mem_mb = get_gpu_mem_mb(device)
 
         rewards_hist.append(mean_reward)
         scores_hist.append(mean_score)
@@ -401,6 +484,12 @@ def _train_one_seed(
         value_loss_hist.append(_safe_float(update_metrics.get("value_loss"), 0.0))
         entropy_hist.append(_safe_float(update_metrics.get("entropy"), 0.0))
         kl_hist.append(_safe_float(update_metrics.get("kl_divergence"), 0.0))
+        rollout_steps_per_sec_hist.append(rollout_steps_per_sec)
+        learner_updates_per_sec_hist.append(learner_updates_per_sec)
+        buffer_backlog_hist.append(backlog_steps)
+        weight_sync_count += 1
+        if gpu_mem_mb is not None:
+            gpu_mem_hist.append(float(gpu_mem_mb))
 
         if invalid_rate > float(cfg.train.invalid_action_warn_threshold):
             warnings.append(
@@ -436,7 +525,13 @@ def _train_one_seed(
                 "value_loss": _safe_float(update_metrics.get("value_loss"), 0.0),
                 "entropy": _safe_float(update_metrics.get("entropy"), 0.0),
                 "kl_divergence": _safe_float(update_metrics.get("kl_divergence"), 0.0),
+                "rollout_steps_per_sec": rollout_steps_per_sec,
+                "learner_updates_per_sec": learner_updates_per_sec,
+                "buffer_backlog_steps": backlog_steps,
+                "weight_sync_count": weight_sync_count,
+                "oom_restart_count": oom_restart_count,
             },
+            "runtime_profile": runtime_profile,
         }
         save_torch_checkpoint(last_ckpt, checkpoint_payload)
         if mean_reward >= best_reward:
@@ -464,7 +559,48 @@ def _train_one_seed(
                 "invalid_action_rate": invalid_rate,
                 "rollout_steps": int(rollout_summary.get("step_count") or 0),
                 "rollout_dir": str(rollout_summary.get("run_dir") or ""),
+                "rollout_steps_per_sec": rollout_steps_per_sec,
+                "learner_updates_per_sec": learner_updates_per_sec,
+                "buffer_backlog_steps": backlog_steps,
+                "weight_sync_count": weight_sync_count,
+                "oom_restart_count": oom_restart_count,
+                "learner_device": learner_device,
+                "rollout_device": rollout_device,
+                "gpu_mem_mb": gpu_mem_mb,
             },
+        )
+        append_unified_progress_event(
+            unified_progress_path,
+            build_progress_event(
+                run_id=run_dir.name,
+                component=component_name,
+                phase="train",
+                status=status,
+                step=update_idx,
+                epoch_or_iter=update_idx,
+                seed=str(seed),
+                metrics={
+                    "mean_reward": mean_reward,
+                    "mean_score": mean_score,
+                    "policy_loss": _safe_float(update_metrics.get("policy_loss"), 0.0),
+                    "value_loss": _safe_float(update_metrics.get("value_loss"), 0.0),
+                    "entropy": _safe_float(update_metrics.get("entropy"), 0.0),
+                    "kl_divergence": _safe_float(update_metrics.get("kl_divergence"), 0.0),
+                    "invalid_action_rate": invalid_rate,
+                    "rollout_steps": int(rollout_summary.get("step_count") or 0),
+                    "rollout_steps_per_sec": rollout_steps_per_sec,
+                    "learner_updates_per_sec": learner_updates_per_sec,
+                    "buffer_backlog_steps": backlog_steps,
+                    "weight_sync_count": weight_sync_count,
+                    "oom_restart_count": oom_restart_count,
+                },
+                device_profile=runtime_profile,
+                learner_device=learner_device,
+                rollout_device=rollout_device,
+                throughput=rollout_steps_per_sec,
+                gpu_mem_mb=gpu_mem_mb,
+                warning=(warnings[-1] if warnings else ""),
+            ),
         )
 
     if warnings:
@@ -485,8 +621,15 @@ def _train_one_seed(
         "value_loss": float(statistics.mean(value_loss_hist)) if value_loss_hist else 0.0,
         "entropy": float(statistics.mean(entropy_hist)) if entropy_hist else 0.0,
         "kl_divergence": float(statistics.mean(kl_hist)) if kl_hist else 0.0,
+        "rollout_steps_per_sec": float(statistics.mean(rollout_steps_per_sec_hist)) if rollout_steps_per_sec_hist else 0.0,
+        "learner_updates_per_sec": float(statistics.mean(learner_updates_per_sec_hist)) if learner_updates_per_sec_hist else 0.0,
+        "buffer_backlog_steps": float(statistics.mean(buffer_backlog_hist)) if buffer_backlog_hist else 0.0,
+        "weight_sync_count": int(weight_sync_count),
+        "oom_restart_count": int(oom_restart_count),
+        "gpu_mem_mb": float(statistics.mean(gpu_mem_hist)) if gpu_mem_hist else None,
         "best_checkpoint": str(best_ckpt if best_ckpt.exists() else ""),
         "last_checkpoint": str(last_ckpt if last_ckpt.exists() else ""),
+        "runtime_profile": runtime_profile,
     }
     _write_json(seed_dir / "metrics.json", metrics)
     return {
@@ -498,6 +641,7 @@ def _train_one_seed(
         "last_checkpoint": str(last_ckpt if last_ckpt.exists() else ""),
         "rollout_buffers": rollout_buffers,
         "rollout_manifests": rollout_manifests,
+        "runtime_profile": runtime_profile,
     }
 
 
@@ -554,11 +698,22 @@ def run_ppo_lite_training(
     run_token = str(run_id or cfg.run_id or _now_stamp())
     run_dir = _resolve_path(repo_root, out_dir) if out_dir else (_resolve_path(repo_root, cfg.output_artifacts_root) / run_token)
     run_dir.mkdir(parents=True, exist_ok=True)
+    runtime_profile_payload = load_runtime_profile(config=cfg_raw, component=_component_name_for_schema(cfg.schema)).to_dict()
+    runtime_resolved = (
+        runtime_profile_payload.get("resolved_profile", {}).get("resolved")
+        if isinstance(runtime_profile_payload.get("resolved_profile"), dict)
+        else {}
+    )
+    learner_device = str((runtime_resolved or {}).get("learner_device") or "cpu")
+    rollout_device = str((runtime_resolved or {}).get("rollout_device") or "cpu")
+    runtime_profile_json = run_dir / "runtime_profile.json"
+    _write_json(runtime_profile_json, runtime_profile_payload)
 
     seeds_payload = build_seeds_payload(seeds, seed_policy_version="p44.rl_ppo_lite")
     _write_json(run_dir / "seeds_used.json", seeds_payload)
     _write_json(run_dir / "reward_config.json", cfg.env.reward if isinstance(cfg.env.reward, dict) else {})
     progress_path = run_dir / "progress.jsonl"
+    unified_progress_path = run_dir / "progress.unified.jsonl"
     warnings_log_path = run_dir / "warnings.log"
 
     scheduler = load_curriculum_scheduler(config_path=cfg.curriculum_config or None)
@@ -580,6 +735,7 @@ def run_ppo_lite_training(
             "status": "dry_run",
             "run_dir": str(run_dir),
             "config": cfg.to_dict(),
+            "runtime_profile": runtime_profile_payload,
             "curriculum_plan": curriculum_plan,
             "seed_results": [],
             "best_checkpoint": "",
@@ -594,9 +750,23 @@ def run_ppo_lite_training(
                 "status": "dry_run",
                 "seed_count": len(seeds),
                 "ok_seed_count": 0,
+                "learner_device": learner_device,
+                "rollout_device": rollout_device,
             },
         )
         (run_dir / "best_checkpoint.txt").write_text("\n", encoding="utf-8")
+        append_unified_progress_event(
+            unified_progress_path,
+            build_progress_event(
+                run_id=run_token,
+                component=_component_name_for_schema(cfg.schema),
+                phase="train",
+                status="dry_run",
+                device_profile=runtime_profile_payload,
+                learner_device=learner_device,
+                rollout_device=rollout_device,
+            ),
+        )
         return {
             "status": "dry_run",
             "run_id": run_token,
@@ -609,6 +779,8 @@ def run_ppo_lite_training(
             "warnings_log": str(warnings_log_path),
             "curriculum_plan": str(curriculum_plan_path),
             "curriculum_applied": str(curriculum_applied_path),
+            "runtime_profile_json": str(runtime_profile_json),
+            "progress_unified_jsonl": str(unified_progress_path),
         }
 
     try:
@@ -639,6 +811,7 @@ def run_ppo_lite_training(
             "seed_results": [],
             "best_checkpoint": str(stub_checkpoint),
             "reason": "torch_missing",
+            "runtime_profile": runtime_profile_payload,
         }
         write_manifest(run_dir / "train_manifest.json", manifest)
         _write_json(
@@ -652,9 +825,24 @@ def run_ppo_lite_training(
                 "ok_seed_count": 0,
                 "reason": "torch_missing",
                 "candidate_checkpoint": str(stub_checkpoint),
+                "learner_device": learner_device,
+                "rollout_device": rollout_device,
             },
         )
         (run_dir / "best_checkpoint.txt").write_text(str(stub_checkpoint) + "\n", encoding="utf-8")
+        append_unified_progress_event(
+            unified_progress_path,
+            build_progress_event(
+                run_id=run_token,
+                component=_component_name_for_schema(cfg.schema),
+                phase="train",
+                status="stub",
+                warning="torch_missing",
+                device_profile=runtime_profile_payload,
+                learner_device=learner_device,
+                rollout_device=rollout_device,
+            ),
+        )
         return {
             "status": "stub",
             "run_id": run_token,
@@ -667,6 +855,8 @@ def run_ppo_lite_training(
             "warnings_log": str(warnings_log_path),
             "curriculum_plan": str(curriculum_plan_path),
             "curriculum_applied": str(curriculum_applied_path),
+            "runtime_profile_json": str(runtime_profile_json),
+            "progress_unified_jsonl": str(unified_progress_path),
         }
 
     seed_results: list[dict[str, Any]] = []
@@ -680,8 +870,10 @@ def run_ppo_lite_training(
             scheduler=scheduler,
             run_dir=run_dir,
             progress_path=progress_path,
+            unified_progress_path=unified_progress_path,
             warnings_log_path=warnings_log_path,
             curriculum_applied_path=curriculum_applied_path,
+            runtime_profile=runtime_profile_payload,
         )
         seed_results.append(seed_result)
 
@@ -817,10 +1009,36 @@ def run_ppo_lite_training(
         "best_checkpoint": best_checkpoint,
         "multi_seed_eval": eval_summary,
         "diagnostics": diagnostics_summary,
+        "runtime_profile": runtime_profile_payload,
     }
     _write_json(run_dir / "metrics.json", metrics_payload)
     write_manifest(run_dir / "train_manifest.json", manifest)
     (run_dir / "best_checkpoint.txt").write_text(str(best_checkpoint).strip() + "\n", encoding="utf-8")
+    append_unified_progress_event(
+        unified_progress_path,
+        build_progress_event(
+            run_id=run_token,
+            component=_component_name_for_schema(cfg.schema),
+            phase="train",
+            status=status,
+            step=len(seed_results),
+            epoch_or_iter=len(seed_results),
+            metrics={
+                "mean_reward": metrics_payload.get("mean_reward"),
+                "mean_score": metrics_payload.get("mean_score"),
+                "policy_loss": metrics_payload.get("policy_loss"),
+                "value_loss": metrics_payload.get("value_loss"),
+                "entropy": metrics_payload.get("entropy"),
+                "kl_divergence": metrics_payload.get("kl_divergence"),
+                "invalid_action_rate": metrics_payload.get("invalid_action_rate"),
+                "candidate_checkpoint": best_checkpoint,
+            },
+            device_profile=runtime_profile_payload,
+            learner_device=learner_device,
+            rollout_device=rollout_device,
+            gpu_mem_mb=get_gpu_mem_mb(learner_device),
+        ),
+    )
 
     return {
         "status": status,
@@ -838,6 +1056,8 @@ def run_ppo_lite_training(
         "diagnostics_json": str(diagnostics_summary.get("diagnostics_json") or ""),
         "diagnostics_report_md": str(diagnostics_summary.get("diagnostics_report_md") or ""),
         "seed_results": seed_results,
+        "runtime_profile_json": str(runtime_profile_json),
+        "progress_unified_jsonl": str(unified_progress_path),
     }
 
 

@@ -29,6 +29,8 @@ from trainer.closed_loop.replay_manifest import (
 )
 from trainer.common.slices import compute_slice_labels
 from trainer.features_shop import SHOP_CONTEXT_DIM
+from trainer.monitoring.progress_schema import append_progress_event, build_progress_event, get_gpu_mem_mb
+from trainer.runtime.runtime_profile import load_runtime_profile
 from trainer.world_model.imagination_schema import (
     IMAGINED_SOURCE_TYPE,
     apply_imagination_metadata,
@@ -354,10 +356,11 @@ def _rollout_step(
     obs_vector: list[float],
     action_id: int,
     horizon: int,
+    device: Any,
 ) -> list[dict[str, Any]]:
     torch = _require_torch()
-    obs_t = torch.tensor([list(obs_vector)], dtype=torch.float32)
-    action_tensor = torch.tensor([int(action_id)], dtype=torch.long)
+    obs_t = torch.tensor([list(obs_vector)], dtype=torch.float32, device=device)
+    action_tensor = torch.tensor([int(action_id)], dtype=torch.long, device=device)
 
     with torch.no_grad():
         z_curr = model.encode(obs_t)
@@ -457,8 +460,6 @@ def run_imagination_rollout(
     checkpoint_path = _resolve_checkpoint(repo_root, cfg)
     if not checkpoint_path or not Path(checkpoint_path).exists():
         raise FileNotFoundError("world model checkpoint unavailable for imagination rollout")
-
-    model, model_cfg, _payload = load_world_model_from_checkpoint(checkpoint_path, device="cpu")
     horizon = max(1, _safe_int(imag_cfg.get("horizon"), 1))
     if quick:
         horizon = min(horizon, 2)
@@ -486,6 +487,18 @@ def run_imagination_rollout(
     rollouts_path = run_dir / "imagined_rollouts.jsonl"
     if rollouts_path.exists():
         rollouts_path.unlink()
+    runtime_profile_payload = load_runtime_profile(config=cfg, component="p46_imagination_rollout").to_dict()
+    runtime_resolved = (
+        runtime_profile_payload.get("resolved_profile", {}).get("resolved")
+        if isinstance(runtime_profile_payload.get("resolved_profile"), dict)
+        else {}
+    )
+    learner_device = str((runtime_resolved or {}).get("learner_device") or "cpu")
+    rollout_device = str((runtime_resolved or {}).get("rollout_device") or "cpu")
+    runtime_profile_json = run_dir / "runtime_profile.json"
+    progress_unified_path = run_dir / "progress.unified.jsonl"
+    write_json(runtime_profile_json, runtime_profile_payload)
+    model, model_cfg, _payload = load_world_model_from_checkpoint(checkpoint_path, device=learner_device)
 
     root_files = _resolve_root_files(repo_root, cfg, quick=quick)
     seeds = [str(seed).strip() for seed in (seeds_override or imag_cfg.get("seeds") or []) if str(seed).strip()]
@@ -526,6 +539,7 @@ def run_imagination_rollout(
                     obs_vector=obs_vector,
                     action_id=int(action_row.get("world_model_action_id") or 0),
                     horizon=horizon,
+                    device=learner_device,
                 ):
                     if len(imagined_rows) >= max_samples:
                         break
@@ -595,6 +609,10 @@ def run_imagination_rollout(
         "run_id": chosen_run_id,
         "status": "ok" if total_samples > 0 else "stub",
         "world_model_checkpoint": checkpoint_path,
+        "runtime_profile": runtime_profile_payload,
+        "learner_device": learner_device,
+        "rollout_device": rollout_device,
+        "gpu_mem_mb": get_gpu_mem_mb(learner_device),
         "root_file_count": len(root_files),
         "root_files": [str(path) for path, _source_type in root_files],
         "total_roots": int(total_roots),
@@ -632,12 +650,38 @@ def run_imagination_rollout(
         "max_training_horizon": 1,
         "source_type": IMAGINED_SOURCE_TYPE,
         "generation_method": "world_model_imagination",
+        "runtime_profile_json": str(runtime_profile_json),
+        "progress_unified_jsonl": str(progress_unified_path),
     }
     write_json(run_dir / "imagined_manifest.json", manifest)
     write_json(run_dir / "imagined_stats.json", stats)
     write_markdown(run_dir / "imagined_stats.md", _stats_markdown(stats))
     write_json(run_dir / "schema_preview.json", imagined_rows[:5])
     write_markdown(run_dir / "schema_preview.md", imagination_schema_markdown())
+    append_progress_event(
+        progress_unified_path,
+        build_progress_event(
+            run_id=chosen_run_id,
+            component="p46_imagination",
+            phase="rollout",
+            status=str(stats.get("status") or "stub"),
+            step=int(total_samples),
+            epoch_or_iter=int(total_roots),
+            metrics={
+                "accepted_samples": int(accepted_samples),
+                "total_imagined_samples": int(total_samples),
+                "acceptance_rate": float(stats.get("acceptance_rate") or 0.0),
+                "mean_uncertainty": float(stats.get("mean_uncertainty") or 0.0),
+                "mean_reward_pred": float(stats.get("mean_reward_pred") or 0.0),
+            },
+            device_profile=runtime_profile_payload,
+            learner_device=learner_device,
+            rollout_device=rollout_device,
+            throughput=float(total_samples) / max(1.0, float(total_roots or 1)),
+            gpu_mem_mb=get_gpu_mem_mb(learner_device),
+            warning=(";".join(warnings[:3]) if warnings else ""),
+        ),
+    )
 
     return {
         "status": str(stats.get("status") or "stub"),
@@ -651,6 +695,8 @@ def run_imagination_rollout(
         "accepted_samples": int(accepted_samples),
         "total_imagined_samples": int(total_samples),
         "acceptance_rate": float(stats.get("acceptance_rate") or 0.0),
+        "runtime_profile_json": str(runtime_profile_json),
+        "progress_unified_jsonl": str(progress_unified_path),
     }
 
 
