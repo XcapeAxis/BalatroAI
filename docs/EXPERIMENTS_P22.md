@@ -28,13 +28,14 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | Scenario | Command | Notes |
 |---|---|---|
 | Plan only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -DryRun` | validates matrix + writes plan/report |
-| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | 14 experiments x 2 seeds (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row + P40 closed-loop smoke row + P41 closed-loop v2 smoke row + P42 RL candidate smoke row + P45 world-model smoke row) |
+| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | mainline smoke set with multi-seed materialization (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row + P40/P41/P42 + P45 world-model smoke row + P46 imagination smoke row) |
 | Fast smoke + legacy probe | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -IncludeLegacy` | adds opt-in legacy BC/DAgger probe row(s) |
 | Legacy only quick | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -LegacyOnly` | runs only legacy baseline probe row(s) |
 | Multi-seed quick compare | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline,quick_candidate -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | 2 strategies x 3 seeds |
 | Fast smoke (verbose) | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -VerboseLogs` | adds per-seed/per-stage console logs |
 | Nightly style | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Nightly -Resume` | larger seed set + resume |
 | P45 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP45` | runs `p45_world_model_smoke` with orchestrator defaults |
+| P46 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP46` | runs `p46_imagination_smoke` with orchestrator defaults |
 | Single experiment | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline -Resume` | rerun one exp id |
 | Limit seeds | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -SeedLimit 2` | local-cost control |
 | Custom seeds | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | explicit reproducibility override (recorded to artifacts) |
@@ -64,7 +65,7 @@ Key sections:
   - `category` (`mainline`, `legacy_baseline`, `required_validation`, ...)
   - `default_enabled` (`false` rows are excluded unless explicitly requested)
   - `backend`, `policy`
-  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`, `selfsup_future_value`, `selfsup_action_type`, `ssl_pretrain`, `ssl_probe`, `rl_selfplay`, `policy_arena`, `closed_loop_improvement`, `closed_loop_improvement_v2`, `closed_loop_rl_candidate`, `world_model_train`, `world_model_eval`, `world_model_assist_compare`)
+  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`, `selfsup_future_value`, `selfsup_action_type`, `ssl_pretrain`, `ssl_probe`, `rl_selfplay`, `policy_arena`, `closed_loop_improvement`, `closed_loop_improvement_v2`, `closed_loop_rl_candidate`, `world_model_train`, `world_model_eval`, `world_model_assist_compare`, `imagination_augmented_candidate`, `p46_imagination`)
   - `seed_mode` (`regression_fixed` or `nightly`)
   - `seeds` (optional explicit seed override list)
   - `gate_flag` (passed to `scripts/run_regressions.ps1`)
@@ -415,6 +416,44 @@ Operational notes:
 - multi-seed materialization remains mandatory (`seeds_used.json` per experiment).
 - P45 remains research-grade: the arena compare uses the world model as a one-step heuristic, not as a simulator replacement.
 
+## P46 Imagination / Dyna-style Integration
+
+P46 introduces `experiment_type: imagination_augmented_candidate` so P22 can orchestrate world-model bootstrap/checkpoint lookup -> imagination rollout -> replay mixing -> candidate ablation -> arena compare -> triage in one experiment row.
+
+Reference rows in `configs/experiments/p22.yaml`:
+
+- `p46_imagination_smoke` (quick/gate)
+- `p46_imagination_nightly` (nightly)
+
+Key eval fields:
+
+- `config`: imagination config path (`configs/experiments/p46_imagination_smoke.yaml` / `...nightly.yaml`)
+- `quick`: reduced-budget mode for local smoke
+- recipe coverage for `real_only`, `real_plus_imagined`, and `real_plus_imagined_filtered`
+- world-model bootstrap/checkpoint reuse policy
+
+Generated artifacts:
+
+- `docs/artifacts/p22/runs/<run_id>/p46_summary.json`
+- `docs/artifacts/p22/runs/<run_id>/p46_imagination_smoke/imagination_runs/seed_*/pipeline_summary.json`
+- referenced rollout outputs under `docs/artifacts/p46/imagination_rollouts/<run_id>/`
+- referenced arena/triage outputs under `docs/artifacts/p46/{arena_compare,triage}/<run_id>/`
+
+Summary-table metrics surfaced by orchestrator:
+
+- `p46_real_only_score`
+- `p46_filtered_score`
+- `p46_filtered_delta_vs_real_only`
+- `p46_imagined_acceptance_rate`
+- `p46_imagined_sample_count`
+
+Operational notes:
+
+- `scripts/run_p22.ps1 -Quick` includes `p46_imagination_smoke` by default.
+- `scripts/run_p22.ps1 -RunP46` selects `p46_imagination_smoke` or `p46_imagination_nightly`.
+- multi-seed materialization remains mandatory (`seeds_used.json` per experiment).
+- P46 keeps imagined replay auxiliary: short horizon, uncertainty-gated, and fraction-capped.
+
 ## Runtime Observability (During Execution)
 
 P22 emits both per-experiment and run-level observability artifacts:
@@ -557,3 +596,4 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_selfsup
 - [P42_RL_CANDIDATE_PIPELINE.md](P42_RL_CANDIDATE_PIPELINE.md)
 - [P44_DISTRIBUTED_RL.md](P44_DISTRIBUTED_RL.md)
 - [P45_WORLD_MODEL.md](P45_WORLD_MODEL.md)
+- [P46_IMAGINATION_LOOP.md](P46_IMAGINATION_LOOP.md)

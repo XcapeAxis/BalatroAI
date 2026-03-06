@@ -17,7 +17,7 @@ Goals:
 - adapters:
   - `trainer/policy_arena/adapters/heuristic_adapter.py`
   - `trainer/policy_arena/adapters/search_adapter.py`
-  - `trainer/policy_arena/adapters/model_adapter.py` (`status=stub` when checkpoint is unavailable)
+  - `trainer/policy_arena/adapters/model_adapter.py` (loads BC-style checkpoints when available; falls back to heuristic when unavailable)
   - `trainer/policy_arena/adapters/hybrid_adapter.py`
   - `trainer/policy_arena/adapters/world_model_assist_adapter.py`
 - arena execution:
@@ -113,6 +113,12 @@ World-model-assisted compare (P45 hook):
 python -m trainer.policy_arena.arena_runner --policies "heuristic_baseline,heuristic_wm_assist" --world-model-checkpoint docs/artifacts/p45/wm_train/<run_id>/best.pt --world-model-assist-mode one_step_heuristic --world-model-weight 0.35 --world-model-uncertainty-penalty 0.5 --seeds "AAAAAAA,BBBBBBB" --episodes-per-seed 1 --max-steps 120
 ```
 
+P46 imagination ablation compare:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_p22.ps1 -RunP46
+```
+
 ## World Model Assist (P45)
 
 P45 adds an optional arena adapter that reranks legal actions with a one-step world-model score while keeping the simulator as the execution authority.
@@ -137,6 +143,8 @@ Behavior:
 - world-model score is uncertainty-penalized before reranking
 - missing or invalid checkpoints degrade to heuristic baseline with `status=stub`
 - run manifest records checkpoint path and assist parameters under `config` / `adapters`
+
+P46 also reuses the arena for candidate-vs-candidate ablations by supplying a `policy_model_map.json` so names like `candidate_real_only` and `candidate_real_plus_imagined_filtered` behave like normal arena policies.
 
 ## Artifacts
 
@@ -181,3 +189,8 @@ P45 planning-hook dependency:
 
 - `heuristic_wm_assist` is treated as a normal arena candidate, so champion rules and bucket metrics operate unchanged.
 - P45 assist compare runs store the resulting arena summary path in `assist_compare_summary.json`.
+
+P46 imagination dependency:
+
+- P46 combined arena compare writes results under `docs/artifacts/p46/arena_compare/<run_id>/`.
+- champion rules and slice metrics remain unchanged because imagined augmentation is evaluated through the same real simulator episodes.

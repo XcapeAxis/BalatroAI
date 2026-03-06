@@ -9,7 +9,7 @@
 [![Seed Governance](https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16)](configs/experiments/seeds_p23.yaml)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Trend Warehouse](https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16)](docs/TREND_WAREHOUSE_P26.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P45-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P46-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -19,7 +19,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/XcapeAxis/BalatroAI)](https://github.com/XcapeAxis/BalatroAI/issues)
 <!-- BADGES:END -->
 
-BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, a unified action replay contract, and a P45 world-model / latent-planning research lane. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised/world-model iteration, not as a cheat injector or memory-hook tool.
+BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, a unified action replay contract, P45 world-model / latent-planning, and P46 short-horizon imagination augmentation. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised/world-model iteration, not as a cheat injector or memory-hook tool.
 
 Badge/status refresh source:
 
@@ -186,6 +186,13 @@ python -m trainer.world_model.train --config configs/experiments/p45_world_model
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP45
 ```
 
+Optional P46 imagination smoke:
+
+```powershell
+python -m trainer.world_model.imagination_rollout --config configs/experiments/p46_imagination_smoke.yaml --quick
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP46
+```
+
 8. Inspect generated artifacts.
 
 - `docs/artifacts/p22/runs/<run_id>/summary_table.md`
@@ -193,6 +200,7 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP45
 - `docs/artifacts/p22/runs/<run_id>/<exp_id>/{run_manifest.json,progress.jsonl,seeds_used.json}`
 - `docs/artifacts/p40/closed_loop_runs/<run_id>/{run_manifest.json,promotion_decision.json,summary_table.md}`
 - `docs/artifacts/p45/{wm_dataset,wm_train,wm_eval,wm_assist_compare}/<run_id>/`
+- `docs/artifacts/p46/{imagination_rollouts,imagination_pipeline,arena_compare,triage}/<run_id>/`
 - optional live snapshot view: `powershell -ExecutionPolicy Bypass -File scripts\show_p22_live.ps1`
 
 9. Cleanup runtime files when finished.
@@ -209,13 +217,14 @@ Expected console excerpt (trimmed):
 [P22] Experiment 5/14: quick_selfsup_future_value (seeds 2, mode=gate)
 [P22] Experiment 7/14: quick_ssl_pretrain_v1 (seeds 2, mode=gate)
 [P22] Experiment 8/14: quick_ssl_probe_v1 (seeds 2, mode=gate)
-[P22] Experiment 9/14: rl_ppo_smoke (seeds 2, mode=gate)
-[P22] Experiment 10/14: p39_policy_arena_smoke (seeds 2, mode=gate)
-[P22] Experiment 11/14: p40_closed_loop_smoke (seeds 2, mode=gate)
-[P22] Experiment 12/14: p41_closed_loop_v2_smoke (seeds 2, mode=gate)
-[P22] Experiment 13/14: p42_rl_candidate_smoke (seeds 2, mode=gate)
-[P22] Experiment 14/14: p45_world_model_smoke (seeds 2, mode=gate)
-[P22] Completed 14/14: p45_world_model_smoke status=passed | avg_ante=... win_rate=... illegal=...
+[P22] Experiment 9/15: rl_ppo_smoke (seeds 2, mode=gate)
+[P22] Experiment 10/15: p39_policy_arena_smoke (seeds 2, mode=gate)
+[P22] Experiment 11/15: p40_closed_loop_smoke (seeds 2, mode=gate)
+[P22] Experiment 12/15: p41_closed_loop_v2_smoke (seeds 2, mode=gate)
+[P22] Experiment 13/15: p42_rl_candidate_smoke (seeds 2, mode=gate)
+[P22] Experiment 14/15: p45_world_model_smoke (seeds 2, mode=gate)
+[P22] Experiment 15/15: p46_imagination_smoke (seeds 2, mode=gate)
+[P22] Completed 15/15: p46_imagination_smoke status=passed | avg_ante=... win_rate=... illegal=...
 [P23] run_id=20260303-005315 mode=gate status=PASS
 [P23] live_snapshot=.../docs/artifacts/p22/runs/20260303-005315/live_summary_snapshot.json
 [P23] summary_json=.../docs/artifacts/p22/runs/20260303-005315/summary_table.json
@@ -297,6 +306,10 @@ All BC/DAgger/Self-Supervised (P33/P36) experiment paths now normalize actions t
   - quick: `python -m trainer.world_model.train --config configs/experiments/p45_world_model_smoke.yaml --quick`
   - orchestrated quick: `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP45`
   - signal: transition/reward error, uncertainty diagnostics, slice-aware eval, and wm-assisted arena compare
+- P46 imagination / Dyna-style augmentation:
+  - quick: `python -m trainer.world_model.imagination_rollout --config configs/experiments/p46_imagination_smoke.yaml --quick`
+  - orchestrated quick: `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP46`
+  - signal: short-horizon imagined rollouts, uncertainty-gated replay augmentation, ablation arena compare, and imagined-aware triage
 
 ## How to Compare Policies
 
@@ -330,6 +343,9 @@ Closed-loop artifacts:
 - `docs/artifacts/p42/closed_loop_runs/<run_id>/run_manifest.json`
 - `docs/artifacts/p42/closed_loop_runs/<run_id>/promotion_decision.json`
 - `docs/artifacts/p42/closed_loop_runs/<run_id>/triage_report.json`
+- `docs/artifacts/p46/imagination_pipeline/<run_id>/pipeline_summary.json`
+- `docs/artifacts/p46/arena_compare/<run_id>/summary_table.json`
+- `docs/artifacts/p46/triage/<run_id>/triage_report.json`
 
 ## Champion/Candidate Workflow
 
@@ -468,12 +484,47 @@ Reference docs:
 
 - [docs/P45_WORLD_MODEL.md](docs/P45_WORLD_MODEL.md)
 
+## Imagination / Dyna-style Training (P46)
+
+P46 builds on P45 by generating very short imagined rollouts from real root states and feeding them back into replay mixing as an explicitly synthetic source:
+
+1. `ImaginationRolloutGenerator` samples real roots and predicts short `(s, a) -> imagined next-step` transitions.
+2. `UncertaintyGating` marks high-uncertainty samples as non-trainable by default.
+3. `ReplayMixer` accepts `imagined_world_model` as a first-class source with fraction caps and filter controls.
+4. `CandidateAblation` compares `real_only`, `real_plus_imagined`, and `real_plus_imagined_filtered`.
+5. `Arena + Triage` decide whether imagined augmentation helped under real simulator evaluation.
+
+Quick start:
+
+```powershell
+python -m trainer.world_model.imagination_rollout --config configs/experiments/p46_imagination_smoke.yaml --quick
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP46
+```
+
+P46 artifacts:
+
+- `docs/artifacts/p46/imagination_rollouts/<run_id>/`
+- `docs/artifacts/p46/imagination_pipeline/<run_id>/`
+- `docs/artifacts/p46/arena_compare/<run_id>/`
+- `docs/artifacts/p46/triage/<run_id>/`
+
+Boundaries / risks:
+
+- imagined samples are short-horizon and uncertainty-gated by default; they are not simulator replacements.
+- synthetic rows stay lineage-separated from real data and are fraction-capped in replay mixing.
+- final promotion still depends on P39 arena outputs and P41-style triage, not model-only training loss.
+
+Reference docs:
+
+- [docs/P46_IMAGINATION_LOOP.md](docs/P46_IMAGINATION_LOOP.md)
+
 ## Maturity and Boundaries
 
 - P41 v2 still produces recommendation-only promotion outputs; champion switching remains manual.
 - Candidate training is staged and curriculum-driven, but full RL/self-play optimization is not part of P41 scope.
 - P42 RL candidate pipeline is v1/research-grade; it prioritizes run stability and traceability over peak policy strength.
 - P45 world model is v1/research-grade; it provides one-step latent planning assist, not a simulator replacement.
+- P46 imagination augmentation is v1/research-grade; it provides short-horizon synthetic replay, not trusted model-based evaluation.
 - BC/DAgger paths are retained as legacy baselines; they are not default mainline training routes.
 - Legacy baseline checks are lightweight smoke/probe checks unless explicitly requested.
 - low-sample CI/bootstrap outcomes remain observation-level and should not be treated as decisive promotion proof.
@@ -831,13 +882,14 @@ Milestone maturity snapshot:
 | P42 (RL candidate pipeline v1: env adapter + rollout + PPO-lite + closed-loop integration) | shipped |
 | P43 (training strategy refocus: mainline selfsup+RL, BC/DAgger legacy demotion) | shipped |
 | P44 (distributed RL training: rollout workers + curriculum + arena-gated evaluation) | shipped |
-| P45 (world model / latent planning v1: dataset + dynamics + uncertainty + planning hook) | active |
+| P45 (world model / latent planning v1: dataset + dynamics + uncertainty + planning hook) | shipped |
+| P46 (Dyna-style imagination loop v1: short imagined rollouts + replay augmentation + arena ablation) | active |
 
 Near-term:
 
-- harden P45 uncertainty calibration and slice-aware failure analysis on larger budgets
-- extend wm-assisted compare beyond heuristic baseline into search and RL candidate policies
-- explore model-based auxiliary losses and imagined-rollout gating without replacing simulator authority
+- harden P46 uncertainty gating and imagined-fraction controls on larger budgets
+- extend imagined augmentation beyond BC-style candidates into RL auxiliary losses and search heuristics
+- keep simulator-first promotion gates strict while improving model-based diagnostics
 
 Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 
@@ -862,6 +914,7 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - P42 PPO-lite is a stability-first baseline and does not yet include full PPO feature coverage (distributed rollouts/opponent pools).
 - P42 RL candidate quality remains gated by arena + slice-aware rules; recommendation output is still manual-promotion only.
 - P45 world model is one-step and uncertainty-aware only in a coarse sense; real simulator/oracle traces still decide promotion and regression outcomes.
+- P46 imagined replay can import world-model bias; short horizon and uncertainty filtering reduce but do not remove that risk.
 
 ## Further Reading
 
@@ -876,6 +929,7 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/P42_RL_CANDIDATE_PIPELINE.md](docs/P42_RL_CANDIDATE_PIPELINE.md)
 - [docs/P44_DISTRIBUTED_RL.md](docs/P44_DISTRIBUTED_RL.md)
 - [docs/P45_WORLD_MODEL.md](docs/P45_WORLD_MODEL.md)
+- [docs/P46_IMAGINATION_LOOP.md](docs/P46_IMAGINATION_LOOP.md)
 - [docs/P43_TRAINING_STRATEGY_REFOCUS.md](docs/P43_TRAINING_STRATEGY_REFOCUS.md)
 - [docs/RL_OVERVIEW.md](docs/RL_OVERVIEW.md)
 - [docs/EXPERIMENTS_P32_SELF_SUPERVISED.md](docs/EXPERIMENTS_P32_SELF_SUPERVISED.md)
@@ -915,6 +969,7 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/P42_RL_CANDIDATE_PIPELINE.md](docs/P42_RL_CANDIDATE_PIPELINE.md)
 - [docs/P44_DISTRIBUTED_RL.md](docs/P44_DISTRIBUTED_RL.md)
 - [docs/P45_WORLD_MODEL.md](docs/P45_WORLD_MODEL.md)
+- [docs/P46_IMAGINATION_LOOP.md](docs/P46_IMAGINATION_LOOP.md)
 - [docs/P43_TRAINING_STRATEGY_REFOCUS.md](docs/P43_TRAINING_STRATEGY_REFOCUS.md)
 - [docs/RL_OVERVIEW.md](docs/RL_OVERVIEW.md)
 - [docs/ROADMAP.md](docs/ROADMAP.md)

@@ -11,6 +11,7 @@ P41 upgrades P40 from a runnable loop into an explainable and stability-oriented
 P41 keeps P40's conservative promotion stance: recommendation-only, no automatic champion swap.
 P42 reuses this exact closed-loop shell and promotes RL candidate training (`rl_ppo_lite`) to default mainline mode.
 P45 can plug into the same shell as an auxiliary world-model asset for wm-assisted arena comparisons.
+P46 reuses the same lineage, replay-mix, arena, and triage surfaces for imagined replay augmentation.
 
 ## Architecture
 
@@ -57,6 +58,16 @@ P41 replay manifest entries include these key fields:
 - `valid_for_training`
 - `lineage_version`
 
+P46 extends the same lineage contract for synthetic replay rows with:
+
+- `source_type = imagined_world_model`
+- `world_model_checkpoint`
+- `imagination_horizon`
+- `uncertainty_score`
+- `uncertainty_gate_passed`
+- `root_sample_id`
+- `imagined_step_idx`
+
 Lineage summary reports:
 
 - source share ratios
@@ -93,6 +104,17 @@ Closed-loop manifests now also reserve `auxiliary_assets` for optional P45 depen
 - `world_model_uncertainty_penalty`
 
 This keeps the dependency chain explicit when a candidate or arena compare uses `heuristic_wm_assist` or another wm-assisted policy variant.
+
+## Imagination Augmentation Contract (P46)
+
+When P46 replay augmentation is enabled, candidate and replay artifacts also record:
+
+- `imagined_enabled`
+- `imagined_filter_mode`
+- `imagined_fraction`
+- replay-source stats for `imagined_world_model`
+
+This lets triage separate model-generated replay effects from real-source shifts.
 
 ## Unified Slice Labels
 
@@ -145,6 +167,12 @@ Triggered after arena decision, triage reports:
 5. data quality anomalies (`lineage_health`, `invalid_for_training` shifts)
 
 If baseline is missing, triage emits `baseline_missing` with a non-crashing report.
+
+P46-specific triage fields:
+
+- `imagined_source_impact`
+- `top_degrading_imagined_slices`
+- `suggested_imagination_adjustments`
 
 ## Run Commands
 
@@ -216,3 +244,4 @@ python -m trainer.closed_loop.slice_smoke
 - P41 does not auto-apply champion replacement; recommendation remains manual-gated.
 - P42 extends candidate training with PPO-lite but keeps the same recommendation-only promotion boundary.
 - P45 world-model assist remains optional and heuristic-only; P41/P42 still rely on real arena outcomes for final gating.
+- P46 imagined replay attribution is best-effort and only as good as world-model uncertainty plus replay-lineage completeness.

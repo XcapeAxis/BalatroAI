@@ -4,6 +4,7 @@ P40 adds a runnable improvement loop that unifies replay mixing, arena failure m
 P41 builds on top of this foundation and adds replay lineage, curriculum scheduling, slice-aware gating, and regression triage.
 P42 keeps the same closed-loop control flow and adds RL candidate training (`rl_ppo_lite`) as an additional training mode.
 P45 can attach a world-model checkpoint as an auxiliary asset so arena evaluation can compare wm-assisted policy variants without changing the closed-loop promotion contract.
+P46 keeps the same closed-loop shell but adds `imagined_world_model` as a replay augmentation source with explicit lineage and filter controls.
 
 See also: `docs/P41_CLOSED_LOOP_V2.md`.
 
@@ -99,6 +100,13 @@ P45 extends the same shell with optional auxiliary assets:
 
 When enabled, these fields are passed through to arena evaluation and persisted in `arena_summary.json` plus `run_manifest.json`.
 
+P46 extends the same shell with synthetic replay controls:
+
+- replay source type: `imagined_world_model`
+- candidate manifest fields: `imagined_enabled`, `imagined_filter_mode`, `imagined_fraction`
+- replay-mix stats: imagined acceptance rate, average uncertainty, and fraction cap
+- triage attribution: imagined-source impact and suggested imagination adjustments
+
 ## Run Modes
 
 Quick smoke:
@@ -126,3 +134,4 @@ python -m trainer.closed_loop.closed_loop_runner --config configs/experiments/p4
 - `model_policy` adapter in P39 currently keeps a stable fallback path; arena deltas should be interpreted as infrastructure smoke unless model inference path is fully wired.
 - closed-loop runner continues with `arena_status=skipped` when arena execution is disabled or unavailable.
 - world-model assist is heuristic-only; it can influence candidate action ranking during arena evaluation, but it does not replace simulator rollouts or promotion gates.
+- P46 imagined replay remains auxiliary and capped; it should not be interpreted as a simulator replacement or promotion signal by itself.

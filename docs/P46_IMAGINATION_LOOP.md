@@ -1,0 +1,163 @@
+# P46 Imagination / Dyna-style Loop v1
+
+P46 adds a conservative imagined-rollout path on top of P45 world models. The goal is not to replace the simulator. The goal is to create a traceable, uncertainty-gated synthetic replay source that can be evaluated with the same arena and triage stack used for real candidates.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  A["Real replay roots\nP13 / P16 / replay manifests"] --> B["P45 world model checkpoint"]
+  B --> C["Imagination rollout generator\n1-3 short steps"]
+  C --> D["imagined_world_model jsonl\nmanifest + stats + seeds_used"]
+  D --> E["ReplayMixer\nfraction cap + uncertainty gate"]
+  E --> F["Candidate training ablations\nreal_only / imagined / filtered"]
+  F --> G["P39 arena compare"]
+  G --> H["P41 champion rules + triage"]
+  H --> I["P22 summary + lineage + reports"]
+```
+
+## Imagined Sample Schema
+
+Synthetic rows stay separate from real replay lineage.
+
+Required fields:
+
+- `source_type = imagined_world_model`
+- `world_model_checkpoint`
+- `imagination_horizon`
+- `uncertainty_score`
+- `uncertainty_gate_passed`
+- `root_sample_id`
+- `imagined_step_idx`
+- `teacher_seed`
+- `valid_for_training`
+- `lineage_version`
+
+Artifacts:
+
+- `docs/artifacts/p46/imagination_schema_<timestamp>.md`
+- `docs/artifacts/p46/schema_smoke_<timestamp>.json`
+- `docs/artifacts/p46/imagination_rollouts/<run_id>/schema_preview.{md,json}`
+
+## Uncertainty Gating
+
+Default safety policy in v1:
+
+1. use real replay states as roots
+2. keep horizon short (`1-3`, smoke defaults to `1`)
+3. predict one-step next latent, reward proxy, and uncertainty
+4. set `uncertainty_gate_passed=false` when predicted uncertainty exceeds threshold
+5. only feed gate-passing rows into replay mixing by default
+6. cap imagined fraction so synthetic rows remain auxiliary
+
+This is intentionally conservative. Real simulator outcomes still decide whether a candidate is useful.
+
+## Replay Mixer Strategy
+
+`trainer.closed_loop.replay_mixer` now accepts `imagined_world_model` as a first-class source type.
+
+Controls:
+
+- `imagined_weight`
+- `require_uncertainty_gate_passed`
+- `max_imagined_fraction`
+- `max_imagination_horizon`
+
+Mixer stats expose imagined-specific fields:
+
+- source share
+- acceptance rate
+- average uncertainty
+- lineage coverage
+
+## Candidate Ablations
+
+P46 compares at least these recipes:
+
+- `real_only`
+- `real_plus_imagined`
+- `real_plus_imagined_filtered`
+
+Candidate manifests record:
+
+- `imagined_enabled`
+- `imagined_filter_mode`
+- `imagined_fraction`
+- replay mix manifest reference
+- `training_mode` and `training_mode_category`
+
+The point of the ablation is to test whether imagined replay helps under real evaluation, not to assume it does.
+
+## Commands
+
+Standalone imagination smoke:
+
+```powershell
+python -m trainer.world_model.imagination_rollout --config configs/experiments/p46_imagination_smoke.yaml --quick
+```
+
+Standalone end-to-end smoke:
+
+```powershell
+python -m trainer.world_model.imagination_pipeline --config configs/experiments/p46_imagination_smoke.yaml --quick --seeds AAAAAAA
+```
+
+P22 smoke:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP46
+```
+
+P22 quick:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
+```
+
+Nightly:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP46 -Nightly
+```
+
+## Artifacts
+
+- `docs/artifacts/p46/imagination_rollouts/<run_id>/`
+  - `imagined_rollouts.jsonl`
+  - `imagined_manifest.json`
+  - `imagined_stats.json`
+  - `imagined_stats.md`
+  - `seeds_used.json`
+- `docs/artifacts/p46/imagination_pipeline/<run_id>/`
+  - `pipeline_summary.json`
+  - `pipeline_summary.md`
+  - generated recipe configs and model map refs
+- `docs/artifacts/p46/arena_compare/<run_id>/`
+  - `summary_table.{json,md}`
+  - `promotion_decision.json`
+- `docs/artifacts/p46/triage/<run_id>/`
+  - `triage_report.json`
+  - `triage_report.md`
+
+## Planning and Arena Hook
+
+P46 does not add a new simulator. It reuses:
+
+- P45 planning/value proxy outputs inside the imagination generator
+- P39 arena for real-policy comparison
+- P41 triage for imagined-source attribution
+
+Arena compare can include:
+
+- `heuristic_baseline`
+- `candidate_real_only`
+- `candidate_real_plus_imagined_filtered`
+- optional `candidate_real_plus_imagined`
+
+## Known Gaps
+
+- no long-horizon imagined rollout governance
+- uncertainty is still approximate
+- imagined rows currently serve replay augmentation, not full model-based planning
+- quick smoke runs are plumbing checks and can be too small to show uplift
+- simulator/oracle traces remain the final judge for promotion and regression decisions

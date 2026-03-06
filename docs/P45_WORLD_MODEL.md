@@ -245,6 +245,7 @@ P22 rows:
 
 - `p45_world_model_smoke`
 - `p45_world_model_nightly`
+- `p46_imagination_smoke` / `p46_imagination_nightly` consume P45 checkpoints through P22 once available
 
 Commands:
 
@@ -270,6 +271,9 @@ Quick mode:
   - reserved config hook exists for future `world_model_aux` coupling in PPO config
 - P44:
   - distributed RL rollouts are valid world-model dataset sources
+- P46:
+  - uses P45 checkpoints to generate short, uncertainty-gated imagined replay under `docs/artifacts/p46/`
+  - keeps synthetic rows lineage-separated and real-arena-gated
 
 ## Configs
 
@@ -287,4 +291,5 @@ Because `.venv_trainer` may not always have `PyYAML`, matching `.json` sidecars 
 - no explicit terminal/done prediction head yet
 - no direct RL training loss from the world model in the shipped P42 loop
 - wm-assisted arena compare currently targets heuristic baseline first; broader policy families are future work
+- P46 short-horizon imagination does not upgrade P45 into full model-based RL; simulator/oracle authority remains unchanged
 - simulator/oracle traces remain the final authority for promotion and regression decisions

@@ -14,20 +14,22 @@
 | P42 | RL candidate pipeline v1 (env adapter + rollout collector + PPO-lite + closed-loop integration) | done |
 | P43 | Training strategy refocus (mainline selfsup+RL, BC/DAgger demoted to legacy baseline) | done |
 | P44 | Distributed RL training (rollout workers + curriculum + multi-seed gating) | done |
-| P45 | World model / latent planning v1 (dataset + dynamics + uncertainty + planning hook) | active |
+| P45 | World model / latent planning v1 (dataset + dynamics + uncertainty + planning hook) | done |
+| P46 | Dyna / imagination loop v1 (short imagined rollouts + replay augmentation + ablation gating) | active |
 
-## Current Focus: P45 World Model Hardening
+## Current Focus: P46 Imagination Hardening
 
-1. Improve uncertainty calibration quality on larger multi-seed P45 runs.
-2. Extend wm-assisted compare beyond heuristic baseline into search and RL candidate evaluation.
-3. Keep P22 quick/nightly summaries aligned with world-model metrics and auxiliary-asset lineage.
+1. Improve uncertainty calibration and gating quality on larger multi-seed imagined-rollout runs.
+2. Keep imagined fraction conservative while expanding ablation coverage and slice-aware triage.
+3. Align P22 quick/nightly summaries with imagination metrics, lineage, and promotion decisions.
 4. Explore future model-based hooks without weakening simulator-first promotion gates.
 
-## Near-Term After P45
+## Near-Term After P46
 
-- uncertainty-aware imagined rollouts beyond one-step heuristic
+- broader imagined-root coverage beyond the current replay families
 - tighter P42/P45 coupling through auxiliary losses and rollout-value proxies
 - higher-budget nightly comparisons for wm-assisted arena variants
+- careful expansion beyond horizon-1/2 while preserving uncertainty controls
 
 ## Constraints
 
