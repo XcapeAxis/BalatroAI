@@ -165,6 +165,8 @@ def normalize_experiment_category(exp: dict[str, Any]) -> str:
         "p45_world_model",
         "imagination_augmented_candidate",
         "p46_imagination",
+        "world_model_rerank_eval",
+        "p47_wm_search",
     }:
         return MODE_CATEGORY_MAINLINE
     if exp_type == "standard" and policy in {"baseline", "candidate"}:
@@ -1867,6 +1869,71 @@ def _run_imagination_seed_experiment(
     }
 
 
+def _run_model_based_search_seed_experiment(
+    *,
+    ctx: RunContext,
+    exp: dict[str, Any],
+    exp_dir: Path,
+    seed: str,
+    seed_idx: int,
+    seed_total: int,
+) -> dict[str, Any]:
+    from trainer.world_model.model_based_search import run_model_based_search_pipeline
+
+    eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+    cfg_rel = str(
+        eval_cfg.get("config")
+        or exp.get("model_based_search_config")
+        or (
+            "configs/experiments/p47_wm_search_smoke.yaml"
+            if ctx.mode == "quick"
+            else "configs/experiments/p47_wm_search_nightly.yaml"
+        )
+    )
+    cfg_path = (ctx.repo_root / cfg_rel).resolve()
+    run_root = exp_dir / "model_based_search_runs" / f"seed_{seed_idx:03d}_{seed}"
+    run_root.mkdir(parents=True, exist_ok=True)
+    run_name = f"seed_{seed_idx:03d}_{seed}"
+
+    summary = run_model_based_search_pipeline(
+        config_path=cfg_path,
+        out_dir=run_root,
+        run_id=run_name,
+        quick=bool(eval_cfg.get("quick", False) or ctx.mode == "quick"),
+        dry_run=bool(ctx.dry_run),
+        seeds_override=[seed],
+    )
+    metrics = summary.get("metrics") if isinstance(summary.get("metrics"), dict) else {}
+    candidate_score = float(metrics.get("p47_candidate_score") or metrics.get("score") or 0.0)
+    baseline_score = float(metrics.get("p47_baseline_score") or 0.0)
+    best_score = float(metrics.get("p47_best_variant_score") or candidate_score)
+    result_metrics = {
+        "score": candidate_score if candidate_score > 0.0 else best_score,
+        "avg_reward": candidate_score if candidate_score > 0.0 else best_score,
+        "best_episode_reward": best_score,
+        "avg_ante_reached": candidate_score if candidate_score > 0.0 else best_score,
+        "median_ante": candidate_score if candidate_score > 0.0 else best_score,
+        "win_rate": float(metrics.get("win_rate") or 0.0),
+        "hand_top1": 0.0,
+        "hand_top3": 0.0,
+        "shop_top1": max(0.0, 1.0 - float(metrics.get("illegal_action_rate") or 0.0)),
+        "illegal_action_rate": float(metrics.get("illegal_action_rate") or 0.0),
+        "p47_baseline_score": baseline_score,
+        "p47_candidate_score": candidate_score,
+        "p47_best_variant_score": best_score,
+        "p47_candidate_delta_vs_baseline": float(metrics.get("p47_candidate_delta_vs_baseline") or (candidate_score - baseline_score)),
+        "p47_best_variant_delta_vs_baseline": float(metrics.get("p47_best_variant_delta_vs_baseline") or (best_score - baseline_score)),
+        "p47_pipeline_summary_json": str(summary.get("pipeline_summary_json") or ""),
+        "p47_promotion_decision_json": str(summary.get("promotion_decision_json") or ""),
+        "p47_triage_report_json": str(summary.get("triage_report_json") or ""),
+    }
+    return {
+        "status": "ok" if str(summary.get("status") or "") == "ok" else "failed",
+        "metrics": result_metrics,
+        "summary": summary,
+    }
+
+
 def _run_closed_loop_seed_experiment(
     *,
     ctx: RunContext,
@@ -2531,6 +2598,22 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "candidate_policy": str(eval_cfg.get("candidate_policy") or "candidate_real_plus_imagined_filtered"),
             "champion_policy": str(eval_cfg.get("champion_policy") or "heuristic_baseline"),
         }
+    elif exp_type in {"world_model_rerank_eval", "p47_wm_search"}:
+        eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+        manifest["model_based_search"] = {
+            "config": str(
+                eval_cfg.get("config")
+                or exp.get("model_based_search_config")
+                or (
+                    "configs/experiments/p47_wm_search_smoke.yaml"
+                    if ctx.mode == "quick"
+                    else "configs/experiments/p47_wm_search_nightly.yaml"
+                )
+            ),
+            "quick": bool(eval_cfg.get("quick") or False),
+            "candidate_policy": str(eval_cfg.get("candidate_policy") or "heuristic_wm_rerank_h1"),
+            "champion_policy": str(eval_cfg.get("champion_policy") or "heuristic_baseline"),
+        }
     write_json(exp_dir / "run_manifest.json", manifest)
     print(
         "[P22] Experiment {idx}/{total}: {exp_id} (seeds {seed_count}, mode={mode})".format(
@@ -3097,6 +3180,52 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                             "elapsed_sec": elapsed(),
                             "metrics": dict(imagination_result.get("metrics") or {}),
                             "imagination_summary": imagination_result.get("summary") or {},
+                        }
+                    )
+                append_experiment_progress_event(
+                    progress_path,
+                    run_id=ctx.run_id,
+                    exp_id=exp_id,
+                    phase="eval",
+                    stage="eval",
+                    status=str(seed_results[-1].get("status")),
+                    seed=seed,
+                    step_or_epoch=seed_idx,
+                    elapsed_sec=elapsed(),
+                    metrics=seed_results[-1].get("metrics") or {},
+                    message=exp_type,
+                    extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
+                )
+            elif exp_type in {"world_model_rerank_eval", "p47_wm_search"}:
+                try:
+                    p47_result = _run_model_based_search_seed_experiment(
+                        ctx=ctx,
+                        exp=exp,
+                        exp_dir=exp_dir,
+                        seed=seed,
+                        seed_idx=seed_idx,
+                        seed_total=len(seeds),
+                    )
+                except Exception as exc:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "failed",
+                            "stage": "eval",
+                            "error": f"model_based_search_exception: {exc}",
+                            "elapsed_sec": elapsed(),
+                            "metrics": {},
+                        }
+                    )
+                else:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "ok" if p47_result["status"] == "ok" else "failed",
+                            "stage": "eval",
+                            "elapsed_sec": elapsed(),
+                            "metrics": dict(p47_result.get("metrics") or {}),
+                            "model_based_search_summary": p47_result.get("summary") or {},
                         }
                     )
                 append_experiment_progress_event(

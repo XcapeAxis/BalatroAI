@@ -225,6 +225,29 @@
         }
       ]
     },
+    "world_model_search_v1": {
+      "description": "P47 uncertainty-aware world-model reranking and short-horizon lookahead",
+      "variants": [
+        {
+          "id": "p47_wm_search_smoke",
+          "algo": "world_model_rerank_eval",
+          "seeds": [
+            "AAAAAAA",
+            "BBBBBBB"
+          ]
+        },
+        {
+          "id": "p47_wm_search_nightly",
+          "algo": "world_model_rerank_eval",
+          "seeds": [
+            "AAAAAAA",
+            "BBBBBBB",
+            "CCCCCCC",
+            "DDDDDDD"
+          ]
+        }
+      ]
+    },
     "legacy_bc_dagger_probe": {
       "description": "Legacy BC/DAgger baseline probes (non-default)",
       "variants": [
@@ -1342,6 +1365,90 @@
         "quick": false,
         "timeout_sec": 18000,
         "candidate_policy": "candidate_real_plus_imagined_filtered",
+        "champion_policy": "heuristic_baseline"
+      }
+    },
+    {
+      "id": "p47_wm_search_smoke",
+      "name": "p47_wm_search_smoke",
+      "backend": "sim",
+      "policy": "model_based_search",
+      "experiment_type": "world_model_rerank_eval",
+      "seed_mode": "regression_fixed",
+      "seed_set_name": "contract_regression",
+      "seeds": [
+        "AAAAAAA",
+        "BBBBBBB"
+      ],
+      "gate_flag": "RunP22",
+      "modes": {
+        "quick": true,
+        "gate": true,
+        "nightly": false
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "sanity_compile": [
+        "trainer/world_model/candidate_actions.py",
+        "trainer/world_model/lookahead_planner.py",
+        "trainer/world_model/model_based_search.py",
+        "trainer/policy_arena/adapters/wm_rerank_adapter.py",
+        "trainer/policy_arena/arena_runner.py",
+        "trainer/closed_loop/regression_triage.py"
+      ],
+      "eval": {
+        "config": "configs/experiments/p47_wm_search_smoke.yaml",
+        "quick": true,
+        "timeout_sec": 10800,
+        "candidate_policy": "heuristic_wm_rerank_h1",
+        "champion_policy": "heuristic_baseline"
+      }
+    },
+    {
+      "id": "p47_wm_search_nightly",
+      "name": "p47_wm_search_nightly",
+      "backend": "sim",
+      "policy": "model_based_search",
+      "experiment_type": "world_model_rerank_eval",
+      "seed_mode": "nightly",
+      "seed_set_name": "eval_default",
+      "seeds": [
+        "AAAAAAA",
+        "BBBBBBB",
+        "CCCCCCC",
+        "DDDDDDD"
+      ],
+      "gate_flag": "RunP22",
+      "modes": {
+        "quick": false,
+        "gate": false,
+        "nightly": true
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "sanity_compile": [
+        "trainer/world_model/candidate_actions.py",
+        "trainer/world_model/lookahead_planner.py",
+        "trainer/world_model/model_based_search.py",
+        "trainer/policy_arena/adapters/wm_rerank_adapter.py",
+        "trainer/policy_arena/arena_runner.py",
+        "trainer/closed_loop/regression_triage.py"
+      ],
+      "eval": {
+        "config": "configs/experiments/p47_wm_search_nightly.yaml",
+        "quick": false,
+        "timeout_sec": 18000,
+        "candidate_policy": "heuristic_wm_rerank_h2",
         "champion_policy": "heuristic_baseline"
       }
     },

@@ -1,0 +1,65 @@
+schema: p47_model_based_search_config_v1
+
+seeds:
+  - AAAAAAA
+  - BBBBBBB
+
+world_model:
+  checkpoint: ""
+  eval_ref: ""
+
+candidate_actions:
+  source: heuristic_candidates
+  top_k: 4
+  seed: AAAAAAA
+  target_phase: SELECTING_HAND
+  search_max_branch: 80
+  search_max_depth: 2
+  search_time_budget_ms: 15.0
+
+planner:
+  horizon: 1
+  gamma: 0.95
+  reward_weight: 1.0
+  score_weight: 0.5
+  value_weight: 0.15
+  terminal_bonus: 0.0
+  uncertainty_penalty: 0.50
+  branching_strategy: repeat_action
+
+arena_compare:
+  backend: sim
+  mode: long_episode
+  baseline_policy: heuristic_baseline
+  champion_policy: heuristic_baseline
+  candidate_policy: heuristic_wm_rerank_h1
+  episodes_per_seed: 1
+  max_steps: 120
+  timeout_sec: 3600
+  enable_champion_rules: true
+  champion_json: docs/artifacts/p22/champion.json
+  variants:
+    - id: heuristic_wm_rerank_h1
+      base_policy: heuristic_baseline
+      candidate_source: heuristic_candidates
+      top_k: 4
+      horizon: 1
+      uncertainty_penalty: 0.50
+    - id: heuristic_wm_rerank_h2
+      base_policy: heuristic_baseline
+      candidate_source: heuristic_candidates
+      top_k: 4
+      horizon: 2
+      uncertainty_penalty: 0.50
+    - id: heuristic_wm_rerank_h1_low_unc
+      base_policy: heuristic_baseline
+      candidate_source: heuristic_candidates
+      top_k: 4
+      horizon: 1
+      uncertainty_penalty: 0.20
+
+triage:
+  output_artifacts_root: docs/artifacts/p47/triage
+
+output:
+  artifacts_root: docs/artifacts/p47/arena_ablation
