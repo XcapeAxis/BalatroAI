@@ -1,0 +1,78 @@
+schema: p45_world_model_config_v1
+run_id: ""
+dataset:
+  feature_dim: 48
+  action_vocab_size: 4096
+  split:
+    train: 0.85
+  representation:
+    cache_latents: true
+    latent_dim: 32
+    hidden_dim: 64
+    dropout: 0.0
+    seed: 4501
+  sources:
+    - id: p42_rollout_smoke
+      type: rl_rollout
+      path: docs/artifacts/p42/rollouts
+      max_files: 1
+      max_samples: 160
+    - id: p36_selfsup_dataset_smoke
+      type: selfsup_dataset
+      path: docs/artifacts/p36/selfsup_datasets/latest
+      max_files: 1
+      max_samples: 160
+    - id: p13_real_trace_smoke
+      type: trace_jsonl
+      path: docs/artifacts/p13
+      max_files: 1
+      max_samples: 96
+  output:
+    artifacts_root: docs/artifacts/p45/wm_dataset
+model:
+  input_dim: 48
+  latent_dim: 32
+  hidden_dim: 96
+  action_embed_dim: 32
+  dropout: 0.1
+  action_vocab_size: 4096
+  resource_dim: 5
+train:
+  seed: 4501
+  epochs: 3
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.00001
+  grad_clip_norm: 1.0
+  checkpoint_metric: val_total_loss
+  max_train_samples: 256
+  max_val_samples: 96
+  loss_weights:
+    latent: 1.0
+    reward: 1.0
+    score_delta: 0.5
+    resource_delta: 0.25
+    uncertainty: 0.25
+  output_artifacts_root: docs/artifacts/p45/wm_train
+eval:
+  split: val
+  batch_size: 128
+  output_artifacts_root: docs/artifacts/p45/wm_eval
+  diagnostics_topk: 12
+planning:
+  enabled: true
+  assist_mode: one_step_heuristic
+  weight: 0.35
+  uncertainty_penalty: 0.5
+arena_compare:
+  enabled: true
+  candidate_policy: heuristic_wm_assist
+  champion_policy: heuristic_baseline
+  episodes_per_seed: 1
+  max_steps: 120
+  output_artifacts_root: docs/artifacts/p45/wm_assist_compare
+  seeds:
+    - AAAAAAA
+    - BBBBBBB
+output:
+  artifacts_root: docs/artifacts/p45

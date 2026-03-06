@@ -159,6 +159,10 @@ def normalize_experiment_category(exp: dict[str, Any]) -> str:
         "p42_rl_candidate",
         "p42_rl_candidate_pipeline",
         "p44_distributed_rl",
+        "world_model_train",
+        "world_model_eval",
+        "world_model_assist_compare",
+        "p45_world_model",
     }:
         return MODE_CATEGORY_MAINLINE
     if exp_type == "standard" and policy in {"baseline", "candidate"}:
@@ -1680,6 +1684,122 @@ def _run_policy_arena_seed_experiment(
     }
 
 
+def _run_world_model_seed_experiment(
+    *,
+    ctx: RunContext,
+    exp: dict[str, Any],
+    exp_dir: Path,
+    seed: str,
+    seed_idx: int,
+    seed_total: int,
+) -> dict[str, Any]:
+    from trainer.world_model.eval import run_world_model_eval
+    from trainer.world_model.planning_hook import run_world_model_assist_compare
+    from trainer.world_model.train import run_world_model_train
+
+    eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+    exp_type = str(exp.get("experiment_type") or "world_model_train").strip().lower()
+    cfg_rel = str(
+        eval_cfg.get("config")
+        or exp.get("world_model_config")
+        or (
+            "configs/experiments/p45_world_model_smoke.yaml"
+            if ctx.mode == "quick"
+            else "configs/experiments/p45_world_model_nightly.yaml"
+        )
+    )
+    cfg_path = (ctx.repo_root / cfg_rel).resolve()
+    world_model_root = exp_dir / "world_model_runs" / f"seed_{seed_idx:03d}_{seed}"
+    world_model_root.mkdir(parents=True, exist_ok=True)
+    run_name = f"seed_{seed_idx:03d}_{seed}"
+    quick_flag = bool(eval_cfg.get("quick", False) or ctx.mode == "quick")
+
+    summary: dict[str, Any]
+    if exp_type == "world_model_eval":
+        checkpoint_path = str(eval_cfg.get("checkpoint") or exp.get("checkpoint") or "").strip()
+        if not checkpoint_path:
+            raise ValueError("world_model_eval requires checkpoint")
+        summary = run_world_model_eval(
+            config_path=cfg_path,
+            checkpoint_path=checkpoint_path,
+            dataset_manifest_path=(str(eval_cfg.get("dataset_manifest") or "").strip() or None),
+            out_dir=world_model_root / "eval",
+            run_id=run_name,
+            quick=quick_flag,
+        )
+    elif exp_type == "world_model_assist_compare":
+        checkpoint_path = str(eval_cfg.get("checkpoint") or exp.get("checkpoint") or "").strip()
+        if not checkpoint_path:
+            raise ValueError("world_model_assist_compare requires checkpoint")
+        summary = run_world_model_assist_compare(
+            config_path=cfg_path,
+            checkpoint_path=checkpoint_path,
+            out_dir=world_model_root / "assist_compare",
+            run_id=run_name,
+            quick=quick_flag,
+        )
+    else:
+        summary = run_world_model_train(
+            config_path=cfg_path,
+            out_dir=world_model_root,
+            run_id=run_name,
+            quick=quick_flag,
+            seed_override=_seed_to_int(seed),
+        )
+
+    eval_summary = summary.get("eval_summary") if isinstance(summary.get("eval_summary"), dict) else {}
+    eval_metrics = eval_summary.get("metrics") if isinstance(eval_summary.get("metrics"), dict) else {}
+    assist_summary = summary.get("assist_summary") if isinstance(summary.get("assist_summary"), dict) else {}
+    assist_payload = assist_summary.get("summary") if isinstance(assist_summary.get("summary"), dict) else {}
+    candidate_policy = str(
+        (eval_cfg.get("candidate_policy") or exp.get("candidate_policy") or "heuristic_wm_assist")
+    )
+    summary_table_json = str(
+        ((assist_payload.get("arena_summary") or {}).get("summary_table_json"))
+        if isinstance(assist_payload.get("arena_summary"), dict)
+        else ""
+    )
+    arena_rows = _read_json_list(Path(summary_table_json)) if summary_table_json else []
+    arena_row = _pick_arena_focus_row(arena_rows, candidate_policy)
+
+    candidate_score = float((arena_row or {}).get("mean_total_score") or 0.0)
+    candidate_rounds = float((arena_row or {}).get("mean_rounds_survived") or 0.0)
+    candidate_win = float((arena_row or {}).get("win_rate") or 0.0)
+    candidate_invalid = float((arena_row or {}).get("invalid_action_rate") or 0.0)
+    reward_error = float(eval_metrics.get("reward_prediction_error") or 0.0)
+    latent_error = float(eval_metrics.get("latent_transition_error") or 0.0)
+    uncertainty_corr = float(
+        ((eval_metrics.get("uncertainty_calibration") or {}).get("uncertainty_error_pearson"))
+        if isinstance(eval_metrics.get("uncertainty_calibration"), dict)
+        else 0.0
+    )
+    fallback_score = max(0.0, 5.0 - min(4.0, reward_error * 0.02) - min(1.0, latent_error * 10.0))
+    metrics = {
+        "score": (candidate_score if candidate_score > 0.0 else fallback_score),
+        "avg_reward": (candidate_score if candidate_score > 0.0 else fallback_score),
+        "best_episode_reward": max(candidate_score, fallback_score),
+        "avg_ante_reached": (candidate_rounds if candidate_rounds > 0.0 else max(0.0, 3.0 - latent_error * 10.0)),
+        "median_ante": (candidate_rounds if candidate_rounds > 0.0 else max(0.0, 3.0 - latent_error * 10.0)),
+        "win_rate": (candidate_win if candidate_win > 0.0 else max(0.0, min(1.0, 0.5 + uncertainty_corr * 0.25))),
+        "hand_top1": max(0.0, min(1.0, 1.0 / (1.0 + max(0.0, reward_error)))),
+        "hand_top3": max(0.0, min(1.0, 1.15 / (1.0 + max(0.0, reward_error)))),
+        "shop_top1": max(0.0, min(1.0, 1.0 - candidate_invalid)),
+        "illegal_action_rate": candidate_invalid,
+        "world_model_reward_prediction_error": reward_error,
+        "world_model_latent_transition_error": latent_error,
+        "world_model_uncertainty_pearson": uncertainty_corr,
+        "world_model_run_dir": str(summary.get("run_dir") or world_model_root),
+        "world_model_eval_metrics_json": str(eval_summary.get("eval_metrics_json") or ""),
+        "world_model_assist_compare_json": str(assist_summary.get("assist_compare_summary_json") or ""),
+        "world_model_best_checkpoint": str(summary.get("best_checkpoint") or ""),
+    }
+    return {
+        "status": "ok" if str(summary.get("status") or "") == "ok" else "failed",
+        "metrics": metrics,
+        "summary": summary,
+    }
+
+
 def _run_closed_loop_seed_experiment(
     *,
     ctx: RunContext,
@@ -2311,6 +2431,23 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "champion_policy": str(eval_cfg.get("champion_policy") or "heuristic_baseline"),
             "pipeline_type": ("p44_distributed_rl" if is_p44 else ("rl_candidate_v1" if is_p42 else ("closed_loop_v2" if is_v2 else "closed_loop_v1"))),
         }
+    elif exp_type in {"world_model_train", "world_model_eval", "world_model_assist_compare", "p45_world_model"}:
+        eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+        manifest["world_model"] = {
+            "config": str(
+                eval_cfg.get("config")
+                or exp.get("world_model_config")
+                or (
+                    "configs/experiments/p45_world_model_smoke.yaml"
+                    if ctx.mode == "quick"
+                    else "configs/experiments/p45_world_model_nightly.yaml"
+                )
+            ),
+            "type": exp_type,
+            "quick": bool(eval_cfg.get("quick") or False),
+            "candidate_policy": str(eval_cfg.get("candidate_policy") or "heuristic_wm_assist"),
+            "checkpoint": str(eval_cfg.get("checkpoint") or exp.get("checkpoint") or ""),
+        }
     write_json(exp_dir / "run_manifest.json", manifest)
     print(
         "[P22] Experiment {idx}/{total}: {exp_id} (seeds {seed_count}, mode={mode})".format(
@@ -2785,6 +2922,52 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                             "elapsed_sec": elapsed(),
                             "metrics": dict(arena_result.get("metrics") or {}),
                             "policy_arena_summary": arena_result.get("summary") or {},
+                        }
+                    )
+                append_experiment_progress_event(
+                    progress_path,
+                    run_id=ctx.run_id,
+                    exp_id=exp_id,
+                    phase="eval",
+                    stage="eval",
+                    status=str(seed_results[-1].get("status")),
+                    seed=seed,
+                    step_or_epoch=seed_idx,
+                    elapsed_sec=elapsed(),
+                    metrics=seed_results[-1].get("metrics") or {},
+                        message=exp_type,
+                        extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
+                    )
+            elif exp_type in {"world_model_train", "world_model_eval", "world_model_assist_compare", "p45_world_model"}:
+                try:
+                    world_model_result = _run_world_model_seed_experiment(
+                        ctx=ctx,
+                        exp=exp,
+                        exp_dir=exp_dir,
+                        seed=seed,
+                        seed_idx=seed_idx,
+                        seed_total=len(seeds),
+                    )
+                except Exception as exc:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "failed",
+                            "stage": "eval",
+                            "error": f"world_model_exception: {exc}",
+                            "elapsed_sec": elapsed(),
+                            "metrics": {},
+                        }
+                    )
+                else:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "ok" if world_model_result["status"] == "ok" else "failed",
+                            "stage": "eval",
+                            "elapsed_sec": elapsed(),
+                            "metrics": dict(world_model_result.get("metrics") or {}),
+                            "world_model_summary": world_model_result.get("summary") or {},
                         }
                     )
                 append_experiment_progress_event(

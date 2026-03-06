@@ -945,6 +945,86 @@ matrix:
       candidate_policy: model_policy
       champion_policy: heuristic_baseline
 
+  - id: p45_world_model_smoke
+    name: p45_world_model_smoke
+    backend: sim
+    policy: world_model
+    experiment_type: world_model_train
+    seed_mode: regression_fixed
+    seed_set_name: contract_regression
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+    gate_flag: RunP22
+    modes:
+      quick: true
+      gate: true
+      nightly: false
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/world_model/schema.py
+      - trainer/world_model/sample_builder.py
+      - trainer/world_model/dataset.py
+      - trainer/world_model/model.py
+      - trainer/world_model/losses.py
+      - trainer/world_model/train.py
+      - trainer/world_model/eval.py
+      - trainer/world_model/diagnostics.py
+      - trainer/world_model/planning_hook.py
+      - trainer/policy_arena/adapters/world_model_assist_adapter.py
+      - trainer/policy_arena/arena_runner.py
+    eval:
+      config: configs/experiments/p45_world_model_smoke.yaml
+      quick: true
+      timeout_sec: 7200
+      candidate_policy: heuristic_wm_assist
+
+  - id: p45_world_model_nightly
+    name: p45_world_model_nightly
+    backend: sim
+    policy: world_model
+    experiment_type: world_model_train
+    seed_mode: nightly
+    seed_set_name: eval_default
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+      - CCCCCCC
+      - DDDDDDD
+    gate_flag: RunP22
+    modes:
+      quick: false
+      gate: false
+      nightly: true
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/world_model/schema.py
+      - trainer/world_model/sample_builder.py
+      - trainer/world_model/dataset.py
+      - trainer/world_model/model.py
+      - trainer/world_model/losses.py
+      - trainer/world_model/train.py
+      - trainer/world_model/eval.py
+      - trainer/world_model/diagnostics.py
+      - trainer/world_model/planning_hook.py
+      - trainer/policy_arena/adapters/world_model_assist_adapter.py
+      - trainer/policy_arena/arena_runner.py
+    eval:
+      config: configs/experiments/p45_world_model_nightly.yaml
+      quick: false
+      timeout_sec: 14400
+      candidate_policy: heuristic_wm_assist
+
   - id: legacy_bc_dagger_probe
     name: legacy_bc_dagger_probe
     backend: sim
