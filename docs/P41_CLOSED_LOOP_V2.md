@@ -10,6 +10,7 @@ P41 upgrades P40 from a runnable loop into an explainable and stability-oriented
 
 P41 keeps P40's conservative promotion stance: recommendation-only, no automatic champion swap.
 P42 reuses this exact closed-loop shell and promotes RL candidate training (`rl_ppo_lite`) to default mainline mode.
+P45 can plug into the same shell as an auxiliary world-model asset for wm-assisted arena comparisons.
 
 ## Architecture
 
@@ -80,6 +81,18 @@ P41/P42 closed-loop outputs now persist lane-aware training metadata:
 - `legacy_paths_used`
 
 These fields are emitted in candidate manifests, closed-loop `run_manifest.json`, and summary tables.
+
+## Auxiliary World Model Contract (P45)
+
+Closed-loop manifests now also reserve `auxiliary_assets` for optional P45 dependencies:
+
+- `world_model_enabled`
+- `world_model_checkpoint`
+- `world_model_assist_mode`
+- `world_model_weight`
+- `world_model_uncertainty_penalty`
+
+This keeps the dependency chain explicit when a candidate or arena compare uses `heuristic_wm_assist` or another wm-assisted policy variant.
 
 ## Unified Slice Labels
 
@@ -153,6 +166,14 @@ P42 RL candidate quick (same closed-loop shell, RL training mode):
 python -m trainer.closed_loop.closed_loop_runner --config configs/experiments/p42_closed_loop_rl_smoke.yaml --quick
 ```
 
+Closed-loop run with world-model-assisted arena compare uses the same entrypoint:
+
+```powershell
+python -m trainer.closed_loop.closed_loop_runner --config configs/experiments/p42_closed_loop_rl_smoke.yaml --quick
+```
+
+Add a `world_model` block to the closed-loop config with `enabled/checkpoint/assist_mode/weight/uncertainty_penalty` to turn on the auxiliary asset path.
+
 Nightly style:
 
 ```powershell
@@ -179,6 +200,7 @@ python -m trainer.closed_loop.slice_smoke
 - `docs/artifacts/p41/candidate_train/<run_id>/`
 - `docs/artifacts/p41/closed_loop_runs/<run_id>/`
   - `run_manifest.json`
+  - `run_manifest.json -> auxiliary_assets.world_model_*`
   - `promotion_decision.json/.md`
   - `slice_decision_breakdown.json/.md`
   - `triage_report.json/.md`
@@ -193,3 +215,4 @@ python -m trainer.closed_loop.slice_smoke
 - Candidate training is mainline-first (RL/selfsup order), while BC/DAgger remain opt-in legacy baselines.
 - P41 does not auto-apply champion replacement; recommendation remains manual-gated.
 - P42 extends candidate training with PPO-lite but keeps the same recommendation-only promotion boundary.
+- P45 world-model assist remains optional and heuristic-only; P41/P42 still rely on real arena outcomes for final gating.

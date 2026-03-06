@@ -19,6 +19,7 @@ Goals:
   - `trainer/policy_arena/adapters/search_adapter.py`
   - `trainer/policy_arena/adapters/model_adapter.py` (`status=stub` when checkpoint is unavailable)
   - `trainer/policy_arena/adapters/hybrid_adapter.py`
+  - `trainer/policy_arena/adapters/world_model_assist_adapter.py`
 - arena execution:
   - `trainer/policy_arena/arena_runner.py`
   - `trainer/policy_arena/arena_metrics.py`
@@ -106,6 +107,37 @@ P22 quick (includes P39 smoke row):
 powershell -ExecutionPolicy Bypass -File scripts/run_p22.ps1 -Quick
 ```
 
+World-model-assisted compare (P45 hook):
+
+```powershell
+python -m trainer.policy_arena.arena_runner --policies "heuristic_baseline,heuristic_wm_assist" --world-model-checkpoint docs/artifacts/p45/wm_train/<run_id>/best.pt --world-model-assist-mode one_step_heuristic --world-model-weight 0.35 --world-model-uncertainty-penalty 0.5 --seeds "AAAAAAA,BBBBBBB" --episodes-per-seed 1 --max-steps 120
+```
+
+## World Model Assist (P45)
+
+P45 adds an optional arena adapter that reranks legal actions with a one-step world-model score while keeping the simulator as the execution authority.
+
+Supported policy ids:
+
+- `heuristic_wm_assist`
+- `baseline_wm_assist`
+- `wm_assist`
+- `world_model_assist`
+
+CLI flags:
+
+- `--world-model-checkpoint`
+- `--world-model-assist-mode` (`one_step_heuristic` in v1)
+- `--world-model-weight`
+- `--world-model-uncertainty-penalty`
+
+Behavior:
+
+- base policy remains `heuristic_baseline`
+- world-model score is uncertainty-penalized before reranking
+- missing or invalid checkpoints degrade to heuristic baseline with `status=stub`
+- run manifest records checkpoint path and assist parameters under `config` / `adapters`
+
 ## Artifacts
 
 Standalone arena:
@@ -115,6 +147,7 @@ Standalone arena:
 - `docs/artifacts/p39/arena_runs/<run_id>/summary_table.{json,csv,md}`
 - `docs/artifacts/p39/arena_runs/<run_id>/bucket_metrics.{json,md}`
 - `docs/artifacts/p39/arena_runs/<run_id>/warnings.log`
+- `run_manifest.json` includes `world_model_checkpoint`, `world_model_assist_mode`, `world_model_weight`, and `world_model_uncertainty_penalty` when wm-assist is enabled
 
 Champion evaluation:
 
@@ -143,3 +176,8 @@ P42 RL candidate dependency:
 
 - P42 closed-loop RL rows also use P39 arena outputs plus champion rules for post-training gating.
 - P22 P42 rows emit per-seed P42 summaries that reference arena summary/decision paths for the same seed run.
+
+P45 planning-hook dependency:
+
+- `heuristic_wm_assist` is treated as a normal arena candidate, so champion rules and bucket metrics operate unchanged.
+- P45 assist compare runs store the resulting arena summary path in `assist_compare_summary.json`.

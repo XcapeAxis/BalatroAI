@@ -3,6 +3,7 @@
 P40 adds a runnable improvement loop that unifies replay mixing, arena failure mining, candidate training, and arena-gated promotion recommendation.
 P41 builds on top of this foundation and adds replay lineage, curriculum scheduling, slice-aware gating, and regression triage.
 P42 keeps the same closed-loop control flow and adds RL candidate training (`rl_ppo_lite`) as an additional training mode.
+P45 can attach a world-model checkpoint as an auxiliary asset so arena evaluation can compare wm-assisted policy variants without changing the closed-loop promotion contract.
 
 See also: `docs/P41_CLOSED_LOOP_V2.md`.
 
@@ -36,6 +37,7 @@ flowchart LR
 - failure pack: `candidate_policy`, `champion_policy`, `low_score_threshold`, `failures[]`, `replay_jsonl_path`
 - candidate train: `training_mode`, `training_mode_category`, `fallback_used`, `fallback_reason`, `legacy_paths_used`, `seed_results[]`, `candidate_checkpoint`
 - promotion decision: `recommendation`, `recommend_promotion`, `arena_status`, `candidate_score`, `champion_score`, `score_delta`, `reasons[]`
+- closed-loop run manifest: `auxiliary_assets.world_model_*` fields record optional P45 checkpoint + assist parameters
 
 ## Failure Mining Logic (v1)
 
@@ -87,6 +89,16 @@ P42 extends candidate training mode options with:
 - PPO-lite trainer with action-mask and invalid-action guards
 - closed-loop-compatible RL candidate manifest output
 
+P45 extends the same shell with optional auxiliary assets:
+
+- `world_model.enabled`
+- `world_model.checkpoint`
+- `world_model.assist_mode`
+- `world_model.weight`
+- `world_model.uncertainty_penalty`
+
+When enabled, these fields are passed through to arena evaluation and persisted in `arena_summary.json` plus `run_manifest.json`.
+
 ## Run Modes
 
 Quick smoke:
@@ -113,3 +125,4 @@ python -m trainer.closed_loop.closed_loop_runner --config configs/experiments/p4
 - legacy `bc_finetune` requires BC-compatible rows and PyTorch; otherwise candidate training degrades to `stub_checkpoint`.
 - `model_policy` adapter in P39 currently keeps a stable fallback path; arena deltas should be interpreted as infrastructure smoke unless model inference path is fully wired.
 - closed-loop runner continues with `arena_status=skipped` when arena execution is disabled or unavailable.
+- world-model assist is heuristic-only; it can influence candidate action ranking during arena evaluation, but it does not replace simulator rollouts or promotion gates.

@@ -12,21 +12,22 @@
 | P40 | Closed-loop improvement v1 (replay mix + failure mining + arena-gated promotion recommendation) | done |
 | P41 | Closed-loop improvement v2 (lineage + curriculum + slice-aware gating + regression triage) | done |
 | P42 | RL candidate pipeline v1 (env adapter + rollout collector + PPO-lite + closed-loop integration) | done |
-| P43 | Training strategy refocus (mainline selfsup+RL, BC/DAgger demoted to legacy baseline) | active |
+| P43 | Training strategy refocus (mainline selfsup+RL, BC/DAgger demoted to legacy baseline) | done |
+| P44 | Distributed RL training (rollout workers + curriculum + multi-seed gating) | done |
+| P45 | World model / latent planning v1 (dataset + dynamics + uncertainty + planning hook) | active |
 
-## Current Focus: P43 Mainline Consolidation
+## Current Focus: P45 World Model Hardening
 
-1. Keep P22 defaults fully aligned with mainline-only execution and explicit legacy opt-in.
-2. Increase stability/quality of RL-first candidate training while preserving lineage/triage clarity.
-3. Expand self-supervised warm-start integration beyond stub mode in closed-loop candidate training.
-4. Maintain lightweight but reliable legacy BC/DAgger smoke for baseline integrity checks.
+1. Improve uncertainty calibration quality on larger multi-seed P45 runs.
+2. Extend wm-assisted compare beyond heuristic baseline into search and RL candidate evaluation.
+3. Keep P22 quick/nightly summaries aligned with world-model metrics and auxiliary-asset lineage.
+4. Explore future model-based hooks without weakening simulator-first promotion gates.
 
-## Next Milestones
+## Near-Term After P45
 
-| Milestone | Target | Exit Signal |
-|---|---|---|
-| P44 | RL scaling and richer opponent/self-play schedules | RL candidate line shows repeatable seed-robust gains over heuristic/search baselines. |
-| P45 | Self-supervised transfer + long-horizon robustness scaling | Representation + policy lines sustain gains under larger-budget multi-seed gating. |
+- uncertainty-aware imagined rollouts beyond one-step heuristic
+- tighter P42/P45 coupling through auxiliary losses and rollout-value proxies
+- higher-budget nightly comparisons for wm-assisted arena variants
 
 ## Constraints
 

@@ -9,7 +9,7 @@
 [![Seed Governance](https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16)](configs/experiments/seeds_p23.yaml)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Trend Warehouse](https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16)](docs/TREND_WAREHOUSE_P26.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P44-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P45-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -19,7 +19,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/XcapeAxis/BalatroAI)](https://github.com/XcapeAxis/BalatroAI/issues)
 <!-- BADGES:END -->
 
-BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, plus a unified action replay contract. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised iteration, not as a cheat injector or memory-hook tool.
+BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, a unified action replay contract, and a P45 world-model / latent-planning research lane. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised/world-model iteration, not as a cheat injector or memory-hook tool.
 
 Badge/status refresh source:
 
@@ -56,7 +56,7 @@ Not suitable for:
 
 P43 refocuses training into two explicit lanes:
 
-- Mainline (default): Self-Supervised + RL candidate + Closed-loop promotion (`P40/P41/P42/P44`).
+- Mainline (default): Self-Supervised + World Model + RL candidate + Closed-loop promotion (`P40/P41/P42/P44/P45`).
 - Legacy baseline (opt-in): BC/DAgger (`trainer/train_bc.py`, `trainer/dagger_collect*.py`) for baseline/probe/warm-start only.
 
 Why this shift:
@@ -67,7 +67,7 @@ Why this shift:
 
 Data dependency by lane:
 
-- mainline: replay-mixer + failure-mining + SSL/selfsup traces + RL rollouts.
+- mainline: replay-mixer + failure-mining + SSL/selfsup traces + RL rollouts + world-model transition datasets.
 - legacy baseline: targeted BC/DAgger smoke/probe datasets for sanity and comparisons.
 
 ## Quick Start (Windows + PowerShell, < 5 min)
@@ -179,12 +179,20 @@ Optional P44 distributed RL smoke:
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP44
 ```
 
+Optional P45 world-model smoke:
+
+```powershell
+python -m trainer.world_model.train --config configs/experiments/p45_world_model_smoke.yaml --quick
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP45
+```
+
 8. Inspect generated artifacts.
 
 - `docs/artifacts/p22/runs/<run_id>/summary_table.md`
 - `docs/artifacts/p22/runs/<run_id>/run_plan.json`
 - `docs/artifacts/p22/runs/<run_id>/<exp_id>/{run_manifest.json,progress.jsonl,seeds_used.json}`
 - `docs/artifacts/p40/closed_loop_runs/<run_id>/{run_manifest.json,promotion_decision.json,summary_table.md}`
+- `docs/artifacts/p45/{wm_dataset,wm_train,wm_eval,wm_assist_compare}/<run_id>/`
 - optional live snapshot view: `powershell -ExecutionPolicy Bypass -File scripts\show_p22_live.ps1`
 
 9. Cleanup runtime files when finished.
@@ -197,16 +205,17 @@ Expected console excerpt (trimmed):
 
 ```text
 [RunFast] PASS (P0/P1 baseline completed)
-[P22] Experiment 1/11: quick_baseline (seeds 2, mode=gate)
-[P22] Experiment 5/11: quick_selfsup_future_value (seeds 2, mode=gate)
-[P22] Experiment 7/11: quick_ssl_pretrain_v1 (seeds 2, mode=gate)
-[P22] Experiment 8/11: quick_ssl_probe_v1 (seeds 2, mode=gate)
-[P22] Experiment 9/11: rl_ppo_smoke (seeds 2, mode=gate)
-[P22] Experiment 10/11: p39_policy_arena_smoke (seeds 2, mode=gate)
-[P22] Experiment 11/13: p40_closed_loop_smoke (seeds 2, mode=gate)
-[P22] Experiment 12/13: p41_closed_loop_v2_smoke (seeds 2, mode=gate)
-[P22] Experiment 13/13: p42_rl_candidate_smoke (seeds 2, mode=gate)
-[P22] Completed 13/13: p42_rl_candidate_smoke status=passed | avg_ante=... win_rate=... hand_top1=... hand_top3=... shop_top1=... illegal=...
+[P22] Experiment 1/14: quick_baseline (seeds 2, mode=gate)
+[P22] Experiment 5/14: quick_selfsup_future_value (seeds 2, mode=gate)
+[P22] Experiment 7/14: quick_ssl_pretrain_v1 (seeds 2, mode=gate)
+[P22] Experiment 8/14: quick_ssl_probe_v1 (seeds 2, mode=gate)
+[P22] Experiment 9/14: rl_ppo_smoke (seeds 2, mode=gate)
+[P22] Experiment 10/14: p39_policy_arena_smoke (seeds 2, mode=gate)
+[P22] Experiment 11/14: p40_closed_loop_smoke (seeds 2, mode=gate)
+[P22] Experiment 12/14: p41_closed_loop_v2_smoke (seeds 2, mode=gate)
+[P22] Experiment 13/14: p42_rl_candidate_smoke (seeds 2, mode=gate)
+[P22] Experiment 14/14: p45_world_model_smoke (seeds 2, mode=gate)
+[P22] Completed 14/14: p45_world_model_smoke status=passed | avg_ante=... win_rate=... illegal=...
 [P23] run_id=20260303-005315 mode=gate status=PASS
 [P23] live_snapshot=.../docs/artifacts/p22/runs/20260303-005315/live_summary_snapshot.json
 [P23] summary_json=.../docs/artifacts/p22/runs/20260303-005315/summary_table.json
@@ -226,6 +235,8 @@ More details:
 - [docs/P40_CLOSED_LOOP_IMPROVEMENT.md](docs/P40_CLOSED_LOOP_IMPROVEMENT.md)
 - [docs/P41_CLOSED_LOOP_V2.md](docs/P41_CLOSED_LOOP_V2.md)
 - [docs/P42_RL_CANDIDATE_PIPELINE.md](docs/P42_RL_CANDIDATE_PIPELINE.md)
+- [docs/P44_DISTRIBUTED_RL.md](docs/P44_DISTRIBUTED_RL.md)
+- [docs/P45_WORLD_MODEL.md](docs/P45_WORLD_MODEL.md)
 - [docs/P43_TRAINING_STRATEGY_REFOCUS.md](docs/P43_TRAINING_STRATEGY_REFOCUS.md)
 
 ## Architecture Overview
@@ -279,6 +290,13 @@ All BC/DAgger/Self-Supervised (P33/P36) experiment paths now normalize actions t
   - quick: `python -m trainer.rl.ppo_lite --config configs/experiments/p42_rl_smoke.yaml`
   - closed-loop quick: `python -m trainer.closed_loop.closed_loop_runner --config configs/experiments/p42_closed_loop_rl_smoke.yaml --quick`
   - signal: RL env adapter + rollout collector + PPO-lite candidate training + arena-gated recommendation + triage
+- P44 distributed RL:
+  - quick: `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP44`
+  - signal: multi-worker rollout collection + curriculum RL stages + multi-seed RL evaluation + diagnostics
+- P45 world model / latent planning:
+  - quick: `python -m trainer.world_model.train --config configs/experiments/p45_world_model_smoke.yaml --quick`
+  - orchestrated quick: `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP45`
+  - signal: transition/reward error, uncertainty diagnostics, slice-aware eval, and wm-assisted arena compare
 
 ## How to Compare Policies
 
@@ -416,11 +434,46 @@ Reference docs:
 
 - [docs/P44_DISTRIBUTED_RL.md](docs/P44_DISTRIBUTED_RL.md)
 
+## World Model / Latent Planning (P45)
+
+P45 adds a research-grade world-model lane on top of replay, self-supervised, and RL artifacts:
+
+1. `WorldModelDataset` builds one-step transition samples from rollout/replay sources (`rl_rollout`, `selfsup_dataset`, `trace_jsonl`, `replay_manifest`).
+2. `LatentWorldModel` predicts `z_{t+1}`, `reward`, `score_delta`, and `resource_delta` from `(obs_t, action_t)`.
+3. `WorldModelEval` reports transition/reward error plus coarse uncertainty calibration diagnostics.
+4. `PlanningHook` provides uncertainty-aware one-step reranking for `heuristic_wm_assist` inside the P39 arena.
+5. `P22Integration` adds `p45_world_model_smoke` and `p45_world_model_nightly`.
+
+Quick start:
+
+```powershell
+python -m trainer.world_model.train --config configs/experiments/p45_world_model_smoke.yaml --quick
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP45
+```
+
+P45 artifacts:
+
+- `docs/artifacts/p45/wm_dataset/<run_id>/`
+- `docs/artifacts/p45/wm_train/<run_id>/`
+- `docs/artifacts/p45/wm_eval/<run_id>/`
+- `docs/artifacts/p45/wm_assist_compare/<run_id>/`
+
+Boundaries / risks:
+
+- uncertainty is a coarse proxy; it is useful for ranking and diagnostics, not calibrated safety certification.
+- the planning hook reranks candidate actions, but real simulator rollouts and arena gates remain the final judge.
+- P45 v1 is one-step only; it does not ship full model-based RL or long-horizon imagined-rollout governance.
+
+Reference docs:
+
+- [docs/P45_WORLD_MODEL.md](docs/P45_WORLD_MODEL.md)
+
 ## Maturity and Boundaries
 
 - P41 v2 still produces recommendation-only promotion outputs; champion switching remains manual.
 - Candidate training is staged and curriculum-driven, but full RL/self-play optimization is not part of P41 scope.
 - P42 RL candidate pipeline is v1/research-grade; it prioritizes run stability and traceability over peak policy strength.
+- P45 world model is v1/research-grade; it provides one-step latent planning assist, not a simulator replacement.
 - BC/DAgger paths are retained as legacy baselines; they are not default mainline training routes.
 - Legacy baseline checks are lightweight smoke/probe checks unless explicitly requested.
 - low-sample CI/bootstrap outcomes remain observation-level and should not be treated as decisive promotion proof.
@@ -639,6 +692,19 @@ P44 distributed RL reproducibility:
 - reference docs:
   - [docs/P44_DISTRIBUTED_RL.md](docs/P44_DISTRIBUTED_RL.md)
 
+P45 world model reproducibility:
+
+- standalone dataset build:
+  - `python -m trainer.world_model.dataset --config configs/experiments/p45_world_model_smoke.yaml --quick`
+- standalone train + eval + assist compare:
+  - `python -m trainer.world_model.train --config configs/experiments/p45_world_model_smoke.yaml --quick`
+- P22 smoke:
+  - `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP45`
+- P22 nightly:
+  - `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP45 -Nightly`
+- reference docs:
+  - [docs/P45_WORLD_MODEL.md](docs/P45_WORLD_MODEL.md)
+
 ## Reinforcement Learning (P37)
 
 P37 adds a research skeleton for RL iteration without claiming a fully optimized agent:
@@ -762,13 +828,16 @@ Milestone maturity snapshot:
 | P39 (policy arena + champion decision rules) | shipped |
 | P40 (closed-loop improvement: replay mix + failure mining + arena-gated promotion) | shipped |
 | P41 (closed-loop v2: lineage + curriculum + slice-aware gating + regression triage) | shipped |
-| P42 (RL candidate pipeline v1: env adapter + rollout + PPO-lite + closed-loop integration) | active |
+| P42 (RL candidate pipeline v1: env adapter + rollout + PPO-lite + closed-loop integration) | shipped |
+| P43 (training strategy refocus: mainline selfsup+RL, BC/DAgger legacy demotion) | shipped |
+| P44 (distributed RL training: rollout workers + curriculum + arena-gated evaluation) | shipped |
+| P45 (world model / latent planning v1: dataset + dynamics + uncertainty + planning hook) | active |
 
 Near-term:
 
-- stabilize P42 smoke/nightly quality with stronger seed-robust RL candidate metrics
-- expand RL training controls (opponent scheduling, richer rollout budgets, stronger diagnostics)
-- scale self-supervised representation transfer into downstream policy stacks (P43+)
+- harden P45 uncertainty calibration and slice-aware failure analysis on larger budgets
+- extend wm-assisted compare beyond heuristic baseline into search and RL candidate policies
+- explore model-based auxiliary losses and imagined-rollout gating without replacing simulator authority
 
 Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 
@@ -792,6 +861,7 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - P41 regression triage attribution is best-effort and depends on lineage completeness from upstream sources.
 - P42 PPO-lite is a stability-first baseline and does not yet include full PPO feature coverage (distributed rollouts/opponent pools).
 - P42 RL candidate quality remains gated by arena + slice-aware rules; recommendation output is still manual-promotion only.
+- P45 world model is one-step and uncertainty-aware only in a coarse sense; real simulator/oracle traces still decide promotion and regression outcomes.
 
 ## Further Reading
 
@@ -804,6 +874,8 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/P40_CLOSED_LOOP_IMPROVEMENT.md](docs/P40_CLOSED_LOOP_IMPROVEMENT.md)
 - [docs/P41_CLOSED_LOOP_V2.md](docs/P41_CLOSED_LOOP_V2.md)
 - [docs/P42_RL_CANDIDATE_PIPELINE.md](docs/P42_RL_CANDIDATE_PIPELINE.md)
+- [docs/P44_DISTRIBUTED_RL.md](docs/P44_DISTRIBUTED_RL.md)
+- [docs/P45_WORLD_MODEL.md](docs/P45_WORLD_MODEL.md)
 - [docs/P43_TRAINING_STRATEGY_REFOCUS.md](docs/P43_TRAINING_STRATEGY_REFOCUS.md)
 - [docs/RL_OVERVIEW.md](docs/RL_OVERVIEW.md)
 - [docs/EXPERIMENTS_P32_SELF_SUPERVISED.md](docs/EXPERIMENTS_P32_SELF_SUPERVISED.md)
@@ -841,6 +913,8 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/P40_CLOSED_LOOP_IMPROVEMENT.md](docs/P40_CLOSED_LOOP_IMPROVEMENT.md)
 - [docs/P41_CLOSED_LOOP_V2.md](docs/P41_CLOSED_LOOP_V2.md)
 - [docs/P42_RL_CANDIDATE_PIPELINE.md](docs/P42_RL_CANDIDATE_PIPELINE.md)
+- [docs/P44_DISTRIBUTED_RL.md](docs/P44_DISTRIBUTED_RL.md)
+- [docs/P45_WORLD_MODEL.md](docs/P45_WORLD_MODEL.md)
 - [docs/P43_TRAINING_STRATEGY_REFOCUS.md](docs/P43_TRAINING_STRATEGY_REFOCUS.md)
 - [docs/RL_OVERVIEW.md](docs/RL_OVERVIEW.md)
 - [docs/ROADMAP.md](docs/ROADMAP.md)
