@@ -195,6 +195,9 @@ Summary metrics exposed in P22:
 - P46:
   - uses the world model for training-time replay augmentation
   - P47 uses the world model for decision-time reranking
+- P48:
+  - treats `policy_plus_wm_rerank` as one controller option inside an explainable hybrid router
+  - keeps P47 rerank settings explicit through `policy_assist_map.json` and routing traces
 - P42:
   - RL candidates can later become candidate sources for rerank-assisted inference
   - this is still a reserved integration point in v1

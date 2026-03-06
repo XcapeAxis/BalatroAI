@@ -16,21 +16,22 @@
 | P44 | Distributed RL training (rollout workers + curriculum + multi-seed gating) | done |
 | P45 | World model / latent planning v1 (dataset + dynamics + uncertainty + planning hook) | done |
 | P46 | Dyna / imagination loop v1 (short imagined rollouts + replay augmentation + ablation gating) | done |
-| P47 | Uncertainty-aware model-based search v1 (candidate rerank + short lookahead + arena ablation) | active |
+| P47 | Uncertainty-aware model-based search v1 (candidate rerank + short lookahead + arena ablation) | done |
+| P48 | Adaptive hybrid controller v1 (state-aware routing across policy/search/wm-rerank) | active |
 
-## Current Focus: P47 Model-Based Search Hardening
+## Current Focus: P48 Adaptive Hybrid Routing
 
-1. Improve world-model uncertainty calibration for rerank decisions on larger multi-seed arena budgets.
-2. Stress-test horizon and uncertainty-penalty sensitivity before enabling broader default use.
-3. Keep P22 quick/nightly summaries aligned with planner traces, arena ablations, and triage outputs.
-4. Preserve simulator-first promotion gates while exploring deeper model-based hooks.
+1. Stress-test router thresholds and controller-selection heuristics on larger multi-seed arena budgets.
+2. Improve the balance between search cost, policy confidence, and wm uncertainty gating.
+3. Keep P22 quick/nightly summaries aligned with routing traces, arena ablations, and triage outputs.
+4. Preserve simulator-first promotion gates while exploring future learned-router extensions.
 
-## Near-Term After P47
+## Near-Term After P48
 
 - broader imagined-root coverage beyond the current replay families
-- tighter P42/P45 coupling through auxiliary losses and rollout-value proxies
-- RL-policy candidate-source support for rerank-assisted inference
-- careful expansion beyond horizon-1/2 while preserving uncertainty controls and arena-first evaluation
+- tighter P42/P45/P47 coupling through auxiliary losses, rollout-value proxies, and RL-policy routing
+- learned router experiments once controller telemetry is richer and more stable
+- careful expansion beyond fixed-budget search while preserving uncertainty controls and arena-first evaluation
 
 ## Constraints
 

@@ -13,6 +13,7 @@ P42 reuses this exact closed-loop shell and promotes RL candidate training (`rl_
 P45 can plug into the same shell as an auxiliary world-model asset for wm-assisted arena comparisons.
 P46 reuses the same lineage, replay-mix, arena, and triage surfaces for imagined replay augmentation.
 P47 reuses the same arena and triage surfaces for uncertainty-aware world-model rerank ablations.
+P48 reuses the same arena and triage surfaces for explainable hybrid-controller routing ablations.
 
 ## Architecture
 
@@ -117,6 +118,16 @@ P47 keeps replay/training untouched but extends arena/triage manifests with:
 - `policy_assist_map_json`
 - `candidate_policy` / `baseline_policy` for rerank ablations
 
+## Adaptive Hybrid Controller Contract (P48)
+
+P48 keeps replay/training unchanged but extends arena/triage manifests with:
+
+- `hybrid_controller`
+- `controller_registry_json`
+- `routing_summary_json`
+- `wm_assist_enabled`
+- controller-selection traces under `router_traces/<run_id>/routing_trace.jsonl`
+
 ## Imagination Augmentation Contract (P46)
 
 When P46 replay augmentation is enabled, candidate and replay artifacts also record:
@@ -192,6 +203,14 @@ P47-specific triage fields:
 - `uncertainty_penalty_sensitivity`
 - `horizon_sensitivity`
 - `top_degrading_slices_with_wm`
+
+P48-specific triage fields:
+
+- `routing_decision_impact`
+- `controller_selection_distribution`
+- `top_degrading_slices_for_hybrid`
+- `search_budget_sensitivity`
+- `wm_uncertainty_gate_impact`
 
 ## Run Commands
 

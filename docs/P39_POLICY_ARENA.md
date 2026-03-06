@@ -21,6 +21,7 @@ Goals:
   - `trainer/policy_arena/adapters/hybrid_adapter.py`
   - `trainer/policy_arena/adapters/world_model_assist_adapter.py`
   - `trainer/policy_arena/adapters/wm_rerank_adapter.py`
+  - `trainer/hybrid/hybrid_controller.py` (`hybrid_controller_v1` via arena adapter factory)
 - arena execution:
   - `trainer/policy_arena/arena_runner.py`
   - `trainer/policy_arena/arena_metrics.py`
@@ -126,6 +127,12 @@ P47 world-model rerank compare:
 powershell -ExecutionPolicy Bypass -File scripts/run_p22.ps1 -RunP47
 ```
 
+P48 adaptive hybrid compare:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_p22.ps1 -RunP48
+```
+
 ## World Model Assist (P45)
 
 P45 adds an optional arena adapter that reranks legal actions with a one-step world-model score while keeping the simulator as the execution authority.
@@ -172,6 +179,23 @@ Recorded fields:
 - `uncertainty_penalty`
 
 P47 ablations still run through normal arena episodes and champion rules. The world model only changes candidate ordering before action selection.
+
+## Adaptive Hybrid Controller (P48)
+
+P48 adds `hybrid_controller_v1`, which chooses between:
+
+- `policy_baseline`
+- `policy_plus_wm_rerank`
+- `search_baseline`
+- `heuristic_baseline`
+
+The router is explainable and writes routing traces under `router_traces/<run_id>/routing_trace.jsonl`.
+
+Arena manifests keep the hybrid policy explicit through:
+
+- `policy_assist_map.json`
+- `run_manifest.json -> hybrid_controller`
+- `routing_summary.json`
 
 ## Artifacts
 
@@ -226,3 +250,8 @@ P47 rerank dependency:
 
 - P47 ablations write results under `docs/artifacts/p47/arena_ablation/<run_id>/`.
 - `policy_assist_map.json` and `run_manifest.json` make world-model rerank settings explicit for each policy variant.
+
+P48 hybrid dependency:
+
+- P48 ablations write results under `docs/artifacts/p48/arena_ablation/<run_id>/`.
+- `routing_summary.json` and `triage_report.json` expose controller-selection distribution and routing impact.

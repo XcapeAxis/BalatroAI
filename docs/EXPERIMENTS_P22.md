@@ -28,7 +28,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | Scenario | Command | Notes |
 |---|---|---|
 | Plan only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -DryRun` | validates matrix + writes plan/report |
-| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | mainline smoke set with multi-seed materialization (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row + P40/P41/P42 + P45 world-model smoke row + P46 imagination smoke row + P47 model-based search smoke row) |
+| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | mainline smoke set with multi-seed materialization (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row + P40/P41/P42 + P45 world-model smoke row + P46 imagination smoke row + P47 model-based search smoke row + P48 hybrid-controller smoke row) |
 | Fast smoke + legacy probe | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -IncludeLegacy` | adds opt-in legacy BC/DAgger probe row(s) |
 | Legacy only quick | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -LegacyOnly` | runs only legacy baseline probe row(s) |
 | Multi-seed quick compare | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline,quick_candidate -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | 2 strategies x 3 seeds |
@@ -37,6 +37,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | P45 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP45` | runs `p45_world_model_smoke` with orchestrator defaults |
 | P46 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP46` | runs `p46_imagination_smoke` with orchestrator defaults |
 | P47 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP47` | runs `p47_wm_search_smoke` with orchestrator defaults |
+| P48 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP48` | runs `p48_hybrid_controller_smoke` with orchestrator defaults |
 | Single experiment | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline -Resume` | rerun one exp id |
 | Limit seeds | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -SeedLimit 2` | local-cost control |
 | Custom seeds | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | explicit reproducibility override (recorded to artifacts) |
@@ -66,7 +67,7 @@ Key sections:
   - `category` (`mainline`, `legacy_baseline`, `required_validation`, ...)
   - `default_enabled` (`false` rows are excluded unless explicitly requested)
   - `backend`, `policy`
-  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`, `selfsup_future_value`, `selfsup_action_type`, `ssl_pretrain`, `ssl_probe`, `rl_selfplay`, `policy_arena`, `closed_loop_improvement`, `closed_loop_improvement_v2`, `closed_loop_rl_candidate`, `world_model_train`, `world_model_eval`, `world_model_assist_compare`, `imagination_augmented_candidate`, `p46_imagination`, `world_model_rerank_eval`, `p47_wm_search`)
+  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`, `selfsup_future_value`, `selfsup_action_type`, `ssl_pretrain`, `ssl_probe`, `rl_selfplay`, `policy_arena`, `closed_loop_improvement`, `closed_loop_improvement_v2`, `closed_loop_rl_candidate`, `world_model_train`, `world_model_eval`, `world_model_assist_compare`, `imagination_augmented_candidate`, `p46_imagination`, `world_model_rerank_eval`, `p47_wm_search`, `hybrid_controller_eval`, `p48_hybrid_controller`)
   - `seed_mode` (`regression_fixed` or `nightly`)
   - `seeds` (optional explicit seed override list)
   - `gate_flag` (passed to `scripts/run_regressions.ps1`)
@@ -493,6 +494,42 @@ Operational notes:
 - multi-seed materialization remains mandatory (`seeds_used.json` per experiment).
 - P47 is rerank-only and keeps real arena outcomes as the promotion authority.
 
+## P48 Adaptive Hybrid Controller Integration
+
+P48 introduces `experiment_type: hybrid_controller_eval` so P22 can orchestrate controller-registry export -> routing-feature smoke -> router smoke -> hybrid-controller arena ablation -> champion decision -> triage in one experiment row.
+
+Reference rows in `configs/experiments/p22.yaml`:
+
+- `p48_hybrid_controller_smoke` (quick/gate)
+- `p48_hybrid_controller_nightly` (nightly)
+
+Key eval fields:
+
+- `config`: hybrid-controller config path (`configs/experiments/p48_hybrid_controller_smoke.yaml` / `...nightly.yaml`)
+- `candidate_policy` / `champion_policy`
+- router thresholds and controller availability via `policy_assist_map.json`
+
+Generated artifacts:
+
+- `docs/artifacts/p22/runs/<run_id>/p48_summary.json`
+- `docs/artifacts/p22/runs/<run_id>/p48_hybrid_controller_smoke/hybrid_controller_runs/seed_*/pipeline_summary.json`
+- referenced arena/triage outputs under `docs/artifacts/p48/{arena_ablation,triage}/<run_id>/`
+
+Summary-table metrics surfaced by orchestrator:
+
+- `p48_baseline_score`
+- `p48_hybrid_score`
+- `p48_wm_rerank_score`
+- `p48_search_score`
+- `p48_hybrid_delta_vs_baseline`
+
+Operational notes:
+
+- `scripts/run_p22.ps1 -Quick` includes `p48_hybrid_controller_smoke` by default.
+- `scripts/run_p22.ps1 -RunP48` selects `p48_hybrid_controller_smoke` or `p48_hybrid_controller_nightly`.
+- multi-seed materialization remains mandatory (`seeds_used.json` per experiment).
+- P48 is an explainable router layer; real arena outcomes remain authoritative.
+
 ## Runtime Observability (During Execution)
 
 P22 emits both per-experiment and run-level observability artifacts:
@@ -637,3 +674,4 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_selfsup
 - [P45_WORLD_MODEL.md](P45_WORLD_MODEL.md)
 - [P46_IMAGINATION_LOOP.md](P46_IMAGINATION_LOOP.md)
 - [P47_MODEL_BASED_SEARCH.md](P47_MODEL_BASED_SEARCH.md)
+- [P48_ADAPTIVE_HYBRID_CONTROLLER.md](P48_ADAPTIVE_HYBRID_CONTROLLER.md)

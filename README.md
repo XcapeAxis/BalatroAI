@@ -9,7 +9,7 @@
 [![Seed Governance](https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16)](configs/experiments/seeds_p23.yaml)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Trend Warehouse](https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16)](docs/TREND_WAREHOUSE_P26.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P47-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P48-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -19,7 +19,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/XcapeAxis/BalatroAI)](https://github.com/XcapeAxis/BalatroAI/issues)
 <!-- BADGES:END -->
 
-BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, a unified action replay contract, P45 world-model / latent-planning, P46 short-horizon imagination augmentation, and P47 uncertainty-aware world-model reranking for decision-time evaluation. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised/world-model iteration, not as a cheat injector or memory-hook tool.
+BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, a unified action replay contract, P45 world-model / latent-planning, P46 short-horizon imagination augmentation, P47 uncertainty-aware world-model reranking, and P48 adaptive hybrid routing across policy/search/world-model assist. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised/world-model iteration, not as a cheat injector or memory-hook tool.
 
 Badge/status refresh source:
 
@@ -56,7 +56,7 @@ Not suitable for:
 
 P43 refocuses training into two explicit lanes:
 
-- Mainline (default): Self-Supervised + World Model + RL candidate + Closed-loop promotion (`P40/P41/P42/P44/P45/P47`).
+- Mainline (default): Self-Supervised + World Model + RL candidate + Closed-loop promotion (`P40/P41/P42/P44/P45/P47/P48`).
 - Legacy baseline (opt-in): BC/DAgger (`trainer/train_bc.py`, `trainer/dagger_collect*.py`) for baseline/probe/warm-start only.
 
 Why this shift:
@@ -200,6 +200,13 @@ python -m trainer.world_model.lookahead_planner --config configs/experiments/p47
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP47
 ```
 
+Optional P48 adaptive hybrid controller smoke:
+
+```powershell
+python -m trainer.hybrid.hybrid_controller --quick
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP48
+```
+
 8. Inspect generated artifacts.
 
 - `docs/artifacts/p22/runs/<run_id>/summary_table.md`
@@ -208,6 +215,8 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP47
 - `docs/artifacts/p40/closed_loop_runs/<run_id>/{run_manifest.json,promotion_decision.json,summary_table.md}`
 - `docs/artifacts/p45/{wm_dataset,wm_train,wm_eval,wm_assist_compare}/<run_id>/`
 - `docs/artifacts/p46/{imagination_rollouts,imagination_pipeline,arena_compare,triage}/<run_id>/`
+- `docs/artifacts/p47/{lookahead,arena_ablation,triage}/<run_id>/`
+- `docs/artifacts/p48/{arena_ablation,triage}/<run_id>/`
 - optional live snapshot view: `powershell -ExecutionPolicy Bypass -File scripts\show_p22_live.ps1`
 
 9. Cleanup runtime files when finished.
@@ -255,6 +264,7 @@ More details:
 - [docs/P45_WORLD_MODEL.md](docs/P45_WORLD_MODEL.md)
 - [docs/P46_IMAGINATION_LOOP.md](docs/P46_IMAGINATION_LOOP.md)
 - [docs/P47_MODEL_BASED_SEARCH.md](docs/P47_MODEL_BASED_SEARCH.md)
+- [docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md](docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md)
 - [docs/P43_TRAINING_STRATEGY_REFOCUS.md](docs/P43_TRAINING_STRATEGY_REFOCUS.md)
 
 ## Architecture Overview
@@ -323,6 +333,10 @@ All BC/DAgger/Self-Supervised (P33/P36) experiment paths now normalize actions t
   - quick: `python -m trainer.world_model.lookahead_planner --config configs/experiments/p47_wm_search_smoke.yaml --quick`
   - orchestrated quick: `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP47`
   - signal: candidate generation, uncertainty-aware lookahead, rerank ablations, and slice-aware triage through the real arena
+- P48 adaptive hybrid controller:
+  - quick: `python -m trainer.hybrid.hybrid_controller --quick`
+  - orchestrated quick: `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP48`
+  - signal: controller registry, routing features, explainable router traces, and hybrid-vs-baseline arena ablations
 
 ## How to Compare Policies
 
@@ -559,6 +573,35 @@ Reference docs:
 
 - [docs/P47_MODEL_BASED_SEARCH.md](docs/P47_MODEL_BASED_SEARCH.md)
 
+## Adaptive Hybrid Controller (P48)
+
+P48 adds a state-aware controller router above the existing policy/search/world-model-assisted adapters. It uses explicit routing features such as policy confidence, world-model uncertainty, slice labels, and search budget to choose between `policy_baseline`, `policy_plus_wm_rerank`, `search_baseline`, and heuristic fallback.
+
+Quick start:
+
+```powershell
+python -m trainer.hybrid.hybrid_controller --quick
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP48
+```
+
+P48 artifacts:
+
+- `docs/artifacts/p48/controller_registry_<timestamp>.json`
+- `docs/artifacts/p48/routing_features_smoke_<timestamp>.json`
+- `docs/artifacts/p48/router_traces/<run_id>/routing_trace.jsonl`
+- `docs/artifacts/p48/arena_ablation/<run_id>/`
+- `docs/artifacts/p48/triage/<run_id>/`
+
+Boundaries / risks:
+
+- P48 is a rule-based, explainable router; it is not a learned meta-policy.
+- overusing search can raise inference cost; overtrusting wm-rerank can import model bias.
+- arena results and triage remain the promotion authority, not routing confidence alone.
+
+Reference docs:
+
+- [docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md](docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md)
+
 ## Maturity and Boundaries
 
 - P41 v2 still produces recommendation-only promotion outputs; champion switching remains manual.
@@ -567,6 +610,7 @@ Reference docs:
 - P45 world model is v1/research-grade; it provides one-step latent planning assist, not a simulator replacement.
 - P46 imagination augmentation is v1/research-grade; it provides short-horizon synthetic replay, not trusted model-based evaluation.
 - P47 model-based reranking is v1/research-grade; it provides short-horizon decision support, not full search or trusted model-only evaluation.
+- P48 adaptive hybrid routing is v1/research-grade; routing rules are explainable heuristics and will require recalibration as controller quality shifts.
 - BC/DAgger paths are retained as legacy baselines; they are not default mainline training routes.
 - Legacy baseline checks are lightweight smoke/probe checks unless explicitly requested.
 - low-sample CI/bootstrap outcomes remain observation-level and should not be treated as decisive promotion proof.
@@ -926,12 +970,13 @@ Milestone maturity snapshot:
 | P44 (distributed RL training: rollout workers + curriculum + arena-gated evaluation) | shipped |
 | P45 (world model / latent planning v1: dataset + dynamics + uncertainty + planning hook) | shipped |
 | P46 (Dyna-style imagination loop v1: short imagined rollouts + replay augmentation + arena ablation) | shipped |
-| P47 (uncertainty-aware model-based search v1: candidate generation + rerank + arena ablation) | active |
+| P47 (uncertainty-aware model-based search v1: candidate generation + rerank + arena ablation) | shipped |
+| P48 (adaptive hybrid controller v1: state-aware routing across policy/search/wm-rerank) | active |
 
 Near-term:
 
-- harden P47 uncertainty calibration and rerank safeguards on larger multi-seed budgets
-- extend imagined augmentation and rerank hooks toward RL candidate inference without weakening arena-first gating
+- harden P48 routing thresholds and controller-cost heuristics on larger multi-seed budgets
+- extend adaptive routing toward RL candidate inference without weakening arena-first gating
 - keep simulator-first promotion gates strict while improving model-based diagnostics
 
 Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
@@ -959,6 +1004,7 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - P45 world model is one-step and uncertainty-aware only in a coarse sense; real simulator/oracle traces still decide promotion and regression outcomes.
 - P46 imagined replay can import world-model bias; short horizon and uncertainty filtering reduce but do not remove that risk.
 - P47 rerank quality depends on P45 model quality and candidate-set quality; poor calibration can still degrade decisions, so arena evaluation stays authoritative.
+- P48 routing quality depends on both P47 rerank quality and controller calibration; routing traces and arena ablations must be read together.
 
 ## Further Reading
 
@@ -975,6 +1021,7 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/P45_WORLD_MODEL.md](docs/P45_WORLD_MODEL.md)
 - [docs/P46_IMAGINATION_LOOP.md](docs/P46_IMAGINATION_LOOP.md)
 - [docs/P47_MODEL_BASED_SEARCH.md](docs/P47_MODEL_BASED_SEARCH.md)
+- [docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md](docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md)
 - [docs/P43_TRAINING_STRATEGY_REFOCUS.md](docs/P43_TRAINING_STRATEGY_REFOCUS.md)
 - [docs/RL_OVERVIEW.md](docs/RL_OVERVIEW.md)
 - [docs/EXPERIMENTS_P32_SELF_SUPERVISED.md](docs/EXPERIMENTS_P32_SELF_SUPERVISED.md)
