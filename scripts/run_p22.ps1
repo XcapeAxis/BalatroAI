@@ -18,6 +18,7 @@ param(
   [switch]$RunP48,
   [switch]$RunP49,
   [switch]$RunP50,
+  [switch]$RunP51,
   [string]$Only = "",
   [string]$Exclude = "",
   [string]$TrainingPython = "",
@@ -70,7 +71,7 @@ if ($LegacyOnly) { $args += "--legacy-only" }
 if ($Resume) { $args += "--resume" }
 if ($KeepIntermediate) { $args += "--keep-intermediate" }
 if ($VerboseLogs) { $args += "--verbose" }
-if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $RunP50) -and [string]::IsNullOrWhiteSpace($Only)) {
+if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $RunP50 -or $RunP51) -and [string]::IsNullOrWhiteSpace($Only)) {
   $selected = @()
   if ($RunP44) { $selected += if ($Nightly) { "p44_rl_nightly" } else { "p44_rl_smoke" } }
   if ($RunP45) { $selected += if ($Nightly) { "p45_world_model_nightly" } else { "p45_world_model_smoke" } }
@@ -79,6 +80,7 @@ if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $Ru
   if ($RunP48) { $selected += if ($Nightly) { "p48_hybrid_controller_nightly" } else { "p48_hybrid_controller_smoke" } }
   if ($RunP49) { $selected += if ($Nightly) { "p49_gpu_mainline_nightly" } else { "p49_gpu_mainline_smoke" } }
   if ($RunP50) { $selected += if ($Nightly) { "p50_gpu_validation_nightly" } else { "p50_gpu_validation_smoke" } }
+  if ($RunP51) { $selected += if ($Nightly) { "p51_resumeable_nightly" } else { "p51_registry_smoke" } }
   $Only = ($selected -join ",")
 }
 if (-not [string]::IsNullOrWhiteSpace($Only)) { $args += @("--only", $Only) }
@@ -107,7 +109,8 @@ if ($Quick) {
       "p47_wm_search_smoke",
       "p48_hybrid_controller_smoke",
       "p49_gpu_mainline_smoke",
-      "p50_gpu_validation_smoke"
+      "p50_gpu_validation_smoke",
+      "p51_registry_smoke"
     )
     if ($IncludeLegacy -or $LegacyOnly) {
       $quickIds += @("legacy_bc_dagger_probe")
@@ -162,7 +165,7 @@ if ($code -ne 0) {
 }
 
 $dashboardPath = ""
-if ($Dashboard -or $Quick -or $Nightly -or $RunP49 -or $RunP50) {
+if ($Dashboard -or $Quick -or $Nightly -or $RunP49 -or $RunP50 -or $RunP51) {
   $dashArgs = @(
     "-B",
     "-m", "trainer.monitoring.dashboard_build",
@@ -179,3 +182,25 @@ if ($Dashboard -or $Quick -or $Nightly -or $RunP49 -or $RunP50) {
 
 if ($readinessReport) { Write-Host ("[P22] readiness_report=" + $readinessReport) }
 if ($dashboardPath) { Write-Host ("[P22] dashboard=" + $dashboardPath) }
+
+$runsRoot = Join-Path $ProjectRoot (Join-Path $OutRoot "runs")
+if (Test-Path $runsRoot) {
+  $latestRun = Get-ChildItem -Path $runsRoot -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1
+  if ($latestRun) {
+    $summaryPath = Join-Path $latestRun.FullName "summary_table.json"
+    if (Test-Path $summaryPath) {
+      try {
+        $rows = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
+        if ($rows) {
+          foreach ($row in @($rows)) {
+            if (-not $row) { continue }
+            if ($row.campaign_state_path) { Write-Host ("[P22] campaign_state=" + [string]$row.campaign_state_path) }
+            if ($row.registry_snapshot_path) { Write-Host ("[P22] registry_snapshot=" + [string]$row.registry_snapshot_path) }
+          }
+        }
+      } catch {
+        Write-Host ("[P22] warning: failed to read summary_table.json: " + $_.Exception.Message)
+      }
+    }
+  }
+}

@@ -178,6 +178,8 @@ def normalize_experiment_category(exp: dict[str, Any]) -> str:
         "gpu_mainline_eval",
         "p49_gpu_mainline",
         "p50_gpu_validation",
+        "checkpoint_registry_campaign",
+        "p51_registry_campaign",
     }:
         return MODE_CATEGORY_MAINLINE
     if exp_type == "standard" and policy in {"baseline", "candidate"}:
@@ -2308,6 +2310,384 @@ def _run_p49_gpu_mainline_seed_experiment(
     }
 
 
+def _run_p51_registry_campaign_seed_experiment(
+    *,
+    ctx: RunContext,
+    exp: dict[str, Any],
+    exp_dir: Path,
+    seed: str,
+    seed_idx: int,
+    seed_total: int,
+) -> dict[str, Any]:
+    from trainer.campaigns.campaign_schema import CAMPAIGN_STAGE_IDS, normalize_stage_status
+    from trainer.campaigns.resume_state import (
+        get_stage,
+        load_campaign_state,
+        mark_stage_completed,
+        mark_stage_failed,
+        mark_stage_started,
+        save_campaign_state,
+        should_skip_stage,
+    )
+    from trainer.closed_loop.closed_loop_runner import run_closed_loop
+    from trainer.monitoring.dashboard_build import build_dashboard
+    from trainer.registry.checkpoint_registry import list_entries, snapshot_registry
+    from trainer.registry.promotion_queue import build_promotion_queue_summary
+    from trainer.world_model.imagination_pipeline import run_imagination_pipeline
+    from trainer.world_model.train import run_world_model_train
+
+    eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+    cfg_rel = str(
+        eval_cfg.get("config")
+        or exp.get("campaign_config")
+        or (
+            "configs/experiments/p51_registry_smoke.yaml"
+            if ctx.mode == "quick"
+            else "configs/experiments/p51_resumeable_nightly.yaml"
+        )
+    )
+    cfg_path = (ctx.repo_root / cfg_rel).resolve()
+    cfg = _read_yaml_or_json(cfg_path)
+    quick_flag = bool(eval_cfg.get("quick", False) or ctx.mode == "quick")
+    device_profile_name = str(
+        cfg.get("device_profile")
+        or ((cfg.get("runtime") or {}).get("device_profile") if isinstance(cfg.get("runtime"), dict) else "")
+        or exp.get("device_profile")
+        or "single_gpu_mainline"
+    ).strip()
+    force_rerun_stages = {
+        str(item).strip()
+        for item in (cfg.get("force_rerun_stages") or exp.get("force_rerun_stages") or [])
+        if str(item).strip()
+    }
+
+    campaign_root = exp_dir / "campaign_runs" / f"seed_{seed_idx:03d}_{seed}"
+    campaign_root.mkdir(parents=True, exist_ok=True)
+    generated_root = campaign_root / "generated_configs"
+    generated_root.mkdir(parents=True, exist_ok=True)
+    state_path = campaign_root / "campaign_state.json"
+    resume_report_path = campaign_root / "campaign_resume_report.md"
+    registry_snapshot_path = campaign_root / "checkpoint_registry_snapshot.json"
+    promotion_queue_path = campaign_root / "promotion_queue.json"
+    campaign_state = load_campaign_state(
+        state_path=state_path,
+        campaign_id=f"{str(exp.get('id') or 'p51_registry_campaign')}-{seed}",
+        run_id=ctx.run_id,
+        experiment_id=str(exp.get("id") or ""),
+        seed=seed,
+        stage_ids=list(CAMPAIGN_STAGE_IDS),
+        metadata={
+            "config_path": str(cfg_path),
+            "device_profile": device_profile_name,
+            "training_python": sys.executable,
+            "readiness_report_path": _resolved_readiness_report_path(),
+        },
+    )
+
+    component_runs: dict[str, Any] = {}
+    component_scores: list[float] = []
+    produced_checkpoint_ids: list[str] = []
+    warnings: list[str] = []
+
+    def _persist() -> None:
+        save_campaign_state(state_path, campaign_state)
+
+    def _stage_artifacts(stage_id: str) -> dict[str, Any]:
+        stage = get_stage(campaign_state, stage_id)
+        return dict(stage.get("artifacts") or {}) if isinstance(stage.get("artifacts"), dict) else {}
+
+    def _start(stage_id: str) -> bool:
+        nonlocal campaign_state
+        if should_skip_stage(campaign_state, stage_id, force_rerun=stage_id in force_rerun_stages):
+            return False
+        campaign_state = mark_stage_started(campaign_state, stage_id)
+        _persist()
+        return True
+
+    def _complete(stage_id: str, artifacts: dict[str, Any], *, skipped: bool = False) -> None:
+        nonlocal campaign_state
+        campaign_state = mark_stage_completed(campaign_state, stage_id, artifacts=artifacts, resume_safe=True, skipped=skipped)
+        _persist()
+
+    def _fail(stage_id: str, exc: Exception, *, artifacts: dict[str, Any] | None = None) -> dict[str, Any]:
+        nonlocal campaign_state
+        campaign_state = mark_stage_failed(
+            campaign_state,
+            stage_id,
+            error_summary=str(exc),
+            artifacts=artifacts or {},
+            resume_safe=True,
+        )
+        _persist()
+        write_json(
+            campaign_root / "campaign_failure.json",
+            {
+                "schema": "p51_campaign_failure_v1",
+                "stage_id": stage_id,
+                "error": str(exc),
+                "campaign_state": str(state_path),
+            },
+        )
+        return {
+            "status": "failed",
+            "metrics": {
+                "score": 0.0,
+                "campaign_state_path": str(state_path),
+                "registry_snapshot_path": str(registry_snapshot_path),
+            },
+            "summary": {
+                "campaign_state_path": str(state_path),
+                "failed_stage": stage_id,
+                "error": str(exc),
+            },
+        }
+
+    try:
+        if _start("service_readiness"):
+            _complete(
+                "service_readiness",
+                {
+                    "readiness_report_path": _resolved_readiness_report_path(),
+                    "training_python": sys.executable,
+                    "device_profile": device_profile_name,
+                },
+            )
+
+        if _gpu_component_enabled(cfg, "p42", default=True):
+            if _start("train_rl"):
+                p42_cfg = _prepare_gpu_component_config(
+                    ctx=ctx,
+                    source_config_path=_resolve_component_config_path(ctx=ctx, cfg=cfg, component_id="p42"),
+                    out_path=generated_root / "p42.json",
+                    seed=seed,
+                    device_profile_name=device_profile_name,
+                    component_id="p42",
+                )
+                p42_summary = run_closed_loop(
+                    config_path=p42_cfg,
+                    out_dir=campaign_root / "p42",
+                    run_id=f"p51-{seed}-p42",
+                    quick=quick_flag,
+                    dry_run=bool(ctx.dry_run),
+                    seeds_override=[seed],
+                )
+                component_runs["p42"] = p42_summary
+                component_scores.append(_read_closed_loop_score(p42_summary))
+                if str(p42_summary.get("candidate_checkpoint_id") or "").strip():
+                    produced_checkpoint_ids.append(str(p42_summary.get("candidate_checkpoint_id") or ""))
+                _complete(
+                    "train_rl",
+                    {
+                        "p42_summary": p42_summary,
+                        "candidate_checkpoint_id": str(p42_summary.get("candidate_checkpoint_id") or ""),
+                        "candidate_checkpoint": str(p42_summary.get("candidate_checkpoint") or ""),
+                    },
+                )
+            else:
+                artifacts = _stage_artifacts("train_rl")
+                if isinstance(artifacts.get("p42_summary"), dict):
+                    component_runs["p42"] = dict(artifacts.get("p42_summary") or {})
+                    component_scores.append(_read_closed_loop_score(component_runs["p42"]))
+                if str(artifacts.get("candidate_checkpoint_id") or "").strip():
+                    produced_checkpoint_ids.append(str(artifacts.get("candidate_checkpoint_id") or ""))
+
+        if _start("train_world_model"):
+            p45_cfg = _prepare_gpu_component_config(
+                ctx=ctx,
+                source_config_path=_resolve_component_config_path(ctx=ctx, cfg=cfg, component_id="p45"),
+                out_path=generated_root / "p45.json",
+                seed=seed,
+                device_profile_name=device_profile_name,
+                component_id="p45",
+            )
+            p45_summary = run_world_model_train(
+                config_path=p45_cfg,
+                out_dir=campaign_root / "p45",
+                run_id=f"p51-{seed}-p45",
+                quick=quick_flag,
+                seed_override=_seed_to_int(seed),
+            )
+            component_runs["p45"] = p45_summary
+            p45_metrics = read_json(Path(str(p45_summary.get("metrics_json") or ""))) or {}
+            component_scores.append(float(1.0 / (1.0 + max(0.0, float((p45_metrics or {}).get("best_metric") or 0.0)))))
+            if str(p45_summary.get("checkpoint_id") or "").strip():
+                produced_checkpoint_ids.append(str(p45_summary.get("checkpoint_id") or ""))
+            _complete(
+                "train_world_model",
+                {
+                    "p45_summary": p45_summary,
+                    "checkpoint_id": str(p45_summary.get("checkpoint_id") or ""),
+                    "best_checkpoint": str(p45_summary.get("best_checkpoint") or ""),
+                },
+            )
+        else:
+            artifacts = _stage_artifacts("train_world_model")
+            if isinstance(artifacts.get("p45_summary"), dict):
+                component_runs["p45"] = dict(artifacts.get("p45_summary") or {})
+                p45_metrics = read_json(Path(str(component_runs["p45"].get("metrics_json") or ""))) or {}
+                component_scores.append(float(1.0 / (1.0 + max(0.0, float((p45_metrics or {}).get("best_metric") or 0.0)))))
+            if str(artifacts.get("checkpoint_id") or "").strip():
+                produced_checkpoint_ids.append(str(artifacts.get("checkpoint_id") or ""))
+
+        if _gpu_component_enabled(cfg, "p46", default=not quick_flag):
+            if _start("build_imagination_data"):
+                p46_cfg = _prepare_gpu_component_config(
+                    ctx=ctx,
+                    source_config_path=_resolve_component_config_path(ctx=ctx, cfg=cfg, component_id="p46"),
+                    out_path=generated_root / "p46.json",
+                    seed=seed,
+                    device_profile_name=device_profile_name,
+                    component_id="p46",
+                )
+                p46_summary = run_imagination_pipeline(
+                    config_path=p46_cfg,
+                    out_dir=campaign_root / "p46",
+                    run_id=f"p51-{seed}-p46",
+                    quick=quick_flag,
+                    dry_run=bool(ctx.dry_run),
+                    seeds_override=[seed],
+                )
+                component_runs["p46"] = p46_summary
+                p46_metrics = p46_summary.get("metrics") if isinstance(p46_summary.get("metrics"), dict) else {}
+                component_scores.append(float((p46_metrics or {}).get("score") or 0.0))
+                _complete("build_imagination_data", {"p46_summary": p46_summary})
+            else:
+                artifacts = _stage_artifacts("build_imagination_data")
+                if isinstance(artifacts.get("p46_summary"), dict):
+                    component_runs["p46"] = dict(artifacts.get("p46_summary") or {})
+                    p46_metrics = component_runs["p46"].get("metrics") if isinstance(component_runs["p46"].get("metrics"), dict) else {}
+                    component_scores.append(float((p46_metrics or {}).get("score") or 0.0))
+        elif _start("build_imagination_data"):
+            _complete("build_imagination_data", {"status": "skipped_component_disabled"}, skipped=True)
+
+        if _start("arena_eval"):
+            arena_refs = {
+                "p42_arena_summary": str((component_runs.get("p42") or {}).get("arena_summary") or ""),
+                "p46_promotion_decision_json": str((component_runs.get("p46") or {}).get("promotion_decision_json") or ""),
+            }
+            _complete("arena_eval", arena_refs)
+
+        if _start("triage"):
+            triage_refs = {
+                "p42_promotion_decision": str((component_runs.get("p42") or {}).get("promotion_decision") or ""),
+                "p46_triage_report_json": str((component_runs.get("p46") or {}).get("triage_report_json") or ""),
+            }
+            _complete("triage", triage_refs)
+
+        if _start("promotion_decision"):
+            snapshot_registry(out_path=registry_snapshot_path)
+            queue_payload = build_promotion_queue_summary(list_entries())
+            write_json(promotion_queue_path, queue_payload)
+            _complete(
+                "promotion_decision",
+                {
+                    "registry_snapshot_path": str(registry_snapshot_path),
+                    "promotion_queue_path": str(promotion_queue_path),
+                    "produced_checkpoint_ids": produced_checkpoint_ids,
+                },
+            )
+
+        if _start("dashboard_build"):
+            dashboard_summary = build_dashboard(
+                ctx.repo_root / "docs" / "artifacts",
+                ctx.repo_root / "docs" / "artifacts" / "dashboard" / "latest",
+            )
+            _complete("dashboard_build", dashboard_summary)
+
+        if _start("cleanup_finalize"):
+            _complete(
+                "cleanup_finalize",
+                {
+                    "keep_intermediate": bool(ctx.keep_intermediate),
+                    "warnings": warnings,
+                },
+            )
+    except Exception as exc:
+        return _fail("cleanup_finalize" if not str(exc) else next((stage for stage in CAMPAIGN_STAGE_IDS if normalize_stage_status(get_stage(campaign_state, stage).get("status")) == "running"), "cleanup_finalize"), exc)
+
+    snapshot_registry(out_path=registry_snapshot_path)
+    queue_payload = build_promotion_queue_summary(list_entries())
+    write_json(promotion_queue_path, queue_payload)
+    write_json(
+        campaign_root / "campaign_summary.json",
+        {
+            "schema": "p51_campaign_summary_v1",
+            "generated_at": now_iso(),
+            "campaign_state_path": str(state_path),
+            "registry_snapshot_path": str(registry_snapshot_path),
+            "promotion_queue_path": str(promotion_queue_path),
+            "produced_checkpoint_ids": produced_checkpoint_ids,
+            "component_runs": component_runs,
+        },
+    )
+    resume_lines = [
+        "# P51 Campaign Resume Report",
+        "",
+        f"- campaign_state_path: `{state_path}`",
+        f"- registry_snapshot_path: `{registry_snapshot_path}`",
+        f"- promotion_queue_path: `{promotion_queue_path}`",
+        f"- produced_checkpoint_ids: `{','.join(produced_checkpoint_ids)}`",
+        "",
+        "## Stage Status",
+    ]
+    for stage_id in CAMPAIGN_STAGE_IDS:
+        stage = get_stage(campaign_state, stage_id)
+        resume_lines.append(
+            "- {stage}: status={status} attempts={attempts} resume_safe={safe}".format(
+                stage=stage_id,
+                status=stage.get("status"),
+                attempts=int(stage.get("attempt_count") or 0),
+                safe=str(bool(stage.get("resume_safe", True))).lower(),
+            )
+        )
+    resume_report_path.write_text("\n".join(resume_lines).rstrip() + "\n", encoding="utf-8")
+
+    aggregate_score = float(sum(component_scores) / max(1, len(component_scores)))
+    result_metrics = {
+        "score": aggregate_score,
+        "avg_reward": aggregate_score,
+        "best_episode_reward": max(component_scores or [0.0]),
+        "avg_ante_reached": aggregate_score,
+        "median_ante": aggregate_score,
+        "win_rate": 0.0,
+        "hand_top1": 0.0,
+        "hand_top3": 0.0,
+        "shop_top1": 0.0,
+        "illegal_action_rate": 0.0,
+        "p51_component_count": len(component_runs),
+        "p51_checkpoint_count": len(produced_checkpoint_ids),
+        "p51_campaign_state_path": str(state_path),
+        "p51_registry_snapshot_path": str(registry_snapshot_path),
+        "p51_promotion_queue_path": str(promotion_queue_path),
+        "p51_resume_report_md": str(resume_report_path),
+        "p51_training_python": sys.executable,
+        "p51_device_profile": device_profile_name,
+        "p51_dashboard_path": str((ctx.repo_root / "docs/artifacts/dashboard/latest/index.html").resolve()),
+        "p51_readiness_report_path": _resolved_readiness_report_path(),
+    }
+    summary_payload = {
+        "schema": "p51_campaign_seed_summary_v1",
+        "generated_at": now_iso(),
+        "seed": str(seed),
+        "run_dir": str(campaign_root),
+        "device_profile": device_profile_name,
+        "component_runs": component_runs,
+        "produced_checkpoint_ids": produced_checkpoint_ids,
+        "campaign_state_path": str(state_path),
+        "registry_snapshot_path": str(registry_snapshot_path),
+        "promotion_queue_path": str(promotion_queue_path),
+        "resume_report_md": str(resume_report_path),
+        "dashboard_path": str((ctx.repo_root / "docs/artifacts/dashboard/latest/index.html").resolve()),
+        "readiness_report_path": _resolved_readiness_report_path(),
+        "training_python": sys.executable,
+    }
+    return {
+        "status": "ok",
+        "metrics": result_metrics,
+        "summary": summary_payload,
+    }
+
+
 def _run_closed_loop_seed_experiment(
     *,
     ctx: RunContext,
@@ -3032,6 +3412,23 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "readiness_report_path": _resolved_readiness_report_path(),
             "training_python": sys.executable,
         }
+    elif exp_type in {"checkpoint_registry_campaign", "p51_registry_campaign"}:
+        eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+        manifest["p51_campaign"] = {
+            "config": str(
+                eval_cfg.get("config")
+                or exp.get("campaign_config")
+                or (
+                    "configs/experiments/p51_registry_smoke.yaml"
+                    if ctx.mode == "quick"
+                    else "configs/experiments/p51_resumeable_nightly.yaml"
+                )
+            ),
+            "quick": bool(eval_cfg.get("quick") or False),
+            "device_profile": str(exp.get("device_profile") or "single_gpu_mainline"),
+            "readiness_report_path": _resolved_readiness_report_path(),
+            "training_python": sys.executable,
+        }
     write_json(exp_dir / "run_manifest.json", manifest)
     print(
         "[P22] Experiment {idx}/{total}: {exp_id} (seeds {seed_count}, mode={mode})".format(
@@ -3750,6 +4147,54 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                     elapsed_sec=elapsed(),
                     metrics=seed_results[-1].get("metrics") or {},
                     message=exp_type,
+                        extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
+                    )
+            elif exp_type in {"checkpoint_registry_campaign", "p51_registry_campaign"}:
+                try:
+                    p51_result = _run_p51_registry_campaign_seed_experiment(
+                        ctx=ctx,
+                        exp=exp,
+                        exp_dir=exp_dir,
+                        seed=seed,
+                        seed_idx=seed_idx,
+                        seed_total=len(seeds),
+                    )
+                except Exception as exc:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "failed",
+                            "stage": "eval",
+                            "error": f"p51_campaign_exception: {exc}",
+                            "elapsed_sec": elapsed(),
+                            "metrics": {},
+                        }
+                    )
+                else:
+                    p51_summary = dict(p51_result.get("summary") or {})
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "ok" if p51_result["status"] == "ok" else "failed",
+                            "stage": "eval",
+                            "elapsed_sec": elapsed(),
+                            "metrics": dict(p51_result.get("metrics") or {}),
+                            "summary": p51_summary,
+                            "p51_campaign_summary": p51_summary,
+                        }
+                    )
+                append_experiment_progress_event(
+                    progress_path,
+                    run_id=ctx.run_id,
+                    exp_id=exp_id,
+                    phase="eval",
+                    stage="eval",
+                    status=str(seed_results[-1].get("status")),
+                    seed=seed,
+                    step_or_epoch=seed_idx,
+                    elapsed_sec=elapsed(),
+                    metrics=seed_results[-1].get("metrics") or {},
+                    message=exp_type,
                     extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
                 )
             elif exp_type in {"closed_loop_improvement", "closed_loop", "p40_closed_loop", "closed_loop_improvement_v2", "p41_closed_loop_v2", "closed_loop_v2", "closed_loop_rl_candidate", "rl_candidate_pipeline", "p42_rl_candidate", "p42_rl_candidate_pipeline", "p44_distributed_rl"}:
@@ -3924,8 +4369,10 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
     success = is_success(metric_summary)
     elapsed_total = elapsed()
     final_seed_metrics = {}
+    final_seed_summary = {}
     if seed_results:
         final_seed_metrics = dict(seed_results[-1].get("metrics") or {})
+        final_seed_summary = dict(seed_results[-1].get("summary") or {})
     final_win_rate = _as_number(final_seed_metrics.get("win_rate"))
     final_loss = _as_number(
         final_seed_metrics.get("ssl_probe_val_loss")
@@ -3958,35 +4405,59 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
     )
     runtime_details = {
         "device_profile": str(
-            final_seed_metrics.get("p50_device_profile")
+            final_seed_metrics.get("p51_device_profile")
+            or final_seed_metrics.get("p50_device_profile")
             or final_seed_metrics.get("p49_device_profile")
             or exp.get("device_profile")
             or ""
         ),
         "learner_device": str(
-            final_seed_metrics.get("p50_learner_device")
+            final_seed_metrics.get("p51_learner_device")
+            or final_seed_metrics.get("p50_learner_device")
             or final_seed_metrics.get("gpu_mainline_learner_device")
             or final_seed_metrics.get("p49_learner_device")
             or ""
         ),
         "training_python": str(
-            final_seed_metrics.get("p50_training_python")
+            final_seed_metrics.get("p51_training_python")
+            or final_seed_metrics.get("p50_training_python")
             or final_seed_metrics.get("gpu_mainline_training_python")
             or final_seed_metrics.get("p49_training_python")
             or ""
         ),
         "dashboard_path": str(
-            final_seed_metrics.get("p50_dashboard_path")
+            final_seed_metrics.get("p51_dashboard_path")
+            or final_seed_metrics.get("p50_dashboard_path")
             or final_seed_metrics.get("p49_dashboard_path")
             or ""
         ),
         "readiness_report_path": str(
-            final_seed_metrics.get("p50_readiness_report_path")
+            final_seed_metrics.get("p51_readiness_report_path")
+            or final_seed_metrics.get("p50_readiness_report_path")
             or final_seed_metrics.get("gpu_mainline_readiness_report_path")
             or final_seed_metrics.get("p49_readiness_report_path")
             or _resolved_readiness_report_path()
             or ""
         ),
+        "campaign_state_path": str(
+            final_seed_metrics.get("p51_campaign_state_path")
+            or ""
+        ),
+        "registry_snapshot_path": str(
+            final_seed_metrics.get("p51_registry_snapshot_path")
+            or ""
+        ),
+        "promotion_queue_path": str(
+            final_seed_metrics.get("p51_promotion_queue_path")
+            or final_seed_summary.get("promotion_queue_path")
+            or ""
+        ),
+        "resume_report_path": str(
+            final_seed_metrics.get("p51_resume_report_md")
+            or final_seed_summary.get("resume_report_md")
+            or ""
+        ),
+        "produced_checkpoint_ids": list(final_seed_summary.get("produced_checkpoint_ids") or []),
     }
 
     exp_summary = {
@@ -4124,6 +4595,11 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "training_python": runtime_details["training_python"],
         "dashboard_path": runtime_details["dashboard_path"],
         "readiness_report_path": runtime_details["readiness_report_path"],
+        "campaign_state_path": runtime_details.get("campaign_state_path"),
+        "registry_snapshot_path": runtime_details.get("registry_snapshot_path"),
+        "promotion_queue_path": runtime_details.get("promotion_queue_path"),
+        "resume_report_path": runtime_details.get("resume_report_path"),
+        "produced_checkpoint_ids": runtime_details.get("produced_checkpoint_ids"),
     }
 
 

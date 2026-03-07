@@ -55,6 +55,11 @@ def write_summary_tables(
         "training_python",
         "dashboard_path",
         "readiness_report_path",
+        "campaign_state_path",
+        "registry_snapshot_path",
+        "promotion_queue_path",
+        "resume_report_path",
+        "produced_checkpoint_ids",
         "run_dir",
     ]
 
@@ -95,6 +100,11 @@ def write_summary_tables(
                     "training_python": row.get("training_python"),
                     "dashboard_path": row.get("dashboard_path"),
                     "readiness_report_path": row.get("readiness_report_path"),
+                    "campaign_state_path": row.get("campaign_state_path"),
+                    "registry_snapshot_path": row.get("registry_snapshot_path"),
+                    "promotion_queue_path": row.get("promotion_queue_path"),
+                    "resume_report_path": row.get("resume_report_path"),
+                    "produced_checkpoint_ids": ",".join([str(item) for item in (row.get("produced_checkpoint_ids") or [])]),
                     "run_dir": row.get("run_dir"),
                 }
             )
@@ -137,7 +147,21 @@ def write_summary_tables(
             )
         )
     runtime_rows = [
-        row for row in rows if any(row.get(key) for key in ("training_python", "dashboard_path", "readiness_report_path"))
+        row
+        for row in rows
+        if any(
+            row.get(key)
+            for key in (
+                "training_python",
+                "dashboard_path",
+                "readiness_report_path",
+                "campaign_state_path",
+                "registry_snapshot_path",
+                "promotion_queue_path",
+                "resume_report_path",
+                "produced_checkpoint_ids",
+            )
+        )
     ]
     if runtime_rows:
         md_lines += [
@@ -152,6 +176,20 @@ def write_summary_tables(
                 md_lines.append(f"  dashboard_path: `{row.get('dashboard_path')}`")
             if row.get("readiness_report_path"):
                 md_lines.append(f"  readiness_report_path: `{row.get('readiness_report_path')}`")
+            if row.get("campaign_state_path"):
+                md_lines.append(f"  campaign_state_path: `{row.get('campaign_state_path')}`")
+            if row.get("registry_snapshot_path"):
+                md_lines.append(f"  registry_snapshot_path: `{row.get('registry_snapshot_path')}`")
+            if row.get("promotion_queue_path"):
+                md_lines.append(f"  promotion_queue_path: `{row.get('promotion_queue_path')}`")
+            if row.get("resume_report_path"):
+                md_lines.append(f"  resume_report_path: `{row.get('resume_report_path')}`")
+            if row.get("produced_checkpoint_ids"):
+                md_lines.append(
+                    "  produced_checkpoint_ids: `{}`".format(
+                        ", ".join([str(item) for item in (row.get("produced_checkpoint_ids") or [])])
+                    )
+                )
     md_path.write_text("\n".join(md_lines) + "\n", encoding="utf-8")
 
     return {

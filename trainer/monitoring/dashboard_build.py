@@ -43,6 +43,50 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _campaign_stage_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    stages = [dict(item) for item in (payload.get("stages") or []) if isinstance(item, dict)]
+    active = next((item for item in stages if str(item.get("status") or "") == "running"), None)
+    failed = next((item for item in stages if str(item.get("status") or "") == "failed"), None)
+    latest = active or failed or (stages[-1] if stages else {})
+    return {
+        "campaign_id": str(payload.get("campaign_id") or ""),
+        "run_id": str(payload.get("run_id") or ""),
+        "experiment_id": str(payload.get("experiment_id") or ""),
+        "seed": str(payload.get("seed") or ""),
+        "stage_id": str((latest or {}).get("stage_id") or ""),
+        "status": str((latest or {}).get("status") or ""),
+        "state_path": str(payload.get("state_path") or ""),
+    }
+
+
+def _registry_summary(input_root: Path) -> dict[str, Any]:
+    registry_path = input_root / "registry" / "checkpoints_registry.json"
+    payload = _read_json(registry_path)
+    items = payload.get("items") if isinstance(payload, dict) and isinstance(payload.get("items"), list) else []
+    counts: dict[str, int] = {}
+    latest_items = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        token = str(item.get("status") or "draft")
+        counts[token] = int(counts.get(token, 0)) + 1
+    for item in items[:8]:
+        if isinstance(item, dict):
+            latest_items.append(
+                {
+                    "checkpoint_id": str(item.get("checkpoint_id") or ""),
+                    "family": str(item.get("family") or ""),
+                    "status": str(item.get("status") or ""),
+                }
+            )
+    return {
+        "registry_path": str(registry_path.resolve()),
+        "count": len(items),
+        "status_counts": counts,
+        "latest_items": latest_items,
+    }
+
+
 def collect_dashboard_data(input_root: Path) -> dict[str, Any]:
     latest: dict[tuple[str, str, str], dict[str, Any]] = {}
     warnings: list[dict[str, Any]] = []
@@ -66,6 +110,13 @@ def collect_dashboard_data(input_root: Path) -> dict[str, Any]:
             summary = _read_json(runs[-1] / "summary_table.json")
             if isinstance(summary, list):
                 latest_p22_summary = [row for row in summary if isinstance(row, dict)]
+    campaign_states = []
+    for path in sorted(input_root.glob("**/campaign_state.json"), key=lambda item: str(item), reverse=True)[:12]:
+        payload = _read_json(path)
+        if not isinstance(payload, dict):
+            continue
+        payload["state_path"] = str(path.resolve())
+        campaign_states.append(_campaign_stage_summary(payload))
     return {
         "schema": "p49_dashboard_data_v1",
         "generated_at": _now_iso(),
@@ -73,6 +124,8 @@ def collect_dashboard_data(input_root: Path) -> dict[str, Any]:
         "latest_events": sorted(latest.values(), key=lambda row: (str(row.get("run_id") or ""), str(row.get("component") or ""))),
         "warnings": warnings[-20:],
         "latest_p22_summary": latest_p22_summary,
+        "campaign_states": campaign_states,
+        "registry_summary": _registry_summary(input_root),
     }
 
 
@@ -117,6 +170,35 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
             f"<td>{html.escape(str(row.get('status') or ''))}</td>"
             f"<td>{html.escape(str(row.get('mean') or ''))}</td>"
             f"<td>{html.escape(str(row.get('seed_count') or ''))}</td>"
+            "</tr>"
+        )
+
+    campaign_html = []
+    for row in data.get("campaign_states") if isinstance(data.get("campaign_states"), list) else []:
+        if not isinstance(row, dict):
+            continue
+        campaign_html.append(
+            "<tr>"
+            f"<td>{html.escape(str(row.get('campaign_id') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('experiment_id') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('seed') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('stage_id') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('status') or ''))}</td>"
+            "</tr>"
+        )
+
+    registry_summary = data.get("registry_summary") if isinstance(data.get("registry_summary"), dict) else {}
+    registry_counts = registry_summary.get("status_counts") if isinstance(registry_summary.get("status_counts"), dict) else {}
+    registry_items = registry_summary.get("latest_items") if isinstance(registry_summary.get("latest_items"), list) else []
+    registry_html = []
+    for row in registry_items:
+        if not isinstance(row, dict):
+            continue
+        registry_html.append(
+            "<tr>"
+            f"<td>{html.escape(str(row.get('checkpoint_id') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('family') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('status') or ''))}</td>"
             "</tr>"
         )
 
@@ -167,6 +249,26 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
       <thead><tr><th>Experiment</th><th>Status</th><th>Mean</th><th>Seeds</th></tr></thead>
       <tbody>
         {''.join(p22_html) or '<tr><td colspan="4">No P22 summary found.</td></tr>'}
+      </tbody>
+    </table>
+  </div>
+  <div class="panel">
+    <h2>Campaign Stages</h2>
+    <table>
+      <thead><tr><th>Campaign</th><th>Experiment</th><th>Seed</th><th>Stage</th><th>Status</th></tr></thead>
+      <tbody>
+        {''.join(campaign_html) or '<tr><td colspan="5">No campaign state found.</td></tr>'}
+      </tbody>
+    </table>
+  </div>
+  <div class="panel">
+    <h2>Checkpoint Registry</h2>
+    <p class="muted">registry: <code>{html.escape(str(registry_summary.get('registry_path') or ''))}</code></p>
+    <p class="muted">count={html.escape(str(registry_summary.get('count') or 0))} status_counts={html.escape(json.dumps(registry_counts, ensure_ascii=False))}</p>
+    <table>
+      <thead><tr><th>Checkpoint ID</th><th>Family</th><th>Status</th></tr></thead>
+      <tbody>
+        {''.join(registry_html) or '<tr><td colspan="3">No registry entries found.</td></tr>'}
       </tbody>
     </table>
   </div>

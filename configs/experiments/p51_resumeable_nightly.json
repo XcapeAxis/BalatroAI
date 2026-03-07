@@ -1,0 +1,33 @@
+{
+  "schema": "p51_registry_campaign_config_v1",
+  "device_profile": "single_gpu_nightly_balanced",
+  "runtime": {
+    "device_profile": "single_gpu_nightly_balanced"
+  },
+  "monitoring": {
+    "readiness_guard": true,
+    "dashboard": true
+  },
+  "components": {
+    "p42": {
+      "enabled": true,
+      "config": "configs/experiments/p42_closed_loop_rl_nightly.yaml"
+    },
+    "p44": {
+      "enabled": true,
+      "config": "configs/experiments/p44_closed_loop_rl_nightly.yaml"
+    },
+    "p45": {
+      "enabled": true,
+      "config": "configs/experiments/p45_world_model_nightly.yaml"
+    },
+    "p46": {
+      "enabled": true,
+      "config": "configs/experiments/p46_imagination_nightly.yaml"
+    }
+  },
+  "force_rerun_stages": [],
+  "output": {
+    "artifacts_root": "docs/artifacts/p51/campaigns"
+  }
+}
