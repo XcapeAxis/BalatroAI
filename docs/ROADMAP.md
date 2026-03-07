@@ -22,15 +22,16 @@
 | P50 | Real CUDA bring-up + GPU validation + nightly benchmark profiles | done |
 | P51 | Checkpoint registry + resumeable nightly campaigns + promotion queue | done |
 | P52 | Learned router / guarded meta-controller + arena ablation + campaign integration | done |
+| P53 | Background execution + local ops UI + window supervision | done |
 
-## Current Focus: Post-P52 Durable Training Ops
+## Current Focus: Post-P53 Durable Local Ops
 
-1. Calibrate P52 routing labels, confidence thresholds, and OOD heuristics on larger multi-seed/controller mixes.
-2. Tighten promotion semantics so promoted candidates can be switched with explicit human review on top of the existing state machine.
-3. Keep readiness guarding and unified dashboards enabled as default night-ops safety rails.
-4. Expand heavier CUDA nightlies, especially P44 distributed RL and P52 learned-router runs, while preserving resume-safe stage boundaries.
+1. Harden P53 background-mode validation beyond smoke so offscreen/hidden/minimized claims remain trustworthy under longer workloads.
+2. Tighten promotion semantics so promoted candidates can be switched with explicit human review on top of the existing state machine and local ops console.
+3. Keep readiness guarding, dashboard generation, and ops-audit logging enabled as default night-ops safety rails.
+4. Expand heavier CUDA nightlies, especially P44 distributed RL and P52 learned-router runs, while preserving resume-safe stage boundaries and manageable background execution.
 
-## Near-Term After P52
+## Near-Term After P53
 
 - broader imagined-root coverage beyond the current replay families
 - tighter P42/P45/P47 coupling through auxiliary losses, rollout-value proxies, and RL-policy routing
@@ -38,6 +39,7 @@
 - stronger checkpoint deduplication / retention policy on top of the new registry
 - richer campaign restart policies beyond simple latest-run resume
 - learned-router calibration against broader controller telemetry, especially controller-collapse and OOD guard behavior
+- richer local ops workflows such as better job history, safer queued actions, and stronger window-state diagnostics
 - careful expansion beyond fixed-budget search while preserving uncertainty controls and arena-first evaluation
 - richer GPU telemetry and eventual multi-GPU support once single-GPU runtime remains stable
 

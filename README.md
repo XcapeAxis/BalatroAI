@@ -9,7 +9,7 @@
 [![Seed Governance](https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16)](configs/experiments/seeds_p23.yaml)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Trend Warehouse](https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16)](docs/TREND_WAREHOUSE_P26.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P52-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P53-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -19,7 +19,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/XcapeAxis/BalatroAI)](https://github.com/XcapeAxis/BalatroAI/issues)
 <!-- BADGES:END -->
 
-BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, a unified action replay contract, P45 world-model / latent-planning, P46 short-horizon imagination augmentation, P47 uncertainty-aware world-model reranking, P48 adaptive hybrid routing across policy/search/world-model assist, P49 GPU-mainline runtime profiles with readiness guards and lightweight dashboards, P50 real local CUDA validation with benchmarked nightly profiles, P51 checkpoint-registry + resumeable nightly campaign operations, and P52 learned-router / guarded meta-controller training plus deployment. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised/world-model iteration, not as a cheat injector or memory-hook tool.
+BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, a unified action replay contract, P45 world-model / latent-planning, P46 short-horizon imagination augmentation, P47 uncertainty-aware world-model reranking, P48 adaptive hybrid routing across policy/search/world-model assist, P49 GPU-mainline runtime profiles with readiness guards and lightweight dashboards, P50 real local CUDA validation with benchmarked nightly profiles, P51 checkpoint-registry + resumeable nightly campaign operations, P52 learned-router / guarded meta-controller training plus deployment, and P53 background execution plus a local-only ops console for campaigns, registry, dashboard, and window supervision. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised/world-model iteration, not as a cheat injector or memory-hook tool.
 
 Badge/status refresh source:
 
@@ -237,6 +237,13 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP52 -Resume
 python -m trainer.hybrid.router_dataset --quick
 ```
 
+Optional P53 background-execution + ops-console smoke:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP53
+powershell -ExecutionPolicy Bypass -File scripts\run_ops_ui.ps1
+```
+
 8. Inspect generated artifacts.
 
 - `docs/artifacts/p22/runs/<run_id>/summary_table.md`
@@ -250,6 +257,7 @@ python -m trainer.hybrid.router_dataset --quick
 - `docs/artifacts/p49/{readiness,rl_cpu_rollout_gpu_learner,wm_gpu_smoke}/`
 - `docs/artifacts/p51/{checkpoint_registry_snapshot_*.json,promotion_queue_smoke_*.json,campaign_resume_validation_*.md}`
 - `docs/artifacts/p52/{router_dataset,router_train,router_inference,arena_ablation,triage}/<run_id>/`
+- `docs/artifacts/p53/{window_supervisor,background_mode_validation,ops_ui,ops_ui_metadata,ops_audit}/`
 - `docs/artifacts/registry/checkpoints_registry.json`
 - `docs/artifacts/dashboard/latest/index.html`
 - optional live snapshot view: `powershell -ExecutionPolicy Bypass -File scripts\show_p22_live.ps1`
@@ -301,6 +309,7 @@ More details:
 - [docs/P47_MODEL_BASED_SEARCH.md](docs/P47_MODEL_BASED_SEARCH.md)
 - [docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md](docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md)
 - [docs/P49_GPU_MAINLINE_AND_DASHBOARD.md](docs/P49_GPU_MAINLINE_AND_DASHBOARD.md)
+- [docs/P53_BACKGROUND_EXECUTION_AND_OPS_UI.md](docs/P53_BACKGROUND_EXECUTION_AND_OPS_UI.md)
 - [docs/P43_TRAINING_STRATEGY_REFOCUS.md](docs/P43_TRAINING_STRATEGY_REFOCUS.md)
 
 ## Architecture Overview
@@ -376,6 +385,40 @@ All BC/DAgger/Self-Supervised (P33/P36) experiment paths now normalize actions t
 - P52 learned router / meta-controller:
   - orchestrated quick: `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP52`
   - signal: routing dataset build, learned-router checkpoint training on the CUDA-first lane, guarded routing traces, checkpoint-registry entries, and arena/triage compare across rule vs learned vs guarded modes
+- P53 background execution + local ops console:
+  - orchestrated quick: `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP53`
+  - local UI: `powershell -ExecutionPolicy Bypass -File scripts\run_ops_ui.ps1`
+  - signal: validated `visible/offscreen/minimized/hidden` window modes, default `offscreen` routing into readiness/P22 summaries, localhost-only ops UI, and audited low-risk control actions
+
+## Background Execution (P53)
+
+P53 moves the LOVE/Balatro window under runtime control instead of leaving it as a manual desktop concern.
+
+- supported modes: `visible`, `minimized`, `hidden`, `offscreen`, `restore`
+- default mode: `offscreen`
+- fallback mode: `offscreen`
+- runtime config lives in `configs/runtime/runtime_defaults.{yaml,json}`
+- ad-hoc control is available via `powershell -ExecutionPolicy Bypass -File scripts\window_supervisor.ps1 -List|-Mode offscreen`
+
+Current validation keeps `offscreen` as the default even though the latest smoke also passed under `hidden` and `minimized`. The project keeps `visible` as the strongest debug mode because timing/input problems are easiest to diagnose there.
+
+## Ops UI / Local Console (P53)
+
+P53 also adds a lightweight local web console over existing artifacts instead of a separate ops database.
+
+- start with `powershell -ExecutionPolicy Bypass -File scripts\run_ops_ui.ps1`
+- default listen address is `http://127.0.0.1:8765/`
+- overview shows latest P22 run, readiness, current window mode, dashboard link, and control buttons
+- campaigns, registry, promotion queue, runs/metrics, windows, and jobs/audit each have a dedicated page
+- low-risk controls are available for `P22 Quick`, `P53 Smoke`, resume, dashboard rebuild, registry refresh, and window-mode switching
+
+## Safety / Risks
+
+- background window modes can affect timing, input focus, or service behavior; trust validation artifacts before changing the default
+- `offscreen` remains the operational default even when `hidden` or `minimized` pass smoke, because it keeps a live window with lower surprise
+- if a future validation marks a mode unstable or unsupported, the resolver downgrades requests to the configured fallback instead of silently running an unsafe mode
+- the ops UI is localhost-only and intentionally avoids destructive process controls
+- arena/triage/dashboard artifacts remain the final source of truth; UI status alone is not a promotion decision
 
 ## How to Compare Policies
 

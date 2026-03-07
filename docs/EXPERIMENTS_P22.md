@@ -28,7 +28,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | Scenario | Command | Notes |
 |---|---|---|
 | Plan only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -DryRun` | validates matrix + writes plan/report |
-| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | mainline smoke set with multi-seed materialization (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row + P40/P41/P42 + P45 world-model smoke row + P46 imagination smoke row + P47 model-based search smoke row + P48 hybrid-controller smoke row + P49 GPU-mainline row + P50 real-CUDA validation row + P51 registry/campaign row + P52 learned-router row) |
+| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | mainline smoke set with multi-seed materialization (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row + P40/P41/P42 + P45 world-model smoke row + P46 imagination smoke row + P47 model-based search smoke row + P48 hybrid-controller smoke row + P49 GPU-mainline row + P50 real-CUDA validation row + P51 registry/campaign row + P52 learned-router row + P53 background-execution row) |
 | Fast smoke + legacy probe | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -IncludeLegacy` | adds opt-in legacy BC/DAgger probe row(s) |
 | Legacy only quick | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -LegacyOnly` | runs only legacy baseline probe row(s) |
 | Multi-seed quick compare | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline,quick_candidate -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | 2 strategies x 3 seeds |
@@ -42,6 +42,9 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | P50 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP50` | runs `p50_gpu_validation_smoke` with CUDA-first python resolver + readiness guard + dashboard build |
 | P51 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP51` | runs `p51_registry_smoke` with checkpoint registry snapshots, promotion queue export, dashboard build, and campaign state artifacts |
 | P52 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP52` | runs `p52_learned_router_smoke` with router dataset build, learned-router training, guarded ablation compare, checkpoint registration, campaign state, promotion queue, and dashboard build |
+| P53 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP53` | runs `p53_background_ops_smoke` with background-mode validation, window-mode recording, campaign state, ops-ui metadata, promotion queue refresh, and dashboard build |
+| P53 smoke + explicit mode | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP53 -WindowMode offscreen` | keeps the requested background mode explicit in the run summary |
+| Start local Ops UI | `powershell -ExecutionPolicy Bypass -File scripts\run_ops_ui.ps1` | starts the localhost-only P53 operations console on `127.0.0.1:8765` by default |
 | Single experiment | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline -Resume` | rerun one exp id |
 | Limit seeds | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -SeedLimit 2` | local-cost control |
 | Custom seeds | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | explicit reproducibility override (recorded to artifacts) |
@@ -71,9 +74,10 @@ Key sections:
   - `category` (`mainline`, `legacy_baseline`, `required_validation`, ...)
   - `default_enabled` (`false` rows are excluded unless explicitly requested)
   - `backend`, `policy`
-  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`, `selfsup_future_value`, `selfsup_action_type`, `ssl_pretrain`, `ssl_probe`, `rl_selfplay`, `policy_arena`, `closed_loop_improvement`, `closed_loop_improvement_v2`, `closed_loop_rl_candidate`, `world_model_train`, `world_model_eval`, `world_model_assist_compare`, `imagination_augmented_candidate`, `p46_imagination`, `world_model_rerank_eval`, `p47_wm_search`, `hybrid_controller_eval`, `p48_hybrid_controller`, `checkpoint_registry_campaign`, `p51_registry_campaign`, `router_dataset_build`, `learned_router_train`, `learned_router_ablation`, `p52_learned_router_campaign`)
+  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`, `selfsup_future_value`, `selfsup_action_type`, `ssl_pretrain`, `ssl_probe`, `rl_selfplay`, `policy_arena`, `closed_loop_improvement`, `closed_loop_improvement_v2`, `closed_loop_rl_candidate`, `world_model_train`, `world_model_eval`, `world_model_assist_compare`, `imagination_augmented_candidate`, `p46_imagination`, `world_model_rerank_eval`, `p47_wm_search`, `hybrid_controller_eval`, `p48_hybrid_controller`, `checkpoint_registry_campaign`, `p51_registry_campaign`, `router_dataset_build`, `learned_router_train`, `learned_router_ablation`, `p52_learned_router_campaign`, `p53_background_ops_campaign`)
   - `seed_mode` (`regression_fixed` or `nightly`)
   - `seeds` (optional explicit seed override list)
+  - `window_mode`, `window_mode_fallback` (when the row manages the real game window)
   - `gate_flag` (passed to `scripts/run_regressions.ps1`)
   - `stages` (`sanity/gate/dataset/train/eval`)
   - `eval` settings
@@ -291,6 +295,43 @@ Generated artifacts:
 - `docs/artifacts/p22/runs/<run_id>/p39_policy_arena_smoke/policy_arena_runs/seed_*/arena_runs/<seed_run_id>/summary_table.json`
 - `docs/artifacts/p22/runs/<run_id>/p39_policy_arena_smoke/policy_arena_runs/seed_*/arena_runs/<seed_run_id>/bucket_metrics.json`
 - optional champion decision outputs under `.../champion_eval/`
+
+## P53 Background Execution + Ops UI Integration
+
+P53 adds `experiment_type: p53_background_ops_campaign` so P22 can validate background execution and publish the local ops-console metadata as part of the same orchestrated run.
+
+Reference rows in `configs/experiments/p22.yaml`:
+
+- `p53_background_ops_smoke`
+- `p53_background_ops_nightly`
+
+Wrapper flags:
+
+- `-RunP53`
+- `-WindowMode`
+- `-WindowModeFallback`
+- `-StartOpsUI`
+
+Runtime/report additions:
+
+- `window_mode`
+- `background_validation_ref`
+- `ops_ui_path`
+
+Generated artifacts:
+
+- `docs/artifacts/p22/runs/<run_id>/p53_background_ops_smoke/campaign_runs/seed_*/campaign_state.json`
+- `docs/artifacts/p22/runs/<run_id>/p53_background_ops_smoke/campaign_runs/seed_*/checkpoint_registry_snapshot.json`
+- `docs/artifacts/p22/runs/<run_id>/p53_background_ops_smoke/campaign_runs/seed_*/promotion_queue.json`
+- `docs/artifacts/p53/background_mode_validation/<run_id>/background_mode_validation.json`
+- `docs/artifacts/p53/ops_ui/latest/ops_ui_state.json`
+- `docs/artifacts/p53/ops_audit/ops_audit.jsonl`
+
+Operational notes:
+
+- the orchestrator records the effective window mode, not just the requested one
+- background-mode validation is reused by `run_p22.ps1`, readiness reporting, the dashboard, and the ops UI
+- the ops UI reads existing artifacts instead of maintaining a parallel state store
 
 ## P40 Closed-loop Improvement Integration
 

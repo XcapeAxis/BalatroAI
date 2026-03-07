@@ -10,6 +10,7 @@ P49 turns the P42/P44/P45/P46 training lanes into a shared runtime surface:
 P49 is an operations/runtime milestone. It does not claim that GPU enablement alone improves policy quality.
 P50 then validates that runtime on a real local CUDA host, adds a shared training-python resolver, and benchmarks recommended single-GPU profiles.
 P52 then reuses that CUDA-first resolver for learned-router dataset/train/eval flows and surfaces the new artifacts in the dashboard.
+P53 then layers validated background execution plus a localhost ops console on top of the same readiness/dashboard substrate.
 
 ## Architecture
 
@@ -34,6 +35,8 @@ flowchart TD
   L --> M["trainer.monitoring.live_dashboard"]
   L --> N["trainer.monitoring.dashboard_build"]
   N --> O["docs/artifacts/dashboard/latest/index.html"]
+  N --> P["P53 ops console metadata"]
+  O --> Q["localhost ops UI links"]
 ```
 
 ## Device Profiles
@@ -208,6 +211,13 @@ The dashboard now also surfaces P52-specific data when present:
 - guard trigger rate and controller-selection distribution
 - campaign stage status and promotion-queue state
 
+The same dashboard now also surfaces P53 operational data when present:
+
+- current managed window mode
+- latest background-mode validation recommendation and fallback
+- ops UI URL / metadata
+- recent P53 campaign rows and ops-audit entries
+
 ## P22 Integration
 
 New experiment templates:
@@ -262,6 +272,17 @@ P52 uses the same runtime substrate for meta-controller training:
 
 This keeps learned-router training in the same operational lane as RL and world-model experiments instead of creating a separate runtime stack.
 
+## P53 Background Execution + Ops Console on Top of P49/P50
+
+P53 reuses the same runtime primitives instead of inventing a second ops layer:
+
+- `scripts/run_p22.ps1` resolves and applies the validated window mode before the orchestrator run
+- `scripts/run_regressions.ps1` exports the same `BALATRO_WINDOW_MODE` / validation refs for gate visibility
+- `trainer.runtime.service_readiness` publishes the latest window-state and background-validation refs into readiness artifacts
+- `trainer.monitoring.dashboard_build` and `trainer.monitoring.live_dashboard` surface the same P53 status
+
+Operationally, P49/P50 remain the runtime base, while P53 makes that runtime manageable when the real game window should not stay foregrounded.
+
 ## Troubleshooting
 
 No CUDA available:
@@ -294,3 +315,4 @@ Dashboard looks empty:
 - GPU utilization is still a proxy via PyTorch memory rather than full `nvidia-smi` sampling
 - rollout backlog is a lightweight diagnostic, not a full queueing subsystem
 - readiness probing is service-level only; it does not validate every downstream simulator dependency
+- background-mode validation is still smoke-oriented; keep `visible` available when debugging timing/focus issues

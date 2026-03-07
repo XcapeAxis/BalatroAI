@@ -9,6 +9,7 @@ P51 adds a durable training-operations layer on top of the P49/P50 GPU mainline:
 - arena, triage, and dashboard outputs now reference checkpoint identities
 
 P52 extends this layer to learned-router checkpoints and resumeable learned-router campaigns.
+P53 then adds a local operator surface over the same registry/campaign artifacts without changing the underlying state model.
 
 P51 is an operations milestone. It improves traceability and rerun behavior; it does not replace trainer checkpoints, simulator truth, or manual promotion judgment.
 
@@ -125,6 +126,13 @@ P52 adds an alternative learned-router campaign stage set:
 - `promotion_queue_update`
 - `dashboard_build`
 
+P53 adds a background-ops campaign stage set:
+
+- `background_mode_validation`
+- `promotion_queue_update`
+- `dashboard_build`
+- `ops_ui_metadata`
+
 Each stage records:
 
 - `stage_id`
@@ -220,6 +228,12 @@ Primary outputs:
 - `docs/artifacts/dashboard/latest/index.html`
 - `docs/artifacts/dashboard/latest/dashboard_data.json`
 
+P53 reuses the same outputs and adds a local operator entrypoint:
+
+- `powershell -ExecutionPolicy Bypass -File scripts\run_ops_ui.ps1`
+- the ops UI reads `campaign_state.json`, registry snapshots, promotion queues, progress events, readiness reports, and dashboard artifacts
+- the UI does not own promotion logic; it only exposes the current state plus low-risk commands
+
 ## P52 Learned Router Extension
 
 P52 treats learned-router checkpoints as first-class registry assets:
@@ -236,9 +250,18 @@ Representative P52 artifacts:
 - `docs/artifacts/p22/runs/<run_id>/p52_learned_router_smoke/campaign_runs/seed_*/campaign_state.json`
 - `docs/artifacts/p22/runs/<run_id>/p52_learned_router_smoke/campaign_runs/seed_*/checkpoint_registry_snapshot.json`
 
+## P53 Local Ops Console Extension
+
+P53 keeps the registry/campaign system authoritative while adding a localhost-only control/view layer:
+
+- window mode, validation refs, and ops UI path are now written into P22 summaries
+- P53 campaign runs publish `ops_ui_metadata.json` so the dashboard and UI can cross-link
+- low-risk UI actions such as registry refresh or dashboard rebuild are audited to `docs/artifacts/p53/ops_audit/ops_audit.jsonl`
+- the promotion queue remains file-backed and readable by both the dashboard and the ops UI
+
 ## Known Limitations
 
 - imported historical checkpoints can be incomplete until their producing pipeline reruns under P51-aware code
-- there is no separate operator UI yet; transitions are system-driven plus CLI/manual edits
+- a local operator UI now exists, but it is intentionally localhost-only and limited to low-risk actions
 - resume safety is stage-granular, not arbitrary checkpointing inside every inner trainer loop
 - registry retention/deduplication is still minimal; imported historical artifacts can produce a noisy draft pool
