@@ -17,6 +17,7 @@ def write_summary_tables(
     rows: list[dict[str, Any]],
     primary_metric: str,
     run_id: str,
+    config_provenance: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     out_dir.mkdir(parents=True, exist_ok=True)
     csv_path = out_dir / "summary_table.csv"
@@ -64,6 +65,13 @@ def write_summary_tables(
         "resume_report_path",
         "produced_checkpoint_ids",
         "run_dir",
+        # P55 config provenance fields
+        "config_source_path",
+        "config_source_type",
+        "config_hash",
+        "sidecar_used",
+        "sidecar_in_sync",
+        "config_sync_report_path",
     ]
 
     with csv_path.open("w", newline="", encoding="utf-8") as fp:
@@ -112,13 +120,48 @@ def write_summary_tables(
                     "resume_report_path": row.get("resume_report_path"),
                     "produced_checkpoint_ids": ",".join([str(item) for item in (row.get("produced_checkpoint_ids") or [])]),
                     "run_dir": row.get("run_dir"),
+                    # P55 provenance (run-level, not per-row; same value for all rows)
+                    "config_source_path": (config_provenance or {}).get("config_source_path", ""),
+                    "config_source_type": (config_provenance or {}).get("config_source_type", ""),
+                    "config_hash": (config_provenance or {}).get("config_hash", ""),
+                    "sidecar_used": str((config_provenance or {}).get("sidecar_used", "")),
+                    "sidecar_in_sync": str((config_provenance or {}).get("sidecar_in_sync", "")),
+                    "config_sync_report_path": (config_provenance or {}).get("config_sync_report_path", ""),
                 }
             )
 
-    json_path.write_text(json.dumps(rows, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # Embed provenance at the top of the JSON summary
+    summary_data: dict[str, Any] = {
+        "run_id": run_id,
+        "primary_metric": primary_metric,
+    }
+    if config_provenance:
+        summary_data["config_provenance"] = config_provenance
+    summary_data["rows"] = rows
+    json_path.write_text(json.dumps(summary_data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
+    prov = config_provenance or {}
     md_lines = [
         f"# P23 Summary ({run_id})",
+        "",
+    ]
+    if prov:
+        sidecar_flag = "sidecar_fallback" if prov.get("sidecar_used") else "yaml_direct"
+        sync_flag = "in_sync" if prov.get("sidecar_in_sync") else "DRIFT"
+        md_lines += [
+            "## Config Provenance (P55)",
+            "",
+            f"| Field | Value |",
+            f"|---|---|",
+            f"| source_path | `{prov.get('config_source_path', '')}` |",
+            f"| source_type | `{prov.get('config_source_type', '')}` ({sidecar_flag}) |",
+            f"| config_hash | `{str(prov.get('config_hash', ''))[:16]}` |",
+            f"| sidecar_in_sync | **{sync_flag}** |",
+            f"| sync_report | `{prov.get('config_sync_report_path', '')}` |",
+            "",
+        ]
+    md_lines += [
+        "## Results",
         "",
         "| exp_id | category | default_enabled | status | seed_set | mean | std | avg_reward | reward_std | best_episode_reward | avg_ante | median_ante | win_rate | final_win_rate | final_loss | hand_top1 | hand_top3 | shop_top1 | illegal_rate | seeds | failures | elapsed_sec | device_profile | learner_device |",
         "|---|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
