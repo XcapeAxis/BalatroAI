@@ -1151,6 +1151,21 @@ if ($RunP22) {
   if (-not (Test-Path $p22Script)) {
     throw "[P22] missing script: $p22Script"
   }
+
+  # P55: sync/check sidecars before running the orchestrator.
+  $syncScript = Join-Path $ProjectRoot "scripts\sync_config_sidecars.ps1"
+  if (Test-Path $syncScript) {
+    Write-Host "[P55] running config sidecar sync/check before P22..."
+    $syncPy = [string]($env:BALATRO_TRAIN_PYTHON)
+    if (-not $syncPy) { $syncPy = "python" }
+    $syncArgs = @("-ExecutionPolicy", "Bypass", "-File", $syncScript, "-TrainingPython", $syncPy)
+    & powershell @syncArgs
+    if ($LASTEXITCODE -ne 0) {
+      throw "[P55] config sidecar sync/check failed. Run: python -m trainer.experiments.config_sidecar_sync --sync"
+    }
+    Write-Host "[P55] config sidecar check/sync passed."
+  }
+
   $p22Args = @(
     "-ExecutionPolicy", "Bypass",
     "-File", $p22Script
