@@ -230,7 +230,7 @@ def run_world_model_eval(
     with torch.no_grad():
         for start in range(0, len(rows), batch_size):
             chunk = rows[start : start + batch_size]
-            batch = _batch_from_rows(chunk, device="cpu")
+            batch = _batch_from_rows(chunk, device=device)
             outputs = model(batch["obs_t"], batch["action_id"], batch["obs_t1"])
             losses = compute_world_model_losses(outputs=outputs, batch=batch, loss_weights=loss_weights)
 

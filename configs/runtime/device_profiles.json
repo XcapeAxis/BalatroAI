@@ -60,6 +60,46 @@
       "matmul_precision": "high",
       "checkpoint_interval": 1,
       "log_interval": 1
+    },
+    "single_gpu_nightly_balanced": {
+      "device": "auto",
+      "gpu_id": 0,
+      "amp_enabled": true,
+      "bf16_enabled": true,
+      "grad_accum_steps": 2,
+      "batch_size": 192,
+      "micro_batch_size": 96,
+      "num_dataloader_workers": 3,
+      "pin_memory": true,
+      "prefetch_factor": 2,
+      "rollout_device": "cpu",
+      "learner_device": "cuda",
+      "max_gpu_memory_mb": 11264,
+      "oom_fallback_policy": "reduce_batch",
+      "torch_compile_enabled": false,
+      "matmul_precision": "high",
+      "checkpoint_interval": 1,
+      "log_interval": 1
+    },
+    "single_gpu_nightly_aggressive": {
+      "device": "auto",
+      "gpu_id": 0,
+      "amp_enabled": true,
+      "bf16_enabled": true,
+      "grad_accum_steps": 2,
+      "batch_size": 256,
+      "micro_batch_size": 128,
+      "num_dataloader_workers": 4,
+      "pin_memory": true,
+      "prefetch_factor": 2,
+      "rollout_device": "cpu",
+      "learner_device": "cuda",
+      "max_gpu_memory_mb": 11776,
+      "oom_fallback_policy": "reduce_batch",
+      "torch_compile_enabled": false,
+      "matmul_precision": "high",
+      "checkpoint_interval": 1,
+      "log_interval": 1
     }
   }
 }

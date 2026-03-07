@@ -34,7 +34,16 @@ def get_gpu_mem_mb(device: Any = None) -> float | None:
         else:
             token = str(device)
             idx = int(token.split(":")[1]) if ":" in token else 0
-        return float(torch.cuda.memory_allocated(idx) / (1024.0 * 1024.0))
+        samples = [
+            float(torch.cuda.memory_allocated(idx)),
+            float(torch.cuda.memory_reserved(idx)),
+        ]
+        try:
+            samples.append(float(torch.cuda.max_memory_allocated(idx)))
+            samples.append(float(torch.cuda.max_memory_reserved(idx)))
+        except Exception:
+            pass
+        return float(max(samples) / (1024.0 * 1024.0))
     except Exception:
         return None
 

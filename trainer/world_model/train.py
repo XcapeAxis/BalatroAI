@@ -131,7 +131,7 @@ def _make_loader(
     kwargs: dict[str, Any] = {
         "batch_size": batch_size,
         "shuffle": shuffle,
-        "collate_fn": functools.partial(_collate_with_device, device=device),
+        "collate_fn": _collate_with_device,
         "num_workers": num_workers,
         "pin_memory": pin_memory,
     }
@@ -140,18 +140,18 @@ def _make_loader(
     return DataLoader(dataset, **kwargs)
 
 
-def _collate(items: list[dict[str, Any]], *, device: Any):
+def _collate(items: list[dict[str, Any]]):
     torch, _, _ = _require_torch()
-    obs_t = torch.tensor([list(item.get("obs_t") or []) for item in items], dtype=torch.float32, device=device)
-    obs_t1 = torch.tensor([list(item.get("obs_t1") or []) for item in items], dtype=torch.float32, device=device)
-    action_id = torch.tensor([int(item.get("action_id") or 0) for item in items], dtype=torch.long, device=device)
-    reward_t = torch.tensor([_safe_float(item.get("reward_t"), 0.0) for item in items], dtype=torch.float32, device=device)
-    score_delta_t = torch.tensor([_safe_float(item.get("score_delta_t"), 0.0) for item in items], dtype=torch.float32, device=device)
-    resource_delta_t = torch.tensor([list(item.get("resource_delta_t") or [0.0] * 5) for item in items], dtype=torch.float32, device=device)
+    obs_t = torch.tensor([list(item.get("obs_t") or []) for item in items], dtype=torch.float32)
+    obs_t1 = torch.tensor([list(item.get("obs_t1") or []) for item in items], dtype=torch.float32)
+    action_id = torch.tensor([int(item.get("action_id") or 0) for item in items], dtype=torch.long)
+    reward_t = torch.tensor([_safe_float(item.get("reward_t"), 0.0) for item in items], dtype=torch.float32)
+    score_delta_t = torch.tensor([_safe_float(item.get("score_delta_t"), 0.0) for item in items], dtype=torch.float32)
+    resource_delta_t = torch.tensor([list(item.get("resource_delta_t") or [0.0] * 5) for item in items], dtype=torch.float32)
     latent_rows = [list(item.get("latent_t1") or []) for item in items]
     latent_t1 = None
     if latent_rows and all(latent_rows) and len(set(len(row) for row in latent_rows)) == 1:
-        latent_t1 = torch.tensor(latent_rows, dtype=torch.float32, device=device)
+        latent_t1 = torch.tensor(latent_rows, dtype=torch.float32)
     return {
         "obs_t": obs_t,
         "obs_t1": obs_t1,
@@ -163,8 +163,21 @@ def _collate(items: list[dict[str, Any]], *, device: Any):
     }
 
 
-def _collate_with_device(items: list[dict[str, Any]], device: Any) -> dict[str, Any]:
-    return _collate(items, device=device)
+def _collate_with_device(items: list[dict[str, Any]]) -> dict[str, Any]:
+    return _collate(items)
+
+
+def _move_batch_to_device(batch: dict[str, Any], *, device: Any) -> dict[str, Any]:
+    torch, _, _ = _require_torch()
+    moved: dict[str, Any] = {}
+    for key, value in batch.items():
+        if value is None:
+            moved[key] = None
+        elif isinstance(value, torch.Tensor):
+            moved[key] = value.to(device, non_blocking=not str(device).startswith("cpu"))
+        else:
+            moved[key] = value
+    return moved
 
 
 def _run_epoch(
@@ -186,6 +199,7 @@ def _run_epoch(
     context = torch.enable_grad() if train_mode else torch.no_grad()
     with context:
         for batch in loader:
+            batch = _move_batch_to_device(batch, device=device)
             outputs = model(batch["obs_t"], batch["action_id"], batch["obs_t1"])
             losses = compute_world_model_losses(outputs=outputs, batch=batch, loss_weights=loss_weights)
             if train_mode and optimizer is not None:
@@ -340,6 +354,7 @@ def run_world_model_train(
             optimizer.zero_grad(set_to_none=True)
             try:
                 for batch_idx, batch in enumerate(train_loader, start=1):
+                    batch = _move_batch_to_device(batch, device=device)
                     outputs = model(batch["obs_t"], batch["action_id"], batch["obs_t1"])
                     losses = compute_world_model_losses(outputs=outputs, batch=batch, loss_weights=loss_weights)
                     (losses["total_loss"] / float(grad_accum_steps)).backward()

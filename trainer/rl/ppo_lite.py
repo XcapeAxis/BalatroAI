@@ -119,7 +119,10 @@ def _component_name_for_schema(schema: str) -> str:
 
 
 def _resolved_runtime_devices(runtime_profile: dict[str, Any]) -> tuple[str, str]:
+    resolved_profile = runtime_profile.get("resolved_profile") if isinstance(runtime_profile.get("resolved_profile"), dict) else {}
     resolved = runtime_profile.get("resolved") if isinstance(runtime_profile.get("resolved"), dict) else {}
+    if not resolved and isinstance(resolved_profile.get("resolved"), dict):
+        resolved = dict(resolved_profile.get("resolved") or {})
     learner_device = str(resolved.get("learner_device") or resolved.get("device") or "cpu")
     rollout_device = str(resolved.get("rollout_device") or "cpu")
     return learner_device, rollout_device
@@ -331,7 +334,10 @@ def _train_one_seed(
     seed_int = int(hashlib.sha256(str(seed).encode("utf-8")).hexdigest()[:8], 16)
     torch.manual_seed(seed_int)
     learner_device, rollout_device = _resolved_runtime_devices(runtime_profile)
+    resolved_profile = runtime_profile.get("resolved_profile") if isinstance(runtime_profile.get("resolved_profile"), dict) else {}
     resolved_runtime = runtime_profile.get("resolved") if isinstance(runtime_profile.get("resolved"), dict) else {}
+    if not resolved_runtime and isinstance(resolved_profile.get("resolved"), dict):
+        resolved_runtime = dict(resolved_profile.get("resolved") or {})
     try:
         torch.set_float32_matmul_precision(str(resolved_runtime.get("matmul_precision") or "high"))
     except Exception:
