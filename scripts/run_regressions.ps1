@@ -66,6 +66,77 @@ if (-not [string]::IsNullOrWhiteSpace($trainingResolverJson)) {
     Write-Host ("[train-python] warning: failed to parse resolver output: " + $_.Exception.Message)
   }
 }
+$env:BALATRO_WINDOW_MODE = ""
+$env:BALATRO_WINDOW_MODE_REQUESTED = ""
+$env:BALATRO_BACKGROUND_VALIDATION_REF = ""
+
+function Get-RuntimeWindowSettings {
+  $defaultsPath = Join-Path $ProjectRoot "configs\\runtime\\runtime_defaults.json"
+  if (-not (Test-Path $defaultsPath)) {
+    return [pscustomobject]@{
+      window_mode = "offscreen"
+      window_mode_fallback = "offscreen"
+    }
+  }
+  $payload = Get-Content -LiteralPath $defaultsPath -Raw | ConvertFrom-Json
+  $defaults = $payload.defaults
+  return [pscustomobject]@{
+    window_mode = [string]$defaults.window_mode
+    window_mode_fallback = [string]$defaults.window_mode_fallback
+  }
+}
+
+function Get-TrainingPythonForRuntime {
+  $candidate = [string]$env:BALATRO_TRAIN_PYTHON
+  if (-not [string]::IsNullOrWhiteSpace($candidate)) { return $candidate }
+  return "python"
+}
+
+function Invoke-RuntimePythonJson([string[]]$CmdArgs) {
+  $pyCmd = Get-TrainingPythonForRuntime
+  $text = (& $pyCmd @CmdArgs | Out-String).Trim()
+  if (-not $text) { return $null }
+  return ($text | ConvertFrom-Json)
+}
+
+function Apply-ConfiguredWindowMode([string]$Reason) {
+  $settings = Get-RuntimeWindowSettings
+  $requestedMode = [string]$settings.window_mode
+  $fallbackMode = [string]$settings.window_mode_fallback
+  if ([string]::IsNullOrWhiteSpace($requestedMode)) { return }
+  $latestValidation = Join-Path $ProjectRoot "docs\\artifacts\\p53\\background_mode_validation\\latest\\background_mode_validation.json"
+  if (Test-Path $latestValidation) {
+    $env:BALATRO_BACKGROUND_VALIDATION_REF = $latestValidation
+  }
+  $resolved = Invoke-RuntimePythonJson -CmdArgs @(
+    "-B",
+    "-m", "trainer.runtime.background_mode_validation",
+    "--resolve-mode",
+    "--requested-mode", $requestedMode,
+    "--fallback-mode", $fallbackMode
+  )
+  if (-not $resolved) {
+    Write-Host "[svc] warning: failed to resolve window mode; skipping"
+    return
+  }
+  $effectiveMode = [string]$resolved.effective_mode
+  $env:BALATRO_WINDOW_MODE_REQUESTED = [string]$resolved.requested_mode
+  $env:BALATRO_WINDOW_MODE = $effectiveMode
+  if ([string]$resolved.validation_path) {
+    $env:BALATRO_BACKGROUND_VALIDATION_REF = [string]$resolved.validation_path
+  }
+  Write-Host ("[svc] window_mode requested=" + [string]$resolved.requested_mode + " effective=" + $effectiveMode + " reason=" + [string]$resolved.resolution_reason + " trigger=" + $Reason)
+  $apply = Invoke-RuntimePythonJson -CmdArgs @(
+    "-B",
+    "-m", "trainer.runtime.window_supervisor",
+    "--mode", $effectiveMode,
+    "--process-name", "Balatro",
+    "--json"
+  )
+  if (-not $apply -or -not [bool]$apply.operation_success) {
+    Write-Host "[svc] warning: failed to apply configured window mode"
+  }
+}
 
 # P15 gate builds on top of P14.
 if ($RunP15) { $RunP14 = $true }
@@ -292,6 +363,12 @@ function Invoke-ServiceReadiness([string]$Url, [string]$Reason) {
   if ($LASTEXITCODE -ne 0) {
     throw ("[svc] readiness guard failed for " + $Reason)
   }
+  if ($env:BALATRO_WINDOW_MODE) {
+    Write-Host ("[svc] readiness window_mode=" + $env:BALATRO_WINDOW_MODE)
+  }
+  if ($env:BALATRO_BACKGROUND_VALIDATION_REF) {
+    Write-Host ("[svc] readiness background_validation=" + $env:BALATRO_BACKGROUND_VALIDATION_REF)
+  }
 }
 
 function Start-ServiceProc([string]$Url) {
@@ -319,6 +396,7 @@ function Start-ServiceProc([string]$Url) {
     if (Test-Health -Url $Url -TimeoutSec 3) {
       Write-Host "[svc] health ok"
       Invoke-ServiceReadiness -Url $Url -Reason "startup"
+      Apply-ConfiguredWindowMode -Reason "startup"
       return
     }
     Start-Sleep -Seconds 1
@@ -331,6 +409,7 @@ function Ensure-Service([string]$Url, [bool]$ForceRestart = $false) {
   if (Test-Health -Url $Url) {
     Write-Host "[svc] health ok at $Url"
     Invoke-ServiceReadiness -Url $Url -Reason $(if ($ForceRestart) { "restart" } else { "ensure" })
+    Apply-ConfiguredWindowMode -Reason $(if ($ForceRestart) { "restart" } else { "ensure" })
     return
   }
   Start-ServiceProc -Url $Url

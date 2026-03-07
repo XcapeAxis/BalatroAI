@@ -52,6 +52,8 @@ if ($RunId.Trim()) { $args += @("--run-id", $RunId) }
 Write-Host ("[readiness] python: " + $py)
 Write-Host ("[readiness] python_env_type: " + [string]$resolver.selected.env_type)
 Write-Host ("[readiness] python_cuda: " + [string]$resolver.selected.cuda_available)
+if ($env:BALATRO_WINDOW_MODE) { Write-Host ("[readiness] window_mode: " + [string]$env:BALATRO_WINDOW_MODE) }
+if ($env:BALATRO_BACKGROUND_VALIDATION_REF) { Write-Host ("[readiness] background_validation: " + [string]$env:BALATRO_BACKGROUND_VALIDATION_REF) }
 Write-Host ("[readiness] cmd: " + $py + " " + ($args -join " "))
 & $py @args
 $code = $LASTEXITCODE

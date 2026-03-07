@@ -111,3 +111,11 @@ docs/generated/readme_lint_report.json
 docs/dashboard/data/latest.json
 docs/dashboard/data/latest.js
 docs/dashboard/build_dashboard_summary.json
+
+# Runtime source files under trainer/runtime are tracked code, not disposable runtime outputs.
+!configs/runtime/
+!configs/runtime/runtime_defaults.json
+!configs/runtime/runtime_defaults.yaml
+!trainer/runtime/
+!trainer/runtime/window_supervisor.py
+!trainer/runtime/background_mode_validation.py

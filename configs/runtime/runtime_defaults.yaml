@@ -18,3 +18,8 @@ defaults:
   matmul_precision: high
   checkpoint_interval: 1
   log_interval: 1
+  window_mode: offscreen
+  window_mode_fallback: offscreen
+  window_restore_on_failure: true
+  window_restore_on_exit: true
+  validate_background_mode_before_run: true

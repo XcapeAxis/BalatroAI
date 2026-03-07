@@ -33,6 +33,31 @@ def _write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def _read_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8-sig"))
+    except Exception:
+        return None
+
+
+def _latest_window_state() -> dict[str, Any]:
+    path = _repo_root() / "docs" / "artifacts" / "p53" / "window_supervisor" / "latest" / "window_state.json"
+    payload = _read_json(path)
+    return {
+        "path": str(path.resolve()),
+        "payload": payload if isinstance(payload, dict) else {},
+    }
+
+
+def _latest_background_validation() -> dict[str, Any]:
+    path = _repo_root() / "docs" / "artifacts" / "p53" / "background_mode_validation" / "latest" / "background_mode_validation.json"
+    payload = _read_json(path)
+    return {
+        "path": str(path.resolve()),
+        "payload": payload if isinstance(payload, dict) else {},
+    }
+
+
 def _probe_once(base_url: str, *, timeout_sec: float, probe_method: str) -> dict[str, Any]:
     started = time.time()
     details: dict[str, Any] = {
@@ -141,6 +166,8 @@ def wait_for_service_ready(
         "consecutive_successes_required": int(consecutive_successes),
         "attempt_count": len(attempts),
         "attempts": attempts,
+        "window_state": _latest_window_state(),
+        "background_validation": _latest_background_validation(),
         "report_json": str((run_dir / "service_readiness_report.json").resolve()),
     }
     _write_json(run_dir / "service_readiness_report.json", payload)
