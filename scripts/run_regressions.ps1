@@ -55,6 +55,17 @@ if (-not (Test-Path $safeRunScript)) { throw "missing safe_run script: $safeRunS
 $safeRunLogDir = Join-Path $ProjectRoot ".safe_run/regressions"
 if (-not (Test-Path $safeRunLogDir)) { New-Item -ItemType Directory -Path $safeRunLogDir -Force | Out-Null }
 $waitForReadyScript = Join-Path $ProjectRoot "scripts/wait_for_service_ready.ps1"
+$resolveTrainingPythonScript = Join-Path $ProjectRoot "scripts/resolve_training_python.ps1"
+$trainingResolverJson = (& powershell -ExecutionPolicy Bypass -File $resolveTrainingPythonScript -Emit json | Out-String).Trim()
+if (-not [string]::IsNullOrWhiteSpace($trainingResolverJson)) {
+  try {
+    $TrainingPythonInfo = $trainingResolverJson | ConvertFrom-Json
+    $env:BALATRO_TRAIN_PYTHON = [string]$TrainingPythonInfo.selected.python
+    Write-Host ("[train-python] selected=" + [string]$TrainingPythonInfo.selected.python + " env_type=" + [string]$TrainingPythonInfo.selected.env_type + " cuda=" + [string]$TrainingPythonInfo.selected.cuda_available)
+  } catch {
+    Write-Host ("[train-python] warning: failed to parse resolver output: " + $_.Exception.Message)
+  }
+}
 
 # P15 gate builds on top of P14.
 if ($RunP15) { $RunP14 = $true }

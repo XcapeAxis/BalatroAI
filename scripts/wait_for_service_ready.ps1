@@ -7,7 +7,8 @@ param(
   [double]$WarmupGraceSec = 8.0,
   [int]$ConsecutiveSuccesses = 3,
   [double]$TimeoutSec = 3.0,
-  [string]$ProbeMethod = "health_gamestate"
+  [string]$ProbeMethod = "health_gamestate",
+  [string]$TrainingPython = ""
 )
 
 Set-StrictMode -Version Latest
@@ -17,8 +18,22 @@ $PSNativeCommandUseErrorActionPreference = $false
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $ProjectRoot
 
-$py = Join-Path $ProjectRoot ".venv_trainer\\Scripts\\python.exe"
-if (-not (Test-Path $py)) { $py = "python" }
+$resolveTrainingPythonScript = Join-Path $ProjectRoot "scripts\\resolve_training_python.ps1"
+$resolverArgs = @(
+  "-ExecutionPolicy", "Bypass",
+  "-File", $resolveTrainingPythonScript,
+  "-Emit", "json"
+)
+if ($TrainingPython.Trim()) { $resolverArgs += @("-ExplicitPython", $TrainingPython) }
+$resolverJson = (& powershell @resolverArgs | Out-String).Trim()
+if (-not $resolverJson) {
+  throw "[readiness] training python resolver returned empty output"
+}
+$resolver = $resolverJson | ConvertFrom-Json
+$py = [string]$resolver.selected.python
+if (-not $py.Trim()) {
+  throw "[readiness] training python resolver did not return a python path"
+}
 
 $args = @(
   "-B",
@@ -35,6 +50,8 @@ $args = @(
 if ($RunId.Trim()) { $args += @("--run-id", $RunId) }
 
 Write-Host ("[readiness] python: " + $py)
+Write-Host ("[readiness] python_env_type: " + [string]$resolver.selected.env_type)
+Write-Host ("[readiness] python_cuda: " + [string]$resolver.selected.cuda_available)
 Write-Host ("[readiness] cmd: " + $py + " " + ($args -join " "))
 & $py @args
 $code = $LASTEXITCODE
