@@ -26,6 +26,13 @@ P52_ROUTER_CAMPAIGN_STAGE_IDS = (
     "dashboard_build",
 )
 
+P53_OPS_CAMPAIGN_STAGE_IDS = (
+    "background_mode_validation",
+    "promotion_queue_update",
+    "dashboard_build",
+    "ops_ui_metadata",
+)
+
 CAMPAIGN_STAGE_STATUSES = ("pending", "running", "completed", "failed", "skipped")
 
 

@@ -55,6 +55,9 @@ def write_summary_tables(
         "training_python",
         "dashboard_path",
         "readiness_report_path",
+        "window_mode",
+        "background_validation_ref",
+        "ops_ui_path",
         "campaign_state_path",
         "registry_snapshot_path",
         "promotion_queue_path",
@@ -100,6 +103,9 @@ def write_summary_tables(
                     "training_python": row.get("training_python"),
                     "dashboard_path": row.get("dashboard_path"),
                     "readiness_report_path": row.get("readiness_report_path"),
+                    "window_mode": row.get("window_mode"),
+                    "background_validation_ref": row.get("background_validation_ref"),
+                    "ops_ui_path": row.get("ops_ui_path"),
                     "campaign_state_path": row.get("campaign_state_path"),
                     "registry_snapshot_path": row.get("registry_snapshot_path"),
                     "promotion_queue_path": row.get("promotion_queue_path"),
@@ -155,6 +161,9 @@ def write_summary_tables(
                 "training_python",
                 "dashboard_path",
                 "readiness_report_path",
+                "window_mode",
+                "background_validation_ref",
+                "ops_ui_path",
                 "campaign_state_path",
                 "registry_snapshot_path",
                 "promotion_queue_path",
@@ -176,6 +185,12 @@ def write_summary_tables(
                 md_lines.append(f"  dashboard_path: `{row.get('dashboard_path')}`")
             if row.get("readiness_report_path"):
                 md_lines.append(f"  readiness_report_path: `{row.get('readiness_report_path')}`")
+            if row.get("window_mode"):
+                md_lines.append(f"  window_mode: `{row.get('window_mode')}`")
+            if row.get("background_validation_ref"):
+                md_lines.append(f"  background_validation_ref: `{row.get('background_validation_ref')}`")
+            if row.get("ops_ui_path"):
+                md_lines.append(f"  ops_ui_path: `{row.get('ops_ui_path')}`")
             if row.get("campaign_state_path"):
                 md_lines.append(f"  campaign_state_path: `{row.get('campaign_state_path')}`")
             if row.get("registry_snapshot_path"):

@@ -1,0 +1,42 @@
+schema: p53_background_ops_config_v1
+
+device_profile: single_gpu_mainline
+
+runtime:
+  device_profile: single_gpu_mainline
+  window_mode: offscreen
+  window_mode_fallback: offscreen
+  window_restore_on_failure: true
+  window_restore_on_exit: true
+  validate_background_mode_before_run: true
+
+monitoring:
+  readiness_guard: true
+  dashboard: true
+  ops_ui_metadata_enabled: true
+
+campaign:
+  resume_enabled: true
+  force_rerun_stages: []
+
+validation:
+  base_url: http://127.0.0.1:12346
+  modes:
+    - visible
+    - offscreen
+    - minimized
+    - hidden
+  seed: AAAAAAA
+  scope: p1_hand_score_observed_core
+  max_steps: 120
+  timeout_sec: 1200
+
+ops_ui:
+  host: 127.0.0.1
+  port: 8765
+  path: http://127.0.0.1:8765/
+  enabled: true
+
+output:
+  background_validation_root: docs/artifacts/p53/background_mode_validation
+  ops_ui_metadata_root: docs/artifacts/p53/ops_ui_metadata

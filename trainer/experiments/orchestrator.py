@@ -79,6 +79,22 @@ def _resolved_readiness_report_path() -> str:
     return str(os.environ.get("BALATRO_READINESS_REPORT") or "").strip()
 
 
+def _resolved_window_mode() -> str:
+    return str(os.environ.get("BALATRO_WINDOW_MODE") or "").strip()
+
+
+def _resolved_requested_window_mode() -> str:
+    return str(os.environ.get("BALATRO_WINDOW_MODE_REQUESTED") or "").strip()
+
+
+def _resolved_background_validation_path() -> str:
+    return str(os.environ.get("BALATRO_BACKGROUND_VALIDATION_REF") or "").strip()
+
+
+def _resolved_ops_ui_path() -> str:
+    return str(os.environ.get("BALATRO_OPS_UI_PATH") or "").strip()
+
+
 def run_process(
     command: str | list[str],
     *,
@@ -179,6 +195,8 @@ def normalize_experiment_category(exp: dict[str, Any]) -> str:
         "learned_router_train",
         "learned_router_ablation",
         "p52_learned_router_campaign",
+        "background_ops_validation",
+        "p53_background_ops_campaign",
         "gpu_mainline_eval",
         "p49_gpu_mainline",
         "p50_gpu_validation",
@@ -3267,6 +3285,324 @@ def _run_p52_learned_router_campaign_seed_experiment(
     }
 
 
+def _run_p53_background_ops_campaign_seed_experiment(
+    *,
+    ctx: RunContext,
+    exp: dict[str, Any],
+    exp_dir: Path,
+    seed: str,
+    seed_idx: int,
+    seed_total: int,
+) -> dict[str, Any]:
+    from trainer.campaigns.campaign_schema import P53_OPS_CAMPAIGN_STAGE_IDS, normalize_stage_status
+    from trainer.campaigns.resume_state import (
+        get_stage,
+        load_campaign_state,
+        mark_stage_completed,
+        mark_stage_failed,
+        mark_stage_started,
+        save_campaign_state,
+        should_skip_stage,
+    )
+    from trainer.monitoring.dashboard_build import build_dashboard
+    from trainer.registry.checkpoint_registry import list_entries, snapshot_registry
+    from trainer.registry.promotion_queue import build_promotion_queue_summary
+    from trainer.runtime.background_mode_validation import validate_background_modes
+
+    eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+    cfg_rel = str(
+        eval_cfg.get("config")
+        or exp.get("background_ops_config")
+        or exp.get("campaign_config")
+        or (
+            "configs/experiments/p53_background_ops_smoke.yaml"
+            if ctx.mode == "quick"
+            else "configs/experiments/p53_background_ops_nightly.yaml"
+        )
+    )
+    cfg_path = (ctx.repo_root / cfg_rel).resolve()
+    cfg = _read_yaml_or_json(cfg_path)
+    quick_flag = bool(eval_cfg.get("quick", False) or ctx.mode == "quick")
+    campaign_cfg = cfg.get("campaign") if isinstance(cfg.get("campaign"), dict) else {}
+    runtime_cfg = cfg.get("runtime") if isinstance(cfg.get("runtime"), dict) else {}
+    validation_cfg = cfg.get("validation") if isinstance(cfg.get("validation"), dict) else {}
+    output_cfg = cfg.get("output") if isinstance(cfg.get("output"), dict) else {}
+    ops_ui_cfg = cfg.get("ops_ui") if isinstance(cfg.get("ops_ui"), dict) else {}
+    device_profile_name = str(
+        cfg.get("device_profile")
+        or runtime_cfg.get("device_profile")
+        or exp.get("device_profile")
+        or "single_gpu_mainline"
+    ).strip()
+    force_rerun_stages = {
+        str(item).strip()
+        for item in (
+            campaign_cfg.get("force_rerun_stages")
+            or cfg.get("force_rerun_stages")
+            or exp.get("force_rerun_stages")
+            or []
+        )
+        if str(item).strip()
+    }
+    requested_window_mode = str(
+        _resolved_requested_window_mode()
+        or _resolved_window_mode()
+        or runtime_cfg.get("window_mode")
+        or exp.get("window_mode")
+        or "offscreen"
+    ).strip()
+    ops_ui_url = str(
+        _resolved_ops_ui_path()
+        or ops_ui_cfg.get("path")
+        or f"http://127.0.0.1:{int(ops_ui_cfg.get('port') or 8765)}/"
+    ).strip()
+
+    campaign_root = exp_dir / "campaign_runs" / f"seed_{seed_idx:03d}_{seed}"
+    campaign_root.mkdir(parents=True, exist_ok=True)
+    state_path = campaign_root / "campaign_state.json"
+    resume_report_path = campaign_root / "campaign_resume_report.md"
+    registry_snapshot_path = campaign_root / "checkpoint_registry_snapshot.json"
+    promotion_queue_path = campaign_root / "promotion_queue.json"
+    ops_ui_metadata_root = (
+        (ctx.repo_root / str(output_cfg.get("ops_ui_metadata_root") or "docs/artifacts/p53/ops_ui_metadata")).resolve()
+    )
+    background_validation_root = (
+        (ctx.repo_root / str(output_cfg.get("background_validation_root") or "docs/artifacts/p53/background_mode_validation")).resolve()
+    )
+    campaign_state = load_campaign_state(
+        state_path=state_path,
+        campaign_id=f"{str(exp.get('id') or 'p53_background_ops_campaign')}-{seed}",
+        run_id=ctx.run_id,
+        experiment_id=str(exp.get("id") or ""),
+        seed=seed,
+        stage_ids=list(P53_OPS_CAMPAIGN_STAGE_IDS),
+        metadata={
+            "config_path": str(cfg_path),
+            "device_profile": device_profile_name,
+            "window_mode": requested_window_mode,
+            "ops_ui_url": ops_ui_url,
+            "training_python": sys.executable,
+            "readiness_report_path": _resolved_readiness_report_path(),
+        },
+    )
+
+    validation_summary: dict[str, Any] = {}
+    ops_ui_metadata_path = ""
+
+    def _persist() -> None:
+        save_campaign_state(state_path, campaign_state)
+
+    def _stage_artifacts(stage_id: str) -> dict[str, Any]:
+        stage = get_stage(campaign_state, stage_id)
+        return dict(stage.get("artifacts") or {}) if isinstance(stage.get("artifacts"), dict) else {}
+
+    def _start(stage_id: str) -> bool:
+        nonlocal campaign_state
+        if should_skip_stage(campaign_state, stage_id, force_rerun=stage_id in force_rerun_stages):
+            return False
+        campaign_state = mark_stage_started(campaign_state, stage_id)
+        _persist()
+        return True
+
+    def _complete(stage_id: str, artifacts: dict[str, Any], *, skipped: bool = False) -> None:
+        nonlocal campaign_state
+        campaign_state = mark_stage_completed(campaign_state, stage_id, artifacts=artifacts, resume_safe=True, skipped=skipped)
+        _persist()
+
+    def _fail(stage_id: str, exc: Exception, *, artifacts: dict[str, Any] | None = None) -> dict[str, Any]:
+        nonlocal campaign_state
+        campaign_state = mark_stage_failed(
+            campaign_state,
+            stage_id,
+            error_summary=str(exc),
+            artifacts=artifacts or {},
+            resume_safe=True,
+        )
+        _persist()
+        write_json(
+            campaign_root / "campaign_failure.json",
+            {
+                "schema": "p53_campaign_failure_v1",
+                "stage_id": stage_id,
+                "error": str(exc),
+                "campaign_state": str(state_path),
+            },
+        )
+        return {
+            "status": "failed",
+            "metrics": {
+                "score": 0.0,
+                "p53_campaign_state_path": str(state_path),
+                "p53_registry_snapshot_path": str(registry_snapshot_path),
+            },
+            "summary": {
+                "campaign_state_path": str(state_path),
+                "failed_stage": stage_id,
+                "error": str(exc),
+            },
+        }
+
+    try:
+        if _start("background_mode_validation"):
+            validation_summary = validate_background_modes(
+                base_url=str(validation_cfg.get("base_url") or "http://127.0.0.1:12346"),
+                out_dir=background_validation_root,
+                run_id=f"{ctx.run_id}-{seed}-background-validation",
+                modes=[str(item) for item in (validation_cfg.get("modes") or ["visible", "offscreen", "minimized", "hidden"])],
+                seed=seed,
+                scope=str(validation_cfg.get("scope") or "p1_hand_score_observed_core"),
+                max_steps=int(validation_cfg.get("max_steps") or (120 if quick_flag else 160)),
+                timeout_sec=int(validation_cfg.get("timeout_sec") or (1200 if quick_flag else 1800)),
+            )
+            _complete("background_mode_validation", dict(validation_summary))
+        else:
+            validation_summary = _stage_artifacts("background_mode_validation")
+
+        if _start("promotion_queue_update"):
+            snapshot_registry(out_path=registry_snapshot_path)
+            queue_payload = build_promotion_queue_summary(list_entries())
+            write_json(promotion_queue_path, queue_payload)
+            _complete(
+                "promotion_queue_update",
+                {
+                    "registry_snapshot_path": str(registry_snapshot_path),
+                    "promotion_queue_path": str(promotion_queue_path),
+                },
+            )
+
+        if _start("dashboard_build"):
+            dashboard_summary = build_dashboard(
+                ctx.repo_root / "docs" / "artifacts",
+                ctx.repo_root / "docs" / "artifacts" / "dashboard" / "latest",
+            )
+            _complete("dashboard_build", dashboard_summary)
+
+        if _start("ops_ui_metadata"):
+            ops_ui_run_dir = ops_ui_metadata_root / f"{ctx.run_id}-{seed}-ops-ui"
+            ops_ui_run_dir.mkdir(parents=True, exist_ok=True)
+            ops_ui_metadata_path = str((ops_ui_run_dir / "ops_ui_metadata.json").resolve())
+            metadata_payload = {
+                "schema": "p53_ops_ui_metadata_v1",
+                "generated_at": now_iso(),
+                "run_id": ctx.run_id,
+                "seed": seed,
+                "experiment_id": str(exp.get("id") or ""),
+                "ops_ui_metadata_path": ops_ui_metadata_path,
+                "ops_ui_url": ops_ui_url,
+                "dashboard_path": str((ctx.repo_root / "docs/artifacts/dashboard/latest/index.html").resolve()),
+                "window_mode": requested_window_mode,
+                "background_validation_ref": str(validation_summary.get("report_json") or ""),
+                "registry_snapshot_path": str(registry_snapshot_path),
+                "promotion_queue_path": str(promotion_queue_path),
+                "campaign_state_path": str(state_path),
+                "readiness_report_path": _resolved_readiness_report_path(),
+            }
+            write_json(Path(ops_ui_metadata_path), metadata_payload)
+            _complete("ops_ui_metadata", metadata_payload)
+        else:
+            ops_ui_metadata_path = str(_stage_artifacts("ops_ui_metadata").get("ops_ui_metadata_path") or "")
+    except Exception as exc:
+        failed_stage = next(
+            (
+                stage
+                for stage in P53_OPS_CAMPAIGN_STAGE_IDS
+                if normalize_stage_status(get_stage(campaign_state, stage).get("status")) == "running"
+            ),
+            "ops_ui_metadata",
+        )
+        return _fail(failed_stage, exc)
+
+    snapshot_registry(out_path=registry_snapshot_path)
+    queue_payload = build_promotion_queue_summary(list_entries())
+    write_json(promotion_queue_path, queue_payload)
+    pass_count = sum(1 for row in (validation_summary.get("mode_results") or []) if isinstance(row, dict) and str(row.get("status") or "") == "pass")
+    total_modes = len([row for row in (validation_summary.get("mode_results") or []) if isinstance(row, dict)])
+    validation_pass_rate = float(pass_count) / max(1, total_modes)
+    write_json(
+        campaign_root / "campaign_summary.json",
+        {
+            "schema": "p53_campaign_summary_v1",
+            "generated_at": now_iso(),
+            "campaign_state_path": str(state_path),
+            "registry_snapshot_path": str(registry_snapshot_path),
+            "promotion_queue_path": str(promotion_queue_path),
+            "window_mode": requested_window_mode,
+            "background_validation": validation_summary,
+            "ops_ui_metadata_path": ops_ui_metadata_path,
+            "ops_ui_url": ops_ui_url,
+        },
+    )
+    resume_lines = [
+        "# P53 Campaign Resume Report",
+        "",
+        f"- campaign_state_path: `{state_path}`",
+        f"- registry_snapshot_path: `{registry_snapshot_path}`",
+        f"- promotion_queue_path: `{promotion_queue_path}`",
+        f"- ops_ui_url: `{ops_ui_url}`",
+        f"- window_mode: `{requested_window_mode}`",
+        f"- background_validation_ref: `{validation_summary.get('report_json') or ''}`",
+        "",
+        "## Stage Status",
+    ]
+    for stage_id in P53_OPS_CAMPAIGN_STAGE_IDS:
+        stage = get_stage(campaign_state, stage_id)
+        resume_lines.append(
+            "- {stage}: status={status} attempts={attempts} resume_safe={safe}".format(
+                stage=stage_id,
+                status=stage.get("status"),
+                attempts=int(stage.get("attempt_count") or 0),
+                safe=str(bool(stage.get("resume_safe", True))).lower(),
+            )
+        )
+    resume_report_path.write_text("\n".join(resume_lines).rstrip() + "\n", encoding="utf-8")
+
+    result_metrics = {
+        "score": validation_pass_rate,
+        "avg_reward": validation_pass_rate,
+        "best_episode_reward": validation_pass_rate,
+        "avg_ante_reached": validation_pass_rate,
+        "median_ante": validation_pass_rate,
+        "win_rate": validation_pass_rate,
+        "hand_top1": 0.0,
+        "hand_top3": 0.0,
+        "shop_top1": 0.0,
+        "illegal_action_rate": 0.0,
+        "p53_campaign_state_path": str(state_path),
+        "p53_registry_snapshot_path": str(registry_snapshot_path),
+        "p53_promotion_queue_path": str(promotion_queue_path),
+        "p53_resume_report_md": str(resume_report_path),
+        "p53_training_python": sys.executable,
+        "p53_device_profile": device_profile_name,
+        "p53_window_mode": requested_window_mode,
+        "p53_background_validation_ref": str(validation_summary.get("report_json") or ""),
+        "p53_dashboard_path": str((ctx.repo_root / "docs/artifacts/dashboard/latest/index.html").resolve()),
+        "p53_readiness_report_path": _resolved_readiness_report_path(),
+        "p53_ops_ui_path": ops_ui_url,
+    }
+    summary_payload = {
+        "schema": "p53_campaign_seed_summary_v1",
+        "generated_at": now_iso(),
+        "seed": str(seed),
+        "run_dir": str(campaign_root),
+        "device_profile": device_profile_name,
+        "window_mode": requested_window_mode,
+        "background_validation_ref": str(validation_summary.get("report_json") or ""),
+        "ops_ui_path": ops_ui_url,
+        "campaign_state_path": str(state_path),
+        "registry_snapshot_path": str(registry_snapshot_path),
+        "promotion_queue_path": str(promotion_queue_path),
+        "resume_report_md": str(resume_report_path),
+        "dashboard_path": str((ctx.repo_root / "docs/artifacts/dashboard/latest/index.html").resolve()),
+        "readiness_report_path": _resolved_readiness_report_path(),
+        "training_python": sys.executable,
+    }
+    return {
+        "status": "ok",
+        "metrics": result_metrics,
+        "summary": summary_payload,
+    }
+
+
 def _run_closed_loop_seed_experiment(
     *,
     ctx: RunContext,
@@ -3712,7 +4048,12 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "default_enabled": exp_default_enabled,
         }
 
-    allow_seed_level_resume = exp_type in {"checkpoint_registry_campaign", "p51_registry_campaign", "p52_learned_router_campaign"}
+    allow_seed_level_resume = exp_type in {
+        "checkpoint_registry_campaign",
+        "p51_registry_campaign",
+        "p52_learned_router_campaign",
+        "p53_background_ops_campaign",
+    }
     if ctx.resume and not allow_seed_level_resume:
         old = read_json(status_path)
         if old and str(old.get("status")) in {"success", "passed", "dry_run"}:
@@ -4024,6 +4365,28 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             ),
             "quick": bool(eval_cfg.get("quick") or False),
             "device_profile": str(exp.get("device_profile") or "single_gpu_mainline"),
+            "dashboard_path": str((ctx.repo_root / "docs/artifacts/dashboard/latest/index.html").resolve()),
+            "readiness_report_path": _resolved_readiness_report_path(),
+            "training_python": sys.executable,
+        }
+    elif exp_type in {"background_ops_validation", "p53_background_ops_campaign"}:
+        eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+        manifest["p53_background_ops"] = {
+            "config": str(
+                eval_cfg.get("config")
+                or exp.get("background_ops_config")
+                or exp.get("campaign_config")
+                or (
+                    "configs/experiments/p53_background_ops_smoke.yaml"
+                    if ctx.mode == "quick"
+                    else "configs/experiments/p53_background_ops_nightly.yaml"
+                )
+            ),
+            "quick": bool(eval_cfg.get("quick") or False),
+            "device_profile": str(exp.get("device_profile") or "single_gpu_mainline"),
+            "window_mode": _resolved_window_mode(),
+            "background_validation_ref": _resolved_background_validation_path(),
+            "ops_ui_path": _resolved_ops_ui_path(),
             "dashboard_path": str((ctx.repo_root / "docs/artifacts/dashboard/latest/index.html").resolve()),
             "readiness_report_path": _resolved_readiness_report_path(),
             "training_python": sys.executable,
@@ -4987,6 +5350,54 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                     message=exp_type,
                     extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
                 )
+            elif exp_type in {"background_ops_validation", "p53_background_ops_campaign"}:
+                try:
+                    p53_campaign_result = _run_p53_background_ops_campaign_seed_experiment(
+                        ctx=ctx,
+                        exp=exp,
+                        exp_dir=exp_dir,
+                        seed=seed,
+                        seed_idx=seed_idx,
+                        seed_total=len(seeds),
+                    )
+                except Exception as exc:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "failed",
+                            "stage": "eval",
+                            "error": f"p53_campaign_exception: {exc}",
+                            "elapsed_sec": elapsed(),
+                            "metrics": {},
+                        }
+                    )
+                else:
+                    p53_campaign_summary = dict(p53_campaign_result.get("summary") or {})
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "ok" if p53_campaign_result["status"] == "ok" else "failed",
+                            "stage": "eval",
+                            "elapsed_sec": elapsed(),
+                            "metrics": dict(p53_campaign_result.get("metrics") or {}),
+                            "summary": p53_campaign_summary,
+                            "p53_campaign_summary": p53_campaign_summary,
+                        }
+                    )
+                append_experiment_progress_event(
+                    progress_path,
+                    run_id=ctx.run_id,
+                    exp_id=exp_id,
+                    phase="eval",
+                    stage="eval",
+                    status=str(seed_results[-1].get("status")),
+                    seed=seed,
+                    step_or_epoch=seed_idx,
+                    elapsed_sec=elapsed(),
+                    metrics=seed_results[-1].get("metrics") or {},
+                    message=exp_type,
+                    extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
+                )
             elif exp_type in {"closed_loop_improvement", "closed_loop", "p40_closed_loop", "closed_loop_improvement_v2", "p41_closed_loop_v2", "closed_loop_v2", "closed_loop_rl_candidate", "rl_candidate_pipeline", "p42_rl_candidate", "p42_rl_candidate_pipeline", "p44_distributed_rl"}:
                 try:
                     closed_loop_result = _run_closed_loop_seed_experiment(
@@ -5195,7 +5606,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
     )
     runtime_details = {
         "device_profile": str(
-            final_seed_metrics.get("p52_device_profile")
+            final_seed_metrics.get("p53_device_profile")
+            or final_seed_metrics.get("p52_device_profile")
             or final_seed_metrics.get("p51_device_profile")
             or final_seed_metrics.get("p50_device_profile")
             or final_seed_metrics.get("p49_device_profile")
@@ -5203,6 +5615,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             or ""
         ),
         "learner_device": str(
+            final_seed_metrics.get("p53_learner_device")
+            or
             final_seed_metrics.get("p52_learner_device")
             or final_seed_metrics.get("p51_learner_device")
             or final_seed_metrics.get("p50_learner_device")
@@ -5211,7 +5625,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             or ""
         ),
         "training_python": str(
-            final_seed_metrics.get("p52_training_python")
+            final_seed_metrics.get("p53_training_python")
+            or final_seed_metrics.get("p52_training_python")
             or final_seed_metrics.get("p51_training_python")
             or final_seed_metrics.get("p50_training_python")
             or final_seed_metrics.get("gpu_mainline_training_python")
@@ -5219,14 +5634,16 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             or ""
         ),
         "dashboard_path": str(
-            final_seed_metrics.get("p52_dashboard_path")
+            final_seed_metrics.get("p53_dashboard_path")
+            or final_seed_metrics.get("p52_dashboard_path")
             or final_seed_metrics.get("p51_dashboard_path")
             or final_seed_metrics.get("p50_dashboard_path")
             or final_seed_metrics.get("p49_dashboard_path")
             or ""
         ),
         "readiness_report_path": str(
-            final_seed_metrics.get("p52_readiness_report_path")
+            final_seed_metrics.get("p53_readiness_report_path")
+            or final_seed_metrics.get("p52_readiness_report_path")
             or final_seed_metrics.get("p51_readiness_report_path")
             or final_seed_metrics.get("p50_readiness_report_path")
             or final_seed_metrics.get("gpu_mainline_readiness_report_path")
@@ -5235,25 +5652,45 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             or ""
         ),
         "campaign_state_path": str(
-            final_seed_metrics.get("p52_campaign_state_path")
+            final_seed_metrics.get("p53_campaign_state_path")
+            or final_seed_metrics.get("p52_campaign_state_path")
             or final_seed_metrics.get("p51_campaign_state_path")
             or ""
         ),
         "registry_snapshot_path": str(
-            final_seed_metrics.get("p52_registry_snapshot_path")
+            final_seed_metrics.get("p53_registry_snapshot_path")
+            or final_seed_metrics.get("p52_registry_snapshot_path")
             or final_seed_metrics.get("p51_registry_snapshot_path")
             or ""
         ),
         "promotion_queue_path": str(
-            final_seed_metrics.get("p52_promotion_queue_path")
+            final_seed_metrics.get("p53_promotion_queue_path")
+            or final_seed_metrics.get("p52_promotion_queue_path")
             or final_seed_metrics.get("p51_promotion_queue_path")
             or final_seed_summary.get("promotion_queue_path")
             or ""
         ),
         "resume_report_path": str(
-            final_seed_metrics.get("p52_resume_report_md")
+            final_seed_metrics.get("p53_resume_report_md")
+            or final_seed_metrics.get("p52_resume_report_md")
             or final_seed_metrics.get("p51_resume_report_md")
             or final_seed_summary.get("resume_report_md")
+            or ""
+        ),
+        "window_mode": str(
+            final_seed_metrics.get("p53_window_mode")
+            or _resolved_window_mode()
+            or exp.get("window_mode")
+            or ""
+        ),
+        "background_validation_ref": str(
+            final_seed_metrics.get("p53_background_validation_ref")
+            or _resolved_background_validation_path()
+            or ""
+        ),
+        "ops_ui_path": str(
+            final_seed_metrics.get("p53_ops_ui_path")
+            or _resolved_ops_ui_path()
             or ""
         ),
         "produced_checkpoint_ids": list(
@@ -5397,6 +5834,9 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "training_python": runtime_details["training_python"],
         "dashboard_path": runtime_details["dashboard_path"],
         "readiness_report_path": runtime_details["readiness_report_path"],
+        "window_mode": runtime_details.get("window_mode"),
+        "background_validation_ref": runtime_details.get("background_validation_ref"),
+        "ops_ui_path": runtime_details.get("ops_ui_path"),
         "campaign_state_path": runtime_details.get("campaign_state_path"),
         "registry_snapshot_path": runtime_details.get("registry_snapshot_path"),
         "promotion_queue_path": runtime_details.get("promotion_queue_path"),

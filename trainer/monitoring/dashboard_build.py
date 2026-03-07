@@ -183,6 +183,49 @@ def _collect_p52_dashboard_data(input_root: Path, campaign_states: list[dict[str
     }
 
 
+def _collect_p53_dashboard_data(input_root: Path, campaign_states: list[dict[str, Any]]) -> dict[str, Any]:
+    window_state_path = input_root / "p53" / "window_supervisor" / "latest" / "window_state.json"
+    background_path = input_root / "p53" / "background_mode_validation" / "latest" / "background_mode_validation.json"
+    ops_ui_path = input_root / "p53" / "ops_ui" / "latest" / "ops_ui_state.json"
+    audit_path = input_root / "p53" / "ops_audit" / "ops_audit.jsonl"
+    metadata_path, metadata_payload = _latest_matching_json(input_root, "**/ops_ui_metadata.json", required_tokens=("p53/",))
+    window_payload = _read_json(window_state_path)
+    background_payload = _read_json(background_path)
+    ops_ui_payload = _read_json(ops_ui_path)
+    audit_rows = _read_jsonl(audit_path)[-12:]
+    dominant_mode = ""
+    rows = (
+        window_payload.get("window_mode_after")
+        if isinstance(window_payload, dict) and isinstance(window_payload.get("window_mode_after"), list)
+        else (window_payload.get("windows") if isinstance(window_payload, dict) else [])
+    )
+    if isinstance(rows, list):
+        for role in ("game_main", "other_balatro", "diagnostic_console"):
+            for row in rows:
+                if isinstance(row, dict) and str(row.get("role") or "") == role and str(row.get("mode") or "").strip():
+                    dominant_mode = str(row.get("mode") or "")
+                    break
+            if dominant_mode:
+                break
+    p53_campaign_states = [
+        row
+        for row in campaign_states
+        if isinstance(row, dict)
+        and (
+            "p53" in str(row.get("campaign_id") or "").lower()
+            or "p53" in str(row.get("experiment_id") or "").lower()
+        )
+    ]
+    return {
+        "window_state": {"path": str(window_state_path.resolve()), "payload": window_payload if isinstance(window_payload, dict) else {}, "dominant_mode": dominant_mode},
+        "background_validation": {"path": str(background_path.resolve()), "payload": background_payload if isinstance(background_payload, dict) else {}},
+        "ops_ui": {"path": str(ops_ui_path.resolve()), "payload": ops_ui_payload if isinstance(ops_ui_payload, dict) else {}},
+        "ops_ui_metadata": {"path": metadata_path, "payload": metadata_payload if isinstance(metadata_payload, dict) else {}},
+        "audit_tail": audit_rows,
+        "campaign_states": p53_campaign_states,
+    }
+
+
 def collect_dashboard_data(input_root: Path) -> dict[str, Any]:
     latest: dict[tuple[str, str, str], dict[str, Any]] = {}
     warnings: list[dict[str, Any]] = []
@@ -224,6 +267,7 @@ def collect_dashboard_data(input_root: Path) -> dict[str, Any]:
         "campaign_states": campaign_states,
         "registry_summary": registry_summary,
         "p52": _collect_p52_dashboard_data(input_root, campaign_states, registry_summary),
+        "p53": _collect_p53_dashboard_data(input_root, campaign_states),
     }
 
 
@@ -315,6 +359,17 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
     p52_campaign_rows = p52_payload.get("campaign_states") if isinstance(p52_payload.get("campaign_states"), list) else []
     p52_registry = p52_payload.get("registry") if isinstance(p52_payload.get("registry"), dict) else {}
     p52_registry_items = p52_registry.get("learned_router_items") if isinstance(p52_registry.get("learned_router_items"), list) else []
+    p53_payload = data.get("p53") if isinstance(data.get("p53"), dict) else {}
+    p53_window = p53_payload.get("window_state") if isinstance(p53_payload.get("window_state"), dict) else {}
+    p53_window_payload = p53_window.get("payload") if isinstance(p53_window.get("payload"), dict) else {}
+    p53_background = p53_payload.get("background_validation") if isinstance(p53_payload.get("background_validation"), dict) else {}
+    p53_background_payload = p53_background.get("payload") if isinstance(p53_background.get("payload"), dict) else {}
+    p53_ops_ui = p53_payload.get("ops_ui") if isinstance(p53_payload.get("ops_ui"), dict) else {}
+    p53_ops_ui_payload = p53_ops_ui.get("payload") if isinstance(p53_ops_ui.get("payload"), dict) else {}
+    p53_ops_meta = p53_payload.get("ops_ui_metadata") if isinstance(p53_payload.get("ops_ui_metadata"), dict) else {}
+    p53_ops_meta_payload = p53_ops_meta.get("payload") if isinstance(p53_ops_meta.get("payload"), dict) else {}
+    p53_campaign_rows = p53_payload.get("campaign_states") if isinstance(p53_payload.get("campaign_states"), list) else []
+    p53_audit_rows = p53_payload.get("audit_tail") if isinstance(p53_payload.get("audit_tail"), list) else []
 
     p52_summary_html = []
     for row in p52_summary_rows:
@@ -369,11 +424,37 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
             "</tr>"
         )
 
+    p53_campaign_html = []
+    for row in p53_campaign_rows:
+        if not isinstance(row, dict):
+            continue
+        p53_campaign_html.append(
+            "<tr>"
+            f"<td>{html.escape(str(row.get('campaign_id') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('experiment_id') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('stage_id') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('status') or ''))}</td>"
+            "</tr>"
+        )
+
+    p53_audit_html = []
+    for row in p53_audit_rows:
+        if not isinstance(row, dict):
+            continue
+        p53_audit_html.append(
+            "<tr>"
+            f"<td>{html.escape(str(row.get('timestamp') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('action') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('success') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('target') or ''))}</td>"
+            "</tr>"
+        )
+
     html_text = f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>P49/P52 Dashboard</title>
+  <title>P49/P52/P53 Dashboard</title>
   <style>
     :root {{ --bg: #f4f0e8; --panel: #fffaf2; --ink: #241d16; --muted: #8a745d; --warn: #9d3c2f; }}
     body {{ margin: 0; padding: 24px; font-family: Georgia, 'Times New Roman', serif; background: linear-gradient(180deg, #efe6d6 0%, var(--bg) 100%); color: var(--ink); }}
@@ -388,10 +469,11 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
 </head>
 <body>
   <div class="panel">
-    <h1>P49/P51/P52 Dashboard</h1>
+    <h1>P49/P51/P52/P53 Dashboard</h1>
     <p class="muted">Generated from unified progress events and the latest P22 summary.</p>
     <p><strong>Input:</strong> <code>{html.escape(str(input_root))}</code></p>
     <p><strong>Data:</strong> <code>{html.escape(str((output_dir / "dashboard_data.json").resolve()))}</code></p>
+    <p><strong>Ops UI:</strong> <a href="{html.escape(str(p53_ops_ui_payload.get('url') or p53_ops_meta_payload.get('ops_ui_url') or 'http://127.0.0.1:8765/'))}">{html.escape(str(p53_ops_ui_payload.get('url') or p53_ops_meta_payload.get('ops_ui_url') or 'http://127.0.0.1:8765/'))}</a></p>
   </div>
   <div class="panel">
     <h2>Active / Latest Progress</h2>
@@ -480,6 +562,32 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
       <thead><tr><th>Checkpoint ID</th><th>Status</th><th>Artifact</th></tr></thead>
       <tbody>
         {''.join(p52_registry_html) or '<tr><td colspan="3">No learned-router registry entries found.</td></tr>'}
+      </tbody>
+    </table>
+  </div>
+  <div class="panel">
+    <h2>P53 Background Execution</h2>
+    <p class="muted">window_state: <code>{html.escape(str(p53_window.get('path') or ''))}</code></p>
+    <p class="muted">background_validation: <code>{html.escape(str(p53_background.get('path') or ''))}</code></p>
+    <p class="muted">ops_ui_state: <code>{html.escape(str(p53_ops_ui.get('path') or ''))}</code></p>
+    <p>current_window_mode=<code>{html.escape(str(p53_window.get('dominant_mode') or ''))}</code> recommended_default_mode=<code>{html.escape(str(p53_background_payload.get('recommended_default_mode') or ''))}</code> fallback=<code>{html.escape(str(p53_background_payload.get('window_mode_fallback') or ''))}</code></p>
+    <p>ops_ui_url=<a href="{html.escape(str(p53_ops_ui_payload.get('url') or p53_ops_meta_payload.get('ops_ui_url') or 'http://127.0.0.1:8765/'))}">{html.escape(str(p53_ops_ui_payload.get('url') or p53_ops_meta_payload.get('ops_ui_url') or 'http://127.0.0.1:8765/'))}</a></p>
+  </div>
+  <div class="panel">
+    <h2>P53 Campaigns</h2>
+    <table>
+      <thead><tr><th>Campaign</th><th>Experiment</th><th>Stage</th><th>Status</th></tr></thead>
+      <tbody>
+        {''.join(p53_campaign_html) or '<tr><td colspan="4">No P53 campaigns found.</td></tr>'}
+      </tbody>
+    </table>
+  </div>
+  <div class="panel">
+    <h2>P53 Ops Audit</h2>
+    <table>
+      <thead><tr><th>Timestamp</th><th>Action</th><th>Success</th><th>Target</th></tr></thead>
+      <tbody>
+        {''.join(p53_audit_html) or '<tr><td colspan="4">No P53 audit rows found.</td></tr>'}
       </tbody>
     </table>
   </div>

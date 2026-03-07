@@ -137,7 +137,29 @@ def collect_p52_summary(root: Path) -> dict[str, Any]:
     }
 
 
-def render_text(rows: list[dict[str, Any]], campaign_rows: list[dict[str, Any]], registry_summary: dict[str, Any], p52_summary: dict[str, Any]) -> str:
+def collect_p53_summary(root: Path) -> dict[str, Any]:
+    window_path = root / "p53" / "window_supervisor" / "latest" / "window_state.json"
+    background_path = root / "p53" / "background_mode_validation" / "latest" / "background_mode_validation.json"
+    ops_ui_path = root / "p53" / "ops_ui" / "latest" / "ops_ui_state.json"
+    window_payload = _read_json(window_path) or {}
+    background_payload = _read_json(background_path) or {}
+    ops_ui_payload = _read_json(ops_ui_path) or {}
+    dominant_mode = ""
+    rows = window_payload.get("window_mode_after") if isinstance(window_payload.get("window_mode_after"), list) else window_payload.get("windows")
+    if isinstance(rows, list):
+        for row in rows:
+            if isinstance(row, dict) and str(row.get("role") or "") == "game_main" and str(row.get("mode") or "").strip():
+                dominant_mode = str(row.get("mode") or "")
+                break
+    return {
+        "window_mode": dominant_mode,
+        "recommended_default_mode": str(background_payload.get("recommended_default_mode") or ""),
+        "window_mode_fallback": str(background_payload.get("window_mode_fallback") or ""),
+        "ops_ui_url": str(ops_ui_payload.get("url") or ""),
+    }
+
+
+def render_text(rows: list[dict[str, Any]], campaign_rows: list[dict[str, Any]], registry_summary: dict[str, Any], p52_summary: dict[str, Any], p53_summary: dict[str, Any]) -> str:
     lines = [
         "[dashboard] P49/P51/P52 live progress",
         "run_id            component             phase       status    learner      rollout      throughput   gpu_mb   warning",
@@ -169,6 +191,14 @@ def render_text(rows: list[dict[str, Any]], campaign_rows: list[dict[str, Any]],
                 guard=float(p52_summary.get("guard_trigger_rate") or 0.0),
                 rec=str(p52_summary.get("promotion_recommendation") or "n/a"),
                 delta=float(p52_summary.get("promotion_score_delta") or 0.0),
+            ),
+            "",
+            "[p53]",
+            "window_mode={mode} recommended_default_mode={recommended} fallback={fallback} ops_ui_url={ops}".format(
+                mode=str(p53_summary.get("window_mode") or "n/a"),
+                recommended=str(p53_summary.get("recommended_default_mode") or "n/a"),
+                fallback=str(p53_summary.get("window_mode_fallback") or "n/a"),
+                ops=str(p53_summary.get("ops_ui_url") or "n/a"),
             ),
             "",
             "[campaigns]",
@@ -219,8 +249,9 @@ def main() -> int:
         campaign_rows = collect_campaign_rows(watch_root)
         registry_summary = collect_registry_summary(watch_root)
         p52_summary = collect_p52_summary(watch_root)
+        p53_summary = collect_p53_summary(watch_root)
         os.system("cls" if os.name == "nt" else "clear")
-        print(render_text(rows, campaign_rows, registry_summary, p52_summary))
+        print(render_text(rows, campaign_rows, registry_summary, p52_summary, p53_summary))
         iteration += 1
         if bool(args.once) or (int(args.iterations) > 0 and iteration >= int(args.iterations)):
             break

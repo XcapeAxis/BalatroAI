@@ -20,9 +20,16 @@ param(
   [switch]$RunP50,
   [switch]$RunP51,
   [switch]$RunP52,
+  [switch]$RunP53,
   [string]$Only = "",
   [string]$Exclude = "",
   [string]$TrainingPython = "",
+  [ValidateSet("visible", "minimized", "hidden", "offscreen", "restore")]
+  [string]$WindowMode = "",
+  [ValidateSet("visible", "minimized", "hidden", "offscreen", "restore")]
+  [string]$WindowModeFallback = "",
+  [switch]$StartOpsUI,
+  [int]$OpsUiPort = 8765,
   [int]$MaxParallel = 1,
   [int]$SeedLimit = 0,
   [string]$Seeds = ""
@@ -54,8 +61,109 @@ if (-not $py.Trim()) {
 }
 $env:BALATRO_TRAIN_PYTHON = $py
 $env:BALATRO_READINESS_REPORT = ""
+$env:BALATRO_WINDOW_MODE = ""
+$env:BALATRO_WINDOW_MODE_REQUESTED = ""
+$env:BALATRO_BACKGROUND_VALIDATION_REF = ""
+$env:BALATRO_OPS_UI_PATH = ("http://127.0.0.1:" + $OpsUiPort + "/")
 
 $env:PYTHONUTF8 = "1"
+
+function Get-RuntimeWindowSettings {
+  $defaultsPath = Join-Path $ProjectRoot "configs\\runtime\\runtime_defaults.json"
+  if (-not (Test-Path $defaultsPath)) {
+    return [pscustomobject]@{
+      window_mode = "offscreen"
+      window_mode_fallback = "offscreen"
+      window_restore_on_failure = $true
+      window_restore_on_exit = $true
+      validate_background_mode_before_run = $true
+    }
+  }
+  $payload = Get-Content -LiteralPath $defaultsPath -Raw | ConvertFrom-Json
+  $defaults = $payload.defaults
+  return [pscustomobject]@{
+    window_mode = [string]$defaults.window_mode
+    window_mode_fallback = [string]$defaults.window_mode_fallback
+    window_restore_on_failure = [bool]$defaults.window_restore_on_failure
+    window_restore_on_exit = [bool]$defaults.window_restore_on_exit
+    validate_background_mode_before_run = [bool]$defaults.validate_background_mode_before_run
+  }
+}
+
+function Invoke-PythonJson([string[]]$CmdArgs) {
+  $text = (& $py @CmdArgs | Out-String).Trim()
+  if (-not $text) { return $null }
+  return ($text | ConvertFrom-Json)
+}
+
+function Ensure-BackgroundValidation([string]$RequestedMode) {
+  $latestPath = Join-Path $ProjectRoot "docs\\artifacts\\p53\\background_mode_validation\\latest\\background_mode_validation.json"
+  if (Test-Path $latestPath) {
+    return $latestPath
+  }
+  if ([string]::IsNullOrWhiteSpace($RequestedMode) -or $RequestedMode -eq "visible") {
+    return ""
+  }
+  $validationRunId = "p22-window-validation-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+  $validationArgs = @(
+    "-B",
+    "-m", "trainer.runtime.background_mode_validation",
+    "--base-url", "http://127.0.0.1:12346",
+    "--run-id", $validationRunId,
+    "--modes", "visible,offscreen,minimized,hidden",
+    "--seed", "AAAAAAA",
+    "--scope", "p1_hand_score_observed_core",
+    "--max-steps", "120",
+    "--timeout-sec", "1200"
+  )
+  Write-Host ("[P22] background validation cmd: " + $py + " " + ($validationArgs -join " "))
+  & $py @validationArgs
+  if ($LASTEXITCODE -ne 0) {
+    throw ("[P22] background mode validation failed with exit code " + $LASTEXITCODE)
+  }
+  return $latestPath
+}
+
+function Resolve-WindowMode([string]$RequestedMode, [string]$FallbackMode) {
+  $resolveArgs = @(
+    "-B",
+    "-m", "trainer.runtime.background_mode_validation",
+    "--resolve-mode",
+    "--requested-mode", $RequestedMode,
+    "--fallback-mode", $FallbackMode
+  )
+  return Invoke-PythonJson -CmdArgs $resolveArgs
+}
+
+function Set-ManagedWindowMode([string]$Mode) {
+  $windowArgs = @(
+    "-B",
+    "-m", "trainer.runtime.window_supervisor",
+    "--mode", $Mode,
+    "--process-name", "Balatro",
+    "--json"
+  )
+  return Invoke-PythonJson -CmdArgs $windowArgs
+}
+
+function Start-OpsUiServer([int]$Port) {
+  $opsUiScript = Join-Path $ProjectRoot "scripts\\run_ops_ui.ps1"
+  if (-not (Test-Path $opsUiScript)) {
+    throw "[P22] missing ops ui script: $opsUiScript"
+  }
+  $opsArgs = @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $opsUiScript,
+    "-Port", "$Port",
+    "-TrainingPython", $py,
+    "-Detach"
+  )
+  Write-Host ("[P22] ops ui cmd: powershell " + ($opsArgs -join " "))
+  & powershell @opsArgs
+  if ($LASTEXITCODE -ne 0) {
+    throw ("[P22] ops ui start failed with exit code " + $LASTEXITCODE)
+  }
+}
 
 $args = @(
   "-B",
@@ -72,7 +180,7 @@ if ($LegacyOnly) { $args += "--legacy-only" }
 if ($Resume) { $args += "--resume" }
 if ($KeepIntermediate) { $args += "--keep-intermediate" }
 if ($VerboseLogs) { $args += "--verbose" }
-if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $RunP50 -or $RunP51 -or $RunP52) -and [string]::IsNullOrWhiteSpace($Only)) {
+if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $RunP50 -or $RunP51 -or $RunP52 -or $RunP53) -and [string]::IsNullOrWhiteSpace($Only)) {
   $selected = @()
   if ($RunP44) { $selected += if ($Nightly) { "p44_rl_nightly" } else { "p44_rl_smoke" } }
   if ($RunP45) { $selected += if ($Nightly) { "p45_world_model_nightly" } else { "p45_world_model_smoke" } }
@@ -83,6 +191,7 @@ if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $Ru
   if ($RunP50) { $selected += if ($Nightly) { "p50_gpu_validation_nightly" } else { "p50_gpu_validation_smoke" } }
   if ($RunP51) { $selected += if ($Nightly) { "p51_resumeable_nightly" } else { "p51_registry_smoke" } }
   if ($RunP52) { $selected += if ($Nightly) { "p52_learned_router_nightly" } else { "p52_learned_router_smoke" } }
+  if ($RunP53) { $selected += if ($Nightly) { "p53_background_ops_nightly" } else { "p53_background_ops_smoke" } }
   $Only = ($selected -join ",")
 }
 if (-not [string]::IsNullOrWhiteSpace($Only)) { $args += @("--only", $Only) }
@@ -113,7 +222,8 @@ if ($Quick) {
       "p49_gpu_mainline_smoke",
       "p50_gpu_validation_smoke",
       "p51_registry_smoke",
-      "p52_learned_router_smoke"
+      "p52_learned_router_smoke",
+      "p53_background_ops_smoke"
     )
     if ($IncludeLegacy -or $LegacyOnly) {
       $quickIds += @("legacy_bc_dagger_probe")
@@ -142,48 +252,101 @@ Write-Host ("[P22] python_cuda: " + [string]$resolver.selected.cuda_available)
 Write-Host ("[P22] cmd: " + $py + " " + ($args -join " "))
 
 $readinessReport = ""
-if (-not $DryRun -and -not $SkipReadinessGuard) {
-  $readinessRunId = "p22-" + (Get-Date -Format "yyyyMMdd-HHmmss")
-  $waitArgs = @(
-    "-ExecutionPolicy", "Bypass",
-    "-File", (Join-Path $ProjectRoot "scripts\\wait_for_service_ready.ps1"),
-    "-BaseUrl", "http://127.0.0.1:12346",
-    "-OutDir", "docs/artifacts/p49/readiness",
-    "-RunId", $readinessRunId,
-    "-TrainingPython", $py
-  )
-  Write-Host ("[P22] readiness cmd: powershell " + ($waitArgs -join " "))
-  & powershell @waitArgs
-  if ($LASTEXITCODE -ne 0) {
-    throw ("[P22] readiness guard failed with exit code " + $LASTEXITCODE)
-  }
-  $readinessReport = (Join-Path $ProjectRoot ("docs\\artifacts\\p49\\readiness\\" + $readinessRunId + "\\service_readiness_report.json"))
-  $env:BALATRO_READINESS_REPORT = $readinessReport
-}
-
-& $py @args
-$code = $LASTEXITCODE
-if ($code -ne 0) {
-  throw ("[P22] orchestrator failed with exit code " + $code)
-}
-
 $dashboardPath = ""
-if ($Dashboard -or $Quick -or $Nightly -or $RunP49 -or $RunP50 -or $RunP51 -or $RunP52) {
-  $dashArgs = @(
-    "-B",
-    "-m", "trainer.monitoring.dashboard_build",
-    "--input", "docs/artifacts",
-    "--output", "docs/artifacts/dashboard/latest"
-  )
-  Write-Host ("[P22] dashboard cmd: " + $py + " " + ($dashArgs -join " "))
-  & $py @dashArgs
-  if ($LASTEXITCODE -ne 0) {
-    throw ("[P22] dashboard build failed with exit code " + $LASTEXITCODE)
+$windowSettings = Get-RuntimeWindowSettings
+$requestedWindowMode = if ($WindowMode.Trim()) { $WindowMode } else { [string]$windowSettings.window_mode }
+$fallbackWindowMode = if ($WindowModeFallback.Trim()) { $WindowModeFallback } else { [string]$windowSettings.window_mode_fallback }
+$restoreWindowOnFailure = [bool]$windowSettings.window_restore_on_failure
+$restoreWindowOnExit = [bool]$windowSettings.window_restore_on_exit
+$validateBackgroundModeBeforeRun = [bool]$windowSettings.validate_background_mode_before_run
+$windowModeApplied = $false
+$runSucceeded = $false
+
+try {
+  if (-not $DryRun -and -not $SkipReadinessGuard) {
+    $readinessRunId = "p22-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+    $waitArgs = @(
+      "-ExecutionPolicy", "Bypass",
+      "-File", (Join-Path $ProjectRoot "scripts\\wait_for_service_ready.ps1"),
+      "-BaseUrl", "http://127.0.0.1:12346",
+      "-OutDir", "docs/artifacts/p49/readiness",
+      "-RunId", $readinessRunId,
+      "-TrainingPython", $py
+    )
+    Write-Host ("[P22] readiness cmd: powershell " + ($waitArgs -join " "))
+    & powershell @waitArgs
+    if ($LASTEXITCODE -ne 0) {
+      throw ("[P22] readiness guard failed with exit code " + $LASTEXITCODE)
+    }
+    $readinessReport = (Join-Path $ProjectRoot ("docs\\artifacts\\p49\\readiness\\" + $readinessRunId + "\\service_readiness_report.json"))
+    $env:BALATRO_READINESS_REPORT = $readinessReport
   }
-  $dashboardPath = (Join-Path $ProjectRoot "docs\\artifacts\\dashboard\\latest\\index.html")
+
+  if ($StartOpsUI) {
+    Start-OpsUiServer -Port $OpsUiPort
+  }
+  $env:BALATRO_OPS_UI_PATH = ("http://127.0.0.1:" + $OpsUiPort + "/")
+
+  if (-not $DryRun -and -not [string]::IsNullOrWhiteSpace($requestedWindowMode)) {
+    if ($validateBackgroundModeBeforeRun -and $requestedWindowMode -ne "visible") {
+      $validationRef = Ensure-BackgroundValidation -RequestedMode $requestedWindowMode
+      if ($validationRef) { $env:BALATRO_BACKGROUND_VALIDATION_REF = $validationRef }
+    }
+    $resolvedWindowMode = Resolve-WindowMode -RequestedMode $requestedWindowMode -FallbackMode $fallbackWindowMode
+    if ($resolvedWindowMode) {
+      $effectiveWindowMode = [string]$resolvedWindowMode.effective_mode
+      $env:BALATRO_WINDOW_MODE_REQUESTED = [string]$resolvedWindowMode.requested_mode
+      $env:BALATRO_WINDOW_MODE = $effectiveWindowMode
+      if ([string]$resolvedWindowMode.validation_path) {
+        $env:BALATRO_BACKGROUND_VALIDATION_REF = [string]$resolvedWindowMode.validation_path
+      }
+      Write-Host ("[P22] window_mode requested=" + [string]$resolvedWindowMode.requested_mode + " effective=" + $effectiveWindowMode + " reason=" + [string]$resolvedWindowMode.resolution_reason)
+      if ($effectiveWindowMode -and $effectiveWindowMode -ne "restore") {
+        $windowApply = Set-ManagedWindowMode -Mode $effectiveWindowMode
+        if (-not $windowApply -or -not [bool]$windowApply.operation_success) {
+          throw "[P22] failed to apply requested background window mode"
+        }
+        $windowModeApplied = $true
+      }
+    }
+  }
+
+  & $py @args
+  $code = $LASTEXITCODE
+  if ($code -ne 0) {
+    throw ("[P22] orchestrator failed with exit code " + $code)
+  }
+
+  if ($Dashboard -or $Quick -or $Nightly -or $RunP49 -or $RunP50 -or $RunP51 -or $RunP52 -or $RunP53) {
+    $dashArgs = @(
+      "-B",
+      "-m", "trainer.monitoring.dashboard_build",
+      "--input", "docs/artifacts",
+      "--output", "docs/artifacts/dashboard/latest"
+    )
+    Write-Host ("[P22] dashboard cmd: " + $py + " " + ($dashArgs -join " "))
+    & $py @dashArgs
+    if ($LASTEXITCODE -ne 0) {
+      throw ("[P22] dashboard build failed with exit code " + $LASTEXITCODE)
+    }
+    $dashboardPath = (Join-Path $ProjectRoot "docs\\artifacts\\dashboard\\latest\\index.html")
+  }
+  $runSucceeded = $true
+} finally {
+  if ($windowModeApplied -and (($runSucceeded -and $restoreWindowOnExit) -or ((-not $runSucceeded) -and ($restoreWindowOnFailure -or $restoreWindowOnExit)))) {
+    try {
+      $null = Set-ManagedWindowMode -Mode "restore"
+      Write-Host "[P22] restored managed window to visible mode"
+    } catch {
+      Write-Host ("[P22] warning: failed to restore managed window: " + $_.Exception.Message)
+    }
+  }
 }
 
 if ($readinessReport) { Write-Host ("[P22] readiness_report=" + $readinessReport) }
+if ($env:BALATRO_WINDOW_MODE) { Write-Host ("[P22] window_mode=" + $env:BALATRO_WINDOW_MODE) }
+if ($env:BALATRO_BACKGROUND_VALIDATION_REF) { Write-Host ("[P22] background_validation=" + $env:BALATRO_BACKGROUND_VALIDATION_REF) }
+if ($env:BALATRO_OPS_UI_PATH) { Write-Host ("[P22] ops_ui=" + $env:BALATRO_OPS_UI_PATH) }
 if ($dashboardPath) { Write-Host ("[P22] dashboard=" + $dashboardPath) }
 
 $runsRoot = Join-Path $ProjectRoot (Join-Path $OutRoot "runs")
@@ -204,9 +367,12 @@ if (Test-Path $runsRoot) {
         if ($rows) {
           foreach ($row in @($rows)) {
             if (-not $row) { continue }
-            if ($row.campaign_state_path) { Write-Host ("[P22] campaign_state=" + [string]$row.campaign_state_path) }
-            if ($row.registry_snapshot_path) { Write-Host ("[P22] registry_snapshot=" + [string]$row.registry_snapshot_path) }
-            if ($row.promotion_queue_path) { Write-Host ("[P22] promotion_queue=" + [string]$row.promotion_queue_path) }
+            $campaignStateProp = $row.PSObject.Properties["campaign_state_path"]
+            $registrySnapshotProp = $row.PSObject.Properties["registry_snapshot_path"]
+            $promotionQueueProp = $row.PSObject.Properties["promotion_queue_path"]
+            if ($campaignStateProp -and $campaignStateProp.Value) { Write-Host ("[P22] campaign_state=" + [string]$campaignStateProp.Value) }
+            if ($registrySnapshotProp -and $registrySnapshotProp.Value) { Write-Host ("[P22] registry_snapshot=" + [string]$registrySnapshotProp.Value) }
+            if ($promotionQueueProp -and $promotionQueueProp.Value) { Write-Host ("[P22] promotion_queue=" + [string]$promotionQueueProp.Value) }
           }
         }
       } catch {
