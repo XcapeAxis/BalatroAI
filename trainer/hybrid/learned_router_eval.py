@@ -191,6 +191,18 @@ def _merged_config(path: str | Path | None) -> dict[str, Any]:
     return payload
 
 
+def _dataset_artifacts_root(repo_root: Path, cfg: dict[str, Any]) -> Path:
+    dataset_cfg = cfg.get("dataset") if isinstance(cfg.get("dataset"), dict) else {}
+    token = str(dataset_cfg.get("artifacts_root") or "docs/artifacts/p52/router_dataset")
+    return (repo_root / token).resolve()
+
+
+def _train_artifacts_root(repo_root: Path, cfg: dict[str, Any]) -> Path:
+    train_cfg = cfg.get("train") if isinstance(cfg.get("train"), dict) else {}
+    token = str(train_cfg.get("artifacts_root") or "docs/artifacts/p52/router_train")
+    return (repo_root / token).resolve()
+
+
 def _routing_trace_summary(rows: list[dict[str, Any]], *, policy_id: str) -> dict[str, Any]:
     selection_counter: Counter[str] = Counter()
     invalid_incidents = 0
@@ -517,7 +529,11 @@ def run_learned_router_ablation(
             "dataset_manifest_json": str(dataset_manifest.resolve()),
         }
     else:
-        dataset_summary = build_router_dataset(quick=quick)
+        dataset_summary = build_router_dataset(
+            config_path=config_path,
+            out_dir=_dataset_artifacts_root(repo_root, cfg),
+            quick=quick,
+        )
 
     train_summary: dict[str, Any]
     if train_manifest_path or checkpoint_path:
@@ -543,7 +559,7 @@ def run_learned_router_ablation(
     else:
         train_summary = run_learned_router_train(
             config_path=config_path,
-            out_dir=repo_root / "docs" / "artifacts" / "p52" / "router_train",
+            out_dir=_train_artifacts_root(repo_root, cfg),
             run_id=f"{chosen_run_id}-train",
             quick=quick,
             dataset_manifest_path=str(dataset_summary.get("dataset_manifest_json") or ""),

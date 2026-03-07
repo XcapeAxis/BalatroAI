@@ -119,6 +119,20 @@ def _latest_matching_json(input_root: Path, pattern: str, *, required_tokens: tu
     return str(path), _read_json(path)
 
 
+def _latest_matching_json_by_prefix(
+    input_root: Path,
+    pattern: str,
+    *,
+    prefixes: tuple[str, ...],
+    extra_tokens: tuple[str, ...] = (),
+) -> tuple[str, dict[str, Any] | list[Any] | None]:
+    for prefix in prefixes:
+        path, payload = _latest_matching_json(input_root, pattern, required_tokens=(prefix, *extra_tokens))
+        if path:
+            return path, payload
+    return "", None
+
+
 def _guarded_variant(payload: dict[str, Any]) -> dict[str, Any]:
     variants = payload.get("variants") if isinstance(payload.get("variants"), list) else []
     return next(
@@ -131,28 +145,31 @@ def _guarded_variant(payload: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _collect_p52_dashboard_data(input_root: Path, campaign_states: list[dict[str, Any]], registry_summary: dict[str, Any]) -> dict[str, Any]:
-    dataset_path, dataset_payload = _latest_matching_json(input_root, "**/router_dataset_stats.json", required_tokens=("p52/",))
-    train_path, train_payload = _latest_matching_json(input_root, "**/metrics.json", required_tokens=("p52/", "router_train/"))
-    promotion_path, promotion_payload = _latest_matching_json(input_root, "**/promotion_decision.json", required_tokens=("p52/", "arena_ablation/"))
-    routing_path, routing_payload = _latest_matching_json(input_root, "**/routing_summary.json", required_tokens=("p52/", "arena_ablation/"))
-    slice_eval_path, slice_eval_payload = _latest_matching_json(input_root, "**/slice_eval.json", required_tokens=("p52/", "arena_ablation/"))
-    queue_path, queue_payload = _latest_matching_json(input_root, "**/promotion_queue.json", required_tokens=("p52/",))
+def _collect_learned_router_dashboard_data(input_root: Path, campaign_states: list[dict[str, Any]], registry_summary: dict[str, Any]) -> dict[str, Any]:
+    prefixes = ("p54/", "p52/")
+    dataset_path, dataset_payload = _latest_matching_json_by_prefix(input_root, "**/router_dataset_stats.json", prefixes=prefixes)
+    train_path, train_payload = _latest_matching_json_by_prefix(input_root, "**/metrics.json", prefixes=prefixes, extra_tokens=("router_train/",))
+    promotion_path, promotion_payload = _latest_matching_json_by_prefix(input_root, "**/promotion_decision.json", prefixes=prefixes, extra_tokens=("arena_ablation/",))
+    routing_path, routing_payload = _latest_matching_json_by_prefix(input_root, "**/routing_summary.json", prefixes=prefixes, extra_tokens=("arena_ablation/",))
+    slice_eval_path, slice_eval_payload = _latest_matching_json_by_prefix(input_root, "**/slice_eval.json", prefixes=prefixes, extra_tokens=("arena_ablation/",))
+    queue_path, queue_payload = _latest_matching_json_by_prefix(input_root, "**/promotion_queue.json", prefixes=prefixes)
     ablation_dir = Path(promotion_path).parent if promotion_path else None
     summary_rows_payload = _read_json(ablation_dir / "summary_table.json") if isinstance(ablation_dir, Path) else None
     summary_rows = [row for row in summary_rows_payload if isinstance(row, dict)] if isinstance(summary_rows_payload, list) else []
     guarded_variant = _guarded_variant(routing_payload if isinstance(routing_payload, dict) else {})
-    p52_campaign_states = [
+    family_prefix = "p54" if "/p54/" in str(dataset_path).lower().replace("\\", "/") or "/p54/" in str(promotion_path).lower().replace("\\", "/") else "p52"
+    campaign_rows = [
         row
         for row in campaign_states
         if isinstance(row, dict)
         and (
-            "p52" in str(row.get("campaign_id") or "").lower()
-            or "p52" in str(row.get("experiment_id") or "").lower()
+            family_prefix in str(row.get("campaign_id") or "").lower()
+            or family_prefix in str(row.get("experiment_id") or "").lower()
         )
     ]
     train_checkpoint_id = str(train_payload.get("checkpoint_id") or "") if isinstance(train_payload, dict) else ""
     return {
+        "family_prefix": family_prefix,
         "dataset": {
             "path": dataset_path,
             "payload": dataset_payload if isinstance(dataset_payload, dict) else {},
@@ -172,7 +189,7 @@ def _collect_p52_dashboard_data(input_root: Path, campaign_states: list[dict[str
             "summary_rows": summary_rows,
             "guarded_variant": guarded_variant if isinstance(guarded_variant, dict) else {},
         },
-        "campaign_states": p52_campaign_states,
+        "campaign_states": campaign_rows,
         "promotion_queue": {
             "path": queue_path,
             "payload": queue_payload if isinstance(queue_payload, dict) else {},
@@ -226,6 +243,34 @@ def _collect_p53_dashboard_data(input_root: Path, campaign_states: list[dict[str
     }
 
 
+def _collect_config_sync_status(input_root: Path) -> dict[str, Any]:
+    """P55: Find the latest config sidecar sync report and return a brief status summary."""
+    repo_root = input_root.parent
+    sync_root = repo_root / "docs" / "artifacts" / "p55" / "config_sidecar_sync"
+    if not sync_root.exists():
+        return {"available": False}
+    runs = sorted([p for p in sync_root.iterdir() if p.is_dir()], key=lambda p: p.name)
+    if not runs:
+        return {"available": False}
+    latest = runs[-1]
+    report = _read_json(latest / "sidecar_sync_report.json")
+    if not isinstance(report, dict):
+        return {"available": False, "report_dir": str(latest)}
+    return {
+        "available": True,
+        "timestamp": report.get("timestamp"),
+        "mode": report.get("mode"),
+        "overall_status": report.get("overall_status"),
+        "total": report.get("total"),
+        "in_sync": report.get("in_sync"),
+        "drifted": report.get("drifted"),
+        "missing": report.get("missing"),
+        "errors": report.get("errors"),
+        "report_json": str(latest / "sidecar_sync_report.json"),
+        "report_md": str(latest / "sidecar_sync_report.md"),
+    }
+
+
 def collect_dashboard_data(input_root: Path) -> dict[str, Any]:
     latest: dict[tuple[str, str, str], dict[str, Any]] = {}
     warnings: list[dict[str, Any]] = []
@@ -243,12 +288,31 @@ def collect_dashboard_data(input_root: Path) -> dict[str, Any]:
                 warnings.append(row)
     p22_runs_root = input_root / "p22" / "runs"
     latest_p22_summary = []
+    latest_p22_config_provenance: dict[str, Any] = {}
     if p22_runs_root.exists():
         runs = sorted([path for path in p22_runs_root.iterdir() if path.is_dir()], key=lambda path: path.name)
         if runs:
-            summary = _read_json(runs[-1] / "summary_table.json")
-            if isinstance(summary, list):
-                latest_p22_summary = [row for row in summary if isinstance(row, dict)]
+            summary_raw = _read_json(runs[-1] / "summary_table.json")
+            if isinstance(summary_raw, list):
+                latest_p22_summary = [row for row in summary_raw if isinstance(row, dict)]
+            elif isinstance(summary_raw, dict):
+                # P55 format: {"config_provenance": {...}, "rows": [...]}
+                latest_p22_config_provenance = summary_raw.get("config_provenance") or {}
+                rows = summary_raw.get("rows") or []
+                if isinstance(rows, list):
+                    latest_p22_summary = [row for row in rows if isinstance(row, dict)]
+            # Also try to extract provenance from run plan
+            if not latest_p22_config_provenance:
+                run_plan = _read_json(runs[-1] / "run_plan.json")
+                if isinstance(run_plan, dict):
+                    latest_p22_config_provenance = run_plan.get("config_provenance") or {}
+            # Also try from report_p23.json
+            if not latest_p22_config_provenance:
+                for fname in ("report_p23.json", "report_p22.json"):
+                    rpt = _read_json(runs[-1] / fname)
+                    if isinstance(rpt, dict) and rpt.get("config_provenance"):
+                        latest_p22_config_provenance = rpt.get("config_provenance") or {}
+                        break
     campaign_states = []
     for path in sorted(input_root.glob("**/campaign_state.json"), key=lambda item: str(item), reverse=True)[:12]:
         payload = _read_json(path)
@@ -257,6 +321,10 @@ def collect_dashboard_data(input_root: Path) -> dict[str, Any]:
         payload["state_path"] = str(path.resolve())
         campaign_states.append(_campaign_stage_summary(payload))
     registry_summary = _registry_summary(input_root)
+    learned_router_payload = _collect_learned_router_dashboard_data(input_root, campaign_states, registry_summary)
+    # P55: collect latest config sidecar sync report
+    config_sync_status = _collect_config_sync_status(input_root)
+
     return {
         "schema": "p49_dashboard_data_v1",
         "generated_at": _now_iso(),
@@ -264,9 +332,12 @@ def collect_dashboard_data(input_root: Path) -> dict[str, Any]:
         "latest_events": sorted(latest.values(), key=lambda row: (str(row.get("run_id") or ""), str(row.get("component") or ""))),
         "warnings": warnings[-20:],
         "latest_p22_summary": latest_p22_summary,
+        "config_provenance": latest_p22_config_provenance,
+        "config_sync_status": config_sync_status,
         "campaign_states": campaign_states,
         "registry_summary": registry_summary,
-        "p52": _collect_p52_dashboard_data(input_root, campaign_states, registry_summary),
+        "learned_router": learned_router_payload,
+        "p52": learned_router_payload,
         "p53": _collect_p53_dashboard_data(input_root, campaign_states),
     }
 
@@ -315,6 +386,19 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
             "</tr>"
         )
 
+    # P55: config provenance panel data
+    prov = data.get("config_provenance") if isinstance(data.get("config_provenance"), dict) else {}
+    sync_st = data.get("config_sync_status") if isinstance(data.get("config_sync_status"), dict) else {}
+    prov_src_type = str(prov.get("config_source_type") or "-")
+    prov_hash = str(prov.get("config_hash") or "")[:16]
+    prov_sidecar_used = str(prov.get("sidecar_used") or False)
+    prov_sidecar_sync = str(prov.get("sidecar_in_sync") or True)
+    sync_overall = str(sync_st.get("overall_status") or "-")
+    sync_total = str(sync_st.get("total") or "-")
+    sync_drifted = str(sync_st.get("drifted") or 0)
+    sync_missing = str(sync_st.get("missing") or 0)
+    sync_report_link = html.escape(str(sync_st.get("report_md") or ""))
+
     campaign_html = []
     for row in data.get("campaign_states") if isinstance(data.get("campaign_states"), list) else []:
         if not isinstance(row, dict):
@@ -344,21 +428,23 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
             "</tr>"
         )
 
-    p52_payload = data.get("p52") if isinstance(data.get("p52"), dict) else {}
-    p52_dataset = p52_payload.get("dataset") if isinstance(p52_payload.get("dataset"), dict) else {}
-    p52_dataset_payload = p52_dataset.get("payload") if isinstance(p52_dataset.get("payload"), dict) else {}
-    p52_train = p52_payload.get("train") if isinstance(p52_payload.get("train"), dict) else {}
-    p52_train_payload = p52_train.get("payload") if isinstance(p52_train.get("payload"), dict) else {}
-    p52_ablation = p52_payload.get("ablation") if isinstance(p52_payload.get("ablation"), dict) else {}
-    p52_promotion = p52_ablation.get("promotion_decision") if isinstance(p52_ablation.get("promotion_decision"), dict) else {}
-    p52_guarded_variant = p52_ablation.get("guarded_variant") if isinstance(p52_ablation.get("guarded_variant"), dict) else {}
-    p52_summary_rows = p52_ablation.get("summary_rows") if isinstance(p52_ablation.get("summary_rows"), list) else []
-    p52_slice_eval = p52_ablation.get("slice_eval") if isinstance(p52_ablation.get("slice_eval"), dict) else {}
-    p52_queue = p52_payload.get("promotion_queue") if isinstance(p52_payload.get("promotion_queue"), dict) else {}
-    p52_queue_payload = p52_queue.get("payload") if isinstance(p52_queue.get("payload"), dict) else {}
-    p52_campaign_rows = p52_payload.get("campaign_states") if isinstance(p52_payload.get("campaign_states"), list) else []
-    p52_registry = p52_payload.get("registry") if isinstance(p52_payload.get("registry"), dict) else {}
-    p52_registry_items = p52_registry.get("learned_router_items") if isinstance(p52_registry.get("learned_router_items"), list) else []
+    router_payload = data.get("learned_router") if isinstance(data.get("learned_router"), dict) else {}
+    router_family_prefix = str(router_payload.get("family_prefix") or "p52")
+    router_label = f"{router_family_prefix.upper()} Learned Router"
+    router_dataset = router_payload.get("dataset") if isinstance(router_payload.get("dataset"), dict) else {}
+    router_dataset_payload = router_dataset.get("payload") if isinstance(router_dataset.get("payload"), dict) else {}
+    router_train = router_payload.get("train") if isinstance(router_payload.get("train"), dict) else {}
+    router_train_payload = router_train.get("payload") if isinstance(router_train.get("payload"), dict) else {}
+    router_ablation = router_payload.get("ablation") if isinstance(router_payload.get("ablation"), dict) else {}
+    router_promotion = router_ablation.get("promotion_decision") if isinstance(router_ablation.get("promotion_decision"), dict) else {}
+    router_guarded_variant = router_ablation.get("guarded_variant") if isinstance(router_ablation.get("guarded_variant"), dict) else {}
+    router_summary_rows = router_ablation.get("summary_rows") if isinstance(router_ablation.get("summary_rows"), list) else []
+    router_slice_eval = router_ablation.get("slice_eval") if isinstance(router_ablation.get("slice_eval"), dict) else {}
+    router_queue = router_payload.get("promotion_queue") if isinstance(router_payload.get("promotion_queue"), dict) else {}
+    router_queue_payload = router_queue.get("payload") if isinstance(router_queue.get("payload"), dict) else {}
+    router_campaign_rows = router_payload.get("campaign_states") if isinstance(router_payload.get("campaign_states"), list) else []
+    router_registry = router_payload.get("registry") if isinstance(router_payload.get("registry"), dict) else {}
+    router_registry_items = router_registry.get("learned_router_items") if isinstance(router_registry.get("learned_router_items"), list) else []
     p53_payload = data.get("p53") if isinstance(data.get("p53"), dict) else {}
     p53_window = p53_payload.get("window_state") if isinstance(p53_payload.get("window_state"), dict) else {}
     p53_window_payload = p53_window.get("payload") if isinstance(p53_window.get("payload"), dict) else {}
@@ -372,7 +458,7 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
     p53_audit_rows = p53_payload.get("audit_tail") if isinstance(p53_payload.get("audit_tail"), list) else []
 
     p52_summary_html = []
-    for row in p52_summary_rows:
+    for row in router_summary_rows:
         if not isinstance(row, dict):
             continue
         p52_summary_html.append(
@@ -385,7 +471,7 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
         )
 
     p52_campaign_html = []
-    for row in p52_campaign_rows:
+    for row in router_campaign_rows:
         if not isinstance(row, dict):
             continue
         p52_campaign_html.append(
@@ -398,7 +484,7 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
         )
 
     p52_registry_html = []
-    for row in p52_registry_items:
+    for row in router_registry_items:
         if not isinstance(row, dict):
             continue
         p52_registry_html.append(
@@ -409,7 +495,7 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
             "</tr>"
         )
 
-    p52_slice_eval_rows = p52_slice_eval.get("comparisons") if isinstance(p52_slice_eval.get("comparisons"), list) else []
+    p52_slice_eval_rows = router_slice_eval.get("comparisons") if isinstance(router_slice_eval.get("comparisons"), list) else []
     p52_slice_eval_html = []
     for row in p52_slice_eval_rows[:10]:
         if not isinstance(row, dict):
@@ -454,7 +540,7 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>P49/P52/P53 Dashboard</title>
+  <title>P49/Learned-Router/P53 Dashboard</title>
   <style>
     :root {{ --bg: #f4f0e8; --panel: #fffaf2; --ink: #241d16; --muted: #8a745d; --warn: #9d3c2f; }}
     body {{ margin: 0; padding: 24px; font-family: Georgia, 'Times New Roman', serif; background: linear-gradient(180deg, #efe6d6 0%, var(--bg) 100%); color: var(--ink); }}
@@ -469,7 +555,7 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
 </head>
 <body>
   <div class="panel">
-    <h1>P49/P51/P52/P53 Dashboard</h1>
+    <h1>P49/P51/Learned-Router/P53 Dashboard</h1>
     <p class="muted">Generated from unified progress events and the latest P22 summary.</p>
     <p><strong>Input:</strong> <code>{html.escape(str(input_root))}</code></p>
     <p><strong>Data:</strong> <code>{html.escape(str((output_dir / "dashboard_data.json").resolve()))}</code></p>
@@ -502,29 +588,46 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
     </table>
   </div>
   <div class="panel">
-    <h2>P52 Learned Router</h2>
-    <p class="muted">dataset: <code>{html.escape(str(p52_dataset.get('path') or ''))}</code></p>
-    <p class="muted">train: <code>{html.escape(str(p52_train.get('path') or ''))}</code></p>
-    <p class="muted">promotion_decision: <code>{html.escape(str(p52_ablation.get('promotion_decision_path') or ''))}</code></p>
-    <p>dataset_samples={html.escape(str(p52_dataset_payload.get('sample_count') or 0))} valid={html.escape(str(p52_dataset_payload.get('valid_for_training_count') or 0))} mean_label_confidence={html.escape(str(p52_dataset_payload.get('mean_label_confidence') or 0.0))}</p>
-    <p>train_checkpoint_id=<code>{html.escape(str(p52_train.get('checkpoint_id') or ''))}</code> val_top1={html.escape(str(p52_train_payload.get('val_top1_accuracy') or ''))} val_topk={html.escape(str(p52_train_payload.get('val_topk_accuracy') or ''))} learner={html.escape(str(p52_train_payload.get('learner_device') or ''))}</p>
-    <p>recommendation=<code>{html.escape(str(p52_promotion.get('recommendation') or ''))}</code> score_delta={html.escape(str(p52_promotion.get('score_delta') or ''))} guard_trigger_rate={html.escape(str(p52_guarded_variant.get('guard_trigger_rate') or ''))}</p>
-  </div>
-  <div class="panel">
-    <h2>P52 Arena Summary</h2>
+    <h2>Config Provenance (P55)</h2>
     <table>
-      <thead><tr><th>Policy</th><th>Mean Score</th><th>Win Rate</th><th>Invalid Rate</th></tr></thead>
+      <thead><tr><th>Field</th><th>Value</th></tr></thead>
       <tbody>
-        {''.join(p52_summary_html) or '<tr><td colspan="4">No P52 arena summary found.</td></tr>'}
+        <tr><td>source_type</td><td><code>{html.escape(prov_src_type)}</code></td></tr>
+        <tr><td>config_hash</td><td><code>{html.escape(prov_hash)}</code></td></tr>
+        <tr><td>sidecar_used</td><td>{html.escape(prov_sidecar_used)}</td></tr>
+        <tr><td>sidecar_in_sync</td><td>{html.escape(prov_sidecar_sync)}</td></tr>
+        <tr><td>sync_overall_status</td><td><strong>{html.escape(sync_overall)}</strong></td></tr>
+        <tr><td>sync_total_yamls</td><td>{html.escape(sync_total)}</td></tr>
+        <tr><td>sync_drifted</td><td>{html.escape(sync_drifted)}</td></tr>
+        <tr><td>sync_missing_sidecars</td><td>{html.escape(sync_missing)}</td></tr>
+        <tr><td>sync_report</td><td><code>{sync_report_link}</code></td></tr>
       </tbody>
     </table>
   </div>
   <div class="panel">
-    <h2>P52 Slice Eval</h2>
+    <h2>{html.escape(router_label)}</h2>
+    <p class="muted">dataset: <code>{html.escape(str(router_dataset.get('path') or ''))}</code></p>
+    <p class="muted">train: <code>{html.escape(str(router_train.get('path') or ''))}</code></p>
+    <p class="muted">promotion_decision: <code>{html.escape(str(router_ablation.get('promotion_decision_path') or ''))}</code></p>
+    <p>dataset_samples={html.escape(str(router_dataset_payload.get('sample_count') or 0))} valid={html.escape(str(router_dataset_payload.get('valid_for_training_count') or 0))} mean_label_confidence={html.escape(str(router_dataset_payload.get('mean_label_confidence') or 0.0))}</p>
+    <p>train_checkpoint_id=<code>{html.escape(str(router_train.get('checkpoint_id') or ''))}</code> val_top1={html.escape(str(router_train_payload.get('val_top1_accuracy') or ''))} val_topk={html.escape(str(router_train_payload.get('val_topk_accuracy') or ''))} learner={html.escape(str(router_train_payload.get('learner_device') or ''))}</p>
+    <p>recommendation=<code>{html.escape(str(router_promotion.get('recommendation') or ''))}</code> score_delta={html.escape(str(router_promotion.get('score_delta') or ''))} guard_trigger_rate={html.escape(str(router_guarded_variant.get('guard_trigger_rate') or ''))}</p>
+  </div>
+  <div class="panel">
+    <h2>{html.escape(router_family_prefix.upper())} Arena Summary</h2>
+    <table>
+      <thead><tr><th>Policy</th><th>Mean Score</th><th>Win Rate</th><th>Invalid Rate</th></tr></thead>
+      <tbody>
+        {''.join(p52_summary_html) or '<tr><td colspan="4">No learned-router arena summary found.</td></tr>'}
+      </tbody>
+    </table>
+  </div>
+  <div class="panel">
+    <h2>{html.escape(router_family_prefix.upper())} Slice Eval</h2>
     <table>
       <thead><tr><th>Target</th><th>Slice Key</th><th>Slice Label</th><th>Score Delta</th><th>Win Delta</th></tr></thead>
       <tbody>
-        {''.join(p52_slice_eval_html) or '<tr><td colspan="5">No P52 slice eval found.</td></tr>'}
+        {''.join(p52_slice_eval_html) or '<tr><td colspan="5">No learned-router slice eval found.</td></tr>'}
       </tbody>
     </table>
   </div>
@@ -549,13 +652,13 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
     </table>
   </div>
   <div class="panel">
-    <h2>P52 Campaigns And Queue</h2>
-    <p class="muted">promotion_queue: <code>{html.escape(str(p52_queue.get('path') or ''))}</code></p>
-    <p class="muted">queue_counts={html.escape(json.dumps((p52_queue_payload.get('counts') or {}), ensure_ascii=False))}</p>
+    <h2>{html.escape(router_family_prefix.upper())} Campaigns And Queue</h2>
+    <p class="muted">promotion_queue: <code>{html.escape(str(router_queue.get('path') or ''))}</code></p>
+    <p class="muted">queue_counts={html.escape(json.dumps((router_queue_payload.get('counts') or {}), ensure_ascii=False))}</p>
     <table>
       <thead><tr><th>Campaign</th><th>Stage</th><th>Status</th><th>State Path</th></tr></thead>
       <tbody>
-        {''.join(p52_campaign_html) or '<tr><td colspan="4">No P52 campaigns found.</td></tr>'}
+        {''.join(p52_campaign_html) or '<tr><td colspan="4">No learned-router campaigns found.</td></tr>'}
       </tbody>
     </table>
     <table>

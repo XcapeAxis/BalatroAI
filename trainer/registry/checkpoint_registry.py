@@ -217,7 +217,14 @@ def _guess_family_from_path(path: Path) -> str:
         return "rl_policy"
     if "\\p48\\" in token or "/p48/" in token:
         return "hybrid"
-    if "\\p52\\" in token or "/p52/" in token or "\\router_train\\" in token or "/router_train/" in token:
+    if (
+        "\\p52\\" in token
+        or "/p52/" in token
+        or "\\p54\\" in token
+        or "/p54/" in token
+        or "\\router_train\\" in token
+        or "/router_train/" in token
+    ):
         return "learned_router"
     return "other"
 
@@ -232,6 +239,8 @@ def _guess_mode_from_path(path: Path) -> str:
         return "p42_rl_candidate"
     if "\\p48\\" in token or "/p48/" in token:
         return "p48_hybrid_controller"
+    if "\\p54\\" in token or "/p54/" in token:
+        return "p54_learned_router"
     if "\\p52\\" in token or "/p52/" in token or "\\router_train\\" in token or "/router_train/" in token:
         return "p52_learned_router"
     return "unknown"

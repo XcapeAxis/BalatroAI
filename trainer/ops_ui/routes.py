@@ -56,6 +56,19 @@ def render_overview(state: dict[str, Any], *, current_path: str) -> str:
     background = state.get("background_validation") if isinstance(state.get("background_validation"), dict) else {}
     background_payload = background.get("payload") if isinstance(background.get("payload"), dict) else {}
     dashboard = state.get("dashboard") if isinstance(state.get("dashboard"), dict) else {}
+    dashboard_payload = dashboard.get("payload") if isinstance(dashboard.get("payload"), dict) else {}
+    learned_router = dashboard_payload.get("learned_router") if isinstance(dashboard_payload.get("learned_router"), dict) else {}
+    learned_router_family = str(learned_router.get("family_prefix") or "p52").upper()
+    learned_router_dataset = learned_router.get("dataset") if isinstance(learned_router.get("dataset"), dict) else {}
+    learned_router_dataset_payload = learned_router_dataset.get("payload") if isinstance(learned_router_dataset.get("payload"), dict) else {}
+    learned_router_train = learned_router.get("train") if isinstance(learned_router.get("train"), dict) else {}
+    learned_router_train_payload = learned_router_train.get("payload") if isinstance(learned_router_train.get("payload"), dict) else {}
+    learned_router_ablation = learned_router.get("ablation") if isinstance(learned_router.get("ablation"), dict) else {}
+    learned_router_promotion = learned_router_ablation.get("promotion_decision") if isinstance(learned_router_ablation.get("promotion_decision"), dict) else {}
+    learned_router_guarded = learned_router_ablation.get("guarded_variant") if isinstance(learned_router_ablation.get("guarded_variant"), dict) else {}
+    # P55: config provenance from dashboard payload
+    config_prov = dashboard_payload.get("config_provenance") if isinstance(dashboard_payload.get("config_provenance"), dict) else {}
+    config_sync_st = dashboard_payload.get("config_sync_status") if isinstance(dashboard_payload.get("config_sync_status"), dict) else {}
     campaigns = state.get("campaigns") if isinstance(state.get("campaigns"), list) else []
     progress = state.get("progress") if isinstance(state.get("progress"), list) else []
     registry = state.get("registry") if isinstance(state.get("registry"), dict) else {}
@@ -129,6 +142,27 @@ def render_overview(state: dict[str, Any], *, current_path: str) -> str:
           <p>readiness: {artifact_link(str(readiness.get('path') or ''), 'latest readiness')}</p>
           <p>window state: {artifact_link(str(window_state.get('path') or ''), 'window_state.json')}</p>
           <p>background validation: {artifact_link(str(background.get('path') or ''), 'background_mode_validation.json')}</p>
+        </section>
+        <section class="panel">
+          <h2>{esc(learned_router_family)} Learned Router</h2>
+          <p class="muted">dataset: {artifact_link(str(learned_router_dataset.get('path') or ''), 'router_dataset_stats.json')}</p>
+          <p class="muted">train: {artifact_link(str(learned_router_train.get('path') or ''), 'metrics.json')}</p>
+          <p class="muted">promotion: {artifact_link(str(learned_router_ablation.get('promotion_decision_path') or ''), 'promotion_decision.json')}</p>
+          <p>dataset_samples={esc(learned_router_dataset_payload.get('sample_count') or 0)} valid={esc(learned_router_dataset_payload.get('valid_for_training_count') or 0)} mean_label_confidence={esc(learned_router_dataset_payload.get('mean_label_confidence') or 0.0)}</p>
+          <p>checkpoint_id=<code>{esc(learned_router_train.get('checkpoint_id') or '')}</code> val_top1={esc(learned_router_train_payload.get('val_top1_accuracy') or '')} learner={esc(learned_router_train_payload.get('learner_device') or '')}</p>
+          <p>recommendation=<code>{esc(learned_router_promotion.get('recommendation') or '')}</code> guard_trigger_rate={esc(learned_router_guarded.get('guard_trigger_rate') or '')}</p>
+        </section>
+        <section class="panel">
+          <h2>Config Provenance (P55)</h2>
+          <p>source_type=<code>{esc(config_prov.get('config_source_type') or '-')}</code>
+             hash=<code>{esc(str(config_prov.get('config_hash') or '')[:16])}</code>
+             sidecar_used={esc(str(config_prov.get('sidecar_used') or False))}
+             sidecar_in_sync={esc(str(config_prov.get('sidecar_in_sync') or True))}</p>
+          <p>sync_status=<strong>{esc(str(config_sync_st.get('overall_status') or '-'))}</strong>
+             total={esc(str(config_sync_st.get('total') or '-'))}
+             drifted={esc(str(config_sync_st.get('drifted') or 0))}
+             missing={esc(str(config_sync_st.get('missing') or 0))}</p>
+          <p>report: {artifact_link(str(config_sync_st.get('report_md') or ''), 'sidecar_sync_report.md')}</p>
         </section>
         <section class="panel">
           <h2>Latest P22 Summary</h2>

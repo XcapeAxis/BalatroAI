@@ -161,6 +161,16 @@ def _resolve_paths(repo_root: Path, values: list[str]) -> list[Path]:
     return rows
 
 
+def _dataset_artifacts_root(repo_root: Path, cfg: dict[str, Any], out_dir: str | Path | None) -> Path:
+    dataset_cfg = cfg.get("dataset") if isinstance(cfg.get("dataset"), dict) else {}
+    output_cfg = cfg.get("output") if isinstance(cfg.get("output"), dict) else {}
+    configured_root = str(dataset_cfg.get("artifacts_root") or output_cfg.get("artifacts_root") or "docs/artifacts/p52/router_dataset")
+    if out_dir is None:
+        return (repo_root / configured_root).resolve()
+    target = Path(out_dir)
+    return target if target.is_absolute() else (repo_root / target).resolve()
+
+
 def _trace_paths(trace_roots: list[Path], *, max_trace_files: int) -> list[Path]:
     rows: list[Path] = []
     for root in trace_roots:
@@ -443,11 +453,7 @@ def build_router_dataset(
     global_knowledge = build_knowledge_base(summary_paths=summary_paths, bucket_paths=bucket_paths)
 
     chosen_run_id = str(run_id or output_cfg.get("run_id") or _now_stamp())
-    output_root = (
-        (repo_root / str(output_cfg.get("artifacts_root") or "docs/artifacts/p52/router_dataset")).resolve()
-        if out_dir is None
-        else (Path(out_dir) if Path(out_dir).is_absolute() else (repo_root / out_dir).resolve())
-    )
+    output_root = _dataset_artifacts_root(repo_root, cfg, out_dir)
     run_dir = output_root / chosen_run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 

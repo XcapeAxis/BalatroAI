@@ -195,6 +195,7 @@ def normalize_experiment_category(exp: dict[str, Any]) -> str:
         "learned_router_train",
         "learned_router_ablation",
         "p52_learned_router_campaign",
+        "p54_learned_router_campaign",
         "background_ops_validation",
         "p53_background_ops_campaign",
         "gpu_mainline_eval",
@@ -2734,11 +2735,7 @@ def _run_router_dataset_seed_experiment(
     cfg_rel = str(
         eval_cfg.get("config")
         or exp.get("learned_router_config")
-        or (
-            "configs/experiments/p52_learned_router_smoke.yaml"
-            if ctx.mode == "quick"
-            else "configs/experiments/p52_learned_router_nightly.yaml"
-        )
+        or _learned_router_default_config(ctx=ctx, exp=exp)
     )
     cfg_path = (ctx.repo_root / cfg_rel).resolve()
     run_root = exp_dir / "router_dataset_runs"
@@ -2789,11 +2786,7 @@ def _run_learned_router_train_seed_experiment(
     cfg_rel = str(
         eval_cfg.get("config")
         or exp.get("learned_router_config")
-        or (
-            "configs/experiments/p52_learned_router_smoke.yaml"
-            if ctx.mode == "quick"
-            else "configs/experiments/p52_learned_router_nightly.yaml"
-        )
+        or _learned_router_default_config(ctx=ctx, exp=exp)
     )
     cfg_path = (ctx.repo_root / cfg_rel).resolve()
     quick_flag = bool(eval_cfg.get("quick", False) or ctx.mode == "quick")
@@ -2920,6 +2913,48 @@ def _run_learned_router_ablation_seed_experiment(
     }
 
 
+def _learned_router_family_prefix(*, exp: dict[str, Any], cfg_path: Path | None = None) -> str:
+    tokens = [
+        str(exp.get("id") or ""),
+        str(exp.get("experiment_type") or ""),
+        str(exp.get("campaign_config") or ""),
+        str(exp.get("learned_router_config") or ""),
+        str(cfg_path or ""),
+    ]
+    joined = " ".join(tokens).lower()
+    return "p54" if "p54" in joined else "p52"
+
+
+def _learned_router_default_config(*, ctx: RunContext, exp: dict[str, Any]) -> str:
+    family_prefix = _learned_router_family_prefix(exp=exp)
+    if family_prefix == "p54":
+        return "configs/experiments/p54_learned_router_smoke.yaml" if ctx.mode == "quick" else "configs/experiments/p54_learned_router_nightly.yaml"
+    return "configs/experiments/p52_learned_router_smoke.yaml" if ctx.mode == "quick" else "configs/experiments/p52_learned_router_nightly.yaml"
+
+
+def _learned_router_artifact_root(repo_root: Path, cfg: dict[str, Any], *, family_prefix: str, kind: str) -> Path:
+    dataset_cfg = cfg.get("dataset") if isinstance(cfg.get("dataset"), dict) else {}
+    train_cfg = cfg.get("train") if isinstance(cfg.get("train"), dict) else {}
+    output_cfg = cfg.get("output") if isinstance(cfg.get("output"), dict) else {}
+    triage_cfg = cfg.get("triage") if isinstance(cfg.get("triage"), dict) else {}
+    default_map = {
+        "dataset": f"docs/artifacts/{family_prefix}/router_dataset",
+        "train": f"docs/artifacts/{family_prefix}/router_train",
+        "inference": f"docs/artifacts/{family_prefix}/router_inference",
+        "ablation": f"docs/artifacts/{family_prefix}/arena_ablation",
+        "triage": f"docs/artifacts/{family_prefix}/triage",
+    }
+    configured = {
+        "dataset": str(dataset_cfg.get("artifacts_root") or ""),
+        "train": str(train_cfg.get("artifacts_root") or output_cfg.get("artifacts_root") or ""),
+        "inference": str(output_cfg.get("router_inference_root") or ""),
+        "ablation": str(output_cfg.get("arena_ablation_root") or ""),
+        "triage": str(triage_cfg.get("output_artifacts_root") or ""),
+    }
+    token = configured.get(kind) or default_map[kind]
+    return (repo_root / token).resolve()
+
+
 def _run_p52_learned_router_campaign_seed_experiment(
     *,
     ctx: RunContext,
@@ -2951,14 +2986,11 @@ def _run_p52_learned_router_campaign_seed_experiment(
         eval_cfg.get("config")
         or exp.get("campaign_config")
         or exp.get("learned_router_config")
-        or (
-            "configs/experiments/p52_learned_router_smoke.yaml"
-            if ctx.mode == "quick"
-            else "configs/experiments/p52_learned_router_nightly.yaml"
-        )
+        or _learned_router_default_config(ctx=ctx, exp=exp)
     )
     cfg_path = (ctx.repo_root / cfg_rel).resolve()
     cfg = _read_yaml_or_json(cfg_path)
+    family_prefix = _learned_router_family_prefix(exp=exp, cfg_path=cfg_path)
     quick_flag = bool(eval_cfg.get("quick", False) or ctx.mode == "quick")
     campaign_cfg = cfg.get("campaign") if isinstance(cfg.get("campaign"), dict) else {}
     device_profile_name = str(
@@ -2986,7 +3018,7 @@ def _run_p52_learned_router_campaign_seed_experiment(
     promotion_queue_path = campaign_root / "promotion_queue.json"
     campaign_state = load_campaign_state(
         state_path=state_path,
-        campaign_id=f"{str(exp.get('id') or 'p52_learned_router_campaign')}-{seed}",
+        campaign_id=f"{str(exp.get('id') or f'{family_prefix}_learned_router_campaign')}-{seed}",
         run_id=ctx.run_id,
         experiment_id=str(exp.get("id") or ""),
         seed=seed,
@@ -3069,7 +3101,7 @@ def _run_p52_learned_router_campaign_seed_experiment(
         if _start("build_router_dataset"):
             dataset_summary = build_router_dataset(
                 config_path=cfg_path,
-                out_dir=ctx.repo_root / "docs" / "artifacts" / "p52" / "router_dataset",
+                out_dir=_learned_router_artifact_root(ctx.repo_root, cfg, family_prefix=family_prefix, kind="dataset"),
                 run_id=dataset_run_id,
                 quick=quick_flag,
             )
@@ -3082,7 +3114,7 @@ def _run_p52_learned_router_campaign_seed_experiment(
         if _start("train_learned_router"):
             train_summary = run_learned_router_train(
                 config_path=cfg_path,
-                out_dir=ctx.repo_root / "docs" / "artifacts" / "p52" / "router_train",
+                out_dir=_learned_router_artifact_root(ctx.repo_root, cfg, family_prefix=family_prefix, kind="train"),
                 run_id=train_run_id,
                 quick=quick_flag,
                 dataset_manifest_path=dataset_manifest_path,
@@ -3111,7 +3143,7 @@ def _run_p52_learned_router_campaign_seed_experiment(
             inference_summary = run_router_inference_smoke(
                 checkpoint_path=checkpoint_path,
                 config_path=cfg_path,
-                out_dir=ctx.repo_root / "docs" / "artifacts" / "p52" / "router_inference",
+                out_dir=_learned_router_artifact_root(ctx.repo_root, cfg, family_prefix=family_prefix, kind="inference"),
                 run_id=inference_run_id,
                 seed=seed,
                 max_states=max(4, int(((cfg.get("inference_smoke") or {}).get("max_states") or 8))),
@@ -3125,7 +3157,7 @@ def _run_p52_learned_router_campaign_seed_experiment(
         if _start("arena_ablation"):
             ablation_summary = run_learned_router_ablation(
                 config_path=cfg_path,
-                out_dir=ctx.repo_root / "docs" / "artifacts" / "p52" / "arena_ablation",
+                out_dir=_learned_router_artifact_root(ctx.repo_root, cfg, family_prefix=family_prefix, kind="ablation"),
                 run_id=ablation_run_id,
                 quick=quick_flag,
                 seeds_override=[seed],
@@ -4052,6 +4084,7 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "checkpoint_registry_campaign",
         "p51_registry_campaign",
         "p52_learned_router_campaign",
+        "p54_learned_router_campaign",
         "p53_background_ops_campaign",
     }
     if ctx.resume and not allow_seed_level_resume:
@@ -4350,18 +4383,15 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "readiness_report_path": _resolved_readiness_report_path(),
             "training_python": sys.executable,
         }
-    elif exp_type in {"router_dataset_build", "learned_router_train", "learned_router_ablation", "p52_learned_router_campaign"}:
+    elif exp_type in {"router_dataset_build", "learned_router_train", "learned_router_ablation", "p52_learned_router_campaign", "p54_learned_router_campaign"}:
         eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+        default_cfg = _learned_router_default_config(ctx=ctx, exp=exp)
         manifest["p52_learned_router"] = {
             "config": str(
                 eval_cfg.get("config")
                 or exp.get("learned_router_config")
                 or exp.get("campaign_config")
-                or (
-                    "configs/experiments/p52_learned_router_smoke.yaml"
-                    if ctx.mode == "quick"
-                    else "configs/experiments/p52_learned_router_nightly.yaml"
-                )
+                or default_cfg
             ),
             "quick": bool(eval_cfg.get("quick") or False),
             "device_profile": str(exp.get("device_profile") or "single_gpu_mainline"),
@@ -5302,7 +5332,7 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                     message=exp_type,
                     extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
                 )
-            elif exp_type in {"p52_learned_router_campaign"}:
+            elif exp_type in {"p52_learned_router_campaign", "p54_learned_router_campaign"}:
                 try:
                     p52_campaign_result = _run_p52_learned_router_campaign_seed_experiment(
                         ctx=ctx,
@@ -5845,8 +5875,41 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
     }
 
 
+def _yaml_module_available() -> bool:
+    """Return True if PyYAML is importable in the current env."""
+    return yaml is not None
+
+
 def load_config(path: Path) -> dict[str, Any]:
-    return _read_yaml_or_json(path)
+    """Load a config file.  Prefers the hardened central loader (P55); falls
+    back to the local _read_yaml_or_json for non-experiment configs called from
+    deep inside this module before the central loader is importable."""
+    try:
+        from trainer.experiments.config_loader import load_config as _harden_load
+        return _harden_load(path).payload
+    except Exception:
+        return _read_yaml_or_json(path)
+
+
+def load_config_with_provenance(path: Path) -> dict[str, Any]:
+    """Like load_config() but returns a dict that includes __config_provenance__."""
+    try:
+        from trainer.experiments.config_loader import load_config as _harden_load
+        result = _harden_load(path)
+        d = result.payload.copy()
+        d["__config_provenance__"] = result.to_dict()
+        return d
+    except Exception:
+        payload = _read_yaml_or_json(path)
+        payload["__config_provenance__"] = {
+            "config_source_path": str(path),
+            "config_source_type": "unknown_fallback",
+            "config_hash": "",
+            "sidecar_path": "",
+            "sidecar_used": False,
+            "sidecar_in_sync": False,
+        }
+        return payload
 
 
 def resolve_run_root(out_root: Path, resume: bool) -> tuple[str, Path]:
@@ -5945,7 +6008,54 @@ def main() -> int:
 
     config_path = (repo_root / args.config).resolve()
     out_root = (repo_root / args.out_root).resolve()
-    cfg = load_config(config_path)
+
+    # P55: run sidecar consistency check before loading experiments.
+    # Uses --sync (auto-fix) strategy: if PyYAML is available refresh sidecars;
+    # if not, check that all sidecars are in-sync so sidecar fallback is safe.
+    config_provenance: dict[str, Any] = {}
+    config_sync_report_path: str = ""
+    try:
+        from trainer.experiments.config_sidecar_sync import run as _sidecar_run
+        _sidecar_mode = "sync" if _yaml_module_available() else "check"
+        _sidecar_result = _sidecar_run(
+            mode=_sidecar_mode,
+            paths=[config_path],
+            out_root=repo_root / "docs" / "artifacts" / "p55" / "config_sidecar_sync",
+        )
+        config_sync_report_path = str(_sidecar_result.get("report_json") or "")
+        if _sidecar_mode == "check" and _sidecar_result.get("overall_status") != "clean":
+            raise SystemExit(
+                f"[P55] Config sidecar drift detected for {config_path}.\n"
+                f"  drifted={_sidecar_result.get('drifted_count')} "
+                f"missing={_sidecar_result.get('missing_count')}\n"
+                f"  Fix: python -m trainer.experiments.config_sidecar_sync --sync\n"
+                f"  Report: {config_sync_report_path}"
+            )
+    except SystemExit:
+        raise
+    except Exception as _exc:
+        print(f"[P55] sidecar check skipped: {_exc}", flush=True)
+
+    # Use provenance-aware loader for the primary config.
+    try:
+        from trainer.experiments.config_loader import load_config as _harden_load
+        _load_result = _harden_load(config_path)
+        cfg = _load_result.payload
+        config_provenance = _load_result.to_dict()
+        config_provenance["config_sync_report_path"] = config_sync_report_path
+        print(f"[P55] {_load_result.summary_line()}", flush=True)
+    except Exception as _exc:
+        print(f"[P55] hardened loader failed ({_exc}), using fallback", flush=True)
+        cfg = _read_yaml_or_json(config_path)
+        config_provenance = {
+            "config_source_path": str(config_path),
+            "config_source_type": "fallback",
+            "config_hash": "",
+            "sidecar_used": False,
+            "sidecar_in_sync": False,
+            "config_sync_report_path": config_sync_report_path,
+        }
+
     seed_policy_config = str(args.seed_policy_config or cfg.get("seed_policy_config") or "").strip()
     seed_policy: dict[str, Any] | None = None
     if seed_policy_config:
@@ -6062,6 +6172,7 @@ def main() -> int:
         "include_legacy": include_legacy,
         "legacy_only": legacy_only,
         "config_path": str(config_path),
+        "config_provenance": config_provenance,
         "out_root": str(out_root),
         "run_root": str(run_root),
         "git_commit": git_commit,
@@ -6142,7 +6253,7 @@ def main() -> int:
     primary_metric = str((cfg.get("evaluation") or {}).get("primary_metric") or "avg_ante_reached")
     rows_sorted = sorted(rows, key=lambda r: (str(r.get("status")) != "passed", -(float(r.get("mean") or 0.0))))
 
-    summary_paths = write_summary_tables(run_root, rows_sorted, primary_metric=primary_metric, run_id=run_id)
+    summary_paths = write_summary_tables(run_root, rows_sorted, primary_metric=primary_metric, run_id=run_id, config_provenance=config_provenance)
     champion_update = update_nightly_decision(
         out_root,
         run_id=run_id,
@@ -6159,6 +6270,7 @@ def main() -> int:
         "run_id": run_id,
         "mode": mode,
         "status": "PASS" if all(str(r.get("status")) in {"passed", "dry_run", "skipped"} for r in rows_sorted) else "FAIL",
+        "config_provenance": config_provenance,
         "rows": rows_sorted,
         "summary_paths": summary_paths,
         "comparison_report": str(report_path),

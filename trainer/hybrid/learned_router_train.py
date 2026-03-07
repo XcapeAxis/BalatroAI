@@ -185,8 +185,24 @@ def _merged_config(config_path: str | Path | None) -> dict[str, Any]:
     return payload
 
 
-def _discover_latest_dataset_manifest(repo_root: Path) -> Path | None:
-    root = repo_root / "docs" / "artifacts" / "p52" / "router_dataset"
+def _dataset_artifacts_root(repo_root: Path, cfg: dict[str, Any]) -> Path:
+    dataset_cfg = cfg.get("dataset") if isinstance(cfg.get("dataset"), dict) else {}
+    token = str(dataset_cfg.get("artifacts_root") or "docs/artifacts/p52/router_dataset")
+    return (repo_root / token).resolve()
+
+
+def _train_artifacts_root(repo_root: Path, cfg: dict[str, Any], out_dir: str | Path | None) -> Path:
+    train_cfg = cfg.get("train") if isinstance(cfg.get("train"), dict) else {}
+    output_cfg = cfg.get("output") if isinstance(cfg.get("output"), dict) else {}
+    configured_root = str(train_cfg.get("artifacts_root") or output_cfg.get("artifacts_root") or "docs/artifacts/p52/router_train")
+    if out_dir is None:
+        return (repo_root / configured_root).resolve()
+    target = Path(out_dir)
+    return target if target.is_absolute() else (repo_root / target).resolve()
+
+
+def _discover_latest_dataset_manifest(repo_root: Path, cfg: dict[str, Any]) -> Path | None:
+    root = _dataset_artifacts_root(repo_root, cfg)
     if not root.exists():
         return None
     candidates = sorted(root.glob("**/router_dataset_manifest.json"), key=lambda item: str(item))
@@ -381,6 +397,7 @@ def run_learned_router_train(
     dataset_cfg = cfg.get("dataset") if isinstance(cfg.get("dataset"), dict) else {}
     train_cfg = cfg.get("train") if isinstance(cfg.get("train"), dict) else {}
     output_cfg = cfg.get("output") if isinstance(cfg.get("output"), dict) else {}
+    registry_cfg = cfg.get("registry") if isinstance(cfg.get("registry"), dict) else {}
 
     manifest_path = Path(dataset_manifest_path).resolve() if dataset_manifest_path else None
     if manifest_path is None and str(dataset_cfg.get("manifest") or "").strip():
@@ -390,10 +407,14 @@ def run_learned_router_train(
             manifest_path = (repo_root / manifest_path).resolve()
     if manifest_path is None or not manifest_path.exists():
         if bool(dataset_cfg.get("auto_build_quick", True)):
-            dataset_summary = build_router_dataset(quick=quick)
+            dataset_summary = build_router_dataset(
+                config_path=config_path,
+                out_dir=_dataset_artifacts_root(repo_root, cfg),
+                quick=quick,
+            )
             manifest_path = Path(str(dataset_summary.get("dataset_manifest_json") or "")).resolve()
         else:
-            manifest_path = _discover_latest_dataset_manifest(repo_root)
+            manifest_path = _discover_latest_dataset_manifest(repo_root, cfg)
     if manifest_path is None or not manifest_path.exists():
         raise FileNotFoundError("router dataset manifest not found")
 
@@ -439,11 +460,7 @@ def run_learned_router_train(
         val_rows = list(train_rows[: max(1, min(8, len(train_rows)))])
 
     chosen_run_id = str(run_id or output_cfg.get("run_id") or _now_stamp())
-    output_root = (
-        (repo_root / str(output_cfg.get("artifacts_root") or "docs/artifacts/p52/router_train")).resolve()
-        if out_dir is None
-        else (Path(out_dir) if Path(out_dir).is_absolute() else (repo_root / out_dir).resolve())
-    )
+    output_root = _train_artifacts_root(repo_root, cfg, out_dir)
     run_dir = output_root / chosen_run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     progress_path = run_dir / "progress.jsonl"
@@ -599,8 +616,8 @@ def run_learned_router_train(
     checkpoint_registry_entry = register_checkpoint(
         {
             "family": "learned_router",
-            "training_mode": "p52_learned_router",
-            "training_mode_category": "mainline",
+            "training_mode": str(registry_cfg.get("training_mode") or "p52_learned_router"),
+            "training_mode_category": str(registry_cfg.get("training_mode_category") or "mainline"),
             "source_run_id": chosen_run_id,
             "source_experiment_id": Path(str(config_path)).stem if config_path else "p52_learned_router",
             "seed_or_seed_group": str(train_seed),
@@ -619,7 +636,7 @@ def run_learned_router_train(
                 "slice_eval_json": str(slice_eval_path.resolve()),
             },
             "git_commit": _git_commit(repo_root),
-            "notes": "auto_registered_from_p52_learned_router_train",
+            "notes": str(registry_cfg.get("notes") or "auto_registered_from_p52_learned_router_train"),
         }
     )
 

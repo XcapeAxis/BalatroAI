@@ -20,6 +20,7 @@ param(
   [switch]$RunP50,
   [switch]$RunP51,
   [switch]$RunP52,
+  [switch]$RunP54,
   [switch]$RunP53,
   [string]$Only = "",
   [string]$Exclude = "",
@@ -49,7 +50,7 @@ $resolverArgs = @(
   "-Emit", "json"
 )
 if ($TrainingPython.Trim()) { $resolverArgs += @("-ExplicitPython", $TrainingPython) }
-if ($RunP50 -or $RunP52) { $resolverArgs += "-RequireCuda" }
+if ($RunP50 -or $RunP52 -or $RunP54) { $resolverArgs += "-RequireCuda" }
 $resolverJson = (& powershell @resolverArgs | Out-String).Trim()
 if (-not $resolverJson) {
   throw "[P22] training python resolver returned empty output"
@@ -180,7 +181,7 @@ if ($LegacyOnly) { $args += "--legacy-only" }
 if ($Resume) { $args += "--resume" }
 if ($KeepIntermediate) { $args += "--keep-intermediate" }
 if ($VerboseLogs) { $args += "--verbose" }
-if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $RunP50 -or $RunP51 -or $RunP52 -or $RunP53) -and [string]::IsNullOrWhiteSpace($Only)) {
+if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $RunP50 -or $RunP51 -or $RunP52 -or $RunP54 -or $RunP53) -and [string]::IsNullOrWhiteSpace($Only)) {
   $selected = @()
   if ($RunP44) { $selected += if ($Nightly) { "p44_rl_nightly" } else { "p44_rl_smoke" } }
   if ($RunP45) { $selected += if ($Nightly) { "p45_world_model_nightly" } else { "p45_world_model_smoke" } }
@@ -191,6 +192,7 @@ if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $Ru
   if ($RunP50) { $selected += if ($Nightly) { "p50_gpu_validation_nightly" } else { "p50_gpu_validation_smoke" } }
   if ($RunP51) { $selected += if ($Nightly) { "p51_resumeable_nightly" } else { "p51_registry_smoke" } }
   if ($RunP52) { $selected += if ($Nightly) { "p52_learned_router_nightly" } else { "p52_learned_router_smoke" } }
+  if ($RunP54) { $selected += if ($Nightly) { "p54_learned_router_nightly" } else { "p54_learned_router_smoke" } }
   if ($RunP53) { $selected += if ($Nightly) { "p53_background_ops_nightly" } else { "p53_background_ops_smoke" } }
   $Only = ($selected -join ",")
 }
@@ -222,7 +224,7 @@ if ($Quick) {
       "p49_gpu_mainline_smoke",
       "p50_gpu_validation_smoke",
       "p51_registry_smoke",
-      "p52_learned_router_smoke",
+      "p54_learned_router_smoke",
       "p53_background_ops_smoke"
     )
     if ($IncludeLegacy -or $LegacyOnly) {
@@ -250,6 +252,20 @@ Write-Host ("[P22] python_env_type: " + [string]$resolver.selected.env_type)
 Write-Host ("[P22] python_torch: " + [string]$resolver.selected.torch_version)
 Write-Host ("[P22] python_cuda: " + [string]$resolver.selected.cuda_available)
 Write-Host ("[P22] cmd: " + $py + " " + ($args -join " "))
+
+# P55: run sidecar sync/check before the experiment run.
+# In environments with PyYAML (non-CUDA): auto-sync all sidecars (safe, idempotent).
+# In environments without PyYAML (CUDA): check-only; fail fast on drift rather than silently load stale JSON.
+$syncScript = Join-Path $ProjectRoot "scripts\sync_config_sidecars.ps1"
+if (Test-Path $syncScript) {
+  Write-Host "[P55] running config sidecar check/sync..."
+  $syncArgs = @("-ExecutionPolicy", "Bypass", "-File", $syncScript, "-TrainingPython", $py)
+  & powershell @syncArgs
+  if ($LASTEXITCODE -ne 0) {
+    throw ("[P55] config sidecar sync/check failed with exit code " + $LASTEXITCODE + ". Run: python -m trainer.experiments.config_sidecar_sync --sync")
+  }
+  Write-Host "[P55] config sidecar check/sync passed."
+}
 
 $readinessReport = ""
 $dashboardPath = ""
@@ -317,7 +333,7 @@ try {
     throw ("[P22] orchestrator failed with exit code " + $code)
   }
 
-  if ($Dashboard -or $Quick -or $Nightly -or $RunP49 -or $RunP50 -or $RunP51 -or $RunP52 -or $RunP53) {
+  if ($Dashboard -or $Quick -or $Nightly -or $RunP49 -or $RunP50 -or $RunP51 -or $RunP52 -or $RunP54 -or $RunP53) {
     $dashArgs = @(
       "-B",
       "-m", "trainer.monitoring.dashboard_build",
