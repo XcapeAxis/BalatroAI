@@ -26,6 +26,8 @@ from trainer.closed_loop.failure_mining import run_failure_mining
 from trainer.closed_loop.regression_triage import run_regression_triage
 from trainer.closed_loop.replay_manifest import now_iso, now_stamp, to_abs_path, write_json, write_markdown
 from trainer.closed_loop.replay_mixer import run_replay_mixer
+from trainer.registry.checkpoint_registry import find_by_artifact_path, get_entry, update_checkpoint, update_checkpoint_status
+from trainer.registry.checkpoint_state_machine import can_transition
 
 
 def _read_yaml_or_json(path: Path) -> dict[str, Any]:
@@ -74,6 +76,38 @@ def _run_process(command: list[str], *, cwd: Path, timeout_sec: int) -> dict[str
             "elapsed_sec": time.time() - started,
             "timed_out": True,
         }
+
+
+def _checkpoint_entry_from_path(path: str) -> dict[str, Any] | None:
+    token = str(path or "").strip()
+    if not token:
+        return None
+    try:
+        return find_by_artifact_path(Path(token).resolve())
+    except Exception:
+        return None
+
+
+def _safe_transition_checkpoint(
+    checkpoint_id: str,
+    *,
+    to_status: str,
+    reason: str,
+    operator: str,
+    refs: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    token = str(checkpoint_id or "").strip()
+    if not token:
+        return None
+    current = get_entry(token)
+    if not isinstance(current, dict):
+        return None
+    current_status = str(current.get("status") or "draft")
+    if current_status == to_status:
+        return update_checkpoint(token, refs or {})
+    if not can_transition(current_status, to_status):
+        return current
+    return update_checkpoint_status(token, to_status=to_status, reason=reason, operator=operator, refs=refs)
 
 
 def _normalize_seeds(cfg: dict[str, Any], *, quick: bool) -> list[str]:
@@ -371,6 +405,21 @@ def run_closed_loop(
     world_model_uncertainty_penalty = float(world_model_cfg.get("uncertainty_penalty") or 0.5)
 
     candidate_checkpoint = str(candidate_summary.get("best_checkpoint") or "")
+    candidate_checkpoint_id = str(candidate_summary.get("checkpoint_id") or "")
+    if not candidate_checkpoint_id and candidate_checkpoint:
+        existing_candidate_entry = _checkpoint_entry_from_path(candidate_checkpoint)
+        candidate_checkpoint_id = str((existing_candidate_entry or {}).get("checkpoint_id") or "")
+    if candidate_checkpoint_id and str(candidate_summary.get("status") or "") in {"ok", "stub", "dry_run"}:
+        _safe_transition_checkpoint(
+            candidate_checkpoint_id,
+            to_status="smoke_passed",
+            reason="candidate_training_completed",
+            operator="closed_loop_runner",
+            refs={
+                "metrics_ref": str(candidate_summary.get("metrics") or ""),
+                "manifest_path": str(candidate_summary.get("candidate_train_manifest") or ""),
+            },
+        )
     multi_seed_eval_json = str(candidate_summary.get("multi_seed_eval") or "")
     diagnostics_json = str(candidate_summary.get("diagnostics_json") or "")
     if arena_enabled and not dry_run:
@@ -450,10 +499,12 @@ def run_closed_loop(
             "arena_reason": arena_reason,
             "training_mode": training_mode,
             "candidate_checkpoint": candidate_checkpoint,
+            "candidate_checkpoint_id": candidate_checkpoint_id,
             "multi_seed_eval_json": multi_seed_eval_json,
             "diagnostics_json": diagnostics_json,
             "world_model_assist": bool(world_model_enabled and world_model_checkpoint),
             "world_model_checkpoint": world_model_checkpoint,
+            "world_model_checkpoint_id": str(((_checkpoint_entry_from_path(world_model_checkpoint) or {}).get("checkpoint_id")) or ""),
             "world_model_assist_mode": world_model_assist_mode if world_model_enabled else "",
             "arena_command": arena_cmd,
             "arena_returncode": int(arena_result.get("returncode") or 0),
@@ -557,6 +608,7 @@ def run_closed_loop(
             "arena_reason": arena_reason,
             "training_mode": training_mode,
             "candidate_checkpoint": candidate_checkpoint,
+            "candidate_checkpoint_id": candidate_checkpoint_id,
             "multi_seed_eval_json": multi_seed_eval_json,
             "diagnostics_json": diagnostics_json,
         }
@@ -626,6 +678,9 @@ def run_closed_loop(
         "arena_reason": arena_reason,
         "candidate_policy": candidate_policy,
         "champion_policy": champion_policy,
+        "candidate_checkpoint": candidate_checkpoint,
+        "candidate_checkpoint_id": candidate_checkpoint_id,
+        "champion_checkpoint_id": str(decision_payload.get("champion_checkpoint_id") or ""),
         "candidate_score": candidate_score,
         "champion_score": champion_score,
         "score_delta": candidate_score - champion_score,
@@ -651,6 +706,52 @@ def run_closed_loop(
             out_dir=run_dir,
             baseline_run_dir=(str(triage_cfg.get("baseline_run_dir")) if str(triage_cfg.get("baseline_run_dir") or "").strip() else None),
         )
+    if candidate_checkpoint_id:
+        registry_refs = {
+            "arena_ref": str(run_dir / "arena_summary.json"),
+            "triage_ref": str(triage_summary.get("triage_report_json") or ""),
+        }
+        update_checkpoint(candidate_checkpoint_id, registry_refs)
+        if arena_status == "ok":
+            _safe_transition_checkpoint(
+                candidate_checkpoint_id,
+                to_status="arena_passed",
+                reason="arena_eval_completed",
+                operator="closed_loop_runner",
+                refs=registry_refs,
+            )
+            _safe_transition_checkpoint(
+                candidate_checkpoint_id,
+                to_status="promotion_review",
+                reason="promotion_decision_ready",
+                operator="closed_loop_runner",
+                refs={
+                    **registry_refs,
+                    "promotion_decision": str(run_dir / "promotion_decision.json"),
+                },
+            )
+        if recommendation == "promote" and bool(promotion_decision.get("recommend_promotion")):
+            _safe_transition_checkpoint(
+                candidate_checkpoint_id,
+                to_status="promoted",
+                reason="auto_promoted_from_closed_loop",
+                operator="closed_loop_runner",
+                refs={
+                    **registry_refs,
+                    "promotion_decision": str(run_dir / "promotion_decision.json"),
+                },
+            )
+        elif recommendation == "reject":
+            _safe_transition_checkpoint(
+                candidate_checkpoint_id,
+                to_status="rejected",
+                reason="promotion_rejected",
+                operator="closed_loop_runner",
+                refs={
+                    **registry_refs,
+                    "promotion_decision": str(run_dir / "promotion_decision.json"),
+                },
+            )
     write_json(
         run_dir / "triage_ref.json",
         {
@@ -727,6 +828,10 @@ def run_closed_loop(
             "promotion_decision": promotion_decision,
             "regression_triage": triage_summary,
         },
+        "checkpoint_registry": {
+            "candidate_checkpoint_id": candidate_checkpoint_id,
+            "world_model_checkpoint_id": str(((_checkpoint_entry_from_path(world_model_checkpoint) or {}).get("checkpoint_id")) or ""),
+        },
         "auxiliary_assets": {
             "world_model_enabled": bool(world_model_enabled and world_model_checkpoint),
             "world_model_checkpoint": world_model_checkpoint,
@@ -751,6 +856,8 @@ def run_closed_loop(
         "promotion_decision": str(run_dir / "promotion_decision.json"),
         "arena_summary": str(run_dir / "arena_summary.json"),
         "summary_table_json": summary_paths["json"],
+        "candidate_checkpoint": candidate_checkpoint,
+        "candidate_checkpoint_id": candidate_checkpoint_id,
     }
 
 

@@ -36,6 +36,7 @@ from trainer.experiments.training_modes import (
     MODE_CATEGORY_LEGACY_BASELINE,
     mode_category,
 )
+from trainer.registry.checkpoint_registry import register_checkpoint
 from trainer.rl.ppo_lite import run_ppo_lite_training
 from trainer.runtime.python_resolver import resolve_training_python
 
@@ -91,6 +92,21 @@ def _run_process(command: list[str], *, cwd: Path, timeout_sec: int) -> dict[str
             "elapsed_sec": time.time() - start,
             "timed_out": True,
         }
+
+
+def _git_commit(repo_root: Path) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(repo_root),
+            text=True,
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+    except Exception:
+        return ""
+    return str(result.stdout or "").strip() if int(result.returncode) == 0 else ""
 
 
 def _pick_python_exe(repo_root: Path) -> str:
@@ -581,7 +597,9 @@ def run_candidate_training(
             "multi_seed_eval": str(rl_summary.get("eval_seed_results") or ""),
             "diagnostics_json": str(rl_summary.get("diagnostics_json") or ""),
             "diagnostics_report_md": str(rl_summary.get("diagnostics_report_md") or ""),
+            "checkpoint_id": str(rl_summary.get("checkpoint_id") or ""),
         }
+        metrics_payload["checkpoint_id"] = str(rl_summary.get("checkpoint_id") or "")
         write_json(run_dir / "candidate_train_manifest.json", manifest)
         write_json(run_dir / "metrics.json", metrics_payload)
         return {
@@ -604,6 +622,7 @@ def run_candidate_training(
             "multi_seed_eval": str(rl_summary.get("eval_seed_results") or ""),
             "diagnostics_json": str(rl_summary.get("diagnostics_json") or ""),
             "diagnostics_report_md": str(rl_summary.get("diagnostics_report_md") or ""),
+            "checkpoint_id": str(rl_summary.get("checkpoint_id") or ""),
         }
 
     if mode == "selfsup_warm_bc":
@@ -1060,7 +1079,34 @@ def run_candidate_training(
         "candidate_checkpoint": str(best_checkpoint),
         "metrics_ref": str(run_dir / "metrics.json"),
     }
-
+    checkpoint_registry_entry: dict[str, Any] = {}
+    if str(best_checkpoint).strip():
+        checkpoint_registry_entry = register_checkpoint(
+            {
+                "family": "other",
+                "training_mode": mode,
+                "training_mode_category": training_mode_category,
+                "source_run_id": chosen_run_id,
+                "source_experiment_id": cfg_path.stem,
+                "seed_or_seed_group": ",".join(seeds[:4]) + (f"+{max(0, len(seeds) - 4)}" if len(seeds) > 4 else ""),
+                "device_profile": "",
+                "training_python": _pick_python_exe(repo_root),
+                "artifact_path": str(best_checkpoint),
+                "status": "draft",
+                "metrics_ref": str((run_dir / "metrics.json").resolve()),
+                "lineage_refs": {
+                    "candidate_train_manifest": str((run_dir / "candidate_train_manifest.json").resolve()),
+                    "replay_mix_manifest": str(replay_manifest_path),
+                    "curriculum_plan_json": str((run_dir / "curriculum_plan.json").resolve()),
+                    "seeds_used_json": str((run_dir / "seeds_used.json").resolve()),
+                },
+                "imagined_data_used": bool(imagination_cfg.get("enabled")),
+                "git_commit": _git_commit(repo_root),
+                "notes": "auto_registered_from_candidate_train",
+            }
+        )
+        metrics_payload["checkpoint_id"] = str(checkpoint_registry_entry.get("checkpoint_id") or "")
+        manifest["checkpoint_id"] = str(checkpoint_registry_entry.get("checkpoint_id") or "")
     write_json(run_dir / "candidate_train_manifest.json", manifest)
     write_json(run_dir / "metrics.json", metrics_payload)
 
@@ -1081,6 +1127,7 @@ def run_candidate_training(
         "curriculum_applied": str(curriculum_applied_path),
         "imagination_recipe": str(imagination_cfg.get("recipe") or "real_only"),
         "imagined_fraction": float(imagined_fraction),
+        "checkpoint_id": str(checkpoint_registry_entry.get("checkpoint_id") or ""),
     }
 
 

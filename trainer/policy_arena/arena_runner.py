@@ -21,6 +21,7 @@ from trainer.common.slices import (
     as_legacy_risk_bucket,
     compute_slice_labels,
 )
+from trainer.registry.checkpoint_registry import find_by_artifact_path
 from trainer.policy_arena.adapters import (
     HeuristicAdapter,
     HybridAdapter,
@@ -76,6 +77,17 @@ def _read_json(path: Path) -> dict[str, Any]:
         return payload if isinstance(payload, dict) else {}
     except Exception:
         return {}
+
+
+def _checkpoint_ref_for_path(raw_path: str) -> dict[str, Any]:
+    token = str(raw_path or "").strip()
+    if not token:
+        return {}
+    try:
+        payload = find_by_artifact_path(Path(token).resolve())
+    except Exception:
+        payload = None
+    return dict(payload or {}) if isinstance(payload, dict) else {}
 
 
 def _legal_actions_hint(state: dict[str, Any]) -> list[dict[str, Any]] | None:
@@ -431,6 +443,14 @@ def main() -> int:
                 world_model_uncertainty_penalty=float(args.world_model_uncertainty_penalty),
             )
             desc = adapter.describe()
+            adapter_block = desc.get("adapter") if isinstance(desc.get("adapter"), dict) else {}
+            model_entry = _checkpoint_ref_for_path(str(adapter_block.get("model_path") or ""))
+            wm_entry = _checkpoint_ref_for_path(str(adapter_block.get("world_model_checkpoint") or ""))
+            if model_entry:
+                adapter_block["checkpoint_id"] = str(model_entry.get("checkpoint_id") or "")
+            if wm_entry:
+                adapter_block["world_model_checkpoint_id"] = str(wm_entry.get("checkpoint_id") or "")
+            desc["adapter"] = adapter_block
             adapter_descriptions[policy_id] = desc
             if args.skip_unavailable and str((desc.get("adapter") or {}).get("status") or "") == "stub":
                 warnings.append(f"[warning] skip policy={policy_id} because adapter status=stub and --skip-unavailable is enabled")
@@ -470,6 +490,13 @@ def main() -> int:
         adapter.close()
 
     summary_rows = summarize_policy_rows(episode_records)
+    for row in summary_rows:
+        if not isinstance(row, dict):
+            continue
+        desc = adapter_descriptions.get(str(row.get("policy_id") or "")) if isinstance(adapter_descriptions, dict) else None
+        adapter_block = desc.get("adapter") if isinstance(desc, dict) and isinstance(desc.get("adapter"), dict) else {}
+        row["checkpoint_id"] = str(adapter_block.get("checkpoint_id") or "")
+        row["world_model_checkpoint_id"] = str(adapter_block.get("world_model_checkpoint_id") or "")
     bucket_payload = summarize_bucket_metrics(episode_records)
 
     episode_records_path = run_dir / "episode_records.jsonl"

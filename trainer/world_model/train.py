@@ -10,6 +10,8 @@ import argparse
 import functools
 import json
 import random
+import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -27,6 +29,7 @@ except Exception:  # pragma: no cover
 
 from trainer.closed_loop.replay_manifest import build_seeds_payload, now_iso, now_stamp, read_json, read_jsonl, write_json
 from trainer.monitoring.progress_schema import append_progress_event, build_progress_event, get_gpu_mem_mb
+from trainer.registry.checkpoint_registry import register_checkpoint
 from trainer.runtime.runtime_profile import load_runtime_profile
 from trainer.world_model.dataset import build_world_model_dataset
 from trainer.world_model.eval import run_world_model_eval
@@ -83,6 +86,32 @@ def _safe_int(value: Any, default: int = 0) -> int:
 
 def _is_oom_error(exc: Exception) -> bool:
     return "out of memory" in str(exc).lower()
+
+
+def _git_commit(repo_root: Path) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(repo_root),
+            text=True,
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+    except Exception:
+        return ""
+    return str(result.stdout or "").strip() if int(result.returncode) == 0 else ""
+
+
+def _runtime_profile_name(runtime_profile: dict[str, Any]) -> str:
+    if not isinstance(runtime_profile, dict):
+        return ""
+    return str(
+        runtime_profile.get("profile_name")
+        or runtime_profile.get("requested_profile")
+        or ((runtime_profile.get("resolved_profile") or {}).get("profile_name") if isinstance(runtime_profile.get("resolved_profile"), dict) else "")
+        or ""
+    )
 
 
 def _seed_everything(seed: int) -> None:
@@ -557,6 +586,40 @@ def run_world_model_train(
         "assist_summary": assist_summary,
         "runtime_profile": runtime_profile_payload,
     }
+    checkpoint_registry_entry: dict[str, Any] = {}
+    if str(best_checkpoint_path).strip():
+        checkpoint_registry_entry = register_checkpoint(
+            {
+                "family": "world_model",
+                "training_mode": "p45_world_model",
+                "training_mode_category": "mainline",
+                "source_run_id": chosen_run_id,
+                "source_experiment_id": cfg_path.stem,
+                "seed_or_seed_group": str(seed),
+                "device_profile": _runtime_profile_name(runtime_profile_payload),
+                "training_python": sys.executable,
+                "artifact_path": str(Path(best_checkpoint_path).resolve()),
+                "status": "draft",
+                "metrics_ref": str((run_dir / "metrics.json").resolve()),
+                "arena_ref": str((assist_summary.get("promotion_decision_json") or "")) if isinstance(assist_summary, dict) else "",
+                "lineage_refs": {
+                    "train_manifest_json": str((run_dir / "train_manifest.json").resolve()),
+                    "dataset_manifest_json": str(dataset_manifest_path.resolve()),
+                    "eval_metrics_json": str((eval_summary.get("eval_metrics_json") or "")) if isinstance(eval_summary, dict) else "",
+                    "assist_summary_json": str((assist_summary.get("summary_json") or "")) if isinstance(assist_summary, dict) else "",
+                    "runtime_profile_json": str(runtime_profile_json.resolve()),
+                    "progress_unified_jsonl": str(progress_unified_path.resolve()),
+                },
+                "curriculum_profile": "",
+                "git_commit": _git_commit(repo_root),
+                "notes": "auto_registered_from_p45_world_model_train",
+            }
+        )
+        metrics_payload["checkpoint_id"] = str(checkpoint_registry_entry.get("checkpoint_id") or "")
+        manifest_payload["checkpoint_registry"] = {
+            "checkpoint_id": str(checkpoint_registry_entry.get("checkpoint_id") or ""),
+            "registry_path": str((repo_root / "docs/artifacts/registry/checkpoints_registry.json").resolve()),
+        }
     write_json(run_dir / "metrics.json", metrics_payload)
     write_json(run_dir / "train_manifest.json", manifest_payload)
     append_progress_event(
@@ -594,6 +657,7 @@ def run_world_model_train(
         "best_checkpoint": best_checkpoint_path,
         "eval_summary": eval_summary,
         "assist_summary": assist_summary,
+        "checkpoint_id": str(checkpoint_registry_entry.get("checkpoint_id") or ""),
     }
 
 

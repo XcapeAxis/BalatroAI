@@ -19,6 +19,7 @@ except Exception:  # pragma: no cover
 
 from trainer.closed_loop.replay_manifest import now_iso, now_stamp, read_json, read_jsonl, write_json
 from trainer.monitoring.progress_schema import append_progress_event, build_progress_event, get_gpu_mem_mb
+from trainer.registry.checkpoint_registry import find_by_artifact_path, update_checkpoint
 from trainer.runtime.runtime_profile import load_runtime_profile
 from trainer.world_model.dataset import build_world_model_dataset
 from trainer.world_model.diagnostics import write_diagnostics
@@ -354,6 +355,21 @@ def run_world_model_eval(
             gpu_mem_mb=get_gpu_mem_mb(device),
         ),
     )
+    existing_entry = find_by_artifact_path(Path(checkpoint_path).resolve())
+    if isinstance(existing_entry, dict):
+        update_checkpoint(
+            str(existing_entry.get("checkpoint_id") or ""),
+            {
+                "metrics_ref": str((run_dir / "eval_metrics.json").resolve()),
+                "notes": str(existing_entry.get("notes") or "") + (" | eval_linked" if str(existing_entry.get("notes") or "") else "eval_linked"),
+                "lineage_refs": {
+                    **(existing_entry.get("lineage_refs") if isinstance(existing_entry.get("lineage_refs"), dict) else {}),
+                    "eval_metrics_json": str((run_dir / "eval_metrics.json").resolve()),
+                    "slice_eval_json": str((run_dir / "slice_eval.json").resolve()),
+                    "diagnostics_json": str((run_dir / "diagnostics.json").resolve()),
+                },
+            },
+        )
     return {
         "status": "ok",
         "run_id": chosen_run_id,

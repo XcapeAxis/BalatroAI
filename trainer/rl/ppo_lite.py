@@ -10,6 +10,8 @@ import argparse
 import hashlib
 import json
 import statistics
+import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +25,7 @@ except Exception:  # pragma: no cover
 from trainer.closed_loop.replay_manifest import build_seeds_payload
 from trainer.monitoring.progress_schema import append_progress_event as append_unified_progress_event
 from trainer.monitoring.progress_schema import build_progress_event, get_gpu_mem_mb
+from trainer.registry.checkpoint_registry import register_checkpoint
 from trainer.rl.checkpointing import save_torch_checkpoint, write_manifest
 from trainer.rl.curriculum_rl import load_curriculum_scheduler
 from trainer.rl.diagnostics import run_diagnostics
@@ -207,6 +210,32 @@ def _resolve_env_dimensions(cfg: PPOConfig) -> tuple[int, int]:
         return int(adapter.obs_dim), int(adapter.action_dim)
     finally:
         adapter.close()
+
+
+def _git_commit(repo_root: Path) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(repo_root),
+            text=True,
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+    except Exception:
+        return ""
+    return str(result.stdout or "").strip() if int(result.returncode) == 0 else ""
+
+
+def _runtime_profile_name(runtime_profile: dict[str, Any]) -> str:
+    if not isinstance(runtime_profile, dict):
+        return ""
+    return str(
+        runtime_profile.get("profile_name")
+        or runtime_profile.get("requested_profile")
+        or ((runtime_profile.get("resolved_profile") or {}).get("profile_name") if isinstance(runtime_profile.get("resolved_profile"), dict) else "")
+        or ""
+    )
 
 
 def _ppo_update_from_steps(
@@ -1017,6 +1046,39 @@ def run_ppo_lite_training(
         "diagnostics": diagnostics_summary,
         "runtime_profile": runtime_profile_payload,
     }
+    checkpoint_registry_entry: dict[str, Any] = {}
+    if str(best_checkpoint).strip():
+        checkpoint_registry_entry = register_checkpoint(
+            {
+                "family": "rl_policy",
+                "training_mode": ("p42_rl_candidate" if str(cfg.schema).startswith("p42_") else "p44_distributed_rl"),
+                "training_mode_category": "mainline",
+                "source_run_id": run_token,
+                "source_experiment_id": (Path(config_path).stem if config_path is not None else str(cfg.schema or "")),
+                "seed_or_seed_group": ",".join(seeds[:4]) + (f"+{max(0, len(seeds) - 4)}" if len(seeds) > 4 else ""),
+                "device_profile": _runtime_profile_name(runtime_profile_payload),
+                "training_python": sys.executable,
+                "artifact_path": best_checkpoint,
+                "status": "draft",
+                "metrics_ref": str((run_dir / "metrics.json").resolve()),
+                "lineage_refs": {
+                    "manifest_path": str((run_dir / "train_manifest.json").resolve()),
+                    "seeds_used_json": str((run_dir / "seeds_used.json").resolve()),
+                    "runtime_profile_json": str(runtime_profile_json.resolve()),
+                    "eval_seed_results": str(eval_summary.get("seed_results_json") or ""),
+                    "diagnostics_json": str(diagnostics_summary.get("diagnostics_json") or ""),
+                    "progress_unified_jsonl": str(unified_progress_path.resolve()),
+                },
+                "curriculum_profile": str(curriculum_plan_path.resolve()),
+                "git_commit": _git_commit(repo_root),
+                "notes": "auto_registered_from_p44_ppo_lite",
+            }
+        )
+        metrics_payload["checkpoint_id"] = str(checkpoint_registry_entry.get("checkpoint_id") or "")
+        manifest["checkpoint_registry"] = {
+            "checkpoint_id": str(checkpoint_registry_entry.get("checkpoint_id") or ""),
+            "registry_path": str((repo_root / "docs/artifacts/registry/checkpoints_registry.json").resolve()),
+        }
     _write_json(run_dir / "metrics.json", metrics_payload)
     write_manifest(run_dir / "train_manifest.json", manifest)
     (run_dir / "best_checkpoint.txt").write_text(str(best_checkpoint).strip() + "\n", encoding="utf-8")
@@ -1064,6 +1126,7 @@ def run_ppo_lite_training(
         "seed_results": seed_results,
         "runtime_profile_json": str(runtime_profile_json),
         "progress_unified_jsonl": str(unified_progress_path),
+        "checkpoint_id": str(checkpoint_registry_entry.get("checkpoint_id") or ""),
     }
 
 

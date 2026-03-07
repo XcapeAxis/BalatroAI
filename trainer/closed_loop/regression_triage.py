@@ -626,6 +626,7 @@ def run_regression_triage(
 
     current_decision_dict = current_decision if isinstance(current_decision, dict) else {}
     baseline_decision_dict = baseline_decision if isinstance(baseline_decision, dict) else {}
+    current_manifest_dict = current_manifest if isinstance(current_manifest, dict) else {}
     current_slice = _load_slice_breakdown(current_decision_dict)
     degraded_rows = [
         row
@@ -701,6 +702,21 @@ def run_regression_triage(
         - _safe_float(baseline_decision_dict.get("score_delta"), 0.0),
         "recommendation": str(current_decision_dict.get("recommendation") or ""),
     }
+    current_candidate_checkpoint_id = str(
+        current_decision_dict.get("candidate_checkpoint_id")
+        or current_candidate_manifest.get("checkpoint_id")
+        or ""
+    )
+    baseline_candidate_checkpoint_id = str(
+        baseline_decision_dict.get("candidate_checkpoint_id")
+        or baseline_candidate_manifest.get("checkpoint_id")
+        or ""
+    )
+    current_world_model_checkpoint_id = str(
+        (((current_manifest_dict.get("checkpoint_registry") or {}) if isinstance(current_manifest_dict.get("checkpoint_registry"), dict) else {}).get("world_model_checkpoint_id"))
+        or (((current_manifest_dict.get("auxiliary_assets") or {}) if isinstance(current_manifest_dict.get("auxiliary_assets"), dict) else {}).get("world_model_checkpoint_id"))
+        or ""
+    )
 
     payload = {
         "schema": "p41_regression_triage_v1",
@@ -737,6 +753,11 @@ def run_regression_triage(
             },
             "warnings": quality_warnings,
         },
+        "checkpoint_refs": {
+            "current_candidate_checkpoint_id": current_candidate_checkpoint_id,
+            "baseline_candidate_checkpoint_id": baseline_candidate_checkpoint_id,
+            "current_world_model_checkpoint_id": current_world_model_checkpoint_id,
+        },
         "refs": {
             "current_run_manifest": str(current_dir / "run_manifest.json"),
             "current_promotion_decision": str(current_dir / "promotion_decision.json"),
@@ -763,6 +784,9 @@ def run_regression_triage(
         f"- baseline_score_delta: {float((overall or {}).get('baseline_score_delta') or 0.0):.6f}",
         f"- score_delta_change_vs_baseline: {float((overall or {}).get('score_delta_change_vs_baseline') or 0.0):.6f}",
         f"- recommendation: `{(overall or {}).get('recommendation')}`",
+        f"- current_candidate_checkpoint_id: `{current_candidate_checkpoint_id}`",
+        f"- baseline_candidate_checkpoint_id: `{baseline_candidate_checkpoint_id}`",
+        f"- current_world_model_checkpoint_id: `{current_world_model_checkpoint_id}`",
         "",
         "## Degraded Slices (Top-K)",
     ]
