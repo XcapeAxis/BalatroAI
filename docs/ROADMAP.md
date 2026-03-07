@@ -22,14 +22,17 @@
 | P50 | Real CUDA bring-up + GPU validation + nightly benchmark profiles | done |
 | P51 | Checkpoint registry + resumeable nightly campaigns + promotion queue | done |
 | P52 | Learned router / guarded meta-controller + arena ablation + campaign integration | done |
+| P54 | Learned router / guarded meta-controller + P22/dashboard/ops-ui first-class integration | done |
 | P53 | Background execution + local ops UI + window supervision | done |
+| P55 | Config loading hardening + YAML/JSON sidecar sync + full P54 nightly validation | done |
 
-## Current Focus: Post-P53 Durable Local Ops
+## Current Focus: Post-P55 Quality and Durability
 
-1. Harden P53 background-mode validation beyond smoke so offscreen/hidden/minimized claims remain trustworthy under longer workloads.
-2. Tighten promotion semantics so promoted candidates can be switched with explicit human review on top of the existing state machine and local ops console.
-3. Keep readiness guarding, dashboard generation, and ops-audit logging enabled as default night-ops safety rails.
-4. Expand heavier CUDA nightlies, especially P44 distributed RL and P52 learned-router runs, while preserving resume-safe stage boundaries and manageable background execution.
+1. Maintain YAML/JSON sidecar parity — run `sync_config_sidecars.ps1` after every YAML edit.
+2. Expand P54 nightly budget and multi-seed routing-label calibration.
+3. Harden P53 background-mode validation beyond smoke.
+4. Tighten promotion semantics with explicit human review on top of the state machine.
+5. Keep config provenance, readiness guarding, dashboard generation, and ops-audit logging as default night-ops safety rails.
 
 ## Near-Term After P53
 

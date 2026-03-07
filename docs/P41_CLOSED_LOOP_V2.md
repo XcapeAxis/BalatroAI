@@ -14,7 +14,7 @@ P45 can plug into the same shell as an auxiliary world-model asset for wm-assist
 P46 reuses the same lineage, replay-mix, arena, and triage surfaces for imagined replay augmentation.
 P47 reuses the same arena and triage surfaces for uncertainty-aware world-model rerank ablations.
 P48 reuses the same arena and triage surfaces for explainable hybrid-controller routing ablations.
-P52 reuses the same arena and triage surfaces for learned-router dataset labeling, guarded deployment checks, and rule-vs-learned ablations.
+P54 reuses the same arena and triage surfaces for learned-router dataset labeling, guarded deployment checks, and rule-vs-learned ablations.
 
 ## Architecture
 
@@ -129,9 +129,9 @@ P48 keeps replay/training unchanged but extends arena/triage manifests with:
 - `wm_assist_enabled`
 - controller-selection traces under `router_traces/<run_id>/routing_trace.jsonl`
 
-## Learned Router Contract (P52)
+## Learned Router Contract (P54)
 
-P52 keeps replay/candidate training unchanged but extends arena/triage manifests with:
+P54 keeps replay/candidate training unchanged but extends arena/triage manifests with:
 
 - `router_dataset_manifest_json`
 - `router_train_manifest_json`
@@ -226,7 +226,7 @@ P48-specific triage fields:
 - `search_budget_sensitivity`
 - `wm_uncertainty_gate_impact`
 
-P52-specific triage fields:
+P54-specific triage fields:
 
 - `learned_router_impact`
 - `top_degrading_slices_for_learned_router`

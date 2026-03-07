@@ -28,7 +28,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | Scenario | Command | Notes |
 |---|---|---|
 | Plan only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -DryRun` | validates matrix + writes plan/report |
-| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | mainline smoke set with multi-seed materialization (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row + P40/P41/P42 + P45 world-model smoke row + P46 imagination smoke row + P47 model-based search smoke row + P48 hybrid-controller smoke row + P49 GPU-mainline row + P50 real-CUDA validation row + P51 registry/campaign row + P52 learned-router row + P53 background-execution row) |
+| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | mainline smoke set with multi-seed materialization (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row + P40/P41/P42 + P45 world-model smoke row + P46 imagination smoke row + P47 model-based search smoke row + P48 hybrid-controller smoke row + P49 GPU-mainline row + P50 real-CUDA validation row + P51 registry/campaign row + P54 learned-router row + P53 background-execution row) |
 | Fast smoke + legacy probe | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -IncludeLegacy` | adds opt-in legacy BC/DAgger probe row(s) |
 | Legacy only quick | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -LegacyOnly` | runs only legacy baseline probe row(s) |
 | Multi-seed quick compare | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline,quick_candidate -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | 2 strategies x 3 seeds |
@@ -41,7 +41,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | P49 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP49` | runs `p49_gpu_mainline_smoke` with readiness guard + dashboard build |
 | P50 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP50` | runs `p50_gpu_validation_smoke` with CUDA-first python resolver + readiness guard + dashboard build |
 | P51 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP51` | runs `p51_registry_smoke` with checkpoint registry snapshots, promotion queue export, dashboard build, and campaign state artifacts |
-| P52 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP52` | runs `p52_learned_router_smoke` with router dataset build, learned-router training, guarded ablation compare, checkpoint registration, campaign state, promotion queue, and dashboard build |
+| P54 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP54` | runs `p54_learned_router_smoke` with router dataset build, learned-router training, guarded ablation compare, checkpoint registration, campaign state, promotion queue, and dashboard build |
 | P53 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP53` | runs `p53_background_ops_smoke` with background-mode validation, window-mode recording, campaign state, ops-ui metadata, promotion queue refresh, and dashboard build |
 | P53 smoke + explicit mode | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP53 -WindowMode offscreen` | keeps the requested background mode explicit in the run summary |
 | Start local Ops UI | `powershell -ExecutionPolicy Bypass -File scripts\run_ops_ui.ps1` | starts the localhost-only P53 operations console on `127.0.0.1:8765` by default |
@@ -74,7 +74,7 @@ Key sections:
   - `category` (`mainline`, `legacy_baseline`, `required_validation`, ...)
   - `default_enabled` (`false` rows are excluded unless explicitly requested)
   - `backend`, `policy`
-  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`, `selfsup_future_value`, `selfsup_action_type`, `ssl_pretrain`, `ssl_probe`, `rl_selfplay`, `policy_arena`, `closed_loop_improvement`, `closed_loop_improvement_v2`, `closed_loop_rl_candidate`, `world_model_train`, `world_model_eval`, `world_model_assist_compare`, `imagination_augmented_candidate`, `p46_imagination`, `world_model_rerank_eval`, `p47_wm_search`, `hybrid_controller_eval`, `p48_hybrid_controller`, `checkpoint_registry_campaign`, `p51_registry_campaign`, `router_dataset_build`, `learned_router_train`, `learned_router_ablation`, `p52_learned_router_campaign`, `p53_background_ops_campaign`)
+  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`, `selfsup_future_value`, `selfsup_action_type`, `ssl_pretrain`, `ssl_probe`, `rl_selfplay`, `policy_arena`, `closed_loop_improvement`, `closed_loop_improvement_v2`, `closed_loop_rl_candidate`, `world_model_train`, `world_model_eval`, `world_model_assist_compare`, `imagination_augmented_candidate`, `p46_imagination`, `world_model_rerank_eval`, `p47_wm_search`, `hybrid_controller_eval`, `p48_hybrid_controller`, `checkpoint_registry_campaign`, `p51_registry_campaign`, `router_dataset_build`, `learned_router_train`, `learned_router_ablation`, `p54_learned_router_campaign`, `p53_background_ops_campaign`)
   - `seed_mode` (`regression_fixed` or `nightly`)
   - `seeds` (optional explicit seed override list)
   - `window_mode`, `window_mode_fallback` (when the row manages the real game window)
@@ -689,16 +689,16 @@ Operational notes:
 - full experiment-level resume still short-circuits already successful experiments; stage-level resume applies when the experiment needs to rerun and campaign state already exists.
 - imported historical checkpoints can remain metadata-light until their producers re-emit them through the new registry path.
 
-## P52 Learned Router / Meta-Controller Integration
+## P54 Learned Router / Meta-Controller Integration
 
-P52 adds `experiment_type: p52_learned_router_campaign` so P22 can orchestrate the full learned-router flow as one resumable experiment family.
+P54 adds `experiment_type: p54_learned_router_campaign` so P22 can orchestrate the full learned-router flow as one resumable experiment family.
 
 Reference rows in `configs/experiments/p22.yaml`:
 
-- `p52_learned_router_smoke`
-- `p52_learned_router_nightly`
+- `p54_learned_router_smoke`
+- `p54_learned_router_nightly`
 
-What P52 adds on top of P48/P49/P50/P51:
+What P54 adds on top of P48/P49/P50/P51:
 
 - routing dataset build from P48/P39/P41/P51 outputs
 - lightweight learned-router training with masked controller logits
@@ -708,12 +708,12 @@ What P52 adds on top of P48/P49/P50/P51:
 
 Key artifacts:
 
-- `docs/artifacts/p52/router_dataset/<run_id>/router_dataset_manifest.json`
-- `docs/artifacts/p52/router_train/<run_id>/train_manifest.json`
-- `docs/artifacts/p52/router_inference/<run_id>/routing_trace.jsonl`
-- `docs/artifacts/p52/arena_ablation/<run_id>/summary_table.json`
-- `docs/artifacts/p52/triage/<run_id>/triage_report.json`
-- `docs/artifacts/p22/runs/<run_id>/p52_learned_router_smoke/campaign_runs/seed_*/campaign_state.json`
+- `docs/artifacts/p54/router_dataset/<run_id>/router_dataset_manifest.json`
+- `docs/artifacts/p54/router_train/<run_id>/train_manifest.json`
+- `docs/artifacts/p54/router_inference/<run_id>/routing_trace.jsonl`
+- `docs/artifacts/p54/arena_ablation/<run_id>/summary_table.json`
+- `docs/artifacts/p54/triage/<run_id>/triage_report.json`
+- `docs/artifacts/p22/runs/<run_id>/p54_learned_router_smoke/campaign_runs/seed_*/campaign_state.json`
 
 Summary/runtime fields surfaced in P22 rows for this lane:
 
@@ -729,9 +729,9 @@ Summary/runtime fields surfaced in P22 rows for this lane:
 
 Operational notes:
 
-- `scripts/run_p22.ps1 -Quick` now includes `p52_learned_router_smoke`.
-- `scripts/run_p22.ps1 -RunP52` selects `p52_learned_router_smoke` or `p52_learned_router_nightly`.
-- `scripts/run_p22.ps1 -RunP52 -Resume` reuses the latest compatible campaign root and skips completed resume-safe stages.
+- `scripts/run_p22.ps1 -Quick` now includes `p54_learned_router_smoke`.
+- `scripts/run_p22.ps1 -RunP54` selects `p54_learned_router_smoke` or `p54_learned_router_nightly`.
+- `scripts/run_p22.ps1 -RunP54 -Resume` reuses the latest compatible campaign root and skips completed resume-safe stages.
 - the learned router is still arena-gated; training accuracy or checkpoint existence alone is not a promotion signal.
 
 ## Runtime Observability (During Execution)
@@ -887,4 +887,4 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_selfsup
 - [P50_CUDA_ENVIRONMENT.md](P50_CUDA_ENVIRONMENT.md)
 - [P50_GPU_TROUBLESHOOTING.md](P50_GPU_TROUBLESHOOTING.md)
 - [P51_CHECKPOINT_REGISTRY_AND_CAMPAIGNS.md](P51_CHECKPOINT_REGISTRY_AND_CAMPAIGNS.md)
-- [P52_LEARNED_ROUTER.md](P52_LEARNED_ROUTER.md)
+- [P54_LEARNED_ROUTER.md](P54_LEARNED_ROUTER.md)

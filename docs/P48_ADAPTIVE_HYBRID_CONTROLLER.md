@@ -3,7 +3,7 @@
 P48 adds a state-aware, uncertainty-aware, and budget-aware routing layer above the existing controller set.
 
 This is not a learned meta-policy. v1 is explicitly rule-based and explainable.
-P52 later adds a learned router on top of the same controller set while keeping this rule path as the fallback baseline.
+P54 later adds a learned router on top of the same controller set while keeping this rule path as the fallback baseline.
 
 ## Scope
 
@@ -17,7 +17,7 @@ What ships:
 
 What does not ship in P48 itself:
 
-- learned router / meta-policy (added later in P52)
+- learned router / meta-policy (added later in P54)
 - budget-adaptive search depth learning
 - long-horizon model-based planning
 - controller ensembling with trainable weights
@@ -251,11 +251,11 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP48 -Nightly
 - long-horizon planning is intentionally out of scope
 - policy availability still depends on local checkpoint presence
 
-## P52 Follow-on
+## P54 Follow-on
 
-P52 keeps the P48 router as the safe default and adds a learned meta-controller trained from routing traces plus arena/triage outcomes.
+P54 keeps the P48 router as the safe default and adds a learned meta-controller trained from routing traces plus arena/triage outcomes.
 
-New router modes introduced by P52:
+New router modes introduced by P54:
 
 - `rule`
 - `learned`
@@ -270,4 +270,4 @@ The guarded mode falls back to the P48 rule router when:
 
 Reference docs:
 
-- [P52_LEARNED_ROUTER.md](P52_LEARNED_ROUTER.md)
+- [P54_LEARNED_ROUTER.md](P54_LEARNED_ROUTER.md)

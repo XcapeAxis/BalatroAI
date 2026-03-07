@@ -1,4 +1,4 @@
-﻿<h1 align="center">BalatroAI</h1>
+<h1 align="center">BalatroAI</h1>
 <p align="center">
   Simulator-first Balatro research platform for parity, reproducibility, and gated policy iteration.
 </p>
@@ -19,7 +19,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/XcapeAxis/BalatroAI)](https://github.com/XcapeAxis/BalatroAI/issues)
 <!-- BADGES:END -->
 
-BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, a unified action replay contract, P45 world-model / latent-planning, P46 short-horizon imagination augmentation, P47 uncertainty-aware world-model reranking, P48 adaptive hybrid routing across policy/search/world-model assist, P49 GPU-mainline runtime profiles with readiness guards and lightweight dashboards, P50 real local CUDA validation with benchmarked nightly profiles, P51 checkpoint-registry + resumeable nightly campaign operations, P52 learned-router / guarded meta-controller training plus deployment, and P53 background execution plus a local-only ops console for campaigns, registry, dashboard, and window supervision. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised/world-model iteration, not as a cheat injector or memory-hook tool.
+BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, a unified action replay contract, P45 world-model / latent-planning, P46 short-horizon imagination augmentation, P47 uncertainty-aware world-model reranking, P48 adaptive hybrid routing across policy/search/world-model assist, P49 GPU-mainline runtime profiles with readiness guards and lightweight dashboards, P50 real local CUDA validation with benchmarked nightly profiles, P51 checkpoint-registry + resumeable nightly campaign operations, P54 learned-router / guarded meta-controller training plus deployment, and P53 background execution plus a local-only ops console for campaigns, registry, dashboard, and window supervision. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised/world-model iteration, not as a cheat injector or memory-hook tool.
 
 Badge/status refresh source:
 
@@ -229,11 +229,11 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP51 -Resume
 python -m trainer.registry.checkpoint_registry --latest --json
 ```
 
-Optional P52 learned-router / guarded-meta-controller smoke:
+Optional P54 learned-router / guarded-meta-controller smoke:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP52
-powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP52 -Resume
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP54
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP54 -Resume
 python -m trainer.hybrid.router_dataset --quick
 ```
 
@@ -256,7 +256,7 @@ powershell -ExecutionPolicy Bypass -File scripts\run_ops_ui.ps1
 - `docs/artifacts/p48/{arena_ablation,triage}/<run_id>/`
 - `docs/artifacts/p49/{readiness,rl_cpu_rollout_gpu_learner,wm_gpu_smoke}/`
 - `docs/artifacts/p51/{checkpoint_registry_snapshot_*.json,promotion_queue_smoke_*.json,campaign_resume_validation_*.md}`
-- `docs/artifacts/p52/{router_dataset,router_train,router_inference,arena_ablation,triage}/<run_id>/`
+- `docs/artifacts/p54/{router_dataset,router_train,router_inference,arena_ablation,triage}/<run_id>/`
 - `docs/artifacts/p53/{window_supervisor,background_mode_validation,ops_ui,ops_ui_metadata,ops_audit}/`
 - `docs/artifacts/registry/checkpoints_registry.json`
 - `docs/artifacts/dashboard/latest/index.html`
@@ -382,8 +382,8 @@ All BC/DAgger/Self-Supervised (P33/P36) experiment paths now normalize actions t
   - quick: `python -m trainer.hybrid.hybrid_controller --quick`
   - orchestrated quick: `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP48`
   - signal: controller registry, routing features, explainable router traces, and hybrid-vs-baseline arena ablations
-- P52 learned router / meta-controller:
-  - orchestrated quick: `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP52`
+- P54 learned router / meta-controller:
+  - orchestrated quick: `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP54`
   - signal: routing dataset build, learned-router checkpoint training on the CUDA-first lane, guarded routing traces, checkpoint-registry entries, and arena/triage compare across rule vs learned vs guarded modes
 - P53 background execution + local ops console:
   - orchestrated quick: `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP53`
@@ -788,24 +788,24 @@ Reference docs:
 - [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
 - [docs/P49_GPU_MAINLINE_AND_DASHBOARD.md](docs/P49_GPU_MAINLINE_AND_DASHBOARD.md)
 
-## Learned Router / Meta-Controller (P52)
+## Learned Router / Meta-Controller (P54)
 
-P52 upgrades the P48 rule-based hybrid controller into a learnable meta-controller without removing the original router. The learned router is trained from routing features plus arena/triage-derived controller outcomes, writes a first-class `learned_router` checkpoint into the P51 registry, and is evaluated through the same arena-first governance path as every other candidate.
+P54 upgrades the P48 rule-based hybrid controller into a learnable meta-controller without removing the original router. The learned router is trained from routing features plus arena/triage-derived controller outcomes, writes a first-class `learned_router` checkpoint into the P51 registry, and is evaluated through the same arena-first governance path as every other candidate.
 
-How to run P52 smoke:
+How to run P54 smoke:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP52
-powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP52 -Resume
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP54
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP54 -Resume
 ```
 
-What P52 adds:
+What P54 adds:
 
-- routing dataset builder under `docs/artifacts/p52/router_dataset/<run_id>/`
-- lightweight learned router training under `docs/artifacts/p52/router_train/<run_id>/`
+- routing dataset builder under `docs/artifacts/p54/router_dataset/<run_id>/`
+- lightweight learned router training under `docs/artifacts/p54/router_train/<run_id>/`
 - three deployment modes: `rule`, `learned`, `learned_with_rule_guard`
-- guarded routing traces under `docs/artifacts/p52/router_inference/<run_id>/routing_trace.jsonl`
-- arena ablation + triage outputs under `docs/artifacts/p52/{arena_ablation,triage}/<run_id>/`
+- guarded routing traces under `docs/artifacts/p54/router_inference/<run_id>/routing_trace.jsonl`
+- arena ablation + triage outputs under `docs/artifacts/p54/{arena_ablation,triage}/<run_id>/`
 - P22 summary/runtime fields for checkpoint ids, campaign state, registry snapshot, promotion queue, and dashboard refs
 
 Safety / risk notes:
@@ -816,9 +816,36 @@ Safety / risk notes:
 
 Reference docs:
 
-- [docs/P52_LEARNED_ROUTER.md](docs/P52_LEARNED_ROUTER.md)
+- [docs/P54_LEARNED_ROUTER.md](docs/P54_LEARNED_ROUTER.md)
 - [docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md](docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md)
 - [docs/P51_CHECKPOINT_REGISTRY_AND_CAMPAIGNS.md](docs/P51_CHECKPOINT_REGISTRY_AND_CAMPAIGNS.md)
+
+## Config Loading Hardening (P55)
+
+P55 eliminates the silent YAML/JSON sidecar drift failure mode discovered during P54 and introduces config provenance tracking across all run summaries, the dashboard, and the ops UI.
+
+Root cause: the CUDA training env lacked PyYAML, causing the orchestrator to silently load a stale `p22.json` sidecar that lacked newly-added P54 experiments, returning "no experiments selected" with no clear diagnostic.
+
+P55 changes:
+
+- **Centralized hardened loader** (`trainer/experiments/config_loader.py`): YAML is the sole source of truth; sidecar fallback only permitted if `__yaml_source_sha256__` matches; stale sidecars cause fast-fail with an explicit fix command.
+- **Sidecar sync tool** (`trainer/experiments/config_sidecar_sync.py`): `--sync` regenerates all JSON sidecars; `--check` verifies parity (exit 1 on drift); auto-downgrade in CUDA env.
+- **Pre-run gate**: both `run_p22.ps1` and `run_regressions.ps1` call `sync_config_sidecars.ps1` before launching experiments.
+- **Config provenance** recorded in every `run_plan.json`, `report_p23.json`, `summary_table.*`, dashboard, and ops UI.
+- **PyYAML added** to `trainer/requirements.txt` and installed in `.venv_trainer_cuda`.
+
+```powershell
+# Check sidecar parity (run after any YAML edit):
+powershell -ExecutionPolicy Bypass -File scripts\sync_config_sidecars.ps1 -Check
+
+# Regenerate sidecars:
+powershell -ExecutionPolicy Bypass -File scripts\sync_config_sidecars.ps1
+
+# Or via Python:
+python -m trainer.experiments.config_sidecar_sync --sync
+```
+
+Reference: [docs/P55_CONFIG_HARDENING.md](docs/P55_CONFIG_HARDENING.md)
 
 ## Maturity and Boundaries
 
@@ -832,7 +859,7 @@ Reference docs:
 - P49 GPU mainline is an execution/operations milestone, not a claim of higher policy quality by itself.
 - P50 proves local CUDA bring-up and recommended profiles on one RTX 3080 Ti host; it is not a guarantee that every Windows/CUDA stack will behave identically.
 - P51 improves durability and auditability of campaigns, but it does not replace trainer-level checkpoints or manual promotion judgment.
-- P52 learned routing is v1/research-grade; the rule guard remains part of the deployment contract because label quality, uncertainty detection, and controller availability can all shift.
+- P54 learned routing is v1/research-grade; the rule guard remains part of the deployment contract because label quality, uncertainty detection, and controller availability can all shift.
 - BC/DAgger paths are retained as legacy baselines; they are not default mainline training routes.
 - Legacy baseline checks are lightweight smoke/probe checks unless explicitly requested.
 - low-sample CI/bootstrap outcomes remain observation-level and should not be treated as decisive promotion proof.
@@ -1197,11 +1224,12 @@ Milestone maturity snapshot:
 | P49 (GPU mainline + CPU rollout/GPU learner + readiness guard + dashboard) | shipped |
 | P50 (real CUDA bring-up + GPU validation + nightly benchmark profiles) | shipped |
 | P51 (checkpoint registry + resumeable nightly campaigns + promotion queue) | shipped |
-| P52 (learned router / guarded meta-controller + ablation + campaign integration) | shipped |
+| P54 (learned router / guarded meta-controller + ablation + campaign integration) | shipped |
+| P55 (config loading hardening + YAML/JSON sidecar sync + full P54 nightly validation) | shipped |
 
 Near-term:
 
-- calibrate P52 routing labels, confidence thresholds, and OOD heuristics on larger multi-seed budgets
+- calibrate P54 routing labels, confidence thresholds, and OOD heuristics on larger multi-seed budgets
 - expand real-CUDA validation from smoke budgets into heavier P44/P46 nightly budgets
 - harden benchmark-derived profiles with longer warm runs and more realistic learner load
 - extend adaptive routing toward RL candidate inference without weakening arena-first gating
@@ -1236,7 +1264,7 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - P49 runtime profiles currently target single-GPU v1; multi-GPU learner sharding and true utilization telemetry are still future work.
 - P50 benchmark recommendations are based on smoke-sized workloads; longer nightlies can hit different memory and throughput ceilings.
 - P51 campaign-state and registry semantics are durable but still operator-light; the system does not yet offer a separate approval UI.
-- P52 learned-router labels are partly inferred from arena/rule outcomes, so dataset bias and controller-class imbalance can distort the learned policy without arena/triage guardrails.
+- P54 learned-router labels are partly inferred from arena/rule outcomes, so dataset bias and controller-class imbalance can distort the learned policy without arena/triage guardrails.
 
 ## Further Reading
 
@@ -1254,7 +1282,7 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/P46_IMAGINATION_LOOP.md](docs/P46_IMAGINATION_LOOP.md)
 - [docs/P47_MODEL_BASED_SEARCH.md](docs/P47_MODEL_BASED_SEARCH.md)
 - [docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md](docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md)
-- [docs/P52_LEARNED_ROUTER.md](docs/P52_LEARNED_ROUTER.md)
+- [docs/P54_LEARNED_ROUTER.md](docs/P54_LEARNED_ROUTER.md)
 - [docs/P49_GPU_MAINLINE_AND_DASHBOARD.md](docs/P49_GPU_MAINLINE_AND_DASHBOARD.md)
 - [docs/P50_CUDA_ENVIRONMENT.md](docs/P50_CUDA_ENVIRONMENT.md)
 - [docs/P50_GPU_TROUBLESHOOTING.md](docs/P50_GPU_TROUBLESHOOTING.md)
@@ -1288,7 +1316,7 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/STATUS_PUBLISHING_P27.md](docs/STATUS_PUBLISHING_P27.md)
 - [docs/RELEASE_TRAIN_P27.md](docs/RELEASE_TRAIN_P27.md)
 - [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
-- [docs/P52_LEARNED_ROUTER.md](docs/P52_LEARNED_ROUTER.md)
+- [docs/P54_LEARNED_ROUTER.md](docs/P54_LEARNED_ROUTER.md)
 - [docs/SEEDS_AND_REPRODUCIBILITY.md](docs/SEEDS_AND_REPRODUCIBILITY.md)
 - [docs/EXPERIMENTS_P31.md](docs/EXPERIMENTS_P31.md)
 - [docs/EXPERIMENTS_P33.md](docs/EXPERIMENTS_P33.md)

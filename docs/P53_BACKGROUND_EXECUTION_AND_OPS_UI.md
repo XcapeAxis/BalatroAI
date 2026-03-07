@@ -1,10 +1,10 @@
 # P53 Background Execution + Ops UI
 
-P53 adds a local operations layer on top of the existing P49/P50/P51/P52 runtime stack:
+P53 adds a local operations layer on top of the existing P49/P50/P51/P54 runtime stack:
 
 - the LOVE/Balatro window becomes a managed runtime resource instead of a manual desktop artifact
 - background-mode selection is validated before being treated as a default
-- a localhost-only ops console reads existing P22/P49/P51/P52 artifacts and exposes low-risk controls with audit logs
+- a localhost-only ops console reads existing P22/P49/P51/P54 artifacts and exposes low-risk controls with audit logs
 
 P53 is intentionally local-first. It does not introduce cloud orchestration, remote multi-user auth, or a second storage system.
 

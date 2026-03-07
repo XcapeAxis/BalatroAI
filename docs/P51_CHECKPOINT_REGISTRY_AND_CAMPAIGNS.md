@@ -8,7 +8,7 @@ P51 adds a durable training-operations layer on top of the P49/P50 GPU mainline:
 - reruns can skip completed resume-safe stages instead of restarting blindly
 - arena, triage, and dashboard outputs now reference checkpoint identities
 
-P52 extends this layer to learned-router checkpoints and resumeable learned-router campaigns.
+P54 extends this layer to learned-router checkpoints and resumeable learned-router campaigns.
 P53 then adds a local operator surface over the same registry/campaign artifacts without changing the underlying state model.
 
 P51 is an operations milestone. It improves traceability and rerun behavior; it does not replace trainer checkpoints, simulator truth, or manual promotion judgment.
@@ -93,7 +93,7 @@ Current producer wiring:
 
 - P42/P44 RL candidate checkpoints are auto-registered and move through the state machine when closed-loop evaluation completes.
 - P45 world-model checkpoints are auto-registered as `family=world_model` with train/eval refs.
-- P52 learned-router checkpoints are auto-registered as `family=learned_router` with dataset/train/inference/arena refs.
+- P54 learned-router checkpoints are auto-registered as `family=learned_router` with dataset/train/inference/arena refs.
 - assisted/hybrid lanes can reference upstream checkpoint IDs even when they do not emit a new standalone learner artifact.
 
 ## Campaign Stage Model
@@ -116,7 +116,7 @@ Default stage set:
 - `dashboard_build`
 - `cleanup_finalize`
 
-P52 adds an alternative learned-router campaign stage set:
+P54 adds an alternative learned-router campaign stage set:
 
 - `build_router_dataset`
 - `train_learned_router`
@@ -166,9 +166,9 @@ Validated example artifact:
 
 In that validation run, `service_readiness`, `train_rl`, and `train_world_model` stayed at `attempt_count=1`, while intentionally reopened tail stages (`dashboard_build`, `cleanup_finalize`) moved to `attempt_count=2`.
 
-P52 validated the same semantics for learned-router campaigns:
+P54 validated the same semantics for learned-router campaigns:
 
-- `docs/artifacts/p52/campaign_resume_validation_20260307-161918.md`
+- `docs/artifacts/p54/campaign_resume_validation_20260307-161918.md`
 - in that run, `build_router_dataset` through `promotion_queue_update` stayed at `attempt_count=1`
 - the intentionally reopened `dashboard_build` stage advanced to `attempt_count=2`
 
@@ -234,21 +234,21 @@ P53 reuses the same outputs and adds a local operator entrypoint:
 - the ops UI reads `campaign_state.json`, registry snapshots, promotion queues, progress events, readiness reports, and dashboard artifacts
 - the UI does not own promotion logic; it only exposes the current state plus low-risk commands
 
-## P52 Learned Router Extension
+## P54 Learned Router Extension
 
-P52 treats learned-router checkpoints as first-class registry assets:
+P54 treats learned-router checkpoints as first-class registry assets:
 
 - `family = learned_router`
-- `training_mode = p52_learned_router`
+- `training_mode = p54_learned_router`
 - source refs point to dataset, train, inference, arena, and triage artifacts
 - state transitions follow the same machine (`draft -> smoke_passed -> arena_passed -> promotion_review`)
 
-Representative P52 artifacts:
+Representative P54 artifacts:
 
-- `docs/artifacts/p52/router_train/<run_id>/train_manifest.json`
-- `docs/artifacts/p52/arena_ablation/<run_id>/promotion_decision.json`
-- `docs/artifacts/p22/runs/<run_id>/p52_learned_router_smoke/campaign_runs/seed_*/campaign_state.json`
-- `docs/artifacts/p22/runs/<run_id>/p52_learned_router_smoke/campaign_runs/seed_*/checkpoint_registry_snapshot.json`
+- `docs/artifacts/p54/router_train/<run_id>/train_manifest.json`
+- `docs/artifacts/p54/arena_ablation/<run_id>/promotion_decision.json`
+- `docs/artifacts/p22/runs/<run_id>/p54_learned_router_smoke/campaign_runs/seed_*/campaign_state.json`
+- `docs/artifacts/p22/runs/<run_id>/p54_learned_router_smoke/campaign_runs/seed_*/checkpoint_registry_snapshot.json`
 
 ## P53 Local Ops Console Extension
 

@@ -9,7 +9,7 @@ P49 turns the P42/P44/P45/P46 training lanes into a shared runtime surface:
 
 P49 is an operations/runtime milestone. It does not claim that GPU enablement alone improves policy quality.
 P50 then validates that runtime on a real local CUDA host, adds a shared training-python resolver, and benchmarks recommended single-GPU profiles.
-P52 then reuses that CUDA-first resolver for learned-router dataset/train/eval flows and surfaces the new artifacts in the dashboard.
+P54 then reuses that CUDA-first resolver for learned-router dataset/train/eval flows and surfaces the new artifacts in the dashboard.
 P53 then layers validated background execution plus a localhost ops console on top of the same readiness/dashboard substrate.
 
 ## Architecture
@@ -204,7 +204,7 @@ Artifacts:
 - `docs/artifacts/dashboard/latest/dashboard_data.json`
 - `docs/artifacts/p49/dashboard_smoke_<timestamp>.md`
 
-The dashboard now also surfaces P52-specific data when present:
+The dashboard now also surfaces P54-specific data when present:
 
 - learned-router dataset sample counts and label stats
 - learned-router training progress / checkpoint ids
@@ -261,14 +261,14 @@ P49 provided the runtime, telemetry, dashboard, and readiness substrate. P51 bui
 
 Operationally, P49 remains the runtime foundation while P51 is the asset/campaign bookkeeping layer above it.
 
-## P52 Learned Router on Top of P49/P50
+## P54 Learned Router on Top of P49/P50
 
-P52 uses the same runtime substrate for meta-controller training:
+P54 uses the same runtime substrate for meta-controller training:
 
 - training python resolves through the shared CUDA-first resolver introduced in P50
 - `single_gpu_mainline` remains the default learner profile for smoke and nightly templates
 - `progress.jsonl` / `progress.unified.jsonl` stay dashboard-compatible
-- `scripts/run_p22.ps1 -RunP52` rebuilds the dashboard after dataset, train, ablation, and campaign stages complete
+- `scripts/run_p22.ps1 -RunP54` rebuilds the dashboard after dataset, train, ablation, and campaign stages complete
 
 This keeps learned-router training in the same operational lane as RL and world-model experiments instead of creating a separate runtime stack.
 
