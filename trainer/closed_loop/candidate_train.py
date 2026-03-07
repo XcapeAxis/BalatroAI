@@ -37,6 +37,7 @@ from trainer.experiments.training_modes import (
     mode_category,
 )
 from trainer.rl.ppo_lite import run_ppo_lite_training
+from trainer.runtime.python_resolver import resolve_training_python
 
 
 def _read_yaml_or_json(path: Path) -> dict[str, Any]:
@@ -93,9 +94,14 @@ def _run_process(command: list[str], *, cwd: Path, timeout_sec: int) -> dict[str
 
 
 def _pick_python_exe(repo_root: Path) -> str:
-    venv_py = repo_root / ".venv_trainer" / "Scripts" / "python.exe"
-    if venv_py.exists():
-        return str(venv_py)
+    try:
+        payload = resolve_training_python(repo_root=repo_root)
+        selected = payload.get("selected") if isinstance(payload.get("selected"), dict) else {}
+        chosen = str(selected.get("python") or "").strip()
+        if chosen:
+            return chosen
+    except Exception:
+        pass
     return str(sys.executable)
 
 
