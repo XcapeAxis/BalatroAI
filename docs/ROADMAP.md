@@ -21,22 +21,23 @@
 | P49 | GPU mainline + CPU rollout/GPU learner + dashboard + readiness guard | done |
 | P50 | Real CUDA bring-up + GPU validation + nightly benchmark profiles | done |
 | P51 | Checkpoint registry + resumeable nightly campaigns + promotion queue | done |
+| P52 | Learned router / guarded meta-controller + arena ablation + campaign integration | done |
 
-## Current Focus: Post-P51 Durable Training Ops
+## Current Focus: Post-P52 Durable Training Ops
 
-1. Extend P51 registry usage beyond RL/world-model into every persistent policy or auxiliary asset family.
+1. Calibrate P52 routing labels, confidence thresholds, and OOD heuristics on larger multi-seed/controller mixes.
 2. Tighten promotion semantics so promoted candidates can be switched with explicit human review on top of the existing state machine.
 3. Keep readiness guarding and unified dashboards enabled as default night-ops safety rails.
-4. Expand heavier CUDA nightlies, especially P44 distributed RL, while preserving resume-safe stage boundaries.
+4. Expand heavier CUDA nightlies, especially P44 distributed RL and P52 learned-router runs, while preserving resume-safe stage boundaries.
 
-## Near-Term After P51
+## Near-Term After P52
 
 - broader imagined-root coverage beyond the current replay families
 - tighter P42/P45/P47 coupling through auxiliary losses, rollout-value proxies, and RL-policy routing
 - longer real-CUDA benchmark sweeps beyond smoke-sized learners
 - stronger checkpoint deduplication / retention policy on top of the new registry
 - richer campaign restart policies beyond simple latest-run resume
-- learned router experiments once controller telemetry is richer and more stable
+- learned-router calibration against broader controller telemetry, especially controller-collapse and OOD guard behavior
 - careful expansion beyond fixed-budget search while preserving uncertainty controls and arena-first evaluation
 - richer GPU telemetry and eventual multi-GPU support once single-GPU runtime remains stable
 

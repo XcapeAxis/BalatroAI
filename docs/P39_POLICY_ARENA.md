@@ -197,6 +197,25 @@ Arena manifests keep the hybrid policy explicit through:
 - `run_manifest.json -> hybrid_controller`
 - `routing_summary.json`
 
+## Learned Router / Guarded Router (P52)
+
+P52 keeps the same arena substrate but extends the policy set with learned-routing variants:
+
+- `hybrid_controller_rule`
+- `hybrid_controller_learned`
+- `hybrid_controller_learned_with_rule_guard`
+
+Required compare set in P52 ablations:
+
+- `policy_baseline`
+- `policy_plus_wm_rerank`
+- `hybrid_controller_rule`
+- `hybrid_controller_learned`
+- `hybrid_controller_learned_with_rule_guard`
+- optional `search_baseline` when stable on the selected config
+
+P52 outputs remain slice-aware and checkpoint-aware because the arena summary now carries learned-router checkpoint refs, controller-selection distributions, and guard-trigger summaries.
+
 ## Artifacts
 
 Standalone arena:
@@ -255,3 +274,9 @@ P48 hybrid dependency:
 
 - P48 ablations write results under `docs/artifacts/p48/arena_ablation/<run_id>/`.
 - `routing_summary.json` and `triage_report.json` expose controller-selection distribution and routing impact.
+
+P52 learned-router dependency:
+
+- P52 ablations write results under `docs/artifacts/p52/arena_ablation/<run_id>/`.
+- `summary_table.{json,csv,md}`, `slice_eval.json`, and `routing_summary.json` compare rule vs learned vs guarded routing.
+- promotion and triage outputs remain downstream consumers of real arena results instead of training loss alone.

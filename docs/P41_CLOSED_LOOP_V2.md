@@ -14,6 +14,7 @@ P45 can plug into the same shell as an auxiliary world-model asset for wm-assist
 P46 reuses the same lineage, replay-mix, arena, and triage surfaces for imagined replay augmentation.
 P47 reuses the same arena and triage surfaces for uncertainty-aware world-model rerank ablations.
 P48 reuses the same arena and triage surfaces for explainable hybrid-controller routing ablations.
+P52 reuses the same arena and triage surfaces for learned-router dataset labeling, guarded deployment checks, and rule-vs-learned ablations.
 
 ## Architecture
 
@@ -128,6 +129,19 @@ P48 keeps replay/training unchanged but extends arena/triage manifests with:
 - `wm_assist_enabled`
 - controller-selection traces under `router_traces/<run_id>/routing_trace.jsonl`
 
+## Learned Router Contract (P52)
+
+P52 keeps replay/candidate training unchanged but extends arena/triage manifests with:
+
+- `router_dataset_manifest_json`
+- `router_train_manifest_json`
+- `router_checkpoint_id`
+- `router_checkpoint_path`
+- `router_mode`
+- `routing_summary_json`
+- `routing_trace_jsonl`
+- `guard_trigger_rate`
+
 ## Imagination Augmentation Contract (P46)
 
 When P46 replay augmentation is enabled, candidate and replay artifacts also record:
@@ -211,6 +225,15 @@ P48-specific triage fields:
 - `top_degrading_slices_for_hybrid`
 - `search_budget_sensitivity`
 - `wm_uncertainty_gate_impact`
+
+P52-specific triage fields:
+
+- `learned_router_impact`
+- `top_degrading_slices_for_learned_router`
+- `top_degrading_slices_for_guarded_router`
+- `learned_router_selection_overuse`
+- `learned_router_guard_condition_correlation`
+- `learned_router_routing_variants`
 
 ## Run Commands
 
