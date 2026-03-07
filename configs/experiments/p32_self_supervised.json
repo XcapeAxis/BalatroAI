@@ -9,9 +9,23 @@
   "seed_policy": {
     "version": "p35.p32.selfsup.v1",
     "base_seed": "P32SS",
-    "regression_smoke": ["AAAAAAA", "BBBBBBB", "CCCCCCC"],
-    "train_default": ["AAAAAAA", "BBBBBBB", "CCCCCCC", "DDDDDDD", "EEEEEEE"],
-    "eval_default": ["AAAAAAA", "BBBBBBB", "CCCCCCC"],
+    "regression_smoke": [
+      "AAAAAAA",
+      "BBBBBBB",
+      "CCCCCCC"
+    ],
+    "train_default": [
+      "AAAAAAA",
+      "BBBBBBB",
+      "CCCCCCC",
+      "DDDDDDD",
+      "EEEEEEE"
+    ],
+    "eval_default": [
+      "AAAAAAA",
+      "BBBBBBB",
+      "CCCCCCC"
+    ],
     "nightly_extra_random": 2
   },
   "matrix": [
@@ -80,7 +94,10 @@
   },
   "task": {
     "name": "pretrain_repr_stub",
-    "bucket_thresholds": [0.0, 120.0],
+    "bucket_thresholds": [
+      0.0,
+      120.0
+    ],
     "horizon_steps": 3
   },
   "training": {
@@ -91,5 +108,6 @@
   "output": {
     "run_root": "trainer_runs/p32_selfsup_stub",
     "summary_out": "docs/artifacts/p32/selfsup_stub_training_summary_latest.json"
-  }
+  },
+  "__yaml_source_sha256__": "fda385ee1c11ddad8f47764adaad5d77b7a587e5ff1ec7889b071ace8a8c9335"
 }

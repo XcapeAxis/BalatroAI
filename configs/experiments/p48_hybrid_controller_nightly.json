@@ -1,6 +1,11 @@
 {
   "schema": "p48_hybrid_controller_config_v1",
-  "seeds": ["AAAAAAA", "BBBBBBB", "CCCCCCC", "DDDDDDD"],
+  "seeds": [
+    "AAAAAAA",
+    "BBBBBBB",
+    "CCCCCCC",
+    "DDDDDDD"
+  ],
   "controllers": {
     "policy_model_path": "",
     "world_model_checkpoint": "",
@@ -52,5 +57,6 @@
   },
   "output": {
     "artifacts_root": "docs/artifacts/p48/arena_ablation"
-  }
+  },
+  "__yaml_source_sha256__": "b7895092876981dd9e23c7d0d9998b6848b7322eb92fa3900205a9515455664c"
 }

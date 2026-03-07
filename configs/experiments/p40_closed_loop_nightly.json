@@ -45,5 +45,6 @@
     "min_score_improvement": 0.02,
     "max_score_regression": 0.03,
     "min_win_improvement": 0.0
-  }
+  },
+  "__yaml_source_sha256__": "220f092199c2cc2dafa6be3b11d4de0d79ce8a45e2ee46c1cf5eafb5296e9b60"
 }

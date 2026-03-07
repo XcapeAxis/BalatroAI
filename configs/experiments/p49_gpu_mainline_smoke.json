@@ -28,5 +28,6 @@
   },
   "output": {
     "artifacts_root": "docs/artifacts/p49/gpu_mainline"
-  }
+  },
+  "__yaml_source_sha256__": "bfb90608f491af898fa484689ecae194b27aeeb21248e8711a0e8f8614362eb5"
 }

@@ -47,5 +47,6 @@
       "max_samples": 120,
       "failure_pack_manifest": ""
     }
-  ]
+  ],
+  "__yaml_source_sha256__": "e1b5efaac14c22c2b410368d01ece4fcbd8d8fba0675f52bfa1fe5724cff9cf8"
 }

@@ -1,0 +1,68 @@
+{
+  "campaign_id": "p24_nightly_campaign",
+  "mode": "nightly",
+  "seed_policy_config": "configs/experiments/seeds_p23.yaml",
+  "budget": {
+    "max_wall_time_minutes": 180,
+    "max_parallel": 1,
+    "max_experiments": 5,
+    "max_retries": 1
+  },
+  "stages": [
+    {
+      "stage_id": "exploration",
+      "purpose": "exploration",
+      "matrix_ref": "configs/experiments/p23.yaml",
+      "mode": "quick",
+      "include": [
+        "quick_baseline",
+        "quick_hybrid"
+      ],
+      "seed_set_name": "contract_regression",
+      "seed_limit": 12,
+      "failure_policy": "continue"
+    },
+    {
+      "stage_id": "validation",
+      "purpose": "validation",
+      "matrix_ref": "configs/experiments/p23.yaml",
+      "mode": "nightly",
+      "include": [
+        "quick_risk_aware",
+        "nightly_deploy_student"
+      ],
+      "depends_on": [
+        "exploration"
+      ],
+      "seed_set_name": "perf_gate_100",
+      "seed_limit": 16,
+      "failure_policy": "continue"
+    },
+    {
+      "stage_id": "promotion",
+      "purpose": "promotion",
+      "matrix_ref": "configs/experiments/p23.yaml",
+      "mode": "milestone",
+      "include": [
+        "milestone_rl"
+      ],
+      "depends_on": [
+        "validation"
+      ],
+      "seed_set_name": "milestone_500",
+      "seed_limit": 32,
+      "failure_policy": "continue"
+    }
+  ],
+  "post_actions": {
+    "coverage": true,
+    "flake": true,
+    "triage": true,
+    "bisect": true,
+    "ranking": true,
+    "dashboard": true,
+    "champion_update": true,
+    "cleanup": true
+  },
+  "__yaml_source_sha256__": "cbf49c098c3a50dc06a76825adfde219d1dab290090ea46259e984d2eee8ff50"
+}

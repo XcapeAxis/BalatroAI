@@ -28,5 +28,6 @@
   },
   "output": {
     "artifacts_root": "docs/artifacts/p50/gpu_mainline"
-  }
+  },
+  "__yaml_source_sha256__": "fd069c773490f724db028950e4ac70adada777c7d316b50e0d88be7718e0c794"
 }

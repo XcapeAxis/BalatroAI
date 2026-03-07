@@ -30,5 +30,6 @@
       "arena_failures",
       "selfsup_replay"
     ]
-  }
+  },
+  "__yaml_source_sha256__": "6fe21e2af227843167af614b3e89dd5dd0d5dd080e1738841587a9dfe716be59"
 }

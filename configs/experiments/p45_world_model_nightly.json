@@ -111,5 +111,6 @@
   },
   "output": {
     "artifacts_root": "docs/artifacts/p45"
-  }
+  },
+  "__yaml_source_sha256__": "d7be83eb99102c8be81f815a774204a12a2155fb02263519c46a8c395203bc0a"
 }

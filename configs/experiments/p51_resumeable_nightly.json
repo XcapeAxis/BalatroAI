@@ -29,5 +29,6 @@
   "force_rerun_stages": [],
   "output": {
     "artifacts_root": "docs/artifacts/p51/campaigns"
-  }
+  },
+  "__yaml_source_sha256__": "f5ad5d70054dc43ffcf57384cb506bc1b4cd7209633e03cea7d843255d6604b7"
 }

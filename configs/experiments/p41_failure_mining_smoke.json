@@ -18,5 +18,6 @@
   },
   "quick": {
     "max_episode_scan": 280
-  }
+  },
+  "__yaml_source_sha256__": "b9eed9296b57684aafd7866cc2806964ea0fc6b7b4c92b85828e1601273f393e"
 }

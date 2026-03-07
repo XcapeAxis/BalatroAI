@@ -1,0 +1,54 @@
+{
+  "schema": "p26_regression_alert_config_v1",
+  "baseline_window": 6,
+  "min_points": 3,
+  "hysteresis": 0.03,
+  "hard_multiplier": 2.0,
+  "include_metrics": [
+    "avg_ante_reached",
+    "median_ante_reached",
+    "win_rate",
+    "runtime_seconds",
+    "flake_score"
+  ],
+  "metrics": {
+    "avg_ante_reached": {
+      "direction": "higher_better",
+      "hysteresis": 0.05,
+      "hard_hysteresis": 0.1
+    },
+    "median_ante_reached": {
+      "direction": "higher_better",
+      "hysteresis": 0.05,
+      "hard_hysteresis": 0.12
+    },
+    "win_rate": {
+      "direction": "higher_better",
+      "hysteresis": 0.02,
+      "hard_hysteresis": 0.05
+    },
+    "runtime_seconds": {
+      "direction": "lower_better",
+      "hysteresis": 0.03,
+      "hard_hysteresis": 0.08
+    },
+    "flake_score": {
+      "direction": "lower_better",
+      "hysteresis": 0.1,
+      "hard_hysteresis": 0.3
+    }
+  },
+  "noisy_filters": {
+    "flake_statuses": [
+      "flake_fail"
+    ],
+    "risk_statuses": [
+      "high_risk",
+      "regression"
+    ],
+    "statuses": [
+      "skip"
+    ]
+  },
+  "__yaml_source_sha256__": "31b12a765125992e00f094baa814f5b1de74c023f398fd41b8bdd098196c0992"
+}

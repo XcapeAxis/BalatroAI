@@ -36,5 +36,6 @@
   },
   "output": {
     "artifacts_root": "docs/artifacts/p37/ssl_pretrain"
-  }
+  },
+  "__yaml_source_sha256__": "6933f11769104a8cd785938faf0476f5abcc807663ef32f4ee9d026e80d6ba3f"
 }

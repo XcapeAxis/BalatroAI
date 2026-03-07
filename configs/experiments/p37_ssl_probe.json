@@ -34,9 +34,10 @@
   "probe": {
     "epochs": 8,
     "lr": 0.01,
-    "weight_decay": 0.00001
+    "weight_decay": 1e-05
   },
   "output": {
     "artifacts_root": "docs/artifacts/p37/ssl_probe"
-  }
+  },
+  "__yaml_source_sha256__": "ceb05f811881f851ea7a197849c0b764ef9f29064903219edafae567da217fec"
 }

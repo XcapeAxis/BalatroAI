@@ -16,5 +16,6 @@
   "rl_config": "configs/experiments/p44_rl_nightly.yaml",
   "training": {
     "timeout_sec": 14400
-  }
+  },
+  "__yaml_source_sha256__": "b9d37ce561a527ca344da02d6004d4da99be1eb3d3dbed53b5ebdb9e5771b8b2"
 }

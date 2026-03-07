@@ -14,5 +14,6 @@
   "rl_config": "configs/experiments/p44_rl_smoke.yaml",
   "training": {
     "timeout_sec": 5400
-  }
+  },
+  "__yaml_source_sha256__": "671fe7b466d962e5bf04c085394176e8482976877b50d33ca5d70795ddf3de4c"
 }

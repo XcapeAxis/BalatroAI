@@ -97,5 +97,6 @@
   "output": {
     "router_inference_root": "docs/artifacts/p52/router_inference",
     "arena_ablation_root": "docs/artifacts/p52/arena_ablation"
-  }
+  },
+  "__yaml_source_sha256__": "497655fd9ae181cc84aeaa84b1bb3c230f4fc4396ae9c085fcbd2732f84da92b"
 }

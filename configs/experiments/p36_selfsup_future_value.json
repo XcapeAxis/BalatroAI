@@ -3,8 +3,14 @@
   "data": {
     "dataset_path": "docs/artifacts/p36/selfsup_datasets/latest/dataset.jsonl",
     "sources": [
-      { "type": "oracle", "path": "sim/tests/fixtures_runtime/oracle_p0_v6_regression" },
-      { "type": "real", "path": "docs/artifacts/p32" }
+      {
+        "type": "oracle",
+        "path": "sim/tests/fixtures_runtime/oracle_p0_v6_regression"
+      },
+      {
+        "type": "real",
+        "path": "docs/artifacts/p32"
+      }
     ],
     "max_trajectories_per_source": 8,
     "max_samples": 320,
@@ -28,6 +34,6 @@
   "output": {
     "artifacts_root": "docs/artifacts/p36/future_value",
     "run_root": "trainer_runs/p36_selfsup/future_value"
-  }
+  },
+  "__yaml_source_sha256__": "ffb37da014a3f74dab9a1f1350c0ff48f9739a9129d4effbe14ba050271198a1"
 }
-

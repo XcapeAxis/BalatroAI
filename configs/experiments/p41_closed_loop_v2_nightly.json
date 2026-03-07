@@ -51,5 +51,6 @@
   "regression_triage": {
     "enabled": true,
     "baseline_run_dir": ""
-  }
+  },
+  "__yaml_source_sha256__": "c4df74f3927125b0057a3c766be6182d87197d3c6608081cf28c915586d95ee8"
 }

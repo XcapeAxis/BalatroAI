@@ -40,6 +40,6 @@
   },
   "output": {
     "run_root": "trainer_runs/p33_selfsup"
-  }
+  },
+  "__yaml_source_sha256__": "21986059eac681f2200859cbfdfd89a1fd82ae520c6e4fc20083e2476c30c4a4"
 }
-

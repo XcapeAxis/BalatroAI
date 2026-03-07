@@ -40,5 +40,6 @@
   "output": {
     "background_validation_root": "docs/artifacts/p53/background_mode_validation",
     "ops_ui_metadata_root": "docs/artifacts/p53/ops_ui_metadata"
-  }
+  },
+  "__yaml_source_sha256__": "ac5ff68ce3e75f25650616917239cbdb3d58a1924fd30a48f10c75a1ac1367aa"
 }

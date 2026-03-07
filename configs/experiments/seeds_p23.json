@@ -1,0 +1,53 @@
+{
+  "schema": "p23_seed_policy_v1",
+  "seed_policy_version": "p23.v1",
+  "disallow_single_seed_default": true,
+  "generation_rule": {
+    "algorithm": "sha256_letters_v1",
+    "alphabet": "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "width": 7
+  },
+  "seed_sets": {
+    "contract_regression": {
+      "fixed": [
+        "AAAAAAA",
+        "BBBBBBB",
+        "CCCCCCC",
+        "DDDDDDD",
+        "EEEEEEE",
+        "FFFFFFF",
+        "GGGGGGG",
+        "HHHHHHH",
+        "IIIIIII",
+        "JJJJJJJ",
+        "KKKKKKK",
+        "LLLLLLL"
+      ]
+    },
+    "perf_gate_100": {
+      "generated": {
+        "count": 100,
+        "salt": "perf-gate-100"
+      }
+    },
+    "milestone_500": {
+      "generated": {
+        "count": 500,
+        "salt": "milestone-500"
+      }
+    },
+    "milestone_1000": {
+      "generated": {
+        "count": 1000,
+        "salt": "milestone-1000"
+      }
+    }
+  },
+  "nightly_extra_random": {
+    "from_set": "perf_gate_100",
+    "default_count": 16,
+    "salt": "nightly-extra-random-v1",
+    "template": "{policy_version}|nightly|{salt}|{git_commit}|{date_bucket}|{run_id}|{index}|{nonce}"
+  },
+  "__yaml_source_sha256__": "d4a5e6658fff80e7d72d39244340cc95daa4de5af9b375d5ec590c6314116109"
+}

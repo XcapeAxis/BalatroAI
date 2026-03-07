@@ -75,5 +75,6 @@
     "invalid_action_warn_threshold": 0.15,
     "max_kl_warn": 0.18,
     "nan_fail_fast": true
-  }
+  },
+  "__yaml_source_sha256__": "7c81ddbad293a170cf4014ed6d683bac29f701ef3490d5f6d8f7c1df98d4c124"
 }

@@ -1,0 +1,26 @@
+{
+  "schema": "p24_ranking_config_v1",
+  "hard_filters": {
+    "min_avg_ante": 3.2,
+    "min_median_ante": 3.0,
+    "min_win_rate": 0.25,
+    "require_flake_pass": true,
+    "critical_triage_categories": [
+      "config_error",
+      "runtime_crash",
+      "service_instability"
+    ]
+  },
+  "weighted_score": {
+    "weights": {
+      "performance": 0.45,
+      "stability": 0.2,
+      "cost": 0.2,
+      "risk": 0.15
+    }
+  },
+  "pareto_front": {
+    "enabled": true
+  },
+  "__yaml_source_sha256__": "49d2c1c95260097c7ae4d95cae66da4cd6e1af1dded683d84894be35736ff341"
+}

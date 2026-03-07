@@ -103,5 +103,6 @@
   },
   "output": {
     "artifacts_root": "docs/artifacts/p46/imagination_pipeline"
-  }
+  },
+  "__yaml_source_sha256__": "0d2d767a4eca5c52979e5d1f610e68c366a0a374e226ec3ec1da58a79427b4d5"
 }

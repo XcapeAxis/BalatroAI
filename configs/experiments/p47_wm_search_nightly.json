@@ -1,6 +1,11 @@
 {
   "schema": "p47_model_based_search_config_v1",
-  "seeds": ["AAAAAAA", "BBBBBBB", "CCCCCCC", "DDDDDDD"],
+  "seeds": [
+    "AAAAAAA",
+    "BBBBBBB",
+    "CCCCCCC",
+    "DDDDDDD"
+  ],
   "world_model": {
     "checkpoint": "",
     "eval_ref": ""
@@ -79,5 +84,6 @@
   },
   "output": {
     "artifacts_root": "docs/artifacts/p47/arena_ablation"
-  }
+  },
+  "__yaml_source_sha256__": "173217e314e37e04835a9445a323585e119bed0a48f440d7f64d4551d5cfb83d"
 }
