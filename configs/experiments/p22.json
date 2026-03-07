@@ -340,6 +340,29 @@
         }
       ]
     },
+    "learned_router_meta_controller_v1": {
+      "description": "P52 learned router / meta-controller with guarded deployment, ablation, registry, and resumable campaigns",
+      "variants": [
+        {
+          "id": "p52_learned_router_smoke",
+          "algo": "p52_learned_router_campaign",
+          "seeds": [
+            "AAAAAAA",
+            "BBBBBBB"
+          ]
+        },
+        {
+          "id": "p52_learned_router_nightly",
+          "algo": "p52_learned_router_campaign",
+          "seeds": [
+            "AAAAAAA",
+            "BBBBBBB",
+            "CCCCCCC",
+            "DDDDDDD"
+          ]
+        }
+      ]
+    },
     "legacy_bc_dagger_probe": {
       "description": "Legacy BC/DAgger baseline probes (non-default)",
       "variants": [
@@ -1902,6 +1925,104 @@
         "config": "configs/experiments/p51_resumeable_nightly.yaml",
         "quick": false,
         "timeout_sec": 21600
+      }
+    },
+    {
+      "id": "p52_learned_router_smoke",
+      "name": "p52_learned_router_smoke",
+      "backend": "sim",
+      "policy": "learned_router",
+      "experiment_type": "p52_learned_router_campaign",
+      "seed_mode": "regression_fixed",
+      "seed_set_name": "contract_regression",
+      "device_profile": "single_gpu_mainline",
+      "seeds": [
+        "AAAAAAA",
+        "BBBBBBB"
+      ],
+      "gate_flag": "RunP22",
+      "modes": {
+        "quick": true,
+        "gate": true,
+        "nightly": false
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "sanity_compile": [
+        "trainer/hybrid/router_schema.py",
+        "trainer/hybrid/router_labels.py",
+        "trainer/hybrid/router_dataset.py",
+        "trainer/hybrid/learned_router_model.py",
+        "trainer/hybrid/learned_router_train.py",
+        "trainer/hybrid/learned_router_eval.py",
+        "trainer/hybrid/router.py",
+        "trainer/hybrid/hybrid_controller.py",
+        "trainer/closed_loop/regression_triage.py",
+        "trainer/registry/checkpoint_registry.py",
+        "trainer/campaigns/campaign_schema.py",
+        "trainer/experiments/orchestrator.py",
+        "trainer/monitoring/live_dashboard.py",
+        "trainer/monitoring/dashboard_build.py"
+      ],
+      "eval": {
+        "config": "configs/experiments/p52_learned_router_smoke.yaml",
+        "quick": true,
+        "timeout_sec": 18000
+      }
+    },
+    {
+      "id": "p52_learned_router_nightly",
+      "name": "p52_learned_router_nightly",
+      "backend": "sim",
+      "policy": "learned_router",
+      "experiment_type": "p52_learned_router_campaign",
+      "seed_mode": "nightly",
+      "seed_set_name": "eval_default",
+      "device_profile": "single_gpu_nightly_balanced",
+      "seeds": [
+        "AAAAAAA",
+        "BBBBBBB",
+        "CCCCCCC",
+        "DDDDDDD"
+      ],
+      "gate_flag": "RunP22",
+      "modes": {
+        "quick": false,
+        "gate": false,
+        "nightly": true
+      },
+      "stages": {
+        "sanity": true,
+        "gate": false,
+        "dataset": false,
+        "train": false,
+        "eval": true
+      },
+      "sanity_compile": [
+        "trainer/hybrid/router_schema.py",
+        "trainer/hybrid/router_labels.py",
+        "trainer/hybrid/router_dataset.py",
+        "trainer/hybrid/learned_router_model.py",
+        "trainer/hybrid/learned_router_train.py",
+        "trainer/hybrid/learned_router_eval.py",
+        "trainer/hybrid/router.py",
+        "trainer/hybrid/hybrid_controller.py",
+        "trainer/closed_loop/regression_triage.py",
+        "trainer/registry/checkpoint_registry.py",
+        "trainer/campaigns/campaign_schema.py",
+        "trainer/experiments/orchestrator.py",
+        "trainer/monitoring/live_dashboard.py",
+        "trainer/monitoring/dashboard_build.py"
+      ],
+      "eval": {
+        "config": "configs/experiments/p52_learned_router_nightly.yaml",
+        "quick": false,
+        "timeout_sec": 28800
       }
     },
     {

@@ -1,0 +1,101 @@
+{
+  "schema": "p52_learned_router_campaign_config_v1",
+  "device_profile": "single_gpu_nightly_balanced",
+  "runtime": {
+    "device_profile": "single_gpu_nightly_balanced"
+  },
+  "monitoring": {
+    "readiness_guard": true,
+    "dashboard": true
+  },
+  "campaign": {
+    "force_rerun_stages": []
+  },
+  "controllers": {
+    "policy_model_path": "",
+    "world_model_checkpoint": "",
+    "search": {
+      "max_branch": 96,
+      "max_depth": 2,
+      "time_budget_ms": 18.0
+    },
+    "wm_rerank": {
+      "top_k": 4,
+      "horizon": 1,
+      "uncertainty_penalty": 0.55
+    }
+  },
+  "routing": {
+    "router": {
+      "policy_margin_high": 0.2,
+      "policy_margin_low": 0.08,
+      "policy_entropy_high": 1.25,
+      "wm_uncertainty_prefer_max": 0.8,
+      "wm_uncertainty_disable": 1.2,
+      "search_budget_min_level": "medium",
+      "high_risk_search_bonus": 0.75,
+      "late_stage_search_bonus": 0.5,
+      "wm_reward_bonus_scale": 0.2
+    },
+    "rule_guard": {
+      "min_confidence": 0.45,
+      "high_risk_min_confidence": 0.6,
+      "min_feature_completeness": 0.8,
+      "max_ood_score": 6.0,
+      "max_wm_uncertainty": 1.0
+    },
+    "learned_router": {
+      "temperature": 1.0,
+      "device": "auto"
+    }
+  },
+  "dataset": {
+    "quick": false,
+    "max_trace_files": 24,
+    "max_samples": 4096,
+    "allow_rule_labels": true,
+    "min_label_confidence": 0.25
+  },
+  "train": {
+    "quick": false,
+    "seed": 5201,
+    "epochs": 8,
+    "batch_size": 128,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "top_k": 2,
+    "val_fraction": 0.2,
+    "class_weighting": "inverse_freq",
+    "checkpoint_metric": "top1_accuracy",
+    "require_cuda": true
+  },
+  "inference_smoke": {
+    "seed": "AAAAAAA",
+    "max_states": 12
+  },
+  "arena_compare": {
+    "backend": "sim",
+    "mode": "long_episode",
+    "episodes_per_seed": 2,
+    "max_steps": 180,
+    "timeout_sec": 14400,
+    "policies": [
+      "policy_baseline",
+      "policy_plus_wm_rerank",
+      "hybrid_controller_rule",
+      "hybrid_controller_learned",
+      "hybrid_controller_learned_with_rule_guard",
+      "search_baseline",
+      "heuristic_baseline"
+    ],
+    "champion_policy": "hybrid_controller_rule",
+    "candidate_policy": "hybrid_controller_learned_with_rule_guard"
+  },
+  "triage": {
+    "output_artifacts_root": "docs/artifacts/p52/triage"
+  },
+  "output": {
+    "router_inference_root": "docs/artifacts/p52/router_inference",
+    "arena_ablation_root": "docs/artifacts/p52/arena_ablation"
+  }
+}

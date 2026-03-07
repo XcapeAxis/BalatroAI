@@ -98,9 +98,48 @@ def collect_registry_summary(root: Path) -> dict[str, Any]:
     return {"count": len(items), "status_counts": counts}
 
 
-def render_text(rows: list[dict[str, Any]], campaign_rows: list[dict[str, Any]], registry_summary: dict[str, Any]) -> str:
+def _latest_matching_json(root: Path, pattern: str, *, required_tokens: tuple[str, ...] = ()) -> dict[str, Any]:
+    paths = []
+    for path in root.glob(pattern):
+        token = str(path).lower().replace("\\", "/")
+        if any(required not in token for required in required_tokens):
+            continue
+        paths.append(path)
+    paths.sort(key=lambda item: (item.parent.name, str(item)), reverse=True)
+    if not paths:
+        return {}
+    payload = _read_json(paths[0].resolve())
+    return payload if isinstance(payload, dict) else {}
+
+
+def collect_p52_summary(root: Path) -> dict[str, Any]:
+    dataset_payload = _latest_matching_json(root, "**/router_dataset_stats.json", required_tokens=("p52/",))
+    train_payload = _latest_matching_json(root, "**/metrics.json", required_tokens=("p52/", "router_train/"))
+    routing_payload = _latest_matching_json(root, "**/routing_summary.json", required_tokens=("p52/", "arena_ablation/"))
+    promotion_payload = _latest_matching_json(root, "**/promotion_decision.json", required_tokens=("p52/", "arena_ablation/"))
+    variants = routing_payload.get("variants") if isinstance(routing_payload.get("variants"), list) else []
+    guarded_variant = next(
+        (
+            row
+            for row in variants
+            if isinstance(row, dict) and str(row.get("policy_id") or "") == "hybrid_controller_learned_with_rule_guard"
+        ),
+        {},
+    )
+    return {
+        "dataset_samples": int(dataset_payload.get("sample_count") or 0),
+        "dataset_valid": int(dataset_payload.get("valid_for_training_count") or 0),
+        "train_checkpoint_id": str(train_payload.get("checkpoint_id") or ""),
+        "train_val_top1": float(train_payload.get("val_top1_accuracy") or 0.0),
+        "guard_trigger_rate": float(guarded_variant.get("guard_trigger_rate") or 0.0),
+        "promotion_recommendation": str(promotion_payload.get("recommendation") or ""),
+        "promotion_score_delta": float(promotion_payload.get("score_delta") or 0.0),
+    }
+
+
+def render_text(rows: list[dict[str, Any]], campaign_rows: list[dict[str, Any]], registry_summary: dict[str, Any], p52_summary: dict[str, Any]) -> str:
     lines = [
-        "[dashboard] P49/P51 live progress",
+        "[dashboard] P49/P51/P52 live progress",
         "run_id            component             phase       status    learner      rollout      throughput   gpu_mb   warning",
         "-" * 112,
     ]
@@ -120,6 +159,17 @@ def render_text(rows: list[dict[str, Any]], campaign_rows: list[dict[str, Any]],
         )
     lines.extend(
         [
+            "",
+            "[p52]",
+            "dataset_samples={samples} dataset_valid={valid} train_checkpoint_id={checkpoint} train_val_top1={top1:.3f} guard_trigger_rate={guard:.3f} recommendation={rec} score_delta={delta:.3f}".format(
+                samples=int(p52_summary.get("dataset_samples") or 0),
+                valid=int(p52_summary.get("dataset_valid") or 0),
+                checkpoint=str(p52_summary.get("train_checkpoint_id") or "")[:32],
+                top1=float(p52_summary.get("train_val_top1") or 0.0),
+                guard=float(p52_summary.get("guard_trigger_rate") or 0.0),
+                rec=str(p52_summary.get("promotion_recommendation") or "n/a"),
+                delta=float(p52_summary.get("promotion_score_delta") or 0.0),
+            ),
             "",
             "[campaigns]",
             "campaign_id                 experiment              seed      stage                status",
@@ -168,8 +218,9 @@ def main() -> int:
         rows = collect_latest_events(watch_root)
         campaign_rows = collect_campaign_rows(watch_root)
         registry_summary = collect_registry_summary(watch_root)
+        p52_summary = collect_p52_summary(watch_root)
         os.system("cls" if os.name == "nt" else "clear")
-        print(render_text(rows, campaign_rows, registry_summary))
+        print(render_text(rows, campaign_rows, registry_summary, p52_summary))
         iteration += 1
         if bool(args.once) or (int(args.iterations) > 0 and iteration >= int(args.iterations)):
             break

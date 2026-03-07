@@ -19,6 +19,7 @@ param(
   [switch]$RunP49,
   [switch]$RunP50,
   [switch]$RunP51,
+  [switch]$RunP52,
   [string]$Only = "",
   [string]$Exclude = "",
   [string]$TrainingPython = "",
@@ -41,7 +42,7 @@ $resolverArgs = @(
   "-Emit", "json"
 )
 if ($TrainingPython.Trim()) { $resolverArgs += @("-ExplicitPython", $TrainingPython) }
-if ($RunP50) { $resolverArgs += "-RequireCuda" }
+if ($RunP50 -or $RunP52) { $resolverArgs += "-RequireCuda" }
 $resolverJson = (& powershell @resolverArgs | Out-String).Trim()
 if (-not $resolverJson) {
   throw "[P22] training python resolver returned empty output"
@@ -71,7 +72,7 @@ if ($LegacyOnly) { $args += "--legacy-only" }
 if ($Resume) { $args += "--resume" }
 if ($KeepIntermediate) { $args += "--keep-intermediate" }
 if ($VerboseLogs) { $args += "--verbose" }
-if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $RunP50 -or $RunP51) -and [string]::IsNullOrWhiteSpace($Only)) {
+if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $RunP50 -or $RunP51 -or $RunP52) -and [string]::IsNullOrWhiteSpace($Only)) {
   $selected = @()
   if ($RunP44) { $selected += if ($Nightly) { "p44_rl_nightly" } else { "p44_rl_smoke" } }
   if ($RunP45) { $selected += if ($Nightly) { "p45_world_model_nightly" } else { "p45_world_model_smoke" } }
@@ -81,6 +82,7 @@ if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $Ru
   if ($RunP49) { $selected += if ($Nightly) { "p49_gpu_mainline_nightly" } else { "p49_gpu_mainline_smoke" } }
   if ($RunP50) { $selected += if ($Nightly) { "p50_gpu_validation_nightly" } else { "p50_gpu_validation_smoke" } }
   if ($RunP51) { $selected += if ($Nightly) { "p51_resumeable_nightly" } else { "p51_registry_smoke" } }
+  if ($RunP52) { $selected += if ($Nightly) { "p52_learned_router_nightly" } else { "p52_learned_router_smoke" } }
   $Only = ($selected -join ",")
 }
 if (-not [string]::IsNullOrWhiteSpace($Only)) { $args += @("--only", $Only) }
@@ -110,7 +112,8 @@ if ($Quick) {
       "p48_hybrid_controller_smoke",
       "p49_gpu_mainline_smoke",
       "p50_gpu_validation_smoke",
-      "p51_registry_smoke"
+      "p51_registry_smoke",
+      "p52_learned_router_smoke"
     )
     if ($IncludeLegacy -or $LegacyOnly) {
       $quickIds += @("legacy_bc_dagger_probe")
@@ -165,7 +168,7 @@ if ($code -ne 0) {
 }
 
 $dashboardPath = ""
-if ($Dashboard -or $Quick -or $Nightly -or $RunP49 -or $RunP50 -or $RunP51) {
+if ($Dashboard -or $Quick -or $Nightly -or $RunP49 -or $RunP50 -or $RunP51 -or $RunP52) {
   $dashArgs = @(
     "-B",
     "-m", "trainer.monitoring.dashboard_build",
@@ -185,9 +188,16 @@ if ($dashboardPath) { Write-Host ("[P22] dashboard=" + $dashboardPath) }
 
 $runsRoot = Join-Path $ProjectRoot (Join-Path $OutRoot "runs")
 if (Test-Path $runsRoot) {
-  $latestRun = Get-ChildItem -Path $runsRoot -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1
+  $latestRun = Get-ChildItem -Path $runsRoot -Directory -ErrorAction SilentlyContinue |
+    Sort-Object -Property @(
+      @{ Expression = "LastWriteTime"; Descending = $true },
+      @{ Expression = "Name"; Descending = $true }
+    ) |
+    Select-Object -First 1
   if ($latestRun) {
+    Write-Host ("[P22] run_id=" + [string]$latestRun.Name)
     $summaryPath = Join-Path $latestRun.FullName "summary_table.json"
+    if (Test-Path $summaryPath) { Write-Host ("[P22] summary=" + $summaryPath) }
     if (Test-Path $summaryPath) {
       try {
         $rows = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
@@ -196,6 +206,7 @@ if (Test-Path $runsRoot) {
             if (-not $row) { continue }
             if ($row.campaign_state_path) { Write-Host ("[P22] campaign_state=" + [string]$row.campaign_state_path) }
             if ($row.registry_snapshot_path) { Write-Host ("[P22] registry_snapshot=" + [string]$row.registry_snapshot_path) }
+            if ($row.promotion_queue_path) { Write-Host ("[P22] promotion_queue=" + [string]$row.promotion_queue_path) }
           }
         }
       } catch {
