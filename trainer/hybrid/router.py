@@ -15,7 +15,9 @@ from typing import Any
 
 from trainer.closed_loop.replay_manifest import write_json, write_markdown
 from trainer.hybrid.controller_registry import build_controller_registry, discover_policy_model_path, discover_world_model_checkpoint
+from trainer.hybrid.learned_router_model import build_model_from_checkpoint, predict_router_distribution
 from trainer.hybrid.routing_features import run_routing_feature_smoke
+from trainer.hybrid.router_schema import available_controller_mask, encode_routing_features, supported_controller_ids
 
 
 def _now_iso() -> str:
@@ -46,6 +48,20 @@ def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8", newline="\n") as fp:
         fp.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+def _key_feature_values(features: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "policy_margin": float(_safe_float(features.get("policy_margin"), 0.0)),
+        "policy_entropy": float(_safe_float(features.get("policy_entropy"), 0.0)),
+        "wm_uncertainty": float(_safe_float(features.get("wm_uncertainty"), 0.0)),
+        "wm_predicted_return": float(_safe_float(features.get("wm_predicted_return"), 0.0)),
+        "slice_stage": str(features.get("slice_stage") or "unknown"),
+        "slice_resource_pressure": str(features.get("slice_resource_pressure") or "unknown"),
+        "slice_action_type": str(features.get("slice_action_type") or "unknown"),
+        "budget_level": str(features.get("budget_level") or "low"),
+        "phase": str(features.get("phase") or "UNKNOWN"),
+    }
 
 
 class RuleBasedHybridRouter:
@@ -167,20 +183,13 @@ class RuleBasedHybridRouter:
         return {
             "schema": "p48_router_decision_v1",
             "generated_at": _now_iso(),
+            "router_type": "rule",
             "selected_controller": selected,
             "routing_reason": routing_reason,
             "routing_score_breakdown": {key: float(value) for key, value in controller_scores.items()},
             "rejected_controllers": rejected,
-            "key_feature_values": {
-                "policy_margin": float(margin),
-                "policy_entropy": float(entropy),
-                "wm_uncertainty": float(wm_uncertainty),
-                "wm_predicted_return": float(wm_predicted_return),
-                "slice_stage": stage,
-                "slice_resource_pressure": resource_pressure,
-                "budget_level": str(features.get("budget_level") or "low"),
-                "phase": phase,
-            },
+            "predicted_probabilities": {},
+            "key_feature_values": _key_feature_values(features),
             "explainability": {
                 "high_confidence": bool(high_confidence),
                 "low_confidence": bool(low_confidence),
@@ -188,6 +197,92 @@ class RuleBasedHybridRouter:
                 "wm_disabled": bool(wm_disabled),
                 "wm_preferred": bool(wm_preferred),
                 "reasons_triggered": reasons,
+            },
+        }
+
+
+class LearnedHybridRouter:
+    def __init__(self, checkpoint_path: str, config: dict[str, Any] | None = None) -> None:
+        cfg = dict(config or {})
+        token = str(checkpoint_path or "").strip()
+        if not token:
+            raise ValueError("learned router checkpoint_path is required")
+        self.checkpoint_path = str(Path(token).resolve())
+        self.config = {
+            "device": str(cfg.get("device") or "auto"),
+            "temperature": _safe_float(cfg.get("temperature"), 1.0),
+        }
+        torch = None
+        try:  # pragma: no cover - runtime guarded
+            import torch as _torch
+
+            torch = _torch
+        except Exception:  # pragma: no cover
+            torch = None
+        if str(self.config["device"]).lower() == "auto":
+            self.device = "cuda:0" if torch is not None and bool(torch.cuda.is_available()) else "cpu"
+        else:
+            self.device = str(self.config["device"])
+        self.model, self.payload = build_model_from_checkpoint(self.checkpoint_path, map_location=self.device)
+        self.model.to(self.device)
+        self.feature_encoder = self.payload.get("feature_encoder") if isinstance(self.payload.get("feature_encoder"), dict) else {}
+        self.controller_ids = list(self.payload.get("controller_ids") or supported_controller_ids())
+
+    def describe(self) -> dict[str, Any]:
+        return {
+            "schema": "p52_learned_router_config_v1",
+            "checkpoint_path": self.checkpoint_path,
+            "device": self.device,
+            "controller_ids": self.controller_ids,
+            "temperature": float(self.config.get("temperature") or 1.0),
+        }
+
+    def route(
+        self,
+        *,
+        features: dict[str, Any],
+        available_controllers: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        available_ids = [controller_id for controller_id in self.controller_ids if controller_id in available_controllers]
+        encoded = encode_routing_features({"routing_features": features}, self.feature_encoder)
+        distribution = predict_router_distribution(
+            model=self.model,
+            feature_vector=list(encoded.get("vector") or []),
+            available_mask=available_controller_mask(available_ids, controller_ids=self.controller_ids),
+            device=self.device,
+            temperature=_safe_float(self.config.get("temperature"), 1.0),
+        )
+        selected = str(distribution.get("selected_controller") or "heuristic_baseline")
+        rejected = []
+        probabilities = distribution.get("probabilities") if isinstance(distribution.get("probabilities"), dict) else {}
+        for controller_id in self.controller_ids:
+            if controller_id == selected:
+                continue
+            rejected.append(
+                {
+                    "controller_id": controller_id,
+                    "reason": ("not_registered" if controller_id not in available_controllers else "lower_probability"),
+                    "score": float(probabilities.get(controller_id, 0.0)),
+                }
+            )
+        return {
+            "schema": "p52_router_decision_v1",
+            "generated_at": _now_iso(),
+            "router_type": "learned",
+            "selected_controller": selected,
+            "routing_reason": "learned_router_top1",
+            "routing_score_breakdown": {key: float(value) for key, value in probabilities.items()},
+            "predicted_probabilities": {key: float(value) for key, value in probabilities.items()},
+            "rejected_controllers": rejected,
+            "key_feature_values": _key_feature_values(features),
+            "explainability": {
+                "confidence": float(distribution.get("confidence") or 0.0),
+                "ood_score": float(encoded.get("ood_score") or 0.0),
+                "feature_completeness": float(encoded.get("completeness") or 0.0),
+                "missing_keys": list(encoded.get("missing_keys") or []),
+                "unknown_categorical_keys": list(encoded.get("unknown_categorical_keys") or []),
+                "checkpoint_path": self.checkpoint_path,
+                "device": self.device,
             },
         }
 

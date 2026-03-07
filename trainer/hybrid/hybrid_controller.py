@@ -22,7 +22,7 @@ except Exception:  # pragma: no cover
 from trainer.closed_loop.regression_triage import run_regression_triage
 from trainer.closed_loop.replay_manifest import build_seeds_payload, now_iso, now_stamp, to_abs_path, write_json, write_markdown
 from trainer.hybrid.controller_registry import build_controller_registry, discover_policy_model_path, discover_world_model_checkpoint
-from trainer.hybrid.router import RuleBasedHybridRouter, run_router_smoke, summarize_routing_trace
+from trainer.hybrid.router import LearnedHybridRouter, RuleBasedHybridRouter, run_router_smoke, summarize_routing_trace
 from trainer.hybrid.routing_features import collect_sample_states, extract_routing_features, run_routing_feature_smoke
 from trainer.policy_arena.adapters.heuristic_adapter import HeuristicAdapter
 from trainer.policy_arena.adapters.model_adapter import ModelAdapter
@@ -143,6 +143,10 @@ class AdaptiveHybridController(BasePolicyAdapter):
         search_time_budget_ms: float = 15.0,
         wm_horizon: int = 1,
         wm_uncertainty_penalty: float = 0.5,
+        router_mode: str = "rule",
+        learned_router_checkpoint: str = "",
+        learned_router_config: dict[str, Any] | None = None,
+        rule_guard_config: dict[str, Any] | None = None,
         trace_path: str = "",
         trace_context: dict[str, Any] | None = None,
     ) -> None:
@@ -154,6 +158,16 @@ class AdaptiveHybridController(BasePolicyAdapter):
         self.search_time_budget_ms = float(search_time_budget_ms)
         self.wm_horizon = max(1, int(wm_horizon))
         self.wm_uncertainty_penalty = float(wm_uncertainty_penalty)
+        self.router_mode = str(router_mode or "rule").strip().lower() or "rule"
+        self.learned_router_checkpoint = str(learned_router_checkpoint or "")
+        self.learned_router_config = dict(learned_router_config or {})
+        self.rule_guard_config = {
+            "min_confidence": _safe_float((rule_guard_config or {}).get("min_confidence"), 0.45),
+            "high_risk_min_confidence": _safe_float((rule_guard_config or {}).get("high_risk_min_confidence"), 0.60),
+            "min_feature_completeness": _safe_float((rule_guard_config or {}).get("min_feature_completeness"), 0.80),
+            "max_ood_score": _safe_float((rule_guard_config or {}).get("max_ood_score"), 6.0),
+            "max_wm_uncertainty": _safe_float((rule_guard_config or {}).get("max_wm_uncertainty"), 1.0),
+        }
         self.trace_path = str(trace_path or "")
         self.trace_context = dict(trace_context or {})
         self.trace_index = 0
@@ -165,7 +179,11 @@ class AdaptiveHybridController(BasePolicyAdapter):
             for row in (self.registry.get("controllers") if isinstance(self.registry.get("controllers"), list) else [])
             if isinstance(row, dict) and str(row.get("controller_id") or "")
         }
-        self.router = RuleBasedHybridRouter(router_config)
+        self.rule_router = RuleBasedHybridRouter(router_config)
+        self.learned_router = None
+        if self.learned_router_checkpoint:
+            self.learned_router = LearnedHybridRouter(self.learned_router_checkpoint, self.learned_router_config)
+        self.router = self.rule_router
         self.planner = WorldModelLookaheadPlanner(
             checkpoint_path=self.world_model_checkpoint,
             horizon=self.wm_horizon,
@@ -207,7 +225,7 @@ class AdaptiveHybridController(BasePolicyAdapter):
                 supports_shop=True,
                 supports_consumables=True,
                 supports_position_actions=False,
-                notes="Rule-based adaptive hybrid controller over policy/search/world-model rerank.",
+                notes="Adaptive hybrid controller with rule/learned/guarded router modes.",
             )
         )
 
@@ -221,10 +239,105 @@ class AdaptiveHybridController(BasePolicyAdapter):
         payload["adapter"]["search_max_depth"] = int(self.search_max_depth)
         payload["adapter"]["search_time_budget_ms"] = float(self.search_time_budget_ms)
         payload["adapter"]["wm_uncertainty_penalty"] = float(self.wm_uncertainty_penalty)
-        payload["adapter"]["router"] = self.router.describe()
+        payload["adapter"]["router_mode"] = self.router_mode
+        payload["adapter"]["router"] = self.rule_router.describe()
+        payload["adapter"]["learned_router_checkpoint"] = self.learned_router_checkpoint
+        payload["adapter"]["learned_router"] = self.learned_router.describe() if self.learned_router is not None else {}
+        payload["adapter"]["rule_guard_config"] = dict(self.rule_guard_config)
         payload["adapter"]["controller_registry"] = self.registry
         payload["adapter"]["trace_path"] = self.trace_path
         return payload
+
+    def _rule_guard_reason(
+        self,
+        *,
+        features: dict[str, Any],
+        available_controllers: dict[str, dict[str, Any]],
+        learned_decision: dict[str, Any],
+    ) -> str:
+        if self.learned_router is None:
+            return "learned_router_unavailable"
+        selected = str(learned_decision.get("selected_controller") or "")
+        explainability = learned_decision.get("explainability") if isinstance(learned_decision.get("explainability"), dict) else {}
+        confidence = _safe_float(explainability.get("confidence"), 0.0)
+        completeness = _safe_float(explainability.get("feature_completeness"), 1.0)
+        ood_score = _safe_float(explainability.get("ood_score"), 0.0)
+        high_risk = str(features.get("slice_resource_pressure") or "unknown") == "high" or str(features.get("slice_stage") or "unknown") == "late"
+        min_confidence = _safe_float(
+            self.rule_guard_config.get("high_risk_min_confidence") if high_risk else self.rule_guard_config.get("min_confidence"),
+            0.45,
+        )
+        if selected not in available_controllers:
+            return "predicted_controller_unavailable"
+        if completeness < _safe_float(self.rule_guard_config.get("min_feature_completeness"), 0.80):
+            return "feature_completeness_low"
+        if ood_score > _safe_float(self.rule_guard_config.get("max_ood_score"), 6.0):
+            return "ood_score_high"
+        if confidence < min_confidence:
+            return "confidence_low"
+        if _safe_float(features.get("wm_uncertainty"), 0.0) > _safe_float(self.rule_guard_config.get("max_wm_uncertainty"), 1.0):
+            return "wm_uncertainty_high"
+        return ""
+
+    def _route_decision(
+        self,
+        *,
+        features: dict[str, Any],
+        available_controllers: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        rule_decision = self.rule_router.route(features=features, available_controllers=available_controllers)
+        if self.router_mode == "rule":
+            decision = dict(rule_decision)
+            decision["router_mode"] = "rule"
+            decision["final_action_source"] = "rule_router"
+            decision["guard_triggered"] = False
+            decision["guard_reason"] = ""
+            decision["rule_choice"] = str(rule_decision.get("selected_controller") or "")
+            decision["learned_choice"] = ""
+            return decision
+        if self.learned_router is None:
+            if self.router_mode == "learned":
+                raise RuntimeError("learned router mode requested without learned router checkpoint")
+            decision = dict(rule_decision)
+            decision["router_mode"] = self.router_mode
+            decision["final_action_source"] = "rule_router"
+            decision["guard_triggered"] = True
+            decision["guard_reason"] = "learned_router_unavailable"
+            decision["rule_choice"] = str(rule_decision.get("selected_controller") or "")
+            decision["learned_choice"] = ""
+            return decision
+
+        learned_decision = self.learned_router.route(features=features, available_controllers=available_controllers)
+        decision = dict(learned_decision)
+        decision["router_mode"] = self.router_mode
+        decision["rule_choice"] = str(rule_decision.get("selected_controller") or "")
+        decision["learned_choice"] = str(learned_decision.get("selected_controller") or "")
+        decision["guard_triggered"] = False
+        decision["guard_reason"] = ""
+        decision["final_action_source"] = "learned_router"
+        if self.router_mode == "learned_with_rule_guard":
+            guard_reason = self._rule_guard_reason(
+                features=features,
+                available_controllers=available_controllers,
+                learned_decision=learned_decision,
+            )
+            if guard_reason:
+                decision = dict(rule_decision)
+                decision["router_mode"] = "learned_with_rule_guard"
+                decision["rule_choice"] = str(rule_decision.get("selected_controller") or "")
+                decision["learned_choice"] = str(learned_decision.get("selected_controller") or "")
+                decision["predicted_probabilities"] = dict(learned_decision.get("predicted_probabilities") or {})
+                decision["guard_triggered"] = True
+                decision["guard_reason"] = guard_reason
+                decision["final_action_source"] = "rule_guard"
+                decision["routing_reason"] = f"guard_fallback:{guard_reason}"
+                learned_explainability = learned_decision.get("explainability") if isinstance(learned_decision.get("explainability"), dict) else {}
+                rule_explainability = decision.get("explainability") if isinstance(decision.get("explainability"), dict) else {}
+                merged_explainability = dict(rule_explainability)
+                merged_explainability["learned_router"] = learned_explainability
+                decision["explainability"] = merged_explainability
+                return decision
+        return decision
 
     def reset(self, seed: str | int | None = None) -> None:
         super().reset(seed)
@@ -268,7 +381,7 @@ class AdaptiveHybridController(BasePolicyAdapter):
             search_max_depth=self.search_max_depth,
             search_time_budget_ms=self.search_time_budget_ms,
         )
-        decision = self.router.route(features=features, available_controllers=self._available_controllers())
+        decision = self._route_decision(features=features, available_controllers=self._available_controllers())
         phase = phase_from_obs(obs)
         initial_selected = str(decision.get("selected_controller") or "heuristic_baseline")
         final_selected = initial_selected
@@ -298,21 +411,29 @@ class AdaptiveHybridController(BasePolicyAdapter):
 
         self.trace_index += 1
         trace = {
-            "schema": "p48_hybrid_trace_v1",
+            "schema": "p52_hybrid_trace_v2",
             "generated_at": now_iso(),
             "trace_index": int(self.trace_index),
             "seed": str(self._seed),
             "phase": phase,
+            "router_mode": self.router_mode,
             "selected_controller": final_selected,
             "initial_selected_controller": initial_selected,
+            "rule_choice": str(decision.get("rule_choice") or ""),
+            "learned_choice": str(decision.get("learned_choice") or ""),
             "routing_reason": str(decision.get("routing_reason") or ""),
             "routing_score_breakdown": decision.get("routing_score_breakdown") if isinstance(decision.get("routing_score_breakdown"), dict) else {},
+            "predicted_probabilities": decision.get("predicted_probabilities") if isinstance(decision.get("predicted_probabilities"), dict) else {},
             "rejected_controllers": decision.get("rejected_controllers") if isinstance(decision.get("rejected_controllers"), list) else [],
             "key_feature_values": decision.get("key_feature_values") if isinstance(decision.get("key_feature_values"), dict) else {},
             "features": features,
             "final_action": final_action,
             "fallback_used": bool(final_selected != initial_selected),
             "fallback_reason": fallback_reason,
+            "guard_triggered": bool(decision.get("guard_triggered")),
+            "guard_reason": str(decision.get("guard_reason") or ""),
+            "final_action_source": str(decision.get("final_action_source") or "rule_router"),
+            "router_explainability": decision.get("explainability") if isinstance(decision.get("explainability"), dict) else {},
             "controllers_tried": tried,
             "trace_context": self.trace_context,
         }
@@ -334,7 +455,7 @@ class AdaptiveHybridController(BasePolicyAdapter):
             search_max_depth=self.search_max_depth,
             search_time_budget_ms=self.search_time_budget_ms,
         )
-        selected = str(self.router.route(features=features, available_controllers=self._available_controllers()).get("selected_controller") or "heuristic_baseline")
+        selected = str(self._route_decision(features=features, available_controllers=self._available_controllers()).get("selected_controller") or "heuristic_baseline")
         controller = self.controllers.get(selected) or self.controllers["heuristic_baseline"]
         try:
             return controller.candidate_actions(obs, legal_actions=legal_actions, top_k=max(1, int(top_k)))
@@ -364,6 +485,13 @@ def _routing_summary_from_trace(trace_path: Path) -> dict[str, Any]:
     summary["routing_decision_impact"] = {
         "selection_distribution": _selection_distribution(rows),
         "fallback_rate": float(sum(1 for row in rows if bool((row or {}).get("fallback_used")))) / max(1, len(rows)),
+        "guard_trigger_rate": float(sum(1 for row in rows if bool((row or {}).get("guard_triggered")))) / max(1, len(rows)),
+        "router_mode_distribution": _selection_distribution(
+            [
+                {"selected_controller": str((row or {}).get("router_mode") or "unknown")}
+                for row in rows
+            ]
+        ),
     }
     return summary
 
@@ -374,6 +502,7 @@ def _routing_summary_markdown(summary: dict[str, Any]) -> list[str]:
         "",
         f"- decision_count: {int(summary.get('decision_count') or 0)}",
         f"- fallback_rate: {float(((summary.get('routing_decision_impact') or {}).get('fallback_rate') or 0.0)):.3f}",
+        f"- guard_trigger_rate: {float(((summary.get('routing_decision_impact') or {}).get('guard_trigger_rate') or 0.0)):.3f}",
         "",
         "## Controller Selection Distribution",
     ]
