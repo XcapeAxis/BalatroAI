@@ -161,6 +161,27 @@ Training artifacts:
 - eval on the validation split
 - wm-assisted arena compare when `arena_compare.enabled=true`
 
+## P51 Registry Integration
+
+P51 registers world-model checkpoints automatically when `trainer.world_model.train` saves `best.pt`.
+
+Registry metadata includes:
+
+- family `world_model`
+- source run / experiment id
+- seed group
+- runtime profile + training python
+- dataset manifest / train manifest / metrics refs
+- eval summary refs once `trainer.world_model.eval` completes
+- optional assist-compare refs when wm-assisted arena smoke is enabled
+
+Key locations:
+
+- `docs/artifacts/registry/checkpoints_registry.json`
+- `docs/artifacts/p22/runs/<run_id>/p51_registry_smoke/campaign_runs/seed_*/checkpoint_registry_snapshot.json`
+
+P51 does not promote world-model checkpoints through the same champion flow as policies yet, but it does preserve their lineage so policy/hybrid checkpoints can reference which world-model asset they depended on.
+
 ## Evaluation and Diagnostics
 
 Standalone eval:

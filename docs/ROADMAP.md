@@ -20,19 +20,22 @@
 | P48 | Adaptive hybrid controller v1 (state-aware routing across policy/search/wm-rerank) | done |
 | P49 | GPU mainline + CPU rollout/GPU learner + dashboard + readiness guard | done |
 | P50 | Real CUDA bring-up + GPU validation + nightly benchmark profiles | done |
+| P51 | Checkpoint registry + resumeable nightly campaigns + promotion queue | done |
 
-## Current Focus: Post-P50 GPU Scale-Up
+## Current Focus: Post-P51 Durable Training Ops
 
-1. Extend real-CUDA validation from smoke budgets into heavier nightly workloads, especially P44 distributed RL.
-2. Keep readiness guarding enabled on service-dependent paths to avoid cold-start false positives.
-3. Treat unified telemetry and dashboard outputs as first-class artifacts for nightly diagnosis.
-4. Preserve simulator-first promotion gates while runtime plumbing scales underneath them.
+1. Extend P51 registry usage beyond RL/world-model into every persistent policy or auxiliary asset family.
+2. Tighten promotion semantics so promoted candidates can be switched with explicit human review on top of the existing state machine.
+3. Keep readiness guarding and unified dashboards enabled as default night-ops safety rails.
+4. Expand heavier CUDA nightlies, especially P44 distributed RL, while preserving resume-safe stage boundaries.
 
-## Near-Term After P50
+## Near-Term After P51
 
 - broader imagined-root coverage beyond the current replay families
 - tighter P42/P45/P47 coupling through auxiliary losses, rollout-value proxies, and RL-policy routing
 - longer real-CUDA benchmark sweeps beyond smoke-sized learners
+- stronger checkpoint deduplication / retention policy on top of the new registry
+- richer campaign restart policies beyond simple latest-run resume
 - learned router experiments once controller telemetry is richer and more stable
 - careful expansion beyond fixed-budget search while preserving uncertainty controls and arena-first evaluation
 - richer GPU telemetry and eventual multi-GPU support once single-GPU runtime remains stable

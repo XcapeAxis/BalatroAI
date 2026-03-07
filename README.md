@@ -9,7 +9,7 @@
 [![Seed Governance](https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16)](configs/experiments/seeds_p23.yaml)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Trend Warehouse](https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16)](docs/TREND_WAREHOUSE_P26.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P50-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P51-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -19,7 +19,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/XcapeAxis/BalatroAI)](https://github.com/XcapeAxis/BalatroAI/issues)
 <!-- BADGES:END -->
 
-BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, a unified action replay contract, P45 world-model / latent-planning, P46 short-horizon imagination augmentation, P47 uncertainty-aware world-model reranking, P48 adaptive hybrid routing across policy/search/world-model assist, P49 GPU-mainline runtime profiles with readiness guards and lightweight dashboards, and P50 real local CUDA validation with benchmarked nightly profiles. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised/world-model iteration, not as a cheat injector or memory-hook tool.
+BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, a unified action replay contract, P45 world-model / latent-planning, P46 short-horizon imagination augmentation, P47 uncertainty-aware world-model reranking, P48 adaptive hybrid routing across policy/search/world-model assist, P49 GPU-mainline runtime profiles with readiness guards and lightweight dashboards, P50 real local CUDA validation with benchmarked nightly profiles, and P51 checkpoint-registry + resumeable nightly campaign operations. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised/world-model iteration, not as a cheat injector or memory-hook tool.
 
 Badge/status refresh source:
 
@@ -221,6 +221,14 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP50
 python -m trainer.runtime.gpu_diagnose --profile single_gpu_mainline
 ```
 
+Optional P51 checkpoint-registry / resumeable-campaign smoke:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP51
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP51 -Resume
+python -m trainer.registry.checkpoint_registry --latest --json
+```
+
 8. Inspect generated artifacts.
 
 - `docs/artifacts/p22/runs/<run_id>/summary_table.md`
@@ -232,6 +240,8 @@ python -m trainer.runtime.gpu_diagnose --profile single_gpu_mainline
 - `docs/artifacts/p47/{lookahead,arena_ablation,triage}/<run_id>/`
 - `docs/artifacts/p48/{arena_ablation,triage}/<run_id>/`
 - `docs/artifacts/p49/{readiness,rl_cpu_rollout_gpu_learner,wm_gpu_smoke}/`
+- `docs/artifacts/p51/{checkpoint_registry_snapshot_*.json,promotion_queue_smoke_*.json,campaign_resume_validation_*.md}`
+- `docs/artifacts/registry/checkpoints_registry.json`
 - `docs/artifacts/dashboard/latest/index.html`
 - optional live snapshot view: `powershell -ExecutionPolicy Bypass -File scripts\show_p22_live.ps1`
 
@@ -692,6 +702,37 @@ Reference docs:
 - [docs/P50_GPU_TROUBLESHOOTING.md](docs/P50_GPU_TROUBLESHOOTING.md)
 - [docs/P49_GPU_MAINLINE_AND_DASHBOARD.md](docs/P49_GPU_MAINLINE_AND_DASHBOARD.md)
 
+## Checkpoint Registry + Resumeable Campaigns (P51)
+
+P51 turns checkpoints into tracked operational assets and adds stage-level resume semantics for nightly-style runs. RL and world-model producers now auto-register checkpoints with lineage, metrics, arena refs, triage refs, device/runtime info, and auditable status transitions.
+
+How to run P51 smoke:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP51
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP51 -Resume
+python -m trainer.registry.checkpoint_registry --family rl_policy --json
+```
+
+Where to inspect:
+
+- registry: `docs/artifacts/registry/checkpoints_registry.json`
+- campaign state: `docs/artifacts/p22/runs/<run_id>/p51_registry_smoke/campaign_runs/seed_*/campaign_state.json`
+- queue snapshot: `docs/artifacts/p22/runs/<run_id>/p51_registry_smoke/campaign_runs/seed_*/promotion_queue.json`
+- dashboard: `docs/artifacts/dashboard/latest/index.html`
+
+Boundaries / risks:
+
+- checkpoint status changes are still system-driven v1; there is no separate human approval UI yet
+- resume is stage-aware, not arbitrary mid-step continuation inside trainer internals
+- imported historical checkpoints can have incomplete metadata until they are re-emitted by the new producers
+
+Reference docs:
+
+- [docs/P51_CHECKPOINT_REGISTRY_AND_CAMPAIGNS.md](docs/P51_CHECKPOINT_REGISTRY_AND_CAMPAIGNS.md)
+- [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
+- [docs/P49_GPU_MAINLINE_AND_DASHBOARD.md](docs/P49_GPU_MAINLINE_AND_DASHBOARD.md)
+
 ## Maturity and Boundaries
 
 - P41 v2 still produces recommendation-only promotion outputs; champion switching remains manual.
@@ -703,6 +744,7 @@ Reference docs:
 - P48 adaptive hybrid routing is v1/research-grade; routing rules are explainable heuristics and will require recalibration as controller quality shifts.
 - P49 GPU mainline is an execution/operations milestone, not a claim of higher policy quality by itself.
 - P50 proves local CUDA bring-up and recommended profiles on one RTX 3080 Ti host; it is not a guarantee that every Windows/CUDA stack will behave identically.
+- P51 improves durability and auditability of campaigns, but it does not replace trainer-level checkpoints or manual promotion judgment.
 - BC/DAgger paths are retained as legacy baselines; they are not default mainline training routes.
 - Legacy baseline checks are lightweight smoke/probe checks unless explicitly requested.
 - low-sample CI/bootstrap outcomes remain observation-level and should not be treated as decisive promotion proof.
@@ -1066,6 +1108,7 @@ Milestone maturity snapshot:
 | P48 (adaptive hybrid controller v1: state-aware routing across policy/search/wm-rerank) | shipped |
 | P49 (GPU mainline + CPU rollout/GPU learner + readiness guard + dashboard) | shipped |
 | P50 (real CUDA bring-up + GPU validation + nightly benchmark profiles) | shipped |
+| P51 (checkpoint registry + resumeable nightly campaigns + promotion queue) | shipped |
 
 Near-term:
 

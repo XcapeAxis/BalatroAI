@@ -184,6 +184,32 @@ Observed smoke characteristics:
 - non-zero GPU memory was recorded in the smoke artifacts
 - low memory numbers are expected because the shipped smoke config is intentionally tiny
 
+## P51 Checkpoint Registry Integration
+
+P51 makes RL candidate checkpoints first-class tracked assets instead of unnamed `best.pt` files.
+
+What is now recorded automatically when `trainer.rl.ppo_lite` or the closed-loop RL path saves a checkpoint:
+
+- `checkpoint_id`
+- family `rl_policy`
+- training mode / mode category
+- runtime profile + training python
+- metrics / manifest / diagnostics refs
+- arena / triage refs once closed-loop evaluation completes
+- auditable status transitions through the candidate state machine
+
+Primary registry locations:
+
+- `docs/artifacts/registry/checkpoints_registry.json`
+- `docs/artifacts/p22/runs/<run_id>/p51_registry_smoke/campaign_runs/seed_*/checkpoint_registry_snapshot.json`
+
+Closed-loop promotion wiring now updates RL checkpoint state along the path:
+
+- `draft -> smoke_passed`
+- `smoke_passed -> arena_passed`
+- `arena_passed -> promotion_review`
+- optional `promotion_review -> promoted|rejected`
+
 ## Known Gaps
 
 - PPO-lite intentionally omits advanced PPO/distributed features (opponent pools, large-batch parallel rollouts).

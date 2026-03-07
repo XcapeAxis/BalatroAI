@@ -232,6 +232,17 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP49
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP49 -Nightly
 ```
 
+## P51 Operational Layer on Top of P49
+
+P49 provided the runtime, telemetry, dashboard, and readiness substrate. P51 builds the long-running operations layer on top of it:
+
+- checkpoints are registered with runtime/device metadata instead of being anonymous files
+- nightly-style runs persist `campaign_state.json` with stage-level status
+- dashboard data now includes campaign-state and registry summaries
+- `scripts/run_p22.ps1 -RunP51` and `-RunP51 -Resume` reuse the same readiness guard and dashboard pipeline introduced here
+
+Operationally, P49 remains the runtime foundation while P51 is the asset/campaign bookkeeping layer above it.
+
 ## Troubleshooting
 
 No CUDA available:

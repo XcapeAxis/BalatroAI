@@ -28,7 +28,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | Scenario | Command | Notes |
 |---|---|---|
 | Plan only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -DryRun` | validates matrix + writes plan/report |
-| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | mainline smoke set with multi-seed materialization (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row + P40/P41/P42 + P45 world-model smoke row + P46 imagination smoke row + P47 model-based search smoke row + P48 hybrid-controller smoke row + P49 GPU-mainline row + P50 real-CUDA validation row) |
+| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | mainline smoke set with multi-seed materialization (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row + P40/P41/P42 + P45 world-model smoke row + P46 imagination smoke row + P47 model-based search smoke row + P48 hybrid-controller smoke row + P49 GPU-mainline row + P50 real-CUDA validation row + P51 registry/campaign row) |
 | Fast smoke + legacy probe | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -IncludeLegacy` | adds opt-in legacy BC/DAgger probe row(s) |
 | Legacy only quick | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -LegacyOnly` | runs only legacy baseline probe row(s) |
 | Multi-seed quick compare | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline,quick_candidate -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | 2 strategies x 3 seeds |
@@ -40,6 +40,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | P48 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP48` | runs `p48_hybrid_controller_smoke` with orchestrator defaults |
 | P49 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP49` | runs `p49_gpu_mainline_smoke` with readiness guard + dashboard build |
 | P50 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP50` | runs `p50_gpu_validation_smoke` with CUDA-first python resolver + readiness guard + dashboard build |
+| P51 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP51` | runs `p51_registry_smoke` with checkpoint registry snapshots, promotion queue export, dashboard build, and campaign state artifacts |
 | Single experiment | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline -Resume` | rerun one exp id |
 | Limit seeds | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -SeedLimit 2` | local-cost control |
 | Custom seeds | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | explicit reproducibility override (recorded to artifacts) |
@@ -69,7 +70,7 @@ Key sections:
   - `category` (`mainline`, `legacy_baseline`, `required_validation`, ...)
   - `default_enabled` (`false` rows are excluded unless explicitly requested)
   - `backend`, `policy`
-  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`, `selfsup_future_value`, `selfsup_action_type`, `ssl_pretrain`, `ssl_probe`, `rl_selfplay`, `policy_arena`, `closed_loop_improvement`, `closed_loop_improvement_v2`, `closed_loop_rl_candidate`, `world_model_train`, `world_model_eval`, `world_model_assist_compare`, `imagination_augmented_candidate`, `p46_imagination`, `world_model_rerank_eval`, `p47_wm_search`, `hybrid_controller_eval`, `p48_hybrid_controller`)
+  - `experiment_type` (optional, e.g. `selfsup_pretrain`, `selfsup_p33`, `selfsup_future_value`, `selfsup_action_type`, `ssl_pretrain`, `ssl_probe`, `rl_selfplay`, `policy_arena`, `closed_loop_improvement`, `closed_loop_improvement_v2`, `closed_loop_rl_candidate`, `world_model_train`, `world_model_eval`, `world_model_assist_compare`, `imagination_augmented_candidate`, `p46_imagination`, `world_model_rerank_eval`, `p47_wm_search`, `hybrid_controller_eval`, `p48_hybrid_controller`, `checkpoint_registry_campaign`, `p51_registry_campaign`)
   - `seed_mode` (`regression_fixed` or `nightly`)
   - `seeds` (optional explicit seed override list)
   - `gate_flag` (passed to `scripts/run_regressions.ps1`)
@@ -604,6 +605,48 @@ Operational notes:
 - `scripts/run_p22.ps1 -RunP50` requires CUDA in resolver selection and fails early if the CUDA env is not healthy.
 - readiness reports remain under `docs/artifacts/p49/readiness/...` because P50 reuses the shared readiness bucket introduced in P49.
 
+## P51 Checkpoint Registry + Resumeable Campaign Integration
+
+P51 adds `experiment_type: checkpoint_registry_campaign` / `p51_registry_campaign` so P22 can treat checkpoint production and nightly resumption as first-class operational state instead of anonymous files plus blind reruns.
+
+Reference rows in `configs/experiments/p22.yaml`:
+
+- `p51_registry_smoke`
+- `p51_resumeable_nightly`
+
+What P51 adds on top of P49/P50:
+
+- auto-registration of RL and world-model checkpoints into `docs/artifacts/registry/checkpoints_registry.json`
+- auditable checkpoint status transitions (`draft`, `smoke_passed`, `arena_passed`, `promotion_review`, `promoted`, `archived`, `rejected`)
+- stage-level campaign state under `campaign_state.json`
+- promotion queue exports and dashboard sections for registry/campaign status
+- resume behavior that skips completed safe stages when rerunning the same campaign root
+
+Key artifacts:
+
+- `docs/artifacts/registry/checkpoints_registry.json`
+- `docs/artifacts/p22/runs/<run_id>/p51_registry_smoke/campaign_runs/seed_*/campaign_state.json`
+- `docs/artifacts/p22/runs/<run_id>/p51_registry_smoke/campaign_runs/seed_*/checkpoint_registry_snapshot.json`
+- `docs/artifacts/p22/runs/<run_id>/p51_registry_smoke/campaign_runs/seed_*/promotion_queue.json`
+- `docs/artifacts/p22/runs/<run_id>/p51_registry_smoke/campaign_runs/seed_*/campaign_resume_report.md`
+
+Summary/runtime fields surfaced in P22 rows for this lane:
+
+- `campaign_state_path`
+- `registry_snapshot_path`
+- `promotion_queue_path`
+- `resume_report_path`
+- `produced_checkpoint_ids`
+- `training_python`
+- `device_profile`
+
+Operational notes:
+
+- `scripts/run_p22.ps1 -RunP51` runs the registry/campaign smoke path.
+- `scripts/run_p22.ps1 -RunP51 -Resume` resumes the latest compatible campaign root under the selected out-root.
+- full experiment-level resume still short-circuits already successful experiments; stage-level resume applies when the experiment needs to rerun and campaign state already exists.
+- imported historical checkpoints can remain metadata-light until their producers re-emit them through the new registry path.
+
 ## Runtime Observability (During Execution)
 
 P22 emits both per-experiment and run-level observability artifacts:
@@ -756,3 +799,4 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_selfsup
 - [P49_GPU_MAINLINE_AND_DASHBOARD.md](P49_GPU_MAINLINE_AND_DASHBOARD.md)
 - [P50_CUDA_ENVIRONMENT.md](P50_CUDA_ENVIRONMENT.md)
 - [P50_GPU_TROUBLESHOOTING.md](P50_GPU_TROUBLESHOOTING.md)
+- [P51_CHECKPOINT_REGISTRY_AND_CAMPAIGNS.md](P51_CHECKPOINT_REGISTRY_AND_CAMPAIGNS.md)
