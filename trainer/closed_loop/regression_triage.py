@@ -562,6 +562,358 @@ def _p48_hybrid_impact(
     }
 
 
+def _p52_manifest_block(run_manifest: dict[str, Any]) -> dict[str, Any]:
+    if isinstance(run_manifest.get("learned_router"), dict):
+        return dict(run_manifest.get("learned_router") or {})
+    return {}
+
+
+def _p52_summary_rows(run_dir: Path) -> list[dict[str, Any]]:
+    payload = _read_json(run_dir / "summary_table.json")
+    return [row for row in payload if isinstance(row, dict)] if isinstance(payload, list) else []
+
+
+def _p52_bucket_metrics(run_dir: Path) -> dict[str, Any]:
+    payload = _read_json(run_dir / "bucket_metrics.json")
+    return payload if isinstance(payload, dict) else {}
+
+
+def _p52_routing_summary(run_dir: Path, learned_router_block: dict[str, Any]) -> dict[str, Any]:
+    raw = str(learned_router_block.get("routing_summary_json") or "").strip()
+    path = Path(raw).resolve() if raw else (run_dir / "routing_summary.json")
+    payload = _read_json(path)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _p52_trace_rows(run_dir: Path, policy_id: str) -> list[dict[str, Any]]:
+    trace_path = run_dir / "router_traces" / f"{policy_id}.jsonl"
+    if not trace_path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in trace_path.read_text(encoding="utf-8-sig").splitlines():
+        text = line.strip()
+        if not text:
+            continue
+        try:
+            payload = json.loads(text)
+        except Exception:
+            continue
+        if isinstance(payload, dict):
+            rows.append(payload)
+    return rows
+
+
+def _slice_metric_index(bucket_payload: dict[str, Any], policy_id: str) -> dict[str, dict[str, dict[str, Any]]]:
+    policies = bucket_payload.get("policies") if isinstance(bucket_payload.get("policies"), list) else []
+    target = next(
+        (
+            row
+            for row in policies
+            if isinstance(row, dict) and str(row.get("policy_id") or "") == str(policy_id)
+        ),
+        {},
+    )
+    slice_metrics = target.get("slice_metrics") if isinstance(target.get("slice_metrics"), dict) else {}
+    index: dict[str, dict[str, dict[str, Any]]] = {}
+    for slice_key, rows in slice_metrics.items():
+        if not isinstance(rows, list):
+            continue
+        index[str(slice_key)] = {
+            str(row.get("slice_label") or "unknown"): dict(row)
+            for row in rows
+            if isinstance(row, dict)
+        }
+    return index
+
+
+def _top_slice_deltas(
+    *,
+    bucket_payload: dict[str, Any],
+    baseline_policy: str,
+    target_policy: str,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    baseline_index = _slice_metric_index(bucket_payload, baseline_policy)
+    target_index = _slice_metric_index(bucket_payload, target_policy)
+    rows: list[dict[str, Any]] = []
+    for slice_key, labels in target_index.items():
+        baseline_labels = baseline_index.get(slice_key) or {}
+        for slice_label, metrics in labels.items():
+            baseline_metrics = baseline_labels.get(slice_label) or {}
+            target_count = _safe_int(metrics.get("count"), 0)
+            baseline_count = _safe_int(baseline_metrics.get("count"), 0)
+            if target_count <= 0 or baseline_count <= 0:
+                continue
+            rows.append(
+                {
+                    "policy_id": target_policy,
+                    "baseline_policy": baseline_policy,
+                    "slice_key": slice_key,
+                    "slice_label": slice_label,
+                    "count": min(target_count, baseline_count),
+                    "score_delta": _safe_float(metrics.get("mean_total_score"), 0.0)
+                    - _safe_float(baseline_metrics.get("mean_total_score"), 0.0),
+                    "win_rate_delta": _safe_float(metrics.get("win_rate"), 0.0)
+                    - _safe_float(baseline_metrics.get("win_rate"), 0.0),
+                    "target_mean_total_score": _safe_float(metrics.get("mean_total_score"), 0.0),
+                    "baseline_mean_total_score": _safe_float(baseline_metrics.get("mean_total_score"), 0.0),
+                }
+            )
+    rows.sort(
+        key=lambda row: (
+            float(row.get("score_delta") or 0.0),
+            float(row.get("win_rate_delta") or 0.0),
+            -int(row.get("count") or 0),
+            str(row.get("slice_key") or ""),
+            str(row.get("slice_label") or ""),
+        )
+    )
+    return rows[: max(1, int(limit))]
+
+
+def _selection_distribution_from_trace_rows(trace_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    counts = defaultdict(int)
+    for row in trace_rows:
+        counts[str(row.get("selected_controller") or "unknown")] += 1
+    total = sum(counts.values())
+    return [
+        {"controller_id": key, "count": int(value), "ratio": float(value) / max(1, total)}
+        for key, value in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
+
+def _routing_variant_index(run_dir: Path, learned_router_block: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    payload = _p52_routing_summary(run_dir, learned_router_block)
+    variant_rows = payload.get("variants") if isinstance(payload.get("variants"), list) else []
+    index = {
+        str(row.get("policy_id") or ""): dict(row)
+        for row in variant_rows
+        if isinstance(row, dict) and str(row.get("policy_id") or "").strip()
+    }
+    for policy_id in ("hybrid_controller_rule", "hybrid_controller_learned", "hybrid_controller_learned_with_rule_guard"):
+        if policy_id in index:
+            continue
+        trace_rows = _p52_trace_rows(run_dir, policy_id)
+        if not trace_rows:
+            continue
+        guard_count = sum(1 for row in trace_rows if bool(row.get("guard_triggered")))
+        fallback_count = sum(1 for row in trace_rows if bool(row.get("fallback_used")))
+        total = len(trace_rows)
+        index[policy_id] = {
+            "policy_id": policy_id,
+            "decision_count": total,
+            "guard_trigger_rate": float(guard_count) / max(1, total),
+            "fallback_rate": float(fallback_count) / max(1, total),
+            "controller_selection_distribution": _selection_distribution_from_trace_rows(trace_rows),
+            "invalid_routing_incidents": int(
+                sum(
+                    1
+                    for row in trace_rows
+                    if str(row.get("selected_controller") or "")
+                    not in {"policy_baseline", "policy_plus_wm_rerank", "search_baseline", "heuristic_baseline"}
+                )
+            ),
+        }
+    return index
+
+
+def _p52_selection_overuse(variant_index: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for policy_id in ("hybrid_controller_learned", "hybrid_controller_learned_with_rule_guard"):
+        variant = variant_index.get(policy_id) if isinstance(variant_index.get(policy_id), dict) else {}
+        distribution = (
+            variant.get("controller_selection_distribution")
+            if isinstance(variant.get("controller_selection_distribution"), list)
+            else []
+        )
+        top_row = next((row for row in distribution if isinstance(row, dict)), {})
+        top_ratio = _safe_float(top_row.get("ratio"), 0.0)
+        rows.append(
+            {
+                "policy_id": policy_id,
+                "dominant_controller": str(top_row.get("controller_id") or ""),
+                "dominant_ratio": top_ratio,
+                "overuse_detected": top_ratio >= 0.75,
+                "decision_count": _safe_int(variant.get("decision_count"), 0),
+            }
+        )
+    return rows
+
+
+def _p52_trace_condition_correlation(
+    *,
+    trace_rows: list[dict[str, Any]],
+    degraded_rows: list[dict[str, Any]],
+    low_confidence_threshold: float,
+    max_ood_score: float,
+    max_wm_uncertainty: float,
+    min_feature_completeness: float,
+) -> dict[str, Any]:
+    def _matches_degraded(row: dict[str, Any]) -> bool:
+        features = row.get("features") if isinstance(row.get("features"), dict) else {}
+        for item in degraded_rows:
+            if not isinstance(item, dict):
+                continue
+            slice_key = str(item.get("slice_key") or "")
+            if not slice_key:
+                continue
+            if str(features.get(slice_key) if features.get(slice_key) is not None else "unknown") == str(item.get("slice_label") or ""):
+                return True
+        return False
+
+    totals = {
+        "overall_count": len(trace_rows),
+        "degraded_match_count": 0,
+        "high_ood_count": 0,
+        "high_uncertainty_count": 0,
+        "low_confidence_count": 0,
+        "low_feature_completeness_count": 0,
+        "guard_trigger_count": 0,
+    }
+    degraded_totals = dict(totals)
+    degraded_totals["overall_count"] = 0
+    guard_reason_counts = defaultdict(int)
+    for row in trace_rows:
+        explainability = row.get("router_explainability") if isinstance(row.get("router_explainability"), dict) else {}
+        features = row.get("features") if isinstance(row.get("features"), dict) else {}
+        confidence = _safe_float(explainability.get("confidence"), 1.0)
+        ood_score = _safe_float(explainability.get("ood_score"), 0.0)
+        feature_completeness = _safe_float(explainability.get("feature_completeness"), 1.0)
+        wm_uncertainty = _safe_float(features.get("wm_uncertainty"), 0.0)
+        guard_triggered = bool(row.get("guard_triggered"))
+        bucket = degraded_totals if _matches_degraded(row) else totals
+        totals["high_ood_count"] += int(ood_score > max_ood_score)
+        totals["high_uncertainty_count"] += int(wm_uncertainty > max_wm_uncertainty)
+        totals["low_confidence_count"] += int(confidence < low_confidence_threshold)
+        totals["low_feature_completeness_count"] += int(feature_completeness < min_feature_completeness)
+        totals["guard_trigger_count"] += int(guard_triggered)
+        if bucket is degraded_totals:
+            degraded_totals["overall_count"] += 1
+            degraded_totals["degraded_match_count"] += 1
+            degraded_totals["high_ood_count"] += int(ood_score > max_ood_score)
+            degraded_totals["high_uncertainty_count"] += int(wm_uncertainty > max_wm_uncertainty)
+            degraded_totals["low_confidence_count"] += int(confidence < low_confidence_threshold)
+            degraded_totals["low_feature_completeness_count"] += int(feature_completeness < min_feature_completeness)
+            degraded_totals["guard_trigger_count"] += int(guard_triggered)
+        reason = str(row.get("guard_reason") or "")
+        if reason:
+            guard_reason_counts[reason] += 1
+
+    def _rates(block: dict[str, Any]) -> dict[str, float]:
+        total = max(1, _safe_int(block.get("overall_count"), 0))
+        return {
+            "high_ood_rate": float(block.get("high_ood_count") or 0) / total,
+            "high_uncertainty_rate": float(block.get("high_uncertainty_count") or 0) / total,
+            "low_confidence_rate": float(block.get("low_confidence_count") or 0) / total,
+            "low_feature_completeness_rate": float(block.get("low_feature_completeness_count") or 0) / total,
+            "guard_trigger_rate": float(block.get("guard_trigger_count") or 0) / total,
+        }
+
+    overall_rates = _rates(totals)
+    degraded_rates = _rates(degraded_totals)
+    correlated_conditions = [
+        key
+        for key in ("high_ood_rate", "high_uncertainty_rate", "low_confidence_rate", "low_feature_completeness_rate", "guard_trigger_rate")
+        if float(degraded_rates.get(key) or 0.0) >= (float(overall_rates.get(key) or 0.0) + 0.15)
+    ]
+    return {
+        "overall_count": _safe_int(totals.get("overall_count"), 0),
+        "degraded_match_count": _safe_int(degraded_totals.get("degraded_match_count"), 0),
+        "overall_rates": overall_rates,
+        "degraded_slice_rates": degraded_rates,
+        "guard_reason_distribution": [
+            {"guard_reason": key, "count": int(value)}
+            for key, value in sorted(guard_reason_counts.items(), key=lambda item: (-item[1], item[0]))
+        ],
+        "correlated_conditions": correlated_conditions,
+    }
+
+
+def _p52_learned_router_impact(
+    run_manifest: dict[str, Any],
+    run_dir: Path,
+    degraded_rows: list[dict[str, Any]],
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    learned_router_block = _p52_manifest_block(run_manifest)
+    if not learned_router_block:
+        return (
+            {
+                "learned_router_enabled": False,
+                "router_checkpoint_id": "",
+                "rule_policy": "",
+                "learned_policy": "",
+                "guarded_policy": "",
+            },
+            [],
+            [],
+            [],
+            {"guard_condition_correlation": {}, "routing_variants": {}, "selection_overuse": []},
+        )
+
+    summary_rows = _p52_summary_rows(run_dir)
+    bucket_payload = _p52_bucket_metrics(run_dir)
+    routing_variants = _routing_variant_index(run_dir, learned_router_block)
+    rule_policy = str(learned_router_block.get("rule_policy") or "hybrid_controller_rule")
+    learned_policy = "hybrid_controller_learned"
+    guarded_policy = str(learned_router_block.get("guarded_policy") or "hybrid_controller_learned_with_rule_guard")
+    rule_row = _find_policy_row(summary_rows, rule_policy)
+    learned_row = _find_policy_row(summary_rows, learned_policy)
+    guarded_row = _find_policy_row(summary_rows, guarded_policy)
+    rule_score = _safe_float(rule_row.get("mean_total_score"), 0.0)
+    learned_score = _safe_float(learned_row.get("mean_total_score"), 0.0)
+    guarded_score = _safe_float(guarded_row.get("mean_total_score"), 0.0)
+    learned_variant = routing_variants.get(learned_policy) if isinstance(routing_variants.get(learned_policy), dict) else {}
+    guarded_variant = routing_variants.get(guarded_policy) if isinstance(routing_variants.get(guarded_policy), dict) else {}
+    learned_trace_rows = _p52_trace_rows(run_dir, learned_policy)
+    guarded_trace_rows = _p52_trace_rows(run_dir, guarded_policy)
+    learned_top_slices = _top_slice_deltas(
+        bucket_payload=bucket_payload,
+        baseline_policy=rule_policy,
+        target_policy=learned_policy,
+        limit=5,
+    )
+    guarded_top_slices = _top_slice_deltas(
+        bucket_payload=bucket_payload,
+        baseline_policy=rule_policy,
+        target_policy=guarded_policy,
+        limit=5,
+    )
+    selection_overuse = _p52_selection_overuse(routing_variants)
+    guard_condition_correlation = _p52_trace_condition_correlation(
+        trace_rows=guarded_trace_rows or learned_trace_rows,
+        degraded_rows=guarded_top_slices or learned_top_slices or degraded_rows,
+        low_confidence_threshold=0.45,
+        max_ood_score=6.0,
+        max_wm_uncertainty=1.0,
+        min_feature_completeness=0.80,
+    )
+
+    impact = {
+        "learned_router_enabled": True,
+        "router_checkpoint_id": str(learned_router_block.get("checkpoint_id") or ""),
+        "router_checkpoint_path": str(learned_router_block.get("checkpoint_path") or ""),
+        "dataset_manifest_json": str(learned_router_block.get("dataset_manifest_json") or ""),
+        "train_manifest_json": str(learned_router_block.get("train_manifest_json") or ""),
+        "rule_policy": rule_policy,
+        "learned_policy": learned_policy,
+        "guarded_policy": guarded_policy,
+        "rule_score": rule_score,
+        "learned_score": learned_score,
+        "guarded_score": guarded_score,
+        "learned_score_delta_vs_rule": learned_score - rule_score,
+        "guarded_score_delta_vs_rule": guarded_score - rule_score,
+        "guarded_score_delta_vs_learned": guarded_score - learned_score,
+        "guard_trigger_rate": _safe_float(guarded_variant.get("guard_trigger_rate"), 0.0),
+        "guard_fallback_rate": _safe_float(guarded_variant.get("fallback_rate"), 0.0),
+        "guard_invalid_routing_incidents": _safe_int(guarded_variant.get("invalid_routing_incidents"), 0),
+    }
+    return impact, learned_top_slices, guarded_top_slices, selection_overuse, {
+        "guard_condition_correlation": guard_condition_correlation,
+        "routing_variants": routing_variants,
+        "selection_overuse": selection_overuse,
+    }
+
+
 def run_regression_triage(
     *,
     current_run_dir: str | Path,
@@ -656,8 +1008,15 @@ def run_regression_triage(
         current_decision_dict,
         degraded_rows,
     )
+    learned_router_impact, top_degrading_slices_for_learned_router, top_degrading_slices_for_guarded_router, learned_router_selection_overuse, p52_aux = _p52_learned_router_impact(
+        current_manifest if isinstance(current_manifest, dict) else {},
+        current_dir,
+        degraded_rows,
+    )
     search_budget_sensitivity = hybrid_aux.get("search_budget_sensitivity") if isinstance(hybrid_aux, dict) else []
     wm_uncertainty_gate_impact = hybrid_aux.get("wm_uncertainty_gate_impact") if isinstance(hybrid_aux, dict) else []
+    learned_router_guard_correlation = p52_aux.get("guard_condition_correlation") if isinstance(p52_aux, dict) else {}
+    learned_router_routing_variants = p52_aux.get("routing_variants") if isinstance(p52_aux, dict) else {}
     curr_signature = _curriculum_signature(current_candidate_manifest)
     prev_signature = _curriculum_signature(baseline_candidate_manifest)
 
@@ -717,6 +1076,10 @@ def run_regression_triage(
         or (((current_manifest_dict.get("auxiliary_assets") or {}) if isinstance(current_manifest_dict.get("auxiliary_assets"), dict) else {}).get("world_model_checkpoint_id"))
         or ""
     )
+    current_router_checkpoint_id = str(
+        (((current_manifest_dict.get("learned_router") or {}) if isinstance(current_manifest_dict.get("learned_router"), dict) else {}).get("checkpoint_id"))
+        or ""
+    )
 
     payload = {
         "schema": "p41_regression_triage_v1",
@@ -740,6 +1103,12 @@ def run_regression_triage(
         "top_degrading_slices_for_hybrid": top_degrading_slices_for_hybrid,
         "search_budget_sensitivity": search_budget_sensitivity,
         "wm_uncertainty_gate_impact": wm_uncertainty_gate_impact,
+        "learned_router_impact": learned_router_impact,
+        "top_degrading_slices_for_learned_router": top_degrading_slices_for_learned_router,
+        "top_degrading_slices_for_guarded_router": top_degrading_slices_for_guarded_router,
+        "learned_router_selection_overuse": learned_router_selection_overuse,
+        "learned_router_guard_condition_correlation": learned_router_guard_correlation,
+        "learned_router_routing_variants": learned_router_routing_variants,
         "curriculum_change": curriculum_change,
         "data_quality": {
             "current": current_quality,
@@ -757,6 +1126,7 @@ def run_regression_triage(
             "current_candidate_checkpoint_id": current_candidate_checkpoint_id,
             "baseline_candidate_checkpoint_id": baseline_candidate_checkpoint_id,
             "current_world_model_checkpoint_id": current_world_model_checkpoint_id,
+            "current_router_checkpoint_id": current_router_checkpoint_id,
         },
         "refs": {
             "current_run_manifest": str(current_dir / "run_manifest.json"),
@@ -787,6 +1157,7 @@ def run_regression_triage(
         f"- current_candidate_checkpoint_id: `{current_candidate_checkpoint_id}`",
         f"- baseline_candidate_checkpoint_id: `{baseline_candidate_checkpoint_id}`",
         f"- current_world_model_checkpoint_id: `{current_world_model_checkpoint_id}`",
+        f"- current_router_checkpoint_id: `{current_router_checkpoint_id}`",
         "",
         "## Degraded Slices (Top-K)",
     ]
@@ -956,6 +1327,105 @@ def run_regression_triage(
                     ratio=float(row.get("wm_selected_ratio") or 0.0),
                 )
             )
+    if bool(learned_router_impact.get("learned_router_enabled")):
+        md_lines.extend(["", "## Learned Router Impact"])
+        md_lines.append(
+            "- checkpoint_id={checkpoint_id} learned_delta_vs_rule={learned_delta:.6f} guarded_delta_vs_rule={guarded_delta:.6f} guarded_lift_vs_learned={lift:.6f} guard_trigger_rate={guard_rate:.3f}".format(
+                checkpoint_id=learned_router_impact.get("router_checkpoint_id"),
+                learned_delta=float(learned_router_impact.get("learned_score_delta_vs_rule") or 0.0),
+                guarded_delta=float(learned_router_impact.get("guarded_score_delta_vs_rule") or 0.0),
+                lift=float(learned_router_impact.get("guarded_score_delta_vs_learned") or 0.0),
+                guard_rate=float(learned_router_impact.get("guard_trigger_rate") or 0.0),
+            )
+        )
+        if learned_router_selection_overuse:
+            md_lines.extend(["", "## Learned Router Controller Overuse"])
+            for row in learned_router_selection_overuse:
+                if not isinstance(row, dict):
+                    continue
+                md_lines.append(
+                    "- {policy}: dominant_controller={controller} ratio={ratio:.3f} overuse_detected={overuse}".format(
+                        policy=row.get("policy_id"),
+                        controller=row.get("dominant_controller"),
+                        ratio=float(row.get("dominant_ratio") or 0.0),
+                        overuse=str(bool(row.get("overuse_detected"))).lower(),
+                    )
+                )
+        if top_degrading_slices_for_learned_router:
+            md_lines.extend(["", "## Top Degrading Slices For Learned Router"])
+            for row in top_degrading_slices_for_learned_router:
+                if not isinstance(row, dict):
+                    continue
+                md_lines.append(
+                    "- {key}:{label} score_delta={score:.6f} win_delta={win:.6f} count={count}".format(
+                        key=row.get("slice_key"),
+                        label=row.get("slice_label"),
+                        score=float(row.get("score_delta") or 0.0),
+                        win=float(row.get("win_rate_delta") or 0.0),
+                        count=int(row.get("count") or 0),
+                    )
+                )
+        if top_degrading_slices_for_guarded_router:
+            md_lines.extend(["", "## Top Degrading Slices For Guarded Router"])
+            for row in top_degrading_slices_for_guarded_router:
+                if not isinstance(row, dict):
+                    continue
+                md_lines.append(
+                    "- {key}:{label} score_delta={score:.6f} win_delta={win:.6f} count={count}".format(
+                        key=row.get("slice_key"),
+                        label=row.get("slice_label"),
+                        score=float(row.get("score_delta") or 0.0),
+                        win=float(row.get("win_rate_delta") or 0.0),
+                        count=int(row.get("count") or 0),
+                    )
+                )
+        if learned_router_guard_correlation:
+            overall_rates = (
+                learned_router_guard_correlation.get("overall_rates")
+                if isinstance(learned_router_guard_correlation.get("overall_rates"), dict)
+                else {}
+            )
+            degraded_slice_rates = (
+                learned_router_guard_correlation.get("degraded_slice_rates")
+                if isinstance(learned_router_guard_correlation.get("degraded_slice_rates"), dict)
+                else {}
+            )
+            md_lines.extend(["", "## Learned Router Guard Correlation"])
+            md_lines.append(
+                "- degraded_match_count={degraded} overall_count={overall} correlated_conditions={conditions}".format(
+                    degraded=int(learned_router_guard_correlation.get("degraded_match_count") or 0),
+                    overall=int(learned_router_guard_correlation.get("overall_count") or 0),
+                    conditions=",".join([str(item) for item in (learned_router_guard_correlation.get("correlated_conditions") or [])]) or "none",
+                )
+            )
+            md_lines.append(
+                "- overall_rates high_ood={ood:.3f} high_uncertainty={unc:.3f} low_confidence={conf:.3f} low_feature_completeness={comp:.3f} guard_trigger={guard:.3f}".format(
+                    ood=float(overall_rates.get("high_ood_rate") or 0.0),
+                    unc=float(overall_rates.get("high_uncertainty_rate") or 0.0),
+                    conf=float(overall_rates.get("low_confidence_rate") or 0.0),
+                    comp=float(overall_rates.get("low_feature_completeness_rate") or 0.0),
+                    guard=float(overall_rates.get("guard_trigger_rate") or 0.0),
+                )
+            )
+            md_lines.append(
+                "- degraded_slice_rates high_ood={ood:.3f} high_uncertainty={unc:.3f} low_confidence={conf:.3f} low_feature_completeness={comp:.3f} guard_trigger={guard:.3f}".format(
+                    ood=float(degraded_slice_rates.get("high_ood_rate") or 0.0),
+                    unc=float(degraded_slice_rates.get("high_uncertainty_rate") or 0.0),
+                    conf=float(degraded_slice_rates.get("low_confidence_rate") or 0.0),
+                    comp=float(degraded_slice_rates.get("low_feature_completeness_rate") or 0.0),
+                    guard=float(degraded_slice_rates.get("guard_trigger_rate") or 0.0),
+                )
+            )
+            guard_reason_rows = learned_router_guard_correlation.get("guard_reason_distribution") if isinstance(learned_router_guard_correlation.get("guard_reason_distribution"), list) else []
+            for row in guard_reason_rows[:5]:
+                if not isinstance(row, dict):
+                    continue
+                md_lines.append(
+                    "- guard_reason {reason}: count={count}".format(
+                        reason=row.get("guard_reason"),
+                        count=int(row.get("count") or 0),
+                    )
+                )
     md_lines.extend(["", "## Seed Attribution"])
     if current_seed_attr:
         for row in current_seed_attr[:10]:

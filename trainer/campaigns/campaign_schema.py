@@ -16,6 +16,16 @@ CAMPAIGN_STAGE_IDS = (
     "cleanup_finalize",
 )
 
+P52_ROUTER_CAMPAIGN_STAGE_IDS = (
+    "build_router_dataset",
+    "train_learned_router",
+    "eval_learned_router",
+    "arena_ablation",
+    "triage",
+    "promotion_queue_update",
+    "dashboard_build",
+)
+
 CAMPAIGN_STAGE_STATUSES = ("pending", "running", "completed", "failed", "skipped")
 
 
