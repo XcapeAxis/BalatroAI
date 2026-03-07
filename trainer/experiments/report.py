@@ -50,6 +50,11 @@ def write_summary_tables(
         "seed_count",
         "catastrophic_failure_count",
         "elapsed_sec",
+        "device_profile",
+        "learner_device",
+        "training_python",
+        "dashboard_path",
+        "readiness_report_path",
         "run_dir",
     ]
 
@@ -85,6 +90,11 @@ def write_summary_tables(
                     "seed_count": row.get("seed_count"),
                     "catastrophic_failure_count": row.get("catastrophic_failure_count"),
                     "elapsed_sec": _safe_float(row.get("elapsed_sec")),
+                    "device_profile": row.get("device_profile"),
+                    "learner_device": row.get("learner_device"),
+                    "training_python": row.get("training_python"),
+                    "dashboard_path": row.get("dashboard_path"),
+                    "readiness_report_path": row.get("readiness_report_path"),
                     "run_dir": row.get("run_dir"),
                 }
             )
@@ -94,12 +104,12 @@ def write_summary_tables(
     md_lines = [
         f"# P23 Summary ({run_id})",
         "",
-        "| exp_id | category | default_enabled | status | seed_set | mean | std | avg_reward | reward_std | best_episode_reward | avg_ante | median_ante | win_rate | final_win_rate | final_loss | hand_top1 | hand_top3 | shop_top1 | illegal_rate | seeds | failures | elapsed_sec |",
-        "|---|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| exp_id | category | default_enabled | status | seed_set | mean | std | avg_reward | reward_std | best_episode_reward | avg_ante | median_ante | win_rate | final_win_rate | final_loss | hand_top1 | hand_top3 | shop_top1 | illegal_rate | seeds | failures | elapsed_sec | device_profile | learner_device |",
+        "|---|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
     ]
     for row in rows:
         md_lines.append(
-            "| {exp} | {category} | {default_enabled} | {status} | {seed_set} | {mean} | {std} | {avg_reward} | {reward_std} | {best_episode_reward} | {avg_ante} | {median_ante} | {win_rate} | {final_win_rate} | {final_loss} | {hand_top1} | {hand_top3} | {shop_top1} | {illegal_rate} | {seeds} | {fails} | {elapsed} |".format(
+            "| {exp} | {category} | {default_enabled} | {status} | {seed_set} | {mean} | {std} | {avg_reward} | {reward_std} | {best_episode_reward} | {avg_ante} | {median_ante} | {win_rate} | {final_win_rate} | {final_loss} | {hand_top1} | {hand_top3} | {shop_top1} | {illegal_rate} | {seeds} | {fails} | {elapsed} | {device_profile} | {learner_device} |".format(
                 exp=row.get("exp_id"),
                 category=row.get("category"),
                 default_enabled=str(bool(row.get("default_enabled"))).lower(),
@@ -122,8 +132,26 @@ def write_summary_tables(
                 seeds=row.get("seed_count"),
                 fails=row.get("catastrophic_failure_count"),
                 elapsed=_safe_float(row.get("elapsed_sec")),
+                device_profile=row.get("device_profile") or "",
+                learner_device=row.get("learner_device") or "",
             )
         )
+    runtime_rows = [
+        row for row in rows if any(row.get(key) for key in ("training_python", "dashboard_path", "readiness_report_path"))
+    ]
+    if runtime_rows:
+        md_lines += [
+            "",
+            "## Runtime Details",
+        ]
+        for row in runtime_rows:
+            md_lines.append(f"- `{row.get('exp_id')}`")
+            if row.get("training_python"):
+                md_lines.append(f"  training_python: `{row.get('training_python')}`")
+            if row.get("dashboard_path"):
+                md_lines.append(f"  dashboard_path: `{row.get('dashboard_path')}`")
+            if row.get("readiness_report_path"):
+                md_lines.append(f"  readiness_report_path: `{row.get('readiness_report_path')}`")
     md_path.write_text("\n".join(md_lines) + "\n", encoding="utf-8")
 
     return {

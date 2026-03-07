@@ -75,6 +75,10 @@ def append_jsonl(path: Path, payload: dict[str, Any]) -> None:
         fp.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
 
+def _resolved_readiness_report_path() -> str:
+    return str(os.environ.get("BALATRO_READINESS_REPORT") or "").strip()
+
+
 def run_process(
     command: str | list[str],
     *,
@@ -173,6 +177,7 @@ def normalize_experiment_category(exp: dict[str, Any]) -> str:
         "p48_hybrid_controller",
         "gpu_mainline_eval",
         "p49_gpu_mainline",
+        "p50_gpu_validation",
     }:
         return MODE_CATEGORY_MAINLINE
     if exp_type == "standard" and policy in {"baseline", "candidate"}:
@@ -2109,14 +2114,25 @@ def _run_p49_gpu_mainline_seed_experiment(
     from trainer.world_model.imagination_pipeline import run_imagination_pipeline
     from trainer.world_model.train import run_world_model_train
 
+    exp_type = str(exp.get("experiment_type") or "").strip().lower()
+    exp_id = str(exp.get("id") or "").strip().lower()
+    family_prefix = "p50" if exp_type == "p50_gpu_validation" or exp_id.startswith("p50_") else "p49"
     eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
     cfg_rel = str(
         eval_cfg.get("config")
         or exp.get("gpu_mainline_config")
         or (
-            "configs/experiments/p49_gpu_mainline_smoke.yaml"
-            if ctx.mode == "quick"
-            else "configs/experiments/p49_gpu_mainline_nightly.yaml"
+            "configs/experiments/p50_gpu_validation_smoke.yaml"
+            if family_prefix == "p50" and ctx.mode == "quick"
+            else (
+                "configs/experiments/p50_gpu_validation_nightly.yaml"
+                if family_prefix == "p50"
+                else (
+                    "configs/experiments/p49_gpu_mainline_smoke.yaml"
+                    if ctx.mode == "quick"
+                    else "configs/experiments/p49_gpu_mainline_nightly.yaml"
+                )
+            )
         )
     )
     cfg_path = (ctx.repo_root / cfg_rel).resolve()
@@ -2137,6 +2153,8 @@ def _run_p49_gpu_mainline_seed_experiment(
     component_runs: dict[str, Any] = {}
     component_scores: list[float] = []
     component_failures: list[str] = []
+    observed_learner_device = ""
+    observed_gpu_mem_mb = 0.0
 
     if _gpu_component_enabled(cfg, "p42", default=True):
         p42_cfg = _prepare_gpu_component_config(
@@ -2194,7 +2212,7 @@ def _run_p49_gpu_mainline_seed_experiment(
         p45_summary = run_world_model_train(
             config_path=p45_cfg,
             out_dir=run_root / "p45",
-            run_id=f"p49-{seed}-p45",
+            run_id=f"{family_prefix}-{seed}-p45",
             quick=quick_flag,
             seed_override=_seed_to_int(seed),
         )
@@ -2202,6 +2220,8 @@ def _run_p49_gpu_mainline_seed_experiment(
         p45_metrics = read_json(Path(str(p45_summary.get("metrics_json") or ""))) or {}
         p45_best_metric = float((p45_metrics or {}).get("best_metric") or 0.0)
         component_scores.append(float(1.0 / (1.0 + max(0.0, p45_best_metric))))
+        observed_learner_device = str((p45_metrics or {}).get("learner_device") or observed_learner_device)
+        observed_gpu_mem_mb = max(observed_gpu_mem_mb, float((p45_metrics or {}).get("gpu_mem_mb") or 0.0))
         if str(p45_summary.get("status") or "") not in {"ok", "stub"}:
             component_failures.append("p45")
 
@@ -2230,7 +2250,7 @@ def _run_p49_gpu_mainline_seed_experiment(
 
     aggregate_score = float(sum(component_scores) / max(1, len(component_scores)))
     summary_payload = {
-        "schema": "p49_gpu_mainline_seed_summary_v1",
+        "schema": f"{family_prefix}_gpu_mainline_seed_summary_v1",
         "generated_at": now_iso(),
         "seed": str(seed),
         "device_profile": device_profile_name,
@@ -2238,7 +2258,11 @@ def _run_p49_gpu_mainline_seed_experiment(
         "component_runs": component_runs,
         "aggregate_score": aggregate_score,
         "component_failures": component_failures,
+        "training_python": sys.executable,
+        "learner_device": observed_learner_device,
+        "max_gpu_mem_mb": observed_gpu_mem_mb,
         "dashboard_path": str((ctx.repo_root / "docs/artifacts/dashboard/latest/index.html").resolve()),
+        "readiness_report_path": _resolved_readiness_report_path(),
     }
     write_json(run_root / "gpu_mainline_summary.json", summary_payload)
     result_metrics = {
@@ -2257,7 +2281,26 @@ def _run_p49_gpu_mainline_seed_experiment(
         "p49_device_profile": device_profile_name,
         "p49_summary_json": str(run_root / "gpu_mainline_summary.json"),
         "p49_dashboard_path": str((ctx.repo_root / "docs/artifacts/dashboard/latest/index.html").resolve()),
+        "p49_readiness_report_path": _resolved_readiness_report_path(),
+        "gpu_mainline_training_python": sys.executable,
+        "gpu_mainline_learner_device": observed_learner_device,
+        "gpu_mainline_max_gpu_mem_mb": observed_gpu_mem_mb,
+        "gpu_mainline_readiness_report_path": _resolved_readiness_report_path(),
     }
+    if family_prefix == "p50":
+        result_metrics.update(
+            {
+                "p50_component_count": len(component_runs),
+                "p50_component_failures": len(component_failures),
+                "p50_device_profile": device_profile_name,
+                "p50_summary_json": str(run_root / "gpu_mainline_summary.json"),
+                "p50_dashboard_path": str((ctx.repo_root / "docs/artifacts/dashboard/latest/index.html").resolve()),
+                "p50_readiness_report_path": _resolved_readiness_report_path(),
+                "p50_training_python": sys.executable,
+                "p50_learner_device": observed_learner_device,
+                "p50_max_gpu_mem_mb": observed_gpu_mem_mb,
+            }
+        )
     return {
         "status": "ok" if not component_failures else "failed",
         "metrics": result_metrics,
@@ -2961,21 +3004,33 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "candidate_policy": str(eval_cfg.get("candidate_policy") or "hybrid_controller_v1"),
             "champion_policy": str(eval_cfg.get("champion_policy") or "policy_baseline"),
         }
-    elif exp_type in {"gpu_mainline_eval", "p49_gpu_mainline"}:
+    elif exp_type in {"gpu_mainline_eval", "p49_gpu_mainline", "p50_gpu_validation"}:
         eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+        exp_id = str(exp.get("id") or "").strip().lower()
+        family_prefix = "p50" if exp_type == "p50_gpu_validation" or exp_id.startswith("p50_") else "p49"
         manifest["gpu_mainline"] = {
             "config": str(
                 eval_cfg.get("config")
                 or exp.get("gpu_mainline_config")
                 or (
-                    "configs/experiments/p49_gpu_mainline_smoke.yaml"
-                    if ctx.mode == "quick"
-                    else "configs/experiments/p49_gpu_mainline_nightly.yaml"
+                    "configs/experiments/p50_gpu_validation_smoke.yaml"
+                    if family_prefix == "p50" and ctx.mode == "quick"
+                    else (
+                        "configs/experiments/p50_gpu_validation_nightly.yaml"
+                        if family_prefix == "p50"
+                        else (
+                            "configs/experiments/p49_gpu_mainline_smoke.yaml"
+                            if ctx.mode == "quick"
+                            else "configs/experiments/p49_gpu_mainline_nightly.yaml"
+                        )
+                    )
                 )
             ),
             "quick": bool(eval_cfg.get("quick") or False),
             "device_profile": str(exp.get("device_profile") or "single_gpu_mainline"),
             "dashboard_path": str((ctx.repo_root / "docs/artifacts/dashboard/latest/index.html").resolve()),
+            "readiness_report_path": _resolved_readiness_report_path(),
+            "training_python": sys.executable,
         }
     write_json(exp_dir / "run_manifest.json", manifest)
     print(
@@ -3651,7 +3706,7 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                     message=exp_type,
                     extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
                 )
-            elif exp_type in {"gpu_mainline_eval", "p49_gpu_mainline"}:
+            elif exp_type in {"gpu_mainline_eval", "p49_gpu_mainline", "p50_gpu_validation"}:
                 try:
                     p49_result = _run_p49_gpu_mainline_seed_experiment(
                         ctx=ctx,
@@ -3901,6 +3956,38 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             )
         )
     )
+    runtime_details = {
+        "device_profile": str(
+            final_seed_metrics.get("p50_device_profile")
+            or final_seed_metrics.get("p49_device_profile")
+            or exp.get("device_profile")
+            or ""
+        ),
+        "learner_device": str(
+            final_seed_metrics.get("p50_learner_device")
+            or final_seed_metrics.get("gpu_mainline_learner_device")
+            or final_seed_metrics.get("p49_learner_device")
+            or ""
+        ),
+        "training_python": str(
+            final_seed_metrics.get("p50_training_python")
+            or final_seed_metrics.get("gpu_mainline_training_python")
+            or final_seed_metrics.get("p49_training_python")
+            or ""
+        ),
+        "dashboard_path": str(
+            final_seed_metrics.get("p50_dashboard_path")
+            or final_seed_metrics.get("p49_dashboard_path")
+            or ""
+        ),
+        "readiness_report_path": str(
+            final_seed_metrics.get("p50_readiness_report_path")
+            or final_seed_metrics.get("gpu_mainline_readiness_report_path")
+            or final_seed_metrics.get("p49_readiness_report_path")
+            or _resolved_readiness_report_path()
+            or ""
+        ),
+    }
 
     exp_summary = {
         "schema": "p23_experiment_summary_v1",
@@ -3918,6 +4005,7 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "run_dir": str(exp_dir),
         "category": exp_category,
         "default_enabled": exp_default_enabled,
+        "runtime": runtime_details,
     }
     write_json(exp_dir / "stage_results.json", stage_results)
     write_json(exp_dir / "exp_summary.json", exp_summary)
@@ -3948,6 +4036,7 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "final_loss": final_loss,
             "category": exp_category,
             "default_enabled": exp_default_enabled,
+            "runtime": runtime_details,
         },
     )
     write_json(
@@ -3967,6 +4056,7 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "final_loss": final_loss,
             "category": exp_category,
             "default_enabled": exp_default_enabled,
+            "runtime": runtime_details,
         },
     )
 
@@ -4029,6 +4119,11 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "final_loss": final_loss,
         "category": exp_category,
         "default_enabled": exp_default_enabled,
+        "device_profile": runtime_details["device_profile"],
+        "learner_device": runtime_details["learner_device"],
+        "training_python": runtime_details["training_python"],
+        "dashboard_path": runtime_details["dashboard_path"],
+        "readiness_report_path": runtime_details["readiness_report_path"],
     }
 
 

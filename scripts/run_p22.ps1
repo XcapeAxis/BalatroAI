@@ -17,8 +17,10 @@ param(
   [switch]$RunP47,
   [switch]$RunP48,
   [switch]$RunP49,
+  [switch]$RunP50,
   [string]$Only = "",
   [string]$Exclude = "",
+  [string]$TrainingPython = "",
   [int]$MaxParallel = 1,
   [int]$SeedLimit = 0,
   [string]$Seeds = ""
@@ -31,8 +33,25 @@ $PSNativeCommandUseErrorActionPreference = $false
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $ProjectRoot
 
-$py = Join-Path $ProjectRoot ".venv_trainer\Scripts\python.exe"
-if (-not (Test-Path $py)) { $py = "python" }
+$resolveTrainingPythonScript = Join-Path $ProjectRoot "scripts\\resolve_training_python.ps1"
+$resolverArgs = @(
+  "-ExecutionPolicy", "Bypass",
+  "-File", $resolveTrainingPythonScript,
+  "-Emit", "json"
+)
+if ($TrainingPython.Trim()) { $resolverArgs += @("-ExplicitPython", $TrainingPython) }
+if ($RunP50) { $resolverArgs += "-RequireCuda" }
+$resolverJson = (& powershell @resolverArgs | Out-String).Trim()
+if (-not $resolverJson) {
+  throw "[P22] training python resolver returned empty output"
+}
+$resolver = $resolverJson | ConvertFrom-Json
+$py = [string]$resolver.selected.python
+if (-not $py.Trim()) {
+  throw "[P22] training python resolver did not return a python path"
+}
+$env:BALATRO_TRAIN_PYTHON = $py
+$env:BALATRO_READINESS_REPORT = ""
 
 $env:PYTHONUTF8 = "1"
 
@@ -51,7 +70,7 @@ if ($LegacyOnly) { $args += "--legacy-only" }
 if ($Resume) { $args += "--resume" }
 if ($KeepIntermediate) { $args += "--keep-intermediate" }
 if ($VerboseLogs) { $args += "--verbose" }
-if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49) -and [string]::IsNullOrWhiteSpace($Only)) {
+if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $RunP50) -and [string]::IsNullOrWhiteSpace($Only)) {
   $selected = @()
   if ($RunP44) { $selected += if ($Nightly) { "p44_rl_nightly" } else { "p44_rl_smoke" } }
   if ($RunP45) { $selected += if ($Nightly) { "p45_world_model_nightly" } else { "p45_world_model_smoke" } }
@@ -59,6 +78,7 @@ if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49) -and [
   if ($RunP47) { $selected += if ($Nightly) { "p47_wm_search_nightly" } else { "p47_wm_search_smoke" } }
   if ($RunP48) { $selected += if ($Nightly) { "p48_hybrid_controller_nightly" } else { "p48_hybrid_controller_smoke" } }
   if ($RunP49) { $selected += if ($Nightly) { "p49_gpu_mainline_nightly" } else { "p49_gpu_mainline_smoke" } }
+  if ($RunP50) { $selected += if ($Nightly) { "p50_gpu_validation_nightly" } else { "p50_gpu_validation_smoke" } }
   $Only = ($selected -join ",")
 }
 if (-not [string]::IsNullOrWhiteSpace($Only)) { $args += @("--only", $Only) }
@@ -86,7 +106,8 @@ if ($Quick) {
       "p46_imagination_smoke",
       "p47_wm_search_smoke",
       "p48_hybrid_controller_smoke",
-      "p49_gpu_mainline_smoke"
+      "p49_gpu_mainline_smoke",
+      "p50_gpu_validation_smoke"
     )
     if ($IncludeLegacy -or $LegacyOnly) {
       $quickIds += @("legacy_bc_dagger_probe")
@@ -109,6 +130,9 @@ if ($LegacyOnly) {
 
 Write-Host ("[P22] repo_root: " + $ProjectRoot)
 Write-Host ("[P22] python: " + $py)
+Write-Host ("[P22] python_env_type: " + [string]$resolver.selected.env_type)
+Write-Host ("[P22] python_torch: " + [string]$resolver.selected.torch_version)
+Write-Host ("[P22] python_cuda: " + [string]$resolver.selected.cuda_available)
 Write-Host ("[P22] cmd: " + $py + " " + ($args -join " "))
 
 $readinessReport = ""
@@ -119,7 +143,8 @@ if (-not $DryRun -and -not $SkipReadinessGuard) {
     "-File", (Join-Path $ProjectRoot "scripts\\wait_for_service_ready.ps1"),
     "-BaseUrl", "http://127.0.0.1:12346",
     "-OutDir", "docs/artifacts/p49/readiness",
-    "-RunId", $readinessRunId
+    "-RunId", $readinessRunId,
+    "-TrainingPython", $py
   )
   Write-Host ("[P22] readiness cmd: powershell " + ($waitArgs -join " "))
   & powershell @waitArgs
@@ -127,6 +152,7 @@ if (-not $DryRun -and -not $SkipReadinessGuard) {
     throw ("[P22] readiness guard failed with exit code " + $LASTEXITCODE)
   }
   $readinessReport = (Join-Path $ProjectRoot ("docs\\artifacts\\p49\\readiness\\" + $readinessRunId + "\\service_readiness_report.json"))
+  $env:BALATRO_READINESS_REPORT = $readinessReport
 }
 
 & $py @args
@@ -136,7 +162,7 @@ if ($code -ne 0) {
 }
 
 $dashboardPath = ""
-if ($Dashboard -or $Quick -or $Nightly -or $RunP49) {
+if ($Dashboard -or $Quick -or $Nightly -or $RunP49 -or $RunP50) {
   $dashArgs = @(
     "-B",
     "-m", "trainer.monitoring.dashboard_build",
