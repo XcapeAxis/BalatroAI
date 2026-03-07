@@ -28,7 +28,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | Scenario | Command | Notes |
 |---|---|---|
 | Plan only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -DryRun` | validates matrix + writes plan/report |
-| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | mainline smoke set with multi-seed materialization (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row + P40/P41/P42 + P45 world-model smoke row + P46 imagination smoke row + P47 model-based search smoke row + P48 hybrid-controller smoke row + P49 GPU-mainline row) |
+| Fast smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | mainline smoke set with multi-seed materialization (includes P31/P33/P36 + P37 SSL + RL smoke + P39 arena smoke row + P40/P41/P42 + P45 world-model smoke row + P46 imagination smoke row + P47 model-based search smoke row + P48 hybrid-controller smoke row + P49 GPU-mainline row + P50 real-CUDA validation row) |
 | Fast smoke + legacy probe | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -IncludeLegacy` | adds opt-in legacy BC/DAgger probe row(s) |
 | Legacy only quick | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -LegacyOnly` | runs only legacy baseline probe row(s) |
 | Multi-seed quick compare | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline,quick_candidate -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | 2 strategies x 3 seeds |
@@ -39,6 +39,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | P47 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP47` | runs `p47_wm_search_smoke` with orchestrator defaults |
 | P48 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP48` | runs `p48_hybrid_controller_smoke` with orchestrator defaults |
 | P49 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP49` | runs `p49_gpu_mainline_smoke` with readiness guard + dashboard build |
+| P50 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP50` | runs `p50_gpu_validation_smoke` with CUDA-first python resolver + readiness guard + dashboard build |
 | Single experiment | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline -Resume` | rerun one exp id |
 | Limit seeds | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -SeedLimit 2` | local-cost control |
 | Custom seeds | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | explicit reproducibility override (recorded to artifacts) |
@@ -566,6 +567,43 @@ Operational notes:
 - `scripts/run_p22.ps1` now prints readiness-report and dashboard paths after successful runs.
 - no-CUDA hosts degrade to CPU and keep that downgrade in `runtime_profile.json`.
 
+## P50 Real CUDA Validation Integration
+
+P50 adds `experiment_type: p50_gpu_validation` so P22 can prove that the local training path really reached CUDA instead of only exercising CPU fallback.
+
+Reference rows in `configs/experiments/p22.yaml`:
+
+- `p50_gpu_validation_smoke`
+- `p50_gpu_validation_nightly`
+
+What P50 adds on top of P49:
+
+- shared training-python resolver that prefers `.venv_trainer_cuda`
+- explicit CUDA-required mode for `-RunP50`
+- real-CUDA smoke for P42 RL candidate and P45 world model
+- benchmark-derived profile guidance for 12 GB single-GPU hosts
+
+Key artifacts:
+
+- `docs/artifacts/p22/runs/<run_id>/p50_gpu_validation_smoke/run_manifest.json`
+- `docs/artifacts/p22/runs/<run_id>/p50_gpu_validation_smoke/gpu_mainline_runs/seed_*/gpu_mainline_summary.json`
+- `docs/artifacts/p50/gpu_diagnose_<timestamp>.json`
+- `docs/artifacts/p50/benchmarks/<run_id>/benchmark_summary.md`
+
+Summary/runtime fields now surfaced in P22 artifacts for this lane:
+
+- `training_python`
+- `device_profile`
+- `learner_device`
+- `dashboard_path`
+- `readiness_report_path`
+
+Operational notes:
+
+- `scripts/run_p22.ps1 -Quick` includes `p50_gpu_validation_smoke` by default.
+- `scripts/run_p22.ps1 -RunP50` requires CUDA in resolver selection and fails early if the CUDA env is not healthy.
+- readiness reports remain under `docs/artifacts/p49/readiness/...` because P50 reuses the shared readiness bucket introduced in P49.
+
 ## Runtime Observability (During Execution)
 
 P22 emits both per-experiment and run-level observability artifacts:
@@ -716,3 +754,5 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_selfsup
 - [P47_MODEL_BASED_SEARCH.md](P47_MODEL_BASED_SEARCH.md)
 - [P48_ADAPTIVE_HYBRID_CONTROLLER.md](P48_ADAPTIVE_HYBRID_CONTROLLER.md)
 - [P49_GPU_MAINLINE_AND_DASHBOARD.md](P49_GPU_MAINLINE_AND_DASHBOARD.md)
+- [P50_CUDA_ENVIRONMENT.md](P50_CUDA_ENVIRONMENT.md)
+- [P50_GPU_TROUBLESHOOTING.md](P50_GPU_TROUBLESHOOTING.md)

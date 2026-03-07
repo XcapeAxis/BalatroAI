@@ -19,18 +19,20 @@
 | P47 | Uncertainty-aware model-based search v1 (candidate rerank + short lookahead + arena ablation) | done |
 | P48 | Adaptive hybrid controller v1 (state-aware routing across policy/search/wm-rerank) | done |
 | P49 | GPU mainline + CPU rollout/GPU learner + dashboard + readiness guard | done |
+| P50 | Real CUDA bring-up + GPU validation + nightly benchmark profiles | done |
 
-## Current Focus: P49 GPU Mainline Reliability
+## Current Focus: Post-P50 GPU Scale-Up
 
-1. Validate shared runtime profiles on real CUDA hardware and tune batch/grad-accum tradeoffs.
+1. Extend real-CUDA validation from smoke budgets into heavier nightly workloads, especially P44 distributed RL.
 2. Keep readiness guarding enabled on service-dependent paths to avoid cold-start false positives.
 3. Treat unified telemetry and dashboard outputs as first-class artifacts for nightly diagnosis.
 4. Preserve simulator-first promotion gates while runtime plumbing scales underneath them.
 
-## Near-Term After P49
+## Near-Term After P50
 
 - broader imagined-root coverage beyond the current replay families
 - tighter P42/P45/P47 coupling through auxiliary losses, rollout-value proxies, and RL-policy routing
+- longer real-CUDA benchmark sweeps beyond smoke-sized learners
 - learned router experiments once controller telemetry is richer and more stable
 - careful expansion beyond fixed-budget search while preserving uncertainty controls and arena-first evaluation
 - richer GPU telemetry and eventual multi-GPU support once single-GPU runtime remains stable

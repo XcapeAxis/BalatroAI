@@ -9,7 +9,7 @@
 [![Seed Governance](https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16)](configs/experiments/seeds_p23.yaml)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Trend Warehouse](https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16)](docs/TREND_WAREHOUSE_P26.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P49-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P50-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -19,7 +19,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/XcapeAxis/BalatroAI)](https://github.com/XcapeAxis/BalatroAI/issues)
 <!-- BADGES:END -->
 
-BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, a unified action replay contract, P45 world-model / latent-planning, P46 short-horizon imagination augmentation, P47 uncertainty-aware world-model reranking, P48 adaptive hybrid routing across policy/search/world-model assist, and P49 GPU-mainline runtime profiles with readiness guards and lightweight dashboards. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised/world-model iteration, not as a cheat injector or memory-hook tool.
+BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, a unified action replay contract, P45 world-model / latent-planning, P46 short-horizon imagination augmentation, P47 uncertainty-aware world-model reranking, P48 adaptive hybrid routing across policy/search/world-model assist, P49 GPU-mainline runtime profiles with readiness guards and lightweight dashboards, and P50 real local CUDA validation with benchmarked nightly profiles. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised/world-model iteration, not as a cheat injector or memory-hook tool.
 
 Badge/status refresh source:
 
@@ -212,6 +212,13 @@ Optional P49 GPU mainline smoke:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP49
 powershell -ExecutionPolicy Bypass -File scripts\run_dashboard.ps1
+```
+
+Optional P50 real CUDA validation smoke:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP50
+python -m trainer.runtime.gpu_diagnose --profile single_gpu_mainline
 ```
 
 8. Inspect generated artifacts.
@@ -647,6 +654,44 @@ Reference docs:
 
 - [docs/P49_GPU_MAINLINE_AND_DASHBOARD.md](docs/P49_GPU_MAINLINE_AND_DASHBOARD.md)
 
+## Real GPU Validation (P50)
+
+P50 takes the P49 runtime lane from "GPU-ready in code" to "validated on this machine with real CUDA". The project now keeps a safe CPU fallback environment in `.venv_trainer`, a dedicated CUDA training environment in `.venv_trainer_cuda`, and a shared Python resolver that prefers the CUDA environment when it is healthy.
+
+How to run GPU smoke:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP50
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
+python -m trainer.runtime.gpu_diagnose --profile single_gpu_mainline
+```
+
+Observed local validation:
+
+- CUDA environment: `torch 2.10.0+cu128` on `NVIDIA GeForce RTX 3080 Ti`
+- resolver picks `.venv_trainer_cuda` first and falls back to `.venv_trainer` only when CUDA is unavailable
+- P42 RL smoke and P45 world-model smoke both completed with `learner_device=cuda:0`
+- P46 imagination path was validated as GPU-compatible inference/generation, not a separate learner benchmark
+
+Monitoring / dashboard:
+
+- live terminal view: `python -m trainer.monitoring.live_dashboard --watch docs/artifacts/p22/runs/<run_id> --once`
+- static HTML: `docs/artifacts/dashboard/latest/index.html`
+- GPU diagnostics: `docs/artifacts/p50/gpu_diagnose_<timestamp>.json`
+- benchmark matrix: `docs/artifacts/p50/benchmarks/<run_id>/benchmark_matrix.csv`
+
+Boundaries / risks:
+
+- CPU rollout and environment stepping still dominate some runs; GPU enablement does not remove simulator bottlenecks.
+- smoke-scale GPU memory numbers stay low because the shipped smoke configs are intentionally tiny.
+- AMP, OOM fallback, and readiness race conditions still need active monitoring; use the troubleshooting docs before raising profile sizes.
+
+Reference docs:
+
+- [docs/P50_CUDA_ENVIRONMENT.md](docs/P50_CUDA_ENVIRONMENT.md)
+- [docs/P50_GPU_TROUBLESHOOTING.md](docs/P50_GPU_TROUBLESHOOTING.md)
+- [docs/P49_GPU_MAINLINE_AND_DASHBOARD.md](docs/P49_GPU_MAINLINE_AND_DASHBOARD.md)
+
 ## Maturity and Boundaries
 
 - P41 v2 still produces recommendation-only promotion outputs; champion switching remains manual.
@@ -657,6 +702,7 @@ Reference docs:
 - P47 model-based reranking is v1/research-grade; it provides short-horizon decision support, not full search or trusted model-only evaluation.
 - P48 adaptive hybrid routing is v1/research-grade; routing rules are explainable heuristics and will require recalibration as controller quality shifts.
 - P49 GPU mainline is an execution/operations milestone, not a claim of higher policy quality by itself.
+- P50 proves local CUDA bring-up and recommended profiles on one RTX 3080 Ti host; it is not a guarantee that every Windows/CUDA stack will behave identically.
 - BC/DAgger paths are retained as legacy baselines; they are not default mainline training routes.
 - Legacy baseline checks are lightweight smoke/probe checks unless explicitly requested.
 - low-sample CI/bootstrap outcomes remain observation-level and should not be treated as decisive promotion proof.
@@ -1019,11 +1065,13 @@ Milestone maturity snapshot:
 | P47 (uncertainty-aware model-based search v1: candidate generation + rerank + arena ablation) | shipped |
 | P48 (adaptive hybrid controller v1: state-aware routing across policy/search/wm-rerank) | shipped |
 | P49 (GPU mainline + CPU rollout/GPU learner + readiness guard + dashboard) | shipped |
+| P50 (real CUDA bring-up + GPU validation + nightly benchmark profiles) | shipped |
 
 Near-term:
 
 - harden P48 routing thresholds and controller-cost heuristics on larger multi-seed budgets
-- push P49 runtime profiles onto a real CUDA host and tune batch/grad-accum settings against actual GPU memory ceilings
+- expand real-CUDA validation from smoke budgets into heavier P44/P46 nightly budgets
+- harden benchmark-derived profiles with longer warm runs and more realistic learner load
 - extend adaptive routing toward RL candidate inference without weakening arena-first gating
 - keep simulator-first promotion gates strict while improving model-based diagnostics
 
@@ -1054,6 +1102,7 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - P47 rerank quality depends on P45 model quality and candidate-set quality; poor calibration can still degrade decisions, so arena evaluation stays authoritative.
 - P48 routing quality depends on both P47 rerank quality and controller calibration; routing traces and arena ablations must be read together.
 - P49 runtime profiles currently target single-GPU v1; multi-GPU learner sharding and true utilization telemetry are still future work.
+- P50 benchmark recommendations are based on smoke-sized workloads; longer nightlies can hit different memory and throughput ceilings.
 
 ## Further Reading
 
@@ -1072,6 +1121,8 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/P47_MODEL_BASED_SEARCH.md](docs/P47_MODEL_BASED_SEARCH.md)
 - [docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md](docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md)
 - [docs/P49_GPU_MAINLINE_AND_DASHBOARD.md](docs/P49_GPU_MAINLINE_AND_DASHBOARD.md)
+- [docs/P50_CUDA_ENVIRONMENT.md](docs/P50_CUDA_ENVIRONMENT.md)
+- [docs/P50_GPU_TROUBLESHOOTING.md](docs/P50_GPU_TROUBLESHOOTING.md)
 - [docs/P43_TRAINING_STRATEGY_REFOCUS.md](docs/P43_TRAINING_STRATEGY_REFOCUS.md)
 - [docs/RL_OVERVIEW.md](docs/RL_OVERVIEW.md)
 - [docs/EXPERIMENTS_P32_SELF_SUPERVISED.md](docs/EXPERIMENTS_P32_SELF_SUPERVISED.md)

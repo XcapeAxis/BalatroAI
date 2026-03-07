@@ -8,6 +8,7 @@ P49 turns the P42/P44/P45/P46 training lanes into a shared runtime surface:
 - unified progress events for dashboards
 
 P49 is an operations/runtime milestone. It does not claim that GPU enablement alone improves policy quality.
+P50 then validates that runtime on a real local CUDA host, adds a shared training-python resolver, and benchmarks recommended single-GPU profiles.
 
 ## Architecture
 
@@ -53,6 +54,10 @@ Shipped profiles:
   - safe for debugging or hosts without CUDA
 - `gpu_debug_small`
   - smaller batch sizes and conservative runtime settings
+- `single_gpu_nightly_balanced`
+  - benchmark-derived safer nightly preset for a 12 GB single GPU
+- `single_gpu_nightly_aggressive`
+  - optional higher-pressure nightly preset with the same fallback policy
 
 CLI:
 
@@ -64,6 +69,23 @@ Artifacts:
 
 - `docs/artifacts/p49/device_profile_<timestamp>.json`
 - each training run also writes `runtime_profile.json`
+
+## P50 Real CUDA Follow-through
+
+P49 defined the runtime abstraction. P50 verified it on this workstation:
+
+- CUDA env: `.venv_trainer_cuda`
+- torch: `2.10.0+cu128`
+- GPU: `NVIDIA GeForce RTX 3080 Ti`
+- direct real-CUDA smoke passed for:
+  - P42 RL candidate
+  - P45 world-model train/eval
+  - P46 imagination compatibility
+
+Reference docs:
+
+- `docs/P50_CUDA_ENVIRONMENT.md`
+- `docs/P50_GPU_TROUBLESHOOTING.md`
 
 ## CPU Rollout / GPU Learner Design
 

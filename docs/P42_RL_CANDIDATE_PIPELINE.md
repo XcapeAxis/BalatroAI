@@ -168,6 +168,22 @@ P49 moves the P42 learner path onto the shared runtime/device layer:
 - runs now emit `progress.unified.jsonl` and `runtime_profile.json`
 - `scripts/run_p22.ps1` and `scripts/run_regressions.ps1` both pass through the readiness guard before service-dependent execution
 
+## P50 Real CUDA Validation
+
+P50 moved this lane from theoretical GPU support to verified local CUDA execution:
+
+- selected training env: `.venv_trainer_cuda`
+- torch stack: `2.10.0+cu128`
+- validated device: `cuda:0` on `NVIDIA GeForce RTX 3080 Ti`
+- smoke artifact root: `docs/artifacts/p50/p42_gpu_smoke/20260307-112100/`
+
+Observed smoke characteristics:
+
+- rollout remained CPU-first
+- learner executed on GPU
+- non-zero GPU memory was recorded in the smoke artifacts
+- low memory numbers are expected because the shipped smoke config is intentionally tiny
+
 ## Known Gaps
 
 - PPO-lite intentionally omits advanced PPO/distributed features (opponent pools, large-batch parallel rollouts).

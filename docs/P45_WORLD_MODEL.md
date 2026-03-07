@@ -299,6 +299,19 @@ P49 routes world-model train/eval through the same runtime-profile layer used by
 - dataloader workers, pin-memory, batch size, and grad accumulation are pulled from the resolved runtime profile
 - conservative OOM handling reduces batch size before failing hard
 
+## P50 Real CUDA Validation
+
+P50 verified that the P45 lane runs on real local CUDA:
+
+- selected training env: `.venv_trainer_cuda`
+- torch stack: `2.10.0+cu128`
+- learner device: `cuda:0`
+- validation artifact root: `docs/artifacts/p50/p45_gpu_smoke/20260307-111650/`
+
+Operational note:
+
+- the P50 bring-up fixed an old DataLoader/device mismatch by keeping collate on CPU and moving batches after load, which is why P45 smoke now completes cleanly on GPU.
+
 ## Known Gaps
 
 - one-step only; no long-horizon latent rollout policy gate

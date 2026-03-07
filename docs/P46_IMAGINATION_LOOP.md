@@ -169,6 +169,14 @@ P49 does not change P46's research boundary, but it does move the imagination ge
 - unified progress events make P46 visible in the live/static dashboards
 - `p49_gpu_mainline_nightly` can include the P46 lane while still keeping imagined replay auxiliary and uncertainty-gated
 
+## P50 GPU Compatibility
+
+P46 is not the primary GPU learner target in P50, but it was validated as compatible with the GPU world-model path:
+
+- compatibility artifact root: `docs/artifacts/p50/p46_gpu_smoke/20260307-113700/`
+- runtime is resolved through `.venv_trainer_cuda` when available
+- the path remains generation/inference first; P50 does not reframe P46 as a standalone GPU training benchmark
+
 ## Known Gaps
 
 - no long-horizon imagined rollout governance

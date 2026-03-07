@@ -128,3 +128,12 @@ P49 formalizes the intended P44 runtime split:
 - learner prefers the resolved GPU device from the shared runtime profile
 - distributed rollout artifacts now carry throughput and runtime-profile metadata
 - PPO-lite surfaces rollout steps/sec, learner updates/sec, backlog proxy, sync count, and OOM restart count in metrics/progress outputs
+
+## P50 CUDA Follow-through
+
+P50 did not claim a separate large P44 distributed benchmark. It did validate the shared learner/runtime pieces that P44 depends on:
+
+- the training-python resolver now selects `.venv_trainer_cuda` first
+- the shared single-GPU profiles were benchmarked on an RTX 3080 Ti 12 GB host
+- the same PPO-lite learner path used by P44 was validated through the P42 real-CUDA smoke
+- `-RunP44` now inherits the same resolver, readiness guard, dashboard, and runtime-profile plumbing
