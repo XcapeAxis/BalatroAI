@@ -1,0 +1,111 @@
+:root {
+  --bg: #f3efe6;
+  --panel: #fffaf2;
+  --panel-ink: #1c1a17;
+  --line: #d8cfbe;
+  --muted: #786b57;
+  --accent: #27445c;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 24px;
+  font-family: "Segoe UI Variable", "Aptos", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at top right, rgba(39,68,92,0.10), transparent 30%),
+    linear-gradient(180deg, #efe6d6 0%, var(--bg) 100%);
+  color: var(--panel-ink);
+}
+h1, h2, h3, p { margin-top: 0; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { font-family: Consolas, "Courier New", monospace; font-size: 12px; }
+.muted { color: var(--muted); }
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+.meta {
+  min-width: 320px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.55);
+}
+.nav {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.nav a {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.7);
+}
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 18px;
+  margin-bottom: 18px;
+  box-shadow: 0 10px 24px rgba(25, 20, 16, 0.06);
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+.card {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(255,255,255,0.7), rgba(244,240,232,0.95));
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+form { margin: 0; }
+button {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fffdf9;
+  border-radius: 999px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+th, td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #ece2d0;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  color: var(--muted);
+  font-weight: 700;
+}
+pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f8f4ec;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+}
+@media (max-width: 900px) {
+  body { padding: 14px; }
+  .topbar { flex-direction: column; }
+  .meta { min-width: 0; }
+}
