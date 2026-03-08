@@ -4,6 +4,13 @@ Use this checklist when the runtime says "GPU-ready" but the actual learner path
 
 ## First Commands
 
+Bootstrap / doctor:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Mode auto -SkipSmoke
+powershell -ExecutionPolicy Bypass -File scripts\doctor.ps1
+```
+
 Interpreter selection:
 
 ```powershell
@@ -203,3 +210,7 @@ Treat it as a training/runtime tuning problem when:
 - CUDA is visible
 - the learner reaches `cuda:0`
 - failure appears only after batch growth, AMP enablement, or longer nightly budgets
+
+## P58 Portability Note
+
+If a new Windows machine cannot continue the project, start with `doctor.ps1` rather than guessing which environment is broken. P58 writes the latest bootstrap and doctor state into `docs/artifacts/p58/`, and the main entrypoints now surface the resolved training env in P22 summaries and the Ops UI environment page.

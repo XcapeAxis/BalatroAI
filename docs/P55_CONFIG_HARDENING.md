@@ -145,6 +145,16 @@ Missing files that now have sidecars:
    (previously: silent wrong results).
 5. All run summaries, dashboards, and ops UI surfaces record the actual config source used.
 
+## P58 Follow-through
+
+P58 builds directly on P55:
+
+- bootstrap scripts ensure both project envs install `PyYAML`
+- `doctor.ps1` runs a sidecar check and reports config health together with environment health
+- `run_p22.ps1` fails fast when the environment is unhealthy instead of continuing with silent config fallbacks
+
+Operationally, P55 remains the source-of-truth policy for configs, while P58 makes it easier for a new Windows machine to reach that policy-compliant state.
+
 ---
 
 ## Related Docs
@@ -152,3 +162,4 @@ Missing files that now have sidecars:
 - `docs/P54_LEARNED_ROUTER.md` — the P54 milestone that exposed this gap
 - `docs/P49_GPU_MAINLINE_AND_DASHBOARD.md` — dashboard infrastructure
 - `docs/P53_BACKGROUND_EXECUTION_AND_OPS_UI.md` — ops UI infrastructure
+- `docs/P58_WINDOWS_BOOTSTRAP.md` — Windows bootstrap and environment doctor flow

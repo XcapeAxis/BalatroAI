@@ -170,6 +170,26 @@ Useful artifacts from a successful P50 run:
 - `docs/artifacts/p22/runs/20260307-113905/summary_table.json`
 - `docs/artifacts/dashboard/latest/index.html`
 
+## P58 Follow-through
+
+P58 keeps the P50 CUDA path but makes it portable across Windows workstations:
+
+- `scripts\setup_windows.ps1 -Mode auto|cuda` now creates or repairs `.venv_trainer_cuda`
+- `scripts\doctor.ps1` verifies that the CUDA env is still the selected mainline path
+- `scripts\run_p22.ps1`, `scripts\run_dashboard.ps1`, and `scripts\run_ops_ui.ps1` now consume the same resolver result instead of requiring a manually chosen interpreter
+
+Recommended handoff sequence on a new CUDA-capable Windows machine:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Mode auto -SkipSmoke
+powershell -ExecutionPolicy Bypass -File scripts\doctor.ps1
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
+```
+
+See also:
+
+- `docs/P58_WINDOWS_BOOTSTRAP.md`
+
 ## Boundaries
 
 - P50 validates one local Windows + CUDA + PyTorch stack; it is not a portability guarantee.

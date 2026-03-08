@@ -283,6 +283,17 @@ P56 keeps the same runtime and monitoring base introduced by P49/P50:
 - `trainer.monitoring.dashboard_build` adds P56 calibration, guard, canary, and deployment-mode panels without a separate storage system
 - `trainer.monitoring.live_dashboard` exposes the latest P56 bias/ECE/canary summary in the terminal view
 
+## P58 Windows Bootstrap + Environment Health on Top of P49/P50
+
+P58 extends the same runtime surface to new-machine bring-up:
+
+- `scripts\setup_windows.ps1` now establishes the standard CPU/CUDA env layout
+- `scripts\doctor.ps1` records the latest environment health and recommended mode
+- dashboard data now includes a P58 environment summary with bootstrap path, doctor path, recommended mode, and selected training python
+- Ops UI now exposes an environment page backed by the same artifact sources
+
+This keeps environment portability on the same monitoring substrate instead of creating a second status system.
+
 ## P53 Background Execution + Ops Console on Top of P49/P50
 
 P53 reuses the same runtime primitives instead of inventing a second ops layer:

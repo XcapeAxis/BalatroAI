@@ -1,163 +1,189 @@
-<h1 align="center">BalatroAI</h1>
-<p align="center">
-  <strong>面向 Balatro 的模拟、训练、评测与夜间运行一体化工程平台。</strong><br />
-  A simulator-first Balatro research and ops stack for reproducible training, evaluation, and overnight automation.
-</p>
+# BalatroAI
+
+> 面向 Balatro 的模拟、训练、评测与运维一体化工程仓库。  
+> A simulator-first Balatro research and operations stack for reproducible training, evaluation, and overnight execution.
 
 <!-- BADGES:START -->
 [![Latest Gate](https://img.shields.io/badge/Latest_Gate-RunP38_PASS-2EA44F)](scripts/run_regressions.ps1)
 [![Workflow](https://img.shields.io/badge/Workflow-mainline--only-2EA44F)](scripts/git_sync.ps1)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P57-6E7781)](docs/)
-[![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
+[![Windows Bootstrap](https://img.shields.io/badge/Windows_Bootstrap-P58_ready-6F42C1)](docs/P58_WINDOWS_BOOTSTRAP.md)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P58-6E7781)](docs/)
+[![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](docs/P58_WINDOWS_BOOTSTRAP.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
 [![Latest Tag](https://img.shields.io/github/v/tag/XcapeAxis/BalatroAI)](https://github.com/XcapeAxis/BalatroAI/tags)
-[![CI Smoke](https://github.com/XcapeAxis/BalatroAI/actions/workflows/ci-smoke.yml/badge.svg)](https://github.com/XcapeAxis/BalatroAI/actions/workflows/ci-smoke.yml)
 <!-- BADGES:END -->
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> ·
+  <a href="#windows-bootstrap-p58">Windows Bootstrap</a> ·
   <a href="#choose-your-path">Choose Your Path</a> ·
   <a href="#command-cheat-sheet">Command Cheat Sheet</a> ·
   <a href="docs/EXPERIMENTS_P22.md">P22 Docs</a> ·
-  <a href="docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md">P57 Docs</a>
+  <a href="docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md">P57 Docs</a> ·
+  <a href="docs/P58_WINDOWS_BOOTSTRAP.md">P58 Docs</a>
 </p>
 
-BalatroAI focuses on one thing: making Balatro experimentation understandable, reproducible, and operable.  
-本仓库聚焦 Balatro 场景下的研究、评测与运维，不定位为通用模型实验仓库。
-
-This README is intentionally short and navigational.  
-如需实现细节，请将本页作为导航入口，再进入对应文档。
+BalatroAI 的目标很明确：把 Balatro 相关实验整理成一套可复现、可追踪、可持续运行的工程系统。  
+The repository treats simulator parity, training, evaluation, campaign state, and local operations as one connected workflow rather than separate scripts.
 
 ## What This Project Is
 
-该仓库覆盖模拟器对齐、模型训练、回归门禁、实验编排、dashboard、ops UI 与夜间自治运行等完整链路。  
-BalatroAI combines simulator parity, model training, experiment orchestration, gated evaluation, and overnight ops into one repo.
+这个仓库覆盖从模拟器对齐到夜间运行的完整工程链路。  
+It is not just a trainer and not just a dashboard; it is the operating surface for the whole local stack.
 
 | 30 秒速览 | 说明 |
 |---|---|
-| 这是什么？ | 一个围绕 Balatro 构建的“模拟器 + 训练 + 评测 + 运维”工程平台。 |
-| 它能做什么？ | 运行回归、比较策略、训练候选、校准 learned router，并生成 dashboard / ops UI / morning summary。 |
-| 它不是什么？ | 不提供外挂能力，不执行脱离门禁的自动代理，也不依赖缺乏验证依据的黑盒结论。 |
-| 如何开始？ | 启动 `balatrobot`，然后运行 `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick`。 |
+| 这是什么 | 面向 Balatro 的“模拟器 + 训练 + 评测 + 运维”统一仓库。 |
+| 能做什么 | 运行回归、训练候选、比较策略、评估 learned router，并输出 dashboard / ops UI / attention queue / morning summary。 |
+| 不做什么 | 不绕过门禁、不直接做高风险 promotion、不把小样本结果当成最终结论。 |
+| 如何开始 | 新机器优先执行 `scripts\setup_windows.ps1`，然后执行 `scripts\doctor.ps1` 和 `scripts\run_p22.ps1 -Quick`。 |
 
 Core capabilities today:
 
-- high-parity simulator + oracle-trace alignment
+- simulator parity and canonical replay fixtures
 - experiment orchestration with seeds, summaries, and campaign state
-- self-supervised, RL, world-model, and learned-router workflows
-- registry, promotion queue, dashboard, ops UI, attention queue, and morning summary
+- RL, world model, hybrid controller, and learned-router workflows
+- registry, promotion queue, dashboard, ops UI, overnight autonomy, and morning summary
 
 ## Scope and Boundaries
 
-本仓库适用于工程化研究与受控运维，不用于脱离门禁的无约束自动化。  
-Use it for controlled experimentation, not for unbounded live automation.
+该仓库适用于工程化研究、离线评测、局部自动化与夜间批处理。  
+Use it for controlled local experimentation and operations, not for unmanaged live automation.
 
 Suitable for:
 
-- simulator parity and canonical trace validation
-- seed-governed policy comparison and regression gates
-- self-supervised, RL, world-model, and learned-router iteration
-- resumable campaigns, dashboard visibility, and overnight triage
+- simulator alignment and oracle-trace validation
+- seed-governed experiment comparison and gated evaluation
+- checkpoint registry, resumable campaigns, and promotion review
+- local dashboard / Ops UI / overnight automation with explicit human gates
 
 Not suitable for:
 
-- a plug-and-play “always win” bot
-- destructive live promotion without review
-- interpreting metrics outside seed / budget / config context
-- skipping registry, gate, or provenance evidence when making claims
+- a plug-and-play “always-win” bot
+- destructive git/history actions without review
+- live promotion driven only by offline metrics
+- environment changes made implicitly or without traceability
 
 ## Choose Your Path
 
-不同角色关注的入口不同；下表列出最常用的起点。  
-Pick the path that matches your job, then dive into the linked docs only if you need more detail.
+不同角色需要的入口不同，建议按目标选择最短路径。  
+Use this as a routing table; the deeper docs stay in `docs/`.
 
 | 适用角色 | 关注目标 | 推荐入口 | 主要输出 |
 |---|---|---|---|
-| 初次接触项目的读者 | 确认系统主链路可运行 | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | `summary_table.json` + dashboard |
-| 训练 / 研究人员 | 查看主训练与比较链路 | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | multi-seed P22 rows + artifacts |
-| learned router 开发者 | 查看 calibration / guard / canary | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP56` | P56 benchmark / calibration / canary outputs |
-| 夜间运行 / 运维人员 | 查看 attention queue 与 morning summary | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP57` | autonomy campaign state + morning summary |
-| 值班 / 审核人员 | 通过本地 UI 查看状态 | `powershell -ExecutionPolicy Bypass -File scripts\run_ops_ui.ps1` | localhost ops console |
+| 新机器接手 | 快速建立可运行环境 | `powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Mode auto -SkipSmoke` | `.venv_trainer*` + `docs/artifacts/p58/bootstrap/*` |
+| 本机状态确认 | 判断当前机器是否适合继续推进 | `powershell -ExecutionPolicy Bypass -File scripts\doctor.ps1` | `docs/artifacts/p58/doctor_*.json` |
+| 研究 / 训练 | 跑主线 smoke、确认 P22 链路 | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | `summary_table.json` + dashboard |
+| learned router 开发 | 查看 calibration / guard / canary | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP56` | `docs/artifacts/p56/*` |
+| 夜跑 / 运维 | 查看 blocked campaigns / morning summary | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP57` | `attention_queue.json` + `morning_summary/latest.md` |
+| 本地审查 | 用 UI 查看当前状态 | `powershell -ExecutionPolicy Bypass -File scripts\run_ops_ui.ps1` | `http://127.0.0.1:8765/` |
 
 ## Quick Start
 
-本节保留最短启动路径：安装依赖、启动服务、运行 quick、查看结果。  
-If you only remember four commands, remember these.
+如果你只记四条命令，建议记住下面这一组。  
+This path is the default handoff flow for another Windows workstation.
 
-1. Clone the repo and install trainer dependencies.
+1. Clone the repo.
 
 ```powershell
 git clone https://github.com/XcapeAxis/BalatroAI.git
 cd BalatroAI
-python -m venv .venv_trainer
-.\.venv_trainer\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r trainer/requirements.txt
 ```
 
-2. Start `balatrobot` on the default local port.
+2. Bootstrap the local Windows environment.
 
 ```powershell
-uvx balatrobot serve --headless --fast --port 12346
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Mode auto -SkipSmoke
 ```
 
-3. Run the default quick matrix.
+3. Run the doctor / health check.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\doctor.ps1
+```
+
+4. Run the default quick matrix.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
 ```
 
-4. Open the main outputs.
+Main outputs:
 
-- summary table: `docs/artifacts/p22/runs/<run_id>/summary_table.json`
+- P22 summary: `docs/artifacts/p22/runs/<run_id>/summary_table.json`
 - dashboard: `docs/artifacts/dashboard/latest/index.html`
-- ops UI: `http://127.0.0.1:8765/`
+- Ops UI: `http://127.0.0.1:8765/`
+- doctor report: `docs/artifacts/p58/latest_doctor.json`
 
-Common next steps:
+For longer unattended commands, wrap them with `scripts\safe_run.ps1`:
 
 ```powershell
-# Learned-router benchmark / calibration / canary
-powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP56
-
-# Overnight autonomy smoke
-powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP57
-
-# Overnight nightly template
-powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Overnight
+powershell -ExecutionPolicy Bypass -File scripts\safe_run.ps1 -TimeoutSec 7200 -- powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
 ```
 
-More commands live in [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md).
+## Windows Bootstrap (P58)
+
+P58 的重点不是新增训练能力，而是让另一台 Windows 机器能快速接手同一条主线。  
+Bootstrap establishes the standard env layout and keeps the main entrypoints unchanged.
+
+Standard environments:
+
+- `.venv_trainer`: CPU-safe fallback for config checks, docs, dashboard, ops UI, and non-CUDA execution
+- `.venv_trainer_cuda`: CUDA-first training environment for P49/P50/P22 mainline when GPU is healthy
+
+Recommended first-run sequence:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Mode auto -SkipSmoke
+powershell -ExecutionPolicy Bypass -File scripts\doctor.ps1
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -DryRun
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
+```
+
+Mode selection:
+
+- `-Mode cpu`: build only the CPU-safe environment
+- `-Mode cuda`: require a CUDA-capable workstation and build the CUDA env
+- `-Mode auto`: prefer CUDA when `nvidia-smi` is available, otherwise fall back to CPU
+
+Primary references:
+
+- [docs/P58_WINDOWS_BOOTSTRAP.md](docs/P58_WINDOWS_BOOTSTRAP.md)
+- [docs/P50_CUDA_ENVIRONMENT.md](docs/P50_CUDA_ENVIRONMENT.md)
+- [docs/P50_GPU_TROUBLESHOOTING.md](docs/P50_GPU_TROUBLESHOOTING.md)
 
 ## Architecture Overview
 
-下图展示真实游戏、模拟器、训练、评测、campaign 与人工决策之间的关系。  
-The repo is organized as one continuous loop rather than a pile of unrelated scripts.
+下图展示真实游戏、模拟器、训练、评测与运维之间的主线关系。  
+The repository is organized as a continuous loop with explicit artifacts at each handoff.
 
 ```mermaid
 flowchart LR
   A["Real game via balatrobot RPC"] --> B["Oracle traces & canonical schema"]
   B --> C["Simulator parity & replay data"]
   C --> D["Training lanes"]
-  D --> D1["Self-Supervised / RL / World Model"]
-  D --> D2["Learned Router / Hybrid Controller"]
-  D1 --> E["Arena / regression / calibration / triage"]
+  D --> D1["RL / World Model / Self-Supervised"]
+  D --> D2["Hybrid Controller / Learned Router"]
+  D1 --> E["Arena / regression / triage"]
   D2 --> E
-  E --> F["Registry / campaigns / dashboard"]
-  F --> G["Promotion review or safer deployment mode"]
+  E --> F["Registry / campaigns / promotion queue"]
+  F --> G["Dashboard / Ops UI / morning summary"]
 ```
 
 ```mermaid
 flowchart LR
-  A["Nightly campaign stage"] --> B["Decision policy"]
-  B -->|safe| C["Continue"]
-  B -->|warning| D["Continue with warning"]
-  B -->|human gate| E["Attention queue"]
-  E --> F["Morning summary"]
-  C --> G["Dashboard / Ops UI"]
-  D --> G
-  E --> G
+  A["setup_windows.ps1"] --> B["doctor.ps1"]
+  B --> C["P22 / campaigns / nightly"]
+  C --> D["Decision policy"]
+  D -->|continue| E["next stage"]
+  D -->|warning| F["continue with warning"]
+  D -->|human gate| G["Attention Queue"]
+  G --> H["Morning Summary"]
+  E --> I["Dashboard / Ops UI"]
+  F --> I
+  H --> I
 ```
 
 Key docs behind this flow:
@@ -165,48 +191,48 @@ Key docs behind this flow:
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
 - [docs/P53_BACKGROUND_EXECUTION_AND_OPS_UI.md](docs/P53_BACKGROUND_EXECUTION_AND_OPS_UI.md)
-- [docs/P56_ROUTER_CALIBRATION_AND_CANARY.md](docs/P56_ROUTER_CALIBRATION_AND_CANARY.md)
 - [docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md](docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md)
+- [docs/P58_WINDOWS_BOOTSTRAP.md](docs/P58_WINDOWS_BOOTSTRAP.md)
 
 ## Capability Snapshot
 
-目前，模拟器、训练、评测和运维四条链路均已打通，但深度、覆盖面和预算仍在持续扩展。  
-This table is the fastest way to see the repo's current surface area.
+目前的主链已经覆盖模拟、训练、评测与运维四个层面。  
+This table is the fastest summary of the repository surface.
 
 | Layer | Simulator | Training | Evaluation | Ops |
 |---|---|---|---|---|
-| Core value | Oracle parity, replay fixtures, canonical traces | Self-Supervised, RL, world model, learned router | Arena, triage, calibration, guard, canary | Registry, campaigns, dashboard, ops UI, overnight autonomy |
-| Default entry | `scripts\run_regressions.ps1` | `scripts\run_p22.ps1 -Quick` | `scripts\run_p22.ps1 -RunP56` | `scripts\run_p22.ps1 -RunP57` |
-| Main artifacts | `sim/tests/fixtures_runtime/*` | `docs/artifacts/p22/*` | `docs/artifacts/p56/*` | `dashboard`, `attention_required`, `morning_summary` |
-| Best docs | `docs/SIM_ALIGNMENT_STATUS.md` | `docs/EXPERIMENTS_P22.md` | `docs/P56_ROUTER_CALIBRATION_AND_CANARY.md` | `docs/P53_BACKGROUND_EXECUTION_AND_OPS_UI.md`, `docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md` |
+| Core value | Oracle parity, replay fixtures, canonical traces | RL, world model, hybrid controller, learned router | Arena, triage, calibration, guard, canary | Bootstrap, doctor, registry, campaigns, dashboard, ops UI |
+| Default entry | `scripts\run_regressions.ps1` | `scripts\run_p22.ps1 -Quick` | `scripts\run_p22.ps1 -RunP56` | `scripts\doctor.ps1`, `scripts\run_p22.ps1 -RunP57` |
+| Main artifacts | `sim/tests/fixtures_runtime/*` | `docs/artifacts/p22/*` | `docs/artifacts/p56/*` | `docs/artifacts/p58/*`, `dashboard`, `attention_required`, `morning_summary` |
+| Core docs | `docs/SIM_ALIGNMENT_STATUS.md` | `docs/EXPERIMENTS_P22.md` | `docs/P56_ROUTER_CALIBRATION_AND_CANARY.md` | `docs/P53_BACKGROUND_EXECUTION_AND_OPS_UI.md`, `docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md`, `docs/P58_WINDOWS_BOOTSTRAP.md` |
 
-Key shipped milestones worth remembering:
+Current milestone anchors:
 
-- **P53**: background execution + local ops UI
-- **P56**: learned-router calibration + canary promotion path
-- **P57**: overnight autonomy protocol + attention queue + morning summary
+- **P53**: background execution + local Ops UI
+- **P56**: learned-router calibration + guard + canary
+- **P57**: overnight autonomy + attention queue + morning summary
+- **P58**: Windows bootstrap + doctor + environment portability hardening
 
 ## Command Cheat Sheet
 
-本节仅列出最常用入口；更完整的矩阵与参数说明请参见 P22 文档。  
-熟悉仓库后，可将这一节作为日常速查表。  
-If a command is missing here, it was intentionally pushed down into the docs.
+以下只保留最常用的入口；更完整的实验矩阵请查看 P22 文档。  
+If a command is not listed here, it is intentionally pushed down into `docs/EXPERIMENTS_P22.md`.
 
 | 目标 | 命令 | 主要产物 | 适用场景 |
 |---|---|---|---|
-| 跑主线 quick matrix | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | `summary_table.json`, dashboard | 初次了解项目 / 日常 smoke |
+| 建立 Windows 环境 | `powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Mode auto -SkipSmoke` | `docs/artifacts/p58/bootstrap/*` | 新机器接手 |
+| 做环境体检 | `powershell -ExecutionPolicy Bypass -File scripts\doctor.ps1` | `docs/artifacts/p58/doctor_*.{json,md}` | 判断是否可继续推进 |
+| 跑主线 quick | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | `summary_table.json`, dashboard | 日常 smoke / 主线验证 |
 | 跑 P22 回归门禁 | `powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP22` | regression artifacts | 合并前检查 |
-| 跑 learned router 校准 | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP56` | P56 benchmark / calibration / canary | 研究 / routing |
-| 跑 overnight autonomy smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP57` | attention queue, morning summary | 夜跑协议验证 |
-| 跑 overnight nightly | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Overnight` | blocked campaigns, nightly summary | 值班 / 自动推进 |
-| 恢复最新 campaign | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -ResumeLatestCampaign` | resumed campaign state | 中断恢复 |
-| 启动本地 Ops UI | `powershell -ExecutionPolicy Bypass -File scripts\run_ops_ui.ps1` | localhost console | 运维 / 审核 |
-| 重建 dashboard | `python -B -m trainer.monitoring.dashboard_build --input docs/artifacts --output docs/artifacts/dashboard/latest` | `dashboard/latest/index.html` | 静态结果查看 |
+| 跑 learned router 校准 | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP56` | `docs/artifacts/p56/*` | routing / deployment study |
+| 跑夜跑自治 smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP57` | `attention_queue.json`, `morning_summary/latest.md` | autonomy validation |
+| 启动 Ops UI | `powershell -ExecutionPolicy Bypass -File scripts\run_ops_ui.ps1` | localhost console | 本地审查 |
+| 重建 dashboard | `powershell -ExecutionPolicy Bypass -File scripts\run_dashboard.ps1` | `dashboard/latest/index.html` | 汇总最新 artifacts |
 
 ## Current Repository Status
 
-以下内容由脚本自动生成，无需手工维护。  
-This block is intentionally machine-updated by repo scripts.
+以下内容由脚本自动更新，用于说明当前默认分支与最近门禁状态。  
+This block is intentionally machine-maintained.
 
 <!-- STATUS:START -->
 <!-- README_STATUS:BEGIN -->
@@ -219,11 +245,11 @@ This block is intentionally machine-updated by repo scripts.
 - trend_rows_count: 20115
 - champion: quick_risk_aware (champion)
 - candidate:  (decision: hold)
-- docs_coverage: P15-P57
+- docs_coverage: P15-P58
 <!-- README_STATUS:END -->
 <!-- STATUS:END -->
 
-Badge/status refresh source:
+Status refresh sources:
 
 - `docs/artifacts/status/latest_badges.json`
 - `docs/artifacts/status/latest_status.json`
@@ -231,18 +257,20 @@ Badge/status refresh source:
 
 ## Reproducibility
 
-本仓库的重要工程价值之一，是让实验结果具备可复查性与可追溯性。  
-BalatroAI treats seeds, config provenance, and artifact paths as first-class outputs.
+BalatroAI 把 seeds、配置来源、campaign state 和环境选择都作为正式输出记录。  
+Every major run should explain what was executed, with which config, in which environment.
 
 What gets recorded:
 
 | 记录项 | 查看位置 |
 |---|---|
 | seeds used | `summary_table.json`, `seeds_used.json` |
-| config provenance | P22 summary rows and sync reports |
+| config provenance | P22 summary rows and P55 sidecar sync reports |
+| selected training env | P22 runtime fields and `docs/artifacts/p58/latest_doctor.json` |
+| bootstrap / doctor refs | `docs/artifacts/p58/bootstrap/latest_bootstrap_state.json`, `docs/artifacts/p58/latest_doctor.json` |
 | campaign state | `campaign_state.json` |
 | promotion review | `promotion_queue.json` |
-| dashboard / ops refs | latest dashboard, ops UI state, audit logs |
+| dashboard / ops refs | `docs/artifacts/dashboard/latest/`, `docs/artifacts/p53/ops_ui/latest/` |
 
 Recommended docs:
 
@@ -253,15 +281,17 @@ Recommended docs:
 
 ## Example Outputs
 
-以下列出运行后应优先查看的核心输出，便于快速建立全局认识。  
-These are the main files you inspect after a run.
+运行完成后，建议优先查看以下几个输出位置。  
+These paths are the normal inspection surface after a local run.
 
 | 输出 | 路径 | 用途 |
 |---|---|---|
-| P22 summary | `docs/artifacts/p22/runs/<run_id>/summary_table.json` | 查看实验行、seed 数与关键 refs |
-| Dashboard | `docs/artifacts/dashboard/latest/index.html` | 查看总体状态与最近结果 |
-| Attention queue | `docs/artifacts/attention_required/attention_queue.json` | 查看需要人工决策的问题 |
-| Morning summary | `docs/artifacts/morning_summary/latest.md` | 查看夜间运行摘要与待处理事项 |
+| bootstrap state | `docs/artifacts/p58/bootstrap/latest_bootstrap_state.json` | 查看 env 布局、推荐模式和下一步命令 |
+| doctor report | `docs/artifacts/p58/latest_doctor.json` | 查看机器是否适合继续推进项目 |
+| P22 summary | `docs/artifacts/p22/runs/<run_id>/summary_table.json` | 查看实验矩阵、seed 数量与 refs |
+| dashboard | `docs/artifacts/dashboard/latest/index.html` | 查看最新总体状态 |
+| attention queue | `docs/artifacts/attention_required/attention_queue.json` | 查看需要人工介入的事项 |
+| morning summary | `docs/artifacts/morning_summary/latest.md` | 查看夜间运行摘要 |
 
 Sample assets:
 
@@ -270,60 +300,53 @@ Sample assets:
 - [architecture_dataflow.mmd](docs/assets/readme/architecture_dataflow.mmd)
 - [sample_dashboard_log.txt](docs/assets/readme/sample_dashboard_log.txt)
 
-Example summary snippet:
-
-| exp_id | status | mean | seeds |
-|---|---:|---:|---:|
-| quick_risk_aware | passed | 3.8352 | 8 |
-| quick_hybrid | passed | 3.7396 | 8 |
-| quick_baseline | passed | 3.5838 | 8 |
-
 ## Roadmap
 
-README 仅保留当前状态与下一步重点；完整里程碑树请参见 docs。  
-Use this section as a snapshot, not as the full project history.
+README 只保留当前状态和下一步重点，完整路线请查看 `docs/ROADMAP.md`。  
+Treat this as a snapshot, not as the full milestone archive.
 
 | Area | Today | Next |
 |---|---|---|
-| Core sim | parity + oracle trace workflows are established | broaden mechanic coverage and keep drift visible |
-| Training | self-supervised, RL, world model, learned router are wired into P22 | deepen budgets and improve coupling between lanes |
-| Evaluation | arena, triage, calibration, guard, and canary are available | expand slice coverage and higher-budget comparisons |
-| Ops | dashboard, ops UI, registry, campaigns, overnight autonomy are shipped | improve blocked-campaign resolution and safer night ops |
+| Simulator | parity + oracle-trace workflows are established | extend mechanic coverage and keep drift visible |
+| Training | RL, world model, hybrid controller, learned router are wired into P22 | deepen budgets and improve cross-lane coupling |
+| Evaluation | arena, triage, calibration, guard, and canary are available | expand slice coverage and larger-budget comparisons |
+| Ops | dashboard, ops UI, campaigns, overnight autonomy, bootstrap, and doctor are shipped | improve blocked-campaign resolution and cross-machine handoff stability |
 
 Roadmap docs:
 
 - [docs/ROADMAP.md](docs/ROADMAP.md)
 - [docs/P56_ROUTER_CALIBRATION_AND_CANARY.md](docs/P56_ROUTER_CALIBRATION_AND_CANARY.md)
 - [docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md](docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md)
+- [docs/P58_WINDOWS_BOOTSTRAP.md](docs/P58_WINDOWS_BOOTSTRAP.md)
 
 ## Known Limitations
 
-以下限制有助于正确理解当前系统的适用范围与结果边界。  
-This repo is powerful, but it is intentionally conservative in a few places.
+以下边界有助于正确理解当前系统的适用范围。  
+The repository is intentionally conservative in several places.
 
-- real runtime workflows depend on local `balatrobot` / Balatro availability
+- runtime workflows still depend on local `balatrobot` / Balatro availability
+- bootstrap builds project envs, but it does not install GPU drivers or system packages
 - learned-router and world-model conclusions still depend on finite seed budgets
-- promotion remains review-oriented; human sign-off is still required for high-risk changes
-- overnight autonomy stops on unresolved human gates by design
-- some docs, summaries, and badges are machine-refreshed and may lag until the next gate run
+- promotion remains review-oriented; high-risk changes still require human approval
+- overnight autonomy blocks on unresolved human gates by design
+- Windows is the primary supported bootstrap target at this stage
 
 ## Further Reading
 
-如果首页信息已足够，可按关注主题进入对应文档。  
-Do not read everything; pick the lane you care about.
+如果首页信息已经足够，可以按主题进入对应文档。  
+Do not read everything; pick the lane you need.
 
 | If you care about... | Read this |
 |---|---|
-| overall architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | experiment matrix / commands | [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md) |
 | seeds / reproducibility | [docs/SEEDS_AND_REPRODUCIBILITY.md](docs/SEEDS_AND_REPRODUCIBILITY.md) |
-| closed-loop / RL | [docs/P41_CLOSED_LOOP_V2.md](docs/P41_CLOSED_LOOP_V2.md), [docs/P42_RL_CANDIDATE_PIPELINE.md](docs/P42_RL_CANDIDATE_PIPELINE.md) |
-| world model / planning | [docs/P45_WORLD_MODEL.md](docs/P45_WORLD_MODEL.md), [docs/P47_MODEL_BASED_SEARCH.md](docs/P47_MODEL_BASED_SEARCH.md) |
+| CUDA environment | [docs/P50_CUDA_ENVIRONMENT.md](docs/P50_CUDA_ENVIRONMENT.md), [docs/P50_GPU_TROUBLESHOOTING.md](docs/P50_GPU_TROUBLESHOOTING.md) |
 | learned router | [docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md](docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md), [docs/P54_LEARNED_ROUTER.md](docs/P54_LEARNED_ROUTER.md), [docs/P56_ROUTER_CALIBRATION_AND_CANARY.md](docs/P56_ROUTER_CALIBRATION_AND_CANARY.md) |
 | campaigns / registry | [docs/P51_CHECKPOINT_REGISTRY_AND_CAMPAIGNS.md](docs/P51_CHECKPOINT_REGISTRY_AND_CAMPAIGNS.md) |
 | ops UI / overnight autonomy | [docs/P53_BACKGROUND_EXECUTION_AND_OPS_UI.md](docs/P53_BACKGROUND_EXECUTION_AND_OPS_UI.md), [docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md](docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md) |
+| Windows handoff / new machine setup | [docs/P58_WINDOWS_BOOTSTRAP.md](docs/P58_WINDOWS_BOOTSTRAP.md) |
 
 ## License and Contributing
 
 - License: no top-level `LICENSE` file is currently present.
-- Contributions: stay on `main`, keep changes auditable, and run the relevant gates before proposing operational changes.
+- Contributions: stay on `main`, keep changes auditable, and run the relevant gates before changing operational defaults.

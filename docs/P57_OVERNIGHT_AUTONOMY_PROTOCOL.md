@@ -155,6 +155,12 @@ P22 summary rows now surface:
 - `human_gate_triggered`
 - `campaign_state_path`
 
+P58 extends the same flow with environment-aware blocking:
+
+- the overnight stage template now starts with `environment_doctor`
+- blocked environment health can generate an attention item instead of failing silently
+- morning summary and Ops UI now surface the latest doctor state together with blocked campaigns
+
 Dashboard panels expose:
 
 - latest autonomy decision
@@ -189,6 +195,8 @@ Typical artifact checkpoints:
 - `docs/artifacts/attention_required/attention_queue.json`
 - `docs/artifacts/morning_summary/latest.md`
 - `docs/artifacts/dashboard/latest/index.html`
+- `docs/artifacts/p58/latest_doctor.json`
+- `docs/artifacts/p58/bootstrap/latest_bootstrap_state.json`
 
 ## Known Limitations
 
@@ -196,3 +204,4 @@ Typical artifact checkpoints:
 - attention-item resolution is a human acknowledgment flow, not a hidden approval engine
 - stage resume is durable, but inner-loop trainer progress still depends on each subsystem's own checkpoints
 - morning-summary prioritization is heuristic and may need refinement as more overnight flows are added
+- environment repair remains a human-approved action even though doctor output is automatic

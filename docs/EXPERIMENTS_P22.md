@@ -45,12 +45,45 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | P56 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP56` | runs `p56_router_calibration_smoke` with multi-seed benchmark, calibration, guard tuning, canary eval, registry refs, promotion queue refresh, and dashboard build |
 | P57 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP57` | runs `p57_overnight_smoke` with decision-policy audit, attention queue, blocked-stage validation, morning summary, dashboard build, and resumable campaign state |
 | Overnight autonomy | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Overnight` | runs `p57_overnight_nightly` with the overnight stage template and resume-aware human-gate handling |
+| Windows bootstrap | `powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Mode auto -SkipSmoke` | creates or repairs the standard CPU/CUDA envs before P22 |
+| Environment doctor | `powershell -ExecutionPolicy Bypass -File scripts\doctor.ps1` | writes machine-readable environment readiness reports used by P22/P57 |
 | P53 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP53` | runs `p53_background_ops_smoke` with background-mode validation, window-mode recording, campaign state, ops-ui metadata, promotion queue refresh, and dashboard build |
 | P53 smoke + explicit mode | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP53 -WindowMode offscreen` | keeps the requested background mode explicit in the run summary |
 | Start local Ops UI | `powershell -ExecutionPolicy Bypass -File scripts\run_ops_ui.ps1` | starts the localhost-only P53 operations console on `127.0.0.1:8765` by default |
 | Single experiment | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline -Resume` | rerun one exp id |
 | Limit seeds | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick -SeedLimit 2` | local-cost control |
 | Custom seeds | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Only quick_baseline -Seeds "AAAAAAA,BBBBBBB,CCCCCCC"` | explicit reproducibility override (recorded to artifacts) |
+
+## P58 Bootstrap / Doctor Preflight
+
+P58 adds environment health as a first-class preflight surface rather than leaving interpreter selection implicit.
+
+Main commands:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Mode auto -SkipSmoke
+powershell -ExecutionPolicy Bypass -File scripts\doctor.ps1
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
+```
+
+`scripts/run_p22.ps1` now supports and records:
+
+- `-SetupMode auto|cpu|cuda`
+- `-SkipDoctor`
+- doctor report path
+- bootstrap state path
+- resolved training env source/name
+
+Summary/runtime fields added for P58:
+
+- `doctor_report_path`
+- `bootstrap_state_path`
+- `setup_mode`
+- `doctor_recommended_mode`
+- `training_env_source`
+- `training_env_name`
+
+This keeps new-machine bring-up inside the same P22 workflow instead of requiring manual interpreter selection.
 
 ## Config Structure (`configs/experiments/p22.yaml`)
 
@@ -822,6 +855,8 @@ Wrapper behavior:
 - `scripts/run_p22.ps1 -Overnight` selects `p57_overnight_nightly`
 - `scripts/run_p22.ps1 -ResumeLatestCampaign` targets the newest resumable P57-compatible campaign root
 - unresolved human gates remain blocking until the related attention item is resolved
+
+The P57 overnight stage template now also starts with an environment doctor stage so a new or degraded Windows machine can block early with a structured attention item instead of producing ambiguous failures later in the campaign.
 
 ## Runtime Observability (During Execution)
 
