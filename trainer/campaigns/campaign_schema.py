@@ -46,6 +46,7 @@ P56_ROUTER_CAMPAIGN_STAGE_IDS = (
 )
 
 P57_OVERNIGHT_STAGE_IDS = (
+    "environment_doctor",
     "readiness_guard",
     "decision_policy_audit",
     "config_provenance_scan",

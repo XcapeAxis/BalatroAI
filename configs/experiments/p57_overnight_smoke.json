@@ -7,13 +7,15 @@
   },
   "runtime": {
     "device_profile": "single_gpu_mainline",
-    "readiness_guard": true
+    "readiness_guard": true,
+    "doctor_mode": "auto"
   },
   "campaign": {
     "resume_enabled": true,
     "block_on_existing_blocked_campaigns": false,
     "force_rerun_stages": [],
     "stage_ids": [
+      "environment_doctor",
       "readiness_guard",
       "decision_policy_audit",
       "config_provenance_scan",
@@ -40,5 +42,5 @@
     "allow_missing_readiness_report": true,
     "force_human_gate_stage": "promotion_queue_scan"
   },
-  "__yaml_source_sha256__": "44dfa3157e2c3a17cf73f18f4e58e0fa570e294c80f2ff687ff6cba618dc1a9a"
+  "__yaml_source_sha256__": "a2ec838e27a54ad37d7e1f8db83fe457f0e6f019a45956c8ca1501b0c7195360"
 }

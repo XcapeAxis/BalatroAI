@@ -7,13 +7,15 @@
   },
   "runtime": {
     "device_profile": "single_gpu_nightly_balanced",
-    "readiness_guard": true
+    "readiness_guard": true,
+    "doctor_mode": "auto"
   },
   "campaign": {
     "resume_enabled": true,
     "block_on_existing_blocked_campaigns": false,
     "force_rerun_stages": [],
     "stage_ids": [
+      "environment_doctor",
       "readiness_guard",
       "decision_policy_audit",
       "config_provenance_scan",
@@ -39,5 +41,5 @@
   "simulation": {
     "allow_missing_readiness_report": true
   },
-  "__yaml_source_sha256__": "19ae35fe51f4b326a40ac4020a6042132b3827a2d959a19066bc23b4e699b635"
+  "__yaml_source_sha256__": "8e72ef2c4ac479a9ebe1fdfbd93b4f5f0f8427d47446c535ac4526041a51563e"
 }

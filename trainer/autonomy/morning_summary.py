@@ -109,6 +109,17 @@ def _attention_queue(root: Path) -> dict[str, Any]:
     }
 
 
+def _doctor_status(root: Path) -> dict[str, Any]:
+    json_path = root / "p58" / "latest_doctor.json"
+    md_path = root / "p58" / "latest_doctor.md"
+    payload = _read_json(json_path)
+    return {
+        "json_path": str(json_path.resolve()),
+        "md_path": str(md_path.resolve()),
+        "payload": payload if isinstance(payload, dict) else {},
+    }
+
+
 def _dashboard_excerpt(root: Path) -> dict[str, Any]:
     md_path = _latest_matching_path(root / "dashboard" / "latest", "*.html")
     data_path = root / "dashboard" / "latest" / "dashboard_data.json"
@@ -135,7 +146,15 @@ def _latest_p22(root: Path) -> dict[str, Any]:
     }
 
 
-def _recommended_first_action(campaigns: list[dict[str, Any]], attention_open: list[dict[str, Any]], promotion_review: list[dict[str, Any]]) -> str:
+def _recommended_first_action(
+    campaigns: list[dict[str, Any]],
+    attention_open: list[dict[str, Any]],
+    promotion_review: list[dict[str, Any]],
+    doctor: dict[str, Any],
+) -> str:
+    doctor_payload = doctor.get("payload") if isinstance(doctor.get("payload"), dict) else {}
+    if str(doctor_payload.get("status") or "") == "blocked":
+        return "Repair the machine environment from the latest doctor report before resuming campaigns"
     blocking = next((item for item in attention_open if str(item.get("severity") or "") == "block"), None)
     if isinstance(blocking, dict):
         return str(blocking.get("title") or blocking.get("summary") or "Review blocking attention item")
@@ -161,6 +180,7 @@ def build_morning_summary(*, artifacts_root: str | Path | None = None, out_root:
     registry = _registry_summary(root)
     promotion = _promotion_queue(root)
     attention = _attention_queue(root)
+    doctor = _doctor_status(root)
     dashboard = _dashboard_excerpt(root)
     p22 = _latest_p22(root)
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -168,7 +188,7 @@ def build_morning_summary(*, artifacts_root: str | Path | None = None, out_root:
     latest_json = out_dir / "latest.json"
     stamped_md = out_dir / f"{timestamp}.md"
     stamped_json = out_dir / f"{timestamp}.json"
-    first_action = _recommended_first_action(campaigns, attention.get("open_items") or [], promotion.get("review_items") or [])
+    first_action = _recommended_first_action(campaigns, attention.get("open_items") or [], promotion.get("review_items") or [], doctor)
 
     lines = [
         "# Morning Summary",
@@ -177,6 +197,7 @@ def build_morning_summary(*, artifacts_root: str | Path | None = None, out_root:
         f"- latest_p22_run: `{p22.get('run_id') or ''}`",
         f"- attention_queue: `{attention.get('path') or ''}`",
         f"- promotion_queue: `{promotion.get('path') or ''}`",
+        f"- doctor_report: `{doctor.get('json_path') or ''}`",
         "",
         "## Completed Campaigns / Stages",
         "",
@@ -206,6 +227,23 @@ def build_morning_summary(*, artifacts_root: str | Path | None = None, out_root:
         )
     if not (promotion.get("review_items") or []):
         lines.append("- No items in promotion_review.")
+    lines += ["", "## Environment Doctor", ""]
+    doctor_payload = doctor.get("payload") if isinstance(doctor.get("payload"), dict) else {}
+    if doctor_payload:
+        lines.append(
+            "- status=`{}` recommended_mode=`{}` ready=`{}` report=`{}`".format(
+                doctor_payload.get("status") or "",
+                doctor_payload.get("recommended_mode") or "",
+                doctor_payload.get("ready_for_continuation"),
+                doctor.get("json_path") or "",
+            )
+        )
+        for item in (doctor_payload.get("blocking_reasons") or [])[:6]:
+            lines.append(f"  - block: {item}")
+        for item in (doctor_payload.get("warnings") or [])[:6]:
+            lines.append(f"  - warn: {item}")
+    else:
+        lines.append("- No doctor report found.")
     lines += ["", "## Attention Queue", ""]
     for item in attention.get("open_items") or []:
         lines.append(
@@ -227,6 +265,7 @@ def build_morning_summary(*, artifacts_root: str | Path | None = None, out_root:
         "registry": registry,
         "promotion_queue": promotion,
         "attention_queue": attention,
+        "doctor": doctor,
         "dashboard": {"index_path": dashboard.get("index_path") or "", "data_path": dashboard.get("data_path") or ""},
         "latest_p22": p22,
         "recommended_first_action": first_action,

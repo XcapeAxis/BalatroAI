@@ -8,12 +8,14 @@ decision_policy:
 runtime:
   device_profile: single_gpu_mainline
   readiness_guard: true
+  doctor_mode: auto
 
 campaign:
   resume_enabled: true
   block_on_existing_blocked_campaigns: false
   force_rerun_stages: []
   stage_ids:
+    - environment_doctor
     - readiness_guard
     - decision_policy_audit
     - config_provenance_scan

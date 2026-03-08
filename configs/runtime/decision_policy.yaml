@@ -15,14 +15,19 @@ auto_allow_actions:
   - create_attention_item
   - build_morning_summary
   - inspect_promotion_queue
+  - run_environment_doctor
 auto_suggest_actions:
   - switch_window_mode
   - archive_checkpoints
   - adjust_training_profile
   - promote_canary_candidate
+  - bootstrap_windows_env
 must_block_for_human_description: actions that require explicit human sign-off
 human_required_actions:
   - install_dependencies
+  - create_python_env
+  - install_python_packages
+  - bootstrap_windows_env
   - change_driver_or_cuda
   - rewrite_git_history
   - force_push
@@ -34,6 +39,7 @@ human_required_actions:
   - destructive_cleanup
 stop_conditions:
   - env_dependency_change_required
+  - doctor_blocked_environment
   - config_provenance_mismatch
   - unexplained_major_regression
   - insufficient_statistical_evidence
@@ -44,3 +50,4 @@ continue_on_warning_conditions:
   - promotion_review_pending
   - blocked_campaign_review_pending
   - background_mode_warning
+  - doctor_warning

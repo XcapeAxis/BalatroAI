@@ -30,6 +30,7 @@ from trainer.monitoring.dashboard_build import build_dashboard
 from trainer.ops_ui.state_loader import campaign_rows, latest_promotion_queue, latest_readiness_report, registry_entries
 from trainer.registry.checkpoint_registry import list_entries, snapshot_registry
 from trainer.registry.promotion_queue import build_promotion_queue_summary
+from trainer.runtime.doctor import run_doctor
 
 
 def _read_json(path: Path) -> Any:
@@ -101,6 +102,7 @@ def run_overnight_protocol_seed_experiment(
     campaign_cfg = config_payload.get("campaign") if isinstance(config_payload.get("campaign"), dict) else {}
     output_cfg = config_payload.get("output") if isinstance(config_payload.get("output"), dict) else {}
     simulation_cfg = config_payload.get("simulation") if isinstance(config_payload.get("simulation"), dict) else {}
+    runtime_cfg = config_payload.get("runtime") if isinstance(config_payload.get("runtime"), dict) else {}
     policy_path = (repo_root / str(decision_cfg.get("path") or "configs/runtime/decision_policy.yaml")).resolve()
     policy = load_decision_policy(policy_path)
     autonomy_mode = str(config_payload.get("autonomy_mode") or exp.get("autonomy_mode") or "overnight_smoke")
@@ -307,6 +309,37 @@ def run_overnight_protocol_seed_experiment(
         autonomy = evaluate_autonomy(policy=policy, actions=["resume_campaign"], summary="readiness_ok")
         return {"readiness_report_path": report_path, "readiness_status": readiness_status}, autonomy, None
 
+    def _environment_doctor_handler() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]:
+        requested_mode = str(runtime_cfg.get("doctor_mode") or "auto").strip().lower() or "auto"
+        report = run_doctor(
+            repo_root=repo_root,
+            requested_mode=requested_mode,
+            out_root=repo_root / "docs" / "artifacts" / "p58",
+            queue_attention_on_block=True,
+            skip_config_check=False,
+        )
+        artifacts = {
+            "doctor_report_path": str(report.get("json_path") or ""),
+            "doctor_report_md": str(report.get("md_path") or ""),
+            "bootstrap_state_path": str(report.get("bootstrap_state_path") or ""),
+            "doctor_status": str(report.get("status") or ""),
+            "setup_mode": requested_mode,
+            "doctor_recommended_mode": str(report.get("recommended_mode") or ""),
+            "training_env_source": str(((report.get("resolver") or {}).get("selection_reason")) or ""),
+            "training_env_name": str((((report.get("resolver") or {}).get("selected")) or {}).get("env_name") or ""),
+        }
+        attention_item = None
+        if str(report.get("attention_item_ref") or "").strip():
+            attention_item = {"attention_file": str(report.get("attention_item_ref") or "")}
+        if str(report.get("status") or "") == "blocked":
+            autonomy = evaluate_autonomy(policy=policy, actions=["bootstrap_windows_env"], conditions=["doctor_blocked_environment"], summary="doctor_blocked")
+            return artifacts, autonomy, attention_item
+        if str(report.get("status") or "") == "warning":
+            autonomy = evaluate_autonomy(policy=policy, actions=["run_environment_doctor"], conditions=["doctor_warning"], summary="doctor_warning")
+            return artifacts, autonomy, attention_item
+        autonomy = evaluate_autonomy(policy=policy, actions=["run_environment_doctor"], summary="doctor_ready")
+        return artifacts, autonomy, attention_item
+
     def _decision_policy_handler() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]:
         snapshot_path = campaign_root / "decision_policy_snapshot.json"
         snapshot = {
@@ -440,6 +473,7 @@ def run_overnight_protocol_seed_experiment(
         }, autonomy, None
 
     stage_handlers: dict[str, tuple[Callable[[], tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]], bool]] = {
+        "environment_doctor": (_environment_doctor_handler, False),
         "readiness_guard": (_readiness_handler, False),
         "decision_policy_audit": (_decision_policy_handler, False),
         "config_provenance_scan": (_config_handler, False),
@@ -473,6 +507,37 @@ def run_overnight_protocol_seed_experiment(
         "decision_policy_path": str(policy_path),
         "attention_queue_path": str((queue_root / "attention_queue.json").resolve()),
         "morning_summary_path": latest_morning_summary_path,
+        "doctor_report_path": str(
+            (
+                (_existing_stage("environment_doctor").get("artifacts") if isinstance(_existing_stage("environment_doctor").get("artifacts"), dict) else {})
+            ).get("doctor_report_path")
+            or ""
+        ),
+        "bootstrap_state_path": str(
+            (
+                (_existing_stage("environment_doctor").get("artifacts") if isinstance(_existing_stage("environment_doctor").get("artifacts"), dict) else {})
+            ).get("bootstrap_state_path")
+            or ""
+        ),
+        "setup_mode": str(runtime_cfg.get("doctor_mode") or "auto"),
+        "doctor_recommended_mode": str(
+            (
+                (_existing_stage("environment_doctor").get("artifacts") if isinstance(_existing_stage("environment_doctor").get("artifacts"), dict) else {})
+            ).get("doctor_recommended_mode")
+            or ""
+        ),
+        "training_env_source": str(
+            (
+                (_existing_stage("environment_doctor").get("artifacts") if isinstance(_existing_stage("environment_doctor").get("artifacts"), dict) else {})
+            ).get("training_env_source")
+            or ""
+        ),
+        "training_env_name": str(
+            (
+                (_existing_stage("environment_doctor").get("artifacts") if isinstance(_existing_stage("environment_doctor").get("artifacts"), dict) else {})
+            ).get("training_env_name")
+            or ""
+        ),
         "registry_snapshot_path": str(registry_snapshot_path.resolve()),
         "promotion_queue_path": str(promotion_queue_path.resolve()),
         "resume_report_md": str(resume_report_path.resolve()),
@@ -503,6 +568,12 @@ def run_overnight_protocol_seed_experiment(
         "p57_decision_policy_path": str(policy_path),
         "p57_attention_queue_path": str((queue_root / "attention_queue.json").resolve()),
         "p57_morning_summary_path": latest_morning_summary_path,
+        "doctor_report_path": summary_payload.get("doctor_report_path"),
+        "bootstrap_state_path": summary_payload.get("bootstrap_state_path"),
+        "setup_mode": summary_payload.get("setup_mode"),
+        "doctor_recommended_mode": summary_payload.get("doctor_recommended_mode"),
+        "training_env_source": summary_payload.get("training_env_source"),
+        "training_env_name": summary_payload.get("training_env_name"),
         "p57_autonomy_mode": autonomy_mode,
         "p57_human_gate_triggered": human_gate_triggered,
         "p57_open_attention_count": len(open_items),
