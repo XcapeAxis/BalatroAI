@@ -45,7 +45,17 @@ P56_ROUTER_CAMPAIGN_STAGE_IDS = (
     "dashboard_build",
 )
 
-CAMPAIGN_STAGE_STATUSES = ("pending", "running", "completed", "failed", "skipped")
+P57_OVERNIGHT_STAGE_IDS = (
+    "readiness_guard",
+    "decision_policy_audit",
+    "config_provenance_scan",
+    "promotion_queue_scan",
+    "campaign_health_scan",
+    "dashboard_build",
+    "morning_summary",
+)
+
+CAMPAIGN_STAGE_STATUSES = ("pending", "running", "completed", "failed", "blocked", "skipped")
 
 
 def now_iso() -> str:
@@ -67,6 +77,11 @@ def build_stage_entry(stage_id: str, *, resume_safe: bool = True) -> dict[str, A
         "artifacts": {},
         "resume_safe": bool(resume_safe),
         "error_summary": "",
+        "autonomy_decision": "",
+        "autonomy_reason": "",
+        "attention_item_ref": "",
+        "continue_allowed": True,
+        "human_gate_triggered": False,
     }
 
 

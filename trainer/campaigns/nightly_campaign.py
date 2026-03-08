@@ -18,9 +18,23 @@ from trainer.campaigns.resume_state import load_campaign_state
 def build_campaign_overview(payload: dict[str, Any]) -> dict[str, Any]:
     stages = [dict(item) for item in (payload.get("stages") or []) if isinstance(item, dict)]
     counts: dict[str, int] = {}
+    autonomy_counts: dict[str, int] = {}
+    blocked_stages: list[dict[str, Any]] = []
     for stage in stages:
         token = str(stage.get("status") or "pending")
         counts[token] = int(counts.get(token, 0)) + 1
+        decision = str(stage.get("autonomy_decision") or "").strip() or "unset"
+        autonomy_counts[decision] = int(autonomy_counts.get(decision, 0)) + 1
+        if token == "blocked" or bool(stage.get("human_gate_triggered")):
+            blocked_stages.append(
+                {
+                    "stage_id": str(stage.get("stage_id") or ""),
+                    "status": token,
+                    "autonomy_decision": str(stage.get("autonomy_decision") or ""),
+                    "autonomy_reason": str(stage.get("autonomy_reason") or ""),
+                    "attention_item_ref": str(stage.get("attention_item_ref") or ""),
+                }
+            )
     return {
         "schema": "p51_campaign_overview_v1",
         "campaign_id": str(payload.get("campaign_id") or ""),
@@ -28,6 +42,8 @@ def build_campaign_overview(payload: dict[str, Any]) -> dict[str, Any]:
         "experiment_id": str(payload.get("experiment_id") or ""),
         "seed": str(payload.get("seed") or ""),
         "counts": counts,
+        "autonomy_counts": autonomy_counts,
+        "blocked_stages": blocked_stages,
         "stages": stages,
     }
 
