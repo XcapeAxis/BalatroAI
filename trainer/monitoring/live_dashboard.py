@@ -137,6 +137,22 @@ def collect_p52_summary(root: Path) -> dict[str, Any]:
     }
 
 
+def collect_p56_summary(root: Path) -> dict[str, Any]:
+    calibration_payload = _latest_matching_json(root, "**/calibration_metrics.json", required_tokens=("p56/",))
+    canary_payload = _latest_matching_json(root, "**/canary_eval_summary.json", required_tokens=("p56/",))
+    guard_payload = _latest_matching_json(root, "**/guard_tuning_results.json", required_tokens=("p56/",))
+    promotion_payload = _latest_matching_json(root, "**/promotion_decision.json", required_tokens=("p56/", "arena_ablation/"))
+    return {
+        "calibration_bias": str(calibration_payload.get("calibration_bias") or ""),
+        "ece": float(calibration_payload.get("ece") or 0.0),
+        "accuracy": float(calibration_payload.get("accuracy") or 0.0),
+        "canary_usage_rate": float(canary_payload.get("canary_usage_rate") or 0.0),
+        "canary_fallback_rate": float(canary_payload.get("canary_fallback_rate") or 0.0),
+        "deployment_mode_recommendation": str(canary_payload.get("deployment_mode_recommendation") or promotion_payload.get("deployment_mode_recommendation") or ""),
+        "guard_candidate_count": int(len((guard_payload.get("results") or []))) if isinstance(guard_payload.get("results"), list) else 0,
+    }
+
+
 def collect_p53_summary(root: Path) -> dict[str, Any]:
     window_path = root / "p53" / "window_supervisor" / "latest" / "window_state.json"
     background_path = root / "p53" / "background_mode_validation" / "latest" / "background_mode_validation.json"
@@ -159,9 +175,9 @@ def collect_p53_summary(root: Path) -> dict[str, Any]:
     }
 
 
-def render_text(rows: list[dict[str, Any]], campaign_rows: list[dict[str, Any]], registry_summary: dict[str, Any], p52_summary: dict[str, Any], p53_summary: dict[str, Any]) -> str:
+def render_text(rows: list[dict[str, Any]], campaign_rows: list[dict[str, Any]], registry_summary: dict[str, Any], p52_summary: dict[str, Any], p56_summary: dict[str, Any], p53_summary: dict[str, Any]) -> str:
     lines = [
-        "[dashboard] P49/P51/P52 live progress",
+        "[dashboard] P49/P51/P52/P56 live progress",
         "run_id            component             phase       status    learner      rollout      throughput   gpu_mb   warning",
         "-" * 112,
     ]
@@ -191,6 +207,17 @@ def render_text(rows: list[dict[str, Any]], campaign_rows: list[dict[str, Any]],
                 guard=float(p52_summary.get("guard_trigger_rate") or 0.0),
                 rec=str(p52_summary.get("promotion_recommendation") or "n/a"),
                 delta=float(p52_summary.get("promotion_score_delta") or 0.0),
+            ),
+            "",
+            "[p56]",
+            "bias={bias} ece={ece:.3f} accuracy={acc:.3f} canary_usage_rate={usage:.3f} fallback_rate={fallback:.3f} deployment={deploy} guard_candidates={guards}".format(
+                bias=str(p56_summary.get("calibration_bias") or "n/a"),
+                ece=float(p56_summary.get("ece") or 0.0),
+                acc=float(p56_summary.get("accuracy") or 0.0),
+                usage=float(p56_summary.get("canary_usage_rate") or 0.0),
+                fallback=float(p56_summary.get("canary_fallback_rate") or 0.0),
+                deploy=str(p56_summary.get("deployment_mode_recommendation") or "n/a"),
+                guards=int(p56_summary.get("guard_candidate_count") or 0),
             ),
             "",
             "[p53]",
@@ -249,9 +276,10 @@ def main() -> int:
         campaign_rows = collect_campaign_rows(watch_root)
         registry_summary = collect_registry_summary(watch_root)
         p52_summary = collect_p52_summary(watch_root)
+        p56_summary = collect_p56_summary(watch_root)
         p53_summary = collect_p53_summary(watch_root)
         os.system("cls" if os.name == "nt" else "clear")
-        print(render_text(rows, campaign_rows, registry_summary, p52_summary, p53_summary))
+        print(render_text(rows, campaign_rows, registry_summary, p52_summary, p56_summary, p53_summary))
         iteration += 1
         if bool(args.once) or (int(args.iterations) > 0 and iteration >= int(args.iterations)):
             break

@@ -21,6 +21,7 @@ param(
   [switch]$RunP51,
   [switch]$RunP52,
   [switch]$RunP54,
+  [switch]$RunP56,
   [switch]$RunP53,
   [string]$Only = "",
   [string]$Exclude = "",
@@ -50,7 +51,7 @@ $resolverArgs = @(
   "-Emit", "json"
 )
 if ($TrainingPython.Trim()) { $resolverArgs += @("-ExplicitPython", $TrainingPython) }
-if ($RunP50 -or $RunP52 -or $RunP54) { $resolverArgs += "-RequireCuda" }
+if ($RunP50 -or $RunP52 -or $RunP54 -or $RunP56) { $resolverArgs += "-RequireCuda" }
 $resolverJson = (& powershell @resolverArgs | Out-String).Trim()
 if (-not $resolverJson) {
   throw "[P22] training python resolver returned empty output"
@@ -181,7 +182,7 @@ if ($LegacyOnly) { $args += "--legacy-only" }
 if ($Resume) { $args += "--resume" }
 if ($KeepIntermediate) { $args += "--keep-intermediate" }
 if ($VerboseLogs) { $args += "--verbose" }
-if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $RunP50 -or $RunP51 -or $RunP52 -or $RunP54 -or $RunP53) -and [string]::IsNullOrWhiteSpace($Only)) {
+if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $RunP50 -or $RunP51 -or $RunP52 -or $RunP54 -or $RunP56 -or $RunP53) -and [string]::IsNullOrWhiteSpace($Only)) {
   $selected = @()
   if ($RunP44) { $selected += if ($Nightly) { "p44_rl_nightly" } else { "p44_rl_smoke" } }
   if ($RunP45) { $selected += if ($Nightly) { "p45_world_model_nightly" } else { "p45_world_model_smoke" } }
@@ -193,6 +194,7 @@ if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $Ru
   if ($RunP51) { $selected += if ($Nightly) { "p51_resumeable_nightly" } else { "p51_registry_smoke" } }
   if ($RunP52) { $selected += if ($Nightly) { "p52_learned_router_nightly" } else { "p52_learned_router_smoke" } }
   if ($RunP54) { $selected += if ($Nightly) { "p54_learned_router_nightly" } else { "p54_learned_router_smoke" } }
+  if ($RunP56) { $selected += if ($Nightly) { "p56_router_calibration_nightly" } else { "p56_router_calibration_smoke" } }
   if ($RunP53) { $selected += if ($Nightly) { "p53_background_ops_nightly" } else { "p53_background_ops_smoke" } }
   $Only = ($selected -join ",")
 }
@@ -225,6 +227,7 @@ if ($Quick) {
       "p50_gpu_validation_smoke",
       "p51_registry_smoke",
       "p54_learned_router_smoke",
+      "p56_router_calibration_smoke",
       "p53_background_ops_smoke"
     )
     if ($IncludeLegacy -or $LegacyOnly) {
@@ -245,6 +248,12 @@ if ($LegacyOnly) {
 } else {
   Write-Host "[P22] Selected categories: mainline"
 }
+
+$selectedExperimentIds = @()
+if (-not [string]::IsNullOrWhiteSpace($Only)) {
+  $selectedExperimentIds = ($Only -split ",") | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+}
+$requiresRealBackend = $RunP53 -or (@($selectedExperimentIds | Where-Object { $_ -like "p53_background_ops_*" }).Count -gt 0)
 
 Write-Host ("[P22] repo_root: " + $ProjectRoot)
 Write-Host ("[P22] python: " + $py)
@@ -279,7 +288,7 @@ $windowModeApplied = $false
 $runSucceeded = $false
 
 try {
-  if (-not $DryRun -and -not $SkipReadinessGuard) {
+  if ($requiresRealBackend -and -not $DryRun -and -not $SkipReadinessGuard) {
     $readinessRunId = "p22-" + (Get-Date -Format "yyyyMMdd-HHmmss")
     $waitArgs = @(
       "-ExecutionPolicy", "Bypass",
@@ -303,7 +312,7 @@ try {
   }
   $env:BALATRO_OPS_UI_PATH = ("http://127.0.0.1:" + $OpsUiPort + "/")
 
-  if (-not $DryRun -and -not [string]::IsNullOrWhiteSpace($requestedWindowMode)) {
+  if ($requiresRealBackend -and -not $DryRun -and -not [string]::IsNullOrWhiteSpace($requestedWindowMode)) {
     if ($validateBackgroundModeBeforeRun -and $requestedWindowMode -ne "visible") {
       $validationRef = Ensure-BackgroundValidation -RequestedMode $requestedWindowMode
       if ($validationRef) { $env:BALATRO_BACKGROUND_VALIDATION_REF = $validationRef }
@@ -333,7 +342,7 @@ try {
     throw ("[P22] orchestrator failed with exit code " + $code)
   }
 
-  if ($Dashboard -or $Quick -or $Nightly -or $RunP49 -or $RunP50 -or $RunP51 -or $RunP52 -or $RunP54 -or $RunP53) {
+  if ($Dashboard -or $Quick -or $Nightly -or $RunP49 -or $RunP50 -or $RunP51 -or $RunP52 -or $RunP54 -or $RunP56 -or $RunP53) {
     $dashArgs = @(
       "-B",
       "-m", "trainer.monitoring.dashboard_build",
@@ -397,3 +406,4 @@ if (Test-Path $runsRoot) {
     }
   }
 }
+

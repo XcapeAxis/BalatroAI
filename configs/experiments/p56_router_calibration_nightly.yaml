@@ -1,0 +1,195 @@
+schema: p56_router_calibration_campaign_config_v1
+device_profile: single_gpu_nightly_balanced
+runtime:
+  device_profile: single_gpu_nightly_balanced
+monitoring:
+  readiness_guard: true
+  dashboard: true
+campaign:
+  force_rerun_stages: []
+  resume_enabled: true
+registry:
+  training_mode: p56_learned_router
+  training_mode_category: mainline
+  notes: auto_registered_from_p56_learned_router_train
+controllers:
+  policy_model_path: ''
+  world_model_checkpoint: ''
+  search:
+    max_branch: 80
+    max_depth: 2
+    time_budget_ms: 15.0
+  wm_rerank:
+    top_k: 4
+    horizon: 1
+    uncertainty_penalty: 0.55
+routing:
+  router:
+    policy_margin_high: 0.2
+    policy_margin_low: 0.08
+    policy_entropy_high: 1.25
+    wm_uncertainty_prefer_max: 0.8
+    wm_uncertainty_disable: 1.2
+    search_budget_min_level: medium
+    high_risk_search_bonus: 0.75
+    late_stage_search_bonus: 0.5
+    wm_reward_bonus_scale: 0.2
+  rule_guard:
+    router_confidence_min: 0.48
+    high_risk_router_confidence_min: 0.64
+    feature_completeness_min: 0.82
+    ood_score_max: 5.5
+    wm_uncertainty_max: 0.95
+    high_risk_slice_force_rule: true
+  learned_router:
+    temperature: 1.0
+    device: auto
+  canary:
+    router_confidence_min: 0.72
+    feature_completeness_min: 0.9
+    ood_score_max: 4.5
+    wm_uncertainty_max: 0.85
+    high_risk_slice_force_rule: true
+    high_risk_stages:
+    - late
+    high_risk_resource_pressures:
+    - high
+dataset:
+  quick: false
+  max_trace_files: 24
+  max_samples: 4096
+  allow_rule_labels: true
+  min_label_confidence: 0.2
+  artifacts_root: docs/artifacts/p56/router_dataset
+train:
+  quick: false
+  seed: 5602
+  epochs: 8
+  batch_size: 96
+  lr: 0.001
+  weight_decay: 0.0001
+  top_k: 2
+  val_fraction: 0.2
+  class_weighting: inverse_freq
+  checkpoint_metric: top1_accuracy
+  require_cuda: true
+  artifacts_root: docs/artifacts/p56/router_train
+inference_smoke:
+  seed: AAAAAAA
+  max_states: 16
+benchmark:
+  artifacts_root: docs/artifacts/p56/router_benchmark
+  slice_keys:
+  - slice_stage
+  - slice_resource_pressure
+  - slice_action_type
+  catastrophic:
+    min_total_score: 8.0
+    max_invalid_action_rate: 0.05
+  seed_pools:
+  - name: smoke
+    include_in_quick: true
+    quick: true
+    seeds:
+    - AAAAAAA
+    - BBBBBBB
+  - name: medium
+    include_in_quick: true
+    quick: false
+    seeds:
+    - AAAAAAA
+    - BBBBBBB
+    - CCCCCCC
+  - name: nightly
+    include_in_quick: false
+    quick: false
+    seeds:
+    - AAAAAAA
+    - BBBBBBB
+    - CCCCCCC
+    - DDDDDDD
+calibration:
+  artifacts_root: docs/artifacts/p56/router_calibration
+  device: cpu
+  valid_only: true
+  bins: 12
+  slice_keys:
+  - slice_stage
+  - slice_resource_pressure
+  - slice_action_type
+  max_samples: 4096
+guard_tuning:
+  artifacts_root: docs/artifacts/p56/guard_tuning
+  objective:
+    catastrophic_penalty: 50.0
+    guard_trigger_penalty: 5.0
+    score_tolerance_vs_rule: 0.0
+  candidates:
+  - router_confidence_min: 0.45
+    high_risk_router_confidence_min: 0.6
+    feature_completeness_min: 0.8
+    ood_score_max: 6.0
+    wm_uncertainty_max: 1.0
+    high_risk_slice_force_rule: true
+  - router_confidence_min: 0.5
+    high_risk_router_confidence_min: 0.66
+    feature_completeness_min: 0.84
+    ood_score_max: 5.2
+    wm_uncertainty_max: 0.92
+    high_risk_slice_force_rule: true
+  - router_confidence_min: 0.56
+    high_risk_router_confidence_min: 0.72
+    feature_completeness_min: 0.88
+    ood_score_max: 4.8
+    wm_uncertainty_max: 0.86
+    high_risk_slice_force_rule: true
+  - router_confidence_min: 0.6
+    high_risk_router_confidence_min: 0.78
+    feature_completeness_min: 0.9
+    ood_score_max: 4.2
+    wm_uncertainty_max: 0.8
+    high_risk_slice_force_rule: true
+  seed_pools:
+  - name: medium
+    include_in_quick: true
+    quick: false
+    seeds:
+    - AAAAAAA
+    - BBBBBBB
+    - CCCCCCC
+  - name: nightly
+    include_in_quick: false
+    quick: false
+    seeds:
+    - AAAAAAA
+    - BBBBBBB
+    - CCCCCCC
+    - DDDDDDD
+canary:
+  artifacts_root: docs/artifacts/p56/canary_eval
+  slice_keys:
+  - slice_stage
+  - slice_resource_pressure
+arena_compare:
+  backend: sim
+  mode: long_episode
+  episodes_per_seed: 2
+  max_steps: 160
+  timeout_sec: 21600
+  policies:
+  - policy_baseline
+  - policy_plus_wm_rerank
+  - hybrid_controller_rule
+  - hybrid_controller_learned
+  - hybrid_controller_learned_with_rule_guard
+  - hybrid_controller_canary_learned_router
+  - search_baseline
+  - heuristic_baseline
+  champion_policy: hybrid_controller_rule
+  candidate_policy: hybrid_controller_canary_learned_router
+triage:
+  output_artifacts_root: docs/artifacts/p56/triage
+output:
+  router_inference_root: docs/artifacts/p56/router_inference
+  arena_ablation_root: docs/artifacts/p56/arena_ablation
+  canary_eval_root: docs/artifacts/p56/canary_eval

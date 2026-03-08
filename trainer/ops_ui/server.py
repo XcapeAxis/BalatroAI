@@ -70,6 +70,8 @@ def _render_base(title: str, content: str, *, current_path: str, refresh_sec: in
         ("/campaigns", "Campaigns"),
         ("/registry", "Checkpoint Registry"),
         ("/promotion-queue", "Promotion Queue"),
+        ("/router-calibration", "Router Calibration"),
+        ("/router-canary", "Guard / Canary"),
         ("/runs", "Runs / Metrics"),
         ("/windows", "Windows"),
         ("/jobs", "Jobs / Audit"),
@@ -243,6 +245,12 @@ class OpsRequestHandler(BaseHTTPRequestHandler):
             return
         if route == "/promotion-queue":
             self._send_html(_render_base("Promotion Queue", routes.render_promotion_queue(state), current_path=route))
+            return
+        if route == "/router-calibration":
+            self._send_html(_render_base("Router Calibration", routes.render_router_calibration(state), current_path=route))
+            return
+        if route == "/router-canary":
+            self._send_html(_render_base("Guard / Canary", routes.render_router_guard_canary(state), current_path=route))
             return
         if route == "/runs":
             self._send_html(_render_base("Runs", routes.render_runs(state), current_path=route))

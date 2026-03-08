@@ -91,6 +91,10 @@ def _registry_summary(input_root: Path) -> dict[str, Any]:
                 "checkpoint_id": str(item.get("checkpoint_id") or ""),
                 "status": str(item.get("status") or ""),
                 "artifact_path": str(item.get("artifact_path") or ""),
+                "calibration_ref": str(item.get("calibration_ref") or ""),
+                "guard_tuning_ref": str(item.get("guard_tuning_ref") or ""),
+                "canary_eval_ref": str(item.get("canary_eval_ref") or ""),
+                "deployment_mode_recommendation": str(item.get("deployment_mode_recommendation") or ""),
             }
         )
         if len(learned_router_items) >= 6:
@@ -145,8 +149,20 @@ def _guarded_variant(payload: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _canary_variant(payload: dict[str, Any]) -> dict[str, Any]:
+    variants = payload.get("variants") if isinstance(payload.get("variants"), list) else []
+    return next(
+        (
+            row
+            for row in variants
+            if isinstance(row, dict) and str(row.get("policy_id") or "") == "hybrid_controller_canary_learned_router"
+        ),
+        {},
+    )
+
+
 def _collect_learned_router_dashboard_data(input_root: Path, campaign_states: list[dict[str, Any]], registry_summary: dict[str, Any]) -> dict[str, Any]:
-    prefixes = ("p54/", "p52/")
+    prefixes = ("p56/", "p54/", "p52/")
     dataset_path, dataset_payload = _latest_matching_json_by_prefix(input_root, "**/router_dataset_stats.json", prefixes=prefixes)
     train_path, train_payload = _latest_matching_json_by_prefix(input_root, "**/metrics.json", prefixes=prefixes, extra_tokens=("router_train/",))
     promotion_path, promotion_payload = _latest_matching_json_by_prefix(input_root, "**/promotion_decision.json", prefixes=prefixes, extra_tokens=("arena_ablation/",))
@@ -157,7 +173,18 @@ def _collect_learned_router_dashboard_data(input_root: Path, campaign_states: li
     summary_rows_payload = _read_json(ablation_dir / "summary_table.json") if isinstance(ablation_dir, Path) else None
     summary_rows = [row for row in summary_rows_payload if isinstance(row, dict)] if isinstance(summary_rows_payload, list) else []
     guarded_variant = _guarded_variant(routing_payload if isinstance(routing_payload, dict) else {})
-    family_prefix = "p54" if "/p54/" in str(dataset_path).lower().replace("\\", "/") or "/p54/" in str(promotion_path).lower().replace("\\", "/") else "p52"
+    canary_variant = _canary_variant(routing_payload if isinstance(routing_payload, dict) else {})
+    path_tokens = " ".join(
+        str(value).lower().replace("\\", "/")
+        for value in (dataset_path, promotion_path, routing_path, queue_path)
+        if value
+    )
+    if "/p56/" in path_tokens:
+        family_prefix = "p56"
+    elif "/p54/" in path_tokens:
+        family_prefix = "p54"
+    else:
+        family_prefix = "p52"
     campaign_rows = [
         row
         for row in campaign_states
@@ -188,6 +215,7 @@ def _collect_learned_router_dashboard_data(input_root: Path, campaign_states: li
             "slice_eval": slice_eval_payload if isinstance(slice_eval_payload, dict) else {},
             "summary_rows": summary_rows,
             "guarded_variant": guarded_variant if isinstance(guarded_variant, dict) else {},
+            "canary_variant": canary_variant if isinstance(canary_variant, dict) else {},
         },
         "campaign_states": campaign_rows,
         "promotion_queue": {
@@ -197,6 +225,42 @@ def _collect_learned_router_dashboard_data(input_root: Path, campaign_states: li
         "registry": {
             "learned_router_items": registry_summary.get("learned_router_items") if isinstance(registry_summary.get("learned_router_items"), list) else [],
         },
+    }
+
+
+def _collect_p56_dashboard_data(input_root: Path, campaign_states: list[dict[str, Any]], registry_summary: dict[str, Any]) -> dict[str, Any]:
+    calibration_path, calibration_payload = _latest_matching_json(input_root, "**/calibration_metrics.json", required_tokens=("p56/",))
+    reliability_path, reliability_payload = _latest_matching_json(input_root, "**/reliability_bins.json", required_tokens=("p56/",))
+    guard_path, guard_payload = _latest_matching_json(input_root, "**/guard_tuning_results.json", required_tokens=("p56/",))
+    guard_cfg_path, guard_cfg_payload = _latest_matching_json(input_root, "**/recommended_guard_config.json", required_tokens=("p56/",))
+    canary_path, canary_payload = _latest_matching_json(input_root, "**/canary_eval_summary.json", required_tokens=("p56/",))
+    benchmark_path, benchmark_payload = _latest_matching_json(input_root, "**/benchmark_summary.json", required_tokens=("p56/",))
+    promotion_path, promotion_payload = _latest_matching_json(input_root, "**/promotion_decision.json", required_tokens=("p56/", "arena_ablation/"))
+    routing_path, routing_payload = _latest_matching_json(input_root, "**/routing_summary.json", required_tokens=("p56/", "arena_ablation/"))
+    queue_path, queue_payload = _latest_matching_json(input_root, "**/promotion_queue.json", required_tokens=("p56/",))
+    campaign_rows = [
+        row
+        for row in campaign_states
+        if isinstance(row, dict) and ("p56" in str(row.get("campaign_id") or "").lower() or "p56" in str(row.get("experiment_id") or "").lower())
+    ]
+    registry_items = [
+        row
+        for row in (registry_summary.get("learned_router_items") if isinstance(registry_summary.get("learned_router_items"), list) else [])
+        if any(str(row.get(key) or "").strip() for key in ("calibration_ref", "guard_tuning_ref", "canary_eval_ref"))
+        or str(row.get("deployment_mode_recommendation") or "").strip()
+    ]
+    return {
+        "calibration": {"path": calibration_path, "payload": calibration_payload if isinstance(calibration_payload, dict) else {}},
+        "reliability": {"path": reliability_path, "payload": reliability_payload if isinstance(reliability_payload, dict) else {}},
+        "guard_tuning": {"path": guard_path, "payload": guard_payload if isinstance(guard_payload, dict) else {}},
+        "recommended_guard": {"path": guard_cfg_path, "payload": guard_cfg_payload if isinstance(guard_cfg_payload, dict) else {}},
+        "canary_eval": {"path": canary_path, "payload": canary_payload if isinstance(canary_payload, dict) else {}},
+        "benchmark": {"path": benchmark_path, "payload": benchmark_payload if isinstance(benchmark_payload, dict) else {}},
+        "promotion": {"path": promotion_path, "payload": promotion_payload if isinstance(promotion_payload, dict) else {}},
+        "routing": {"path": routing_path, "payload": routing_payload if isinstance(routing_payload, dict) else {}},
+        "promotion_queue": {"path": queue_path, "payload": queue_payload if isinstance(queue_payload, dict) else {}},
+        "campaign_states": campaign_rows,
+        "registry": {"learned_router_items": registry_items},
     }
 
 
@@ -322,6 +386,7 @@ def collect_dashboard_data(input_root: Path) -> dict[str, Any]:
         campaign_states.append(_campaign_stage_summary(payload))
     registry_summary = _registry_summary(input_root)
     learned_router_payload = _collect_learned_router_dashboard_data(input_root, campaign_states, registry_summary)
+    p56_payload = _collect_p56_dashboard_data(input_root, campaign_states, registry_summary)
     # P55: collect latest config sidecar sync report
     config_sync_status = _collect_config_sync_status(input_root)
 
@@ -338,6 +403,7 @@ def collect_dashboard_data(input_root: Path) -> dict[str, Any]:
         "registry_summary": registry_summary,
         "learned_router": learned_router_payload,
         "p52": learned_router_payload,
+        "p56": p56_payload,
         "p53": _collect_p53_dashboard_data(input_root, campaign_states),
     }
 
@@ -445,6 +511,20 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
     router_campaign_rows = router_payload.get("campaign_states") if isinstance(router_payload.get("campaign_states"), list) else []
     router_registry = router_payload.get("registry") if isinstance(router_payload.get("registry"), dict) else {}
     router_registry_items = router_registry.get("learned_router_items") if isinstance(router_registry.get("learned_router_items"), list) else []
+    p56_payload = data.get("p56") if isinstance(data.get("p56"), dict) else {}
+    p56_calibration = p56_payload.get("calibration") if isinstance(p56_payload.get("calibration"), dict) else {}
+    p56_calibration_payload = p56_calibration.get("payload") if isinstance(p56_calibration.get("payload"), dict) else {}
+    p56_guard = p56_payload.get("guard_tuning") if isinstance(p56_payload.get("guard_tuning"), dict) else {}
+    p56_guard_payload = p56_guard.get("payload") if isinstance(p56_guard.get("payload"), dict) else {}
+    p56_guard_cfg = p56_payload.get("recommended_guard") if isinstance(p56_payload.get("recommended_guard"), dict) else {}
+    p56_guard_cfg_payload = p56_guard_cfg.get("payload") if isinstance(p56_guard_cfg.get("payload"), dict) else {}
+    p56_canary = p56_payload.get("canary_eval") if isinstance(p56_payload.get("canary_eval"), dict) else {}
+    p56_canary_payload = p56_canary.get("payload") if isinstance(p56_canary.get("payload"), dict) else {}
+    p56_benchmark = p56_payload.get("benchmark") if isinstance(p56_payload.get("benchmark"), dict) else {}
+    p56_benchmark_payload = p56_benchmark.get("payload") if isinstance(p56_benchmark.get("payload"), dict) else {}
+    p56_promotion = p56_payload.get("promotion") if isinstance(p56_payload.get("promotion"), dict) else {}
+    p56_promotion_payload = p56_promotion.get("payload") if isinstance(p56_promotion.get("payload"), dict) else {}
+    p56_campaign_rows = p56_payload.get("campaign_states") if isinstance(p56_payload.get("campaign_states"), list) else []
     p53_payload = data.get("p53") if isinstance(data.get("p53"), dict) else {}
     p53_window = p53_payload.get("window_state") if isinstance(p53_payload.get("window_state"), dict) else {}
     p53_window_payload = p53_window.get("payload") if isinstance(p53_window.get("payload"), dict) else {}
@@ -492,6 +572,19 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
             f"<td>{html.escape(str(row.get('checkpoint_id') or ''))}</td>"
             f"<td>{html.escape(str(row.get('status') or ''))}</td>"
             f"<td><code>{html.escape(str(row.get('artifact_path') or ''))}</code></td>"
+            "</tr>"
+        )
+
+    p56_campaign_html = []
+    for row in p56_campaign_rows:
+        if not isinstance(row, dict):
+            continue
+        p56_campaign_html.append(
+            "<tr>"
+            f"<td>{html.escape(str(row.get('campaign_id') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('stage_id') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('status') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('state_path') or ''))}</td>"
             "</tr>"
         )
 
@@ -665,6 +758,22 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
       <thead><tr><th>Checkpoint ID</th><th>Status</th><th>Artifact</th></tr></thead>
       <tbody>
         {''.join(p52_registry_html) or '<tr><td colspan="3">No learned-router registry entries found.</td></tr>'}
+      </tbody>
+    </table>
+  </div>
+  <div class="panel">
+    <h2>P56 Calibration / Guard / Canary</h2>
+    <p class="muted">calibration: <code>{html.escape(str(p56_calibration.get('path') or ''))}</code></p>
+    <p class="muted">guard_tuning: <code>{html.escape(str(p56_guard.get('path') or ''))}</code></p>
+    <p class="muted">canary_eval: <code>{html.escape(str(p56_canary.get('path') or ''))}</code></p>
+    <p>bias=<code>{html.escape(str(p56_calibration_payload.get('calibration_bias') or 'n/a'))}</code> ece={html.escape(str(p56_calibration_payload.get('ece') or ''))} accuracy={html.escape(str(p56_calibration_payload.get('accuracy') or ''))}</p>
+    <p>recommended_guard=<code>{html.escape(json.dumps(p56_guard_cfg_payload.get('guard_config') or {}, ensure_ascii=False))}</code></p>
+    <p>deployment_mode=<code>{html.escape(str(p56_canary_payload.get('deployment_mode_recommendation') or p56_promotion_payload.get('deployment_mode_recommendation') or ''))}</code> canary_usage_rate={html.escape(str(p56_canary_payload.get('canary_usage_rate') or ''))} fallback_rate={html.escape(str(p56_canary_payload.get('canary_fallback_rate') or ''))}</p>
+    <p>benchmark_policies={html.escape(str(len(p56_benchmark_payload.get('policy_rows') or [])))} benchmark_seeds={html.escape(str(((p56_benchmark_payload.get('evaluation_budget') or {}).get('seed_count') or 0)))} </p>
+    <table>
+      <thead><tr><th>Campaign</th><th>Stage</th><th>Status</th><th>State Path</th></tr></thead>
+      <tbody>
+        {''.join(p56_campaign_html) or '<tr><td colspan="4">No P56 campaigns found.</td></tr>'}
       </tbody>
     </table>
   </div>

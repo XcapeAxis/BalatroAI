@@ -64,6 +64,10 @@ def write_summary_tables(
         "promotion_queue_path",
         "resume_report_path",
         "produced_checkpoint_ids",
+        "calibration_ref",
+        "guard_tuning_ref",
+        "canary_eval_ref",
+        "deployment_mode_recommendation",
         "run_dir",
         # P55 config provenance fields
         "config_source_path",
@@ -119,6 +123,10 @@ def write_summary_tables(
                     "promotion_queue_path": row.get("promotion_queue_path"),
                     "resume_report_path": row.get("resume_report_path"),
                     "produced_checkpoint_ids": ",".join([str(item) for item in (row.get("produced_checkpoint_ids") or [])]),
+                    "calibration_ref": row.get("calibration_ref"),
+                    "guard_tuning_ref": row.get("guard_tuning_ref"),
+                    "canary_eval_ref": row.get("canary_eval_ref"),
+                    "deployment_mode_recommendation": row.get("deployment_mode_recommendation"),
                     "run_dir": row.get("run_dir"),
                     # P55 provenance (run-level, not per-row; same value for all rows)
                     "config_source_path": (config_provenance or {}).get("config_source_path", ""),
@@ -212,6 +220,10 @@ def write_summary_tables(
                 "promotion_queue_path",
                 "resume_report_path",
                 "produced_checkpoint_ids",
+                "calibration_ref",
+                "guard_tuning_ref",
+                "canary_eval_ref",
+                "deployment_mode_recommendation",
             )
         )
     ]
@@ -248,6 +260,14 @@ def write_summary_tables(
                         ", ".join([str(item) for item in (row.get("produced_checkpoint_ids") or [])])
                     )
                 )
+            if row.get("calibration_ref"):
+                md_lines.append(f"  calibration_ref: `{row.get('calibration_ref')}`")
+            if row.get("guard_tuning_ref"):
+                md_lines.append(f"  guard_tuning_ref: `{row.get('guard_tuning_ref')}`")
+            if row.get("canary_eval_ref"):
+                md_lines.append(f"  canary_eval_ref: `{row.get('canary_eval_ref')}`")
+            if row.get("deployment_mode_recommendation"):
+                md_lines.append(f"  deployment_mode_recommendation: `{row.get('deployment_mode_recommendation')}`")
     md_path.write_text("\n".join(md_lines) + "\n", encoding="utf-8")
 
     return {

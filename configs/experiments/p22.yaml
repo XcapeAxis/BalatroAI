@@ -267,6 +267,21 @@ experiment_groups:
           - BBBBBBB
           - CCCCCCC
           - DDDDDDD
+  learned_router_calibration_canary_v1:
+    description: "P56 calibrated learned router with multi-seed benchmark, guard tuning, canary deployment, and resumable campaigns"
+    variants:
+      - id: p56_router_calibration_smoke
+        algo: p56_router_calibration_campaign
+        seeds:
+          - AAAAAAA
+          - BBBBBBB
+      - id: p56_router_calibration_nightly
+        algo: p56_router_calibration_campaign
+        seeds:
+          - AAAAAAA
+          - BBBBBBB
+          - CCCCCCC
+          - DDDDDDD
   background_execution_ops_ui_v1:
     description: "P53 background execution validation + local ops UI metadata and campaign integration"
     variants:
@@ -1794,6 +1809,110 @@ matrix:
       quick: false
       timeout_sec: 28800
 
+  - id: p56_router_calibration_smoke
+    name: p56_router_calibration_smoke
+    backend: sim
+    policy: learned_router
+    experiment_type: p56_router_calibration_campaign
+    seed_mode: regression_fixed
+    seed_set_name: contract_regression
+    device_profile: single_gpu_mainline
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+    gate_flag: RunP22
+    modes:
+      quick: true
+      gate: true
+      nightly: false
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/hybrid/router_schema.py
+      - trainer/hybrid/router_labels.py
+      - trainer/hybrid/router_dataset.py
+      - trainer/hybrid/learned_router_model.py
+      - trainer/hybrid/learned_router_train.py
+      - trainer/hybrid/learned_router_eval.py
+      - trainer/hybrid/router_benchmark_schema.py
+      - trainer/hybrid/router_benchmark.py
+      - trainer/hybrid/router_calibration.py
+      - trainer/hybrid/router_guard_tuning.py
+      - trainer/hybrid/router.py
+      - trainer/hybrid/hybrid_controller.py
+      - trainer/closed_loop/regression_triage.py
+      - trainer/registry/checkpoint_registry.py
+      - trainer/registry/checkpoint_state_machine.py
+      - trainer/registry/promotion_queue.py
+      - trainer/campaigns/campaign_schema.py
+      - trainer/experiments/orchestrator.py
+      - trainer/experiments/report.py
+      - trainer/monitoring/live_dashboard.py
+      - trainer/monitoring/dashboard_build.py
+      - trainer/ops_ui/server.py
+      - trainer/ops_ui/routes.py
+    eval:
+      config: configs/experiments/p56_router_calibration_smoke.yaml
+      quick: true
+      timeout_sec: 21600
+
+  - id: p56_router_calibration_nightly
+    name: p56_router_calibration_nightly
+    backend: sim
+    policy: learned_router
+    experiment_type: p56_router_calibration_campaign
+    seed_mode: nightly
+    seed_set_name: eval_default
+    device_profile: single_gpu_nightly_balanced
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+      - CCCCCCC
+      - DDDDDDD
+    gate_flag: RunP22
+    modes:
+      quick: false
+      gate: false
+      nightly: true
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/hybrid/router_schema.py
+      - trainer/hybrid/router_labels.py
+      - trainer/hybrid/router_dataset.py
+      - trainer/hybrid/learned_router_model.py
+      - trainer/hybrid/learned_router_train.py
+      - trainer/hybrid/learned_router_eval.py
+      - trainer/hybrid/router_benchmark_schema.py
+      - trainer/hybrid/router_benchmark.py
+      - trainer/hybrid/router_calibration.py
+      - trainer/hybrid/router_guard_tuning.py
+      - trainer/hybrid/router.py
+      - trainer/hybrid/hybrid_controller.py
+      - trainer/closed_loop/regression_triage.py
+      - trainer/registry/checkpoint_registry.py
+      - trainer/registry/checkpoint_state_machine.py
+      - trainer/registry/promotion_queue.py
+      - trainer/campaigns/campaign_schema.py
+      - trainer/experiments/orchestrator.py
+      - trainer/experiments/report.py
+      - trainer/monitoring/live_dashboard.py
+      - trainer/monitoring/dashboard_build.py
+      - trainer/ops_ui/server.py
+      - trainer/ops_ui/routes.py
+    eval:
+      config: configs/experiments/p56_router_calibration_nightly.yaml
+      quick: false
+      timeout_sec: 32400
+
   - id: p53_background_ops_smoke
     name: p53_background_ops_smoke
     backend: real
@@ -1947,3 +2066,4 @@ evaluation:
   promotion:
     min_delta: 0.010
     require_all_gates_pass: true
+

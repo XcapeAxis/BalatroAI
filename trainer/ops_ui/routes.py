@@ -66,6 +66,16 @@ def render_overview(state: dict[str, Any], *, current_path: str) -> str:
     learned_router_ablation = learned_router.get("ablation") if isinstance(learned_router.get("ablation"), dict) else {}
     learned_router_promotion = learned_router_ablation.get("promotion_decision") if isinstance(learned_router_ablation.get("promotion_decision"), dict) else {}
     learned_router_guarded = learned_router_ablation.get("guarded_variant") if isinstance(learned_router_ablation.get("guarded_variant"), dict) else {}
+    learned_router_canary = learned_router_ablation.get("canary_variant") if isinstance(learned_router_ablation.get("canary_variant"), dict) else {}
+    p56 = dashboard_payload.get("p56") if isinstance(dashboard_payload.get("p56"), dict) else {}
+    p56_calibration = p56.get("calibration") if isinstance(p56.get("calibration"), dict) else {}
+    p56_calibration_payload = p56_calibration.get("payload") if isinstance(p56_calibration.get("payload"), dict) else {}
+    p56_guard = p56.get("guard_tuning") if isinstance(p56.get("guard_tuning"), dict) else {}
+    p56_guard_payload = p56_guard.get("payload") if isinstance(p56_guard.get("payload"), dict) else {}
+    p56_guard_cfg = p56.get("recommended_guard") if isinstance(p56.get("recommended_guard"), dict) else {}
+    p56_guard_cfg_payload = p56_guard_cfg.get("payload") if isinstance(p56_guard_cfg.get("payload"), dict) else {}
+    p56_canary = p56.get("canary_eval") if isinstance(p56.get("canary_eval"), dict) else {}
+    p56_canary_payload = p56_canary.get("payload") if isinstance(p56_canary.get("payload"), dict) else {}
     # P55: config provenance from dashboard payload
     config_prov = dashboard_payload.get("config_provenance") if isinstance(dashboard_payload.get("config_provenance"), dict) else {}
     config_sync_st = dashboard_payload.get("config_sync_status") if isinstance(dashboard_payload.get("config_sync_status"), dict) else {}
@@ -150,7 +160,17 @@ def render_overview(state: dict[str, Any], *, current_path: str) -> str:
           <p class="muted">promotion: {artifact_link(str(learned_router_ablation.get('promotion_decision_path') or ''), 'promotion_decision.json')}</p>
           <p>dataset_samples={esc(learned_router_dataset_payload.get('sample_count') or 0)} valid={esc(learned_router_dataset_payload.get('valid_for_training_count') or 0)} mean_label_confidence={esc(learned_router_dataset_payload.get('mean_label_confidence') or 0.0)}</p>
           <p>checkpoint_id=<code>{esc(learned_router_train.get('checkpoint_id') or '')}</code> val_top1={esc(learned_router_train_payload.get('val_top1_accuracy') or '')} learner={esc(learned_router_train_payload.get('learner_device') or '')}</p>
-          <p>recommendation=<code>{esc(learned_router_promotion.get('recommendation') or '')}</code> guard_trigger_rate={esc(learned_router_guarded.get('guard_trigger_rate') or '')}</p>
+          <p>recommendation=<code>{esc(learned_router_promotion.get('recommendation') or '')}</code> guard_trigger_rate={esc(learned_router_guarded.get('guard_trigger_rate') or '')} canary_usage_rate={esc(learned_router_canary.get('canary_usage_rate') or '')}</p>
+        </section>
+        <section class="panel">
+          <h2>P56 Calibration / Guard / Canary</h2>
+          <p>calibration: {artifact_link(str(p56_calibration.get('path') or ''), 'calibration_metrics.json')}</p>
+          <p>guard_tuning: {artifact_link(str(p56_guard.get('path') or ''), 'guard_tuning_results.json')}</p>
+          <p>recommended_guard: {artifact_link(str(p56_guard_cfg.get('path') or ''), 'recommended_guard_config.json')}</p>
+          <p>canary_eval: {artifact_link(str(p56_canary.get('path') or ''), 'canary_eval_summary.json')}</p>
+          <p>bias=<code>{esc(p56_calibration_payload.get('calibration_bias') or '')}</code> ece={esc(p56_calibration_payload.get('ece') or '')} accuracy={esc(p56_calibration_payload.get('accuracy') or '')}</p>
+          <p>deployment_mode=<code>{esc(p56_canary_payload.get('deployment_mode_recommendation') or '')}</code> canary_usage_rate={esc(p56_canary_payload.get('canary_usage_rate') or '')} fallback_rate={esc(p56_canary_payload.get('canary_fallback_rate') or '')}</p>
+          <p>guard_config=<code>{esc(json.dumps(p56_guard_cfg_payload.get('guard_config') or {}, ensure_ascii=False))}</code> candidates={esc(len(p56_guard_payload.get('results') or []) if isinstance(p56_guard_payload.get('results'), list) else 0)}</p>
         </section>
         <section class="panel">
           <h2>Config Provenance (P55)</h2>
@@ -213,12 +233,16 @@ def render_registry(state: dict[str, Any]) -> str:
                 esc(row.get("created_at") or ""),
                 esc(row.get("source_run_id") or ""),
                 artifact_link(str(row.get("metrics_ref") or row.get("artifact_path") or ""), "artifact"),
+                artifact_link(str(row.get("calibration_ref") or ""), "calibration"),
+                artifact_link(str(row.get("guard_tuning_ref") or ""), "guard"),
+                artifact_link(str(row.get("canary_eval_ref") or ""), "canary"),
+                esc(row.get("deployment_mode_recommendation") or ""),
             ]
         )
     return (
         f'<section class="panel"><h2>Registry</h2><p class="muted">{artifact_link(str(registry.get("path") or ""), "checkpoints_registry.json")}</p>'
         f'<p class="muted">status_counts={esc(json.dumps(registry.get("counts") or {}, ensure_ascii=False))} family_counts={esc(json.dumps(registry.get("family_counts") or {}, ensure_ascii=False))}</p>'
-        f'{table(["Checkpoint", "Family", "Status", "Created", "Source Run", "Artifact"], rows)}</section>'
+        f'{table(["Checkpoint", "Family", "Status", "Created", "Source Run", "Artifact", "Calibration", "Guard", "Canary", "Deploy"], rows)}</section>'
     )
 
 
@@ -236,12 +260,70 @@ def render_promotion_queue(state: dict[str, Any]) -> str:
                 esc(row.get("status") or ""),
                 esc(row.get("source_run_id") or ""),
                 artifact_link(str(row.get("arena_ref") or row.get("triage_ref") or row.get("metrics_ref") or ""), "ref"),
+                esc(row.get("deployment_mode_recommendation") or ""),
             ]
         )
     return (
         f'<section class="panel"><h2>Promotion Queue</h2><p class="muted">{artifact_link(str(queue.get("path") or ""), "promotion_queue.json")}</p>'
         f'<p class="muted">counts={esc(json.dumps(payload.get("counts") or {}, ensure_ascii=False))}</p>'
-        f'{table(["Checkpoint", "Family", "Status", "Source Run", "Reference"], rows)}</section>'
+        f'{table(["Checkpoint", "Family", "Status", "Source Run", "Reference", "Deploy"], rows)}</section>'
+    )
+
+
+def render_router_calibration(state: dict[str, Any]) -> str:
+    dashboard = state.get("dashboard") if isinstance(state.get("dashboard"), dict) else {}
+    payload = dashboard.get("payload") if isinstance(dashboard.get("payload"), dict) else {}
+    p56 = payload.get("p56") if isinstance(payload.get("p56"), dict) else {}
+    calibration = p56.get("calibration") if isinstance(p56.get("calibration"), dict) else {}
+    calibration_payload = calibration.get("payload") if isinstance(calibration.get("payload"), dict) else {}
+    reliability = p56.get("reliability") if isinstance(p56.get("reliability"), dict) else {}
+    reliability_payload = reliability.get("payload") if isinstance(reliability.get("payload"), dict) else {}
+    rows = []
+    for row in (reliability_payload.get("bins") or [])[:12]:
+        if not isinstance(row, dict):
+            continue
+        rows.append([
+            esc(row.get("bucket_start") or ""),
+            esc(row.get("bucket_end") or ""),
+            esc(row.get("count") or ""),
+            esc(row.get("accuracy") or ""),
+            esc(row.get("avg_confidence") or ""),
+        ])
+    return (
+        f'<section class="panel"><h2>P56 Calibration</h2>'
+        f'<p>{artifact_link(str(calibration.get("path") or ""), "calibration_metrics.json")} ? {artifact_link(str(reliability.get("path") or ""), "reliability_bins.json")}</p>'
+        f'<p>checkpoint_id=<code>{esc(calibration_payload.get("checkpoint_id") or "")}</code> bias=<code>{esc(calibration_payload.get("calibration_bias") or "")}</code> ece={esc(calibration_payload.get("ece") or "")} accuracy={esc(calibration_payload.get("accuracy") or "")}</p>'
+        f'{table(["Start", "End", "Count", "Accuracy", "Confidence"], rows)}</section>'
+    )
+
+
+def render_router_guard_canary(state: dict[str, Any]) -> str:
+    dashboard = state.get("dashboard") if isinstance(state.get("dashboard"), dict) else {}
+    payload = dashboard.get("payload") if isinstance(dashboard.get("payload"), dict) else {}
+    p56 = payload.get("p56") if isinstance(payload.get("p56"), dict) else {}
+    guard = p56.get("guard_tuning") if isinstance(p56.get("guard_tuning"), dict) else {}
+    guard_payload = guard.get("payload") if isinstance(guard.get("payload"), dict) else {}
+    guard_cfg = p56.get("recommended_guard") if isinstance(p56.get("recommended_guard"), dict) else {}
+    guard_cfg_payload = guard_cfg.get("payload") if isinstance(guard_cfg.get("payload"), dict) else {}
+    canary = p56.get("canary_eval") if isinstance(p56.get("canary_eval"), dict) else {}
+    canary_payload = canary.get("payload") if isinstance(canary.get("payload"), dict) else {}
+    rows = []
+    for row in (canary_payload.get("per_slice_distribution") or [])[:16]:
+        if not isinstance(row, dict):
+            continue
+        rows.append([
+            esc(row.get("slice_stage") or ""),
+            esc(row.get("slice_resource_pressure") or ""),
+            esc(row.get("count") or ""),
+            esc(row.get("canary_used_rate") or ""),
+            esc(row.get("fallback_rate") or ""),
+        ])
+    return (
+        f'<section class="panel"><h2>P56 Guard / Canary</h2>'
+        f'<p>{artifact_link(str(guard.get("path") or ""), "guard_tuning_results.json")} ? {artifact_link(str(guard_cfg.get("path") or ""), "recommended_guard_config.json")} ? {artifact_link(str(canary.get("path") or ""), "canary_eval_summary.json")}</p>'
+        f'<p>recommended_guard=<code>{esc(json.dumps(guard_cfg_payload.get("guard_config") or {}, ensure_ascii=False))}</code></p>'
+        f'<p>deployment=<code>{esc(canary_payload.get("deployment_mode_recommendation") or "")}</code> canary_usage_rate={esc(canary_payload.get("canary_usage_rate") or "")} fallback_rate={esc(canary_payload.get("canary_fallback_rate") or "")} candidate_count={esc(len(guard_payload.get("results") or []) if isinstance(guard_payload.get("results"), list) else 0)}</p>'
+        f'{table(["Stage", "Pressure", "Count", "Used", "Fallback"], rows)}</section>'
     )
 
 
