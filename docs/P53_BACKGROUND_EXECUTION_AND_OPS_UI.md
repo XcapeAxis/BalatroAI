@@ -97,7 +97,7 @@ P22 integration points:
 - `trainer/experiments/orchestrator.py`
 - `trainer/experiments/report.py`
 
-P59 extends the same operator surface with AGENTS/autonomy state:
+P60 extends the same operator surface with AGENTS/autonomy state:
 
 - `scripts/run_autonomy.ps1`
 - `trainer/autonomy/run_autonomy.py`

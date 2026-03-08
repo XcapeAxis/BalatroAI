@@ -1,6 +1,6 @@
 # Decision Policy
 
-P57/P59 define three decision classes so the overnight runner and the unified autonomy entry know when to continue and when to stop for a human.
+P57/P60 define three decision classes so the overnight runner and the unified autonomy entry know when to continue and when to stop for a human.
 
 The rule hierarchy is:
 

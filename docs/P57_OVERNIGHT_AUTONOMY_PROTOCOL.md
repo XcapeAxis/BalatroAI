@@ -83,7 +83,7 @@ Each item includes:
 - `artifact_refs`
 - `status`
 
-P59 extends the same queue surface with additional handoff fields:
+P60 extends the same queue surface with additional handoff fields:
 
 - `blocking_scope`
 - `related_campaign`
@@ -128,11 +128,11 @@ Every overnight run can end with a compact summary built from the latest artifac
 - dashboard summary
 - latest P22 summary rows
 
-P59 keeps the same summary surface and adds a unified autonomy entry that refreshes morning summary even when a run stops on a human gate.
+P60 keeps the same summary surface and adds a unified autonomy entry that refreshes morning summary even when a run stops on a human gate.
 
-## P59 Alignment
+## P60 Alignment
 
-P59 does not replace the overnight protocol. It standardizes the rule layer and adds a single entrypoint:
+P60 does not replace the overnight protocol. It standardizes the rule layer and adds a single entrypoint:
 
 - `scripts/run_autonomy.ps1 -Quick`
 - `scripts/run_autonomy.ps1 -Overnight`

@@ -119,7 +119,7 @@ Default stage set:
 - `promotion_decision`
 - `dashboard_build`
 
-P57/P59 reuse this same campaign-state surface rather than creating a separate autonomy-specific state machine. A blocked campaign remains blocked until the related attention item is resolved; autonomy entrypoints may refresh summaries, but they do not silently cross human gates.
+P57/P60 reuse this same campaign-state surface rather than creating a separate autonomy-specific state machine. A blocked campaign remains blocked until the related attention item is resolved; autonomy entrypoints may refresh summaries, but they do not silently cross human gates.
 - `cleanup_finalize`
 
 P54 adds an alternative learned-router campaign stage set:

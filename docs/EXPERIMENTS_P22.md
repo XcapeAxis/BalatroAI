@@ -46,7 +46,7 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | P57 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP57` | runs `p57_overnight_smoke` with decision-policy audit, attention queue, blocked-stage validation, morning summary, dashboard build, and resumable campaign state |
 | Overnight autonomy | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Overnight` | runs `p57_overnight_nightly` with the overnight stage template and resume-aware human-gate handling |
 | Autonomy entry dry run | `powershell -ExecutionPolicy Bypass -File scripts\run_autonomy.ps1 -DryRun` | inspects AGENTS, decision policy, campaign state, and attention queue before selecting continue / resume / block |
-| Autonomy entry quick | `powershell -ExecutionPolicy Bypass -File scripts\run_autonomy.ps1 -Quick` | runs the unified P59 autonomy entry and writes `docs/artifacts/p59/latest_autonomy_entry.{json,md}` |
+| Autonomy entry quick | `powershell -ExecutionPolicy Bypass -File scripts\run_autonomy.ps1 -Quick` | runs the unified P60 autonomy entry and writes `docs/artifacts/p60/latest_autonomy_entry.{json,md}` |
 | Autonomy entry overnight | `powershell -ExecutionPolicy Bypass -File scripts\run_autonomy.ps1 -Overnight` | runs the unattended autonomy lane with the same P57 policy and handoff artifacts |
 | Windows bootstrap | `powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Mode auto -SkipSmoke` | creates or repairs the standard CPU/CUDA envs before P22 |
 | Environment doctor | `powershell -ExecutionPolicy Bypass -File scripts\doctor.ps1` | writes machine-readable environment readiness reports used by P22/P57 |
@@ -88,9 +88,9 @@ Summary/runtime fields added for P58:
 
 This keeps new-machine bring-up inside the same P22 workflow instead of requiring manual interpreter selection.
 
-## P59 AGENTS / Autonomy Integration
+## P60 AGENTS / Autonomy Integration
 
-P59 adds repo-rule awareness to the same orchestration stack rather than building a second workflow.
+P60 adds repo-rule awareness to the same orchestration stack rather than building a second workflow.
 
 Key surfaces:
 
