@@ -175,9 +175,27 @@ def collect_p53_summary(root: Path) -> dict[str, Any]:
     }
 
 
-def render_text(rows: list[dict[str, Any]], campaign_rows: list[dict[str, Any]], registry_summary: dict[str, Any], p52_summary: dict[str, Any], p56_summary: dict[str, Any], p53_summary: dict[str, Any]) -> str:
+def collect_p57_summary(root: Path) -> dict[str, Any]:
+    attention_path = root / "attention_required" / "attention_queue.json"
+    attention_payload = _read_json(attention_path) or {}
+    items = attention_payload.get("items") if isinstance(attention_payload.get("items"), list) else []
+    open_items = [item for item in items if isinstance(item, dict) and str(item.get("status") or "") == "open"]
+    block_items = [item for item in open_items if str(item.get("severity") or "") == "block"]
+    morning_path = root / "morning_summary" / "latest.json"
+    morning_payload = _read_json(morning_path) or {}
+    campaigns = morning_payload.get("campaigns") if isinstance(morning_payload.get("campaigns"), list) else []
+    blocked_campaigns = [row for row in campaigns if isinstance(row, dict) and str(row.get("status") or "") == "blocked"]
+    return {
+        "open_attention_count": len(open_items),
+        "blocking_attention_count": len(block_items),
+        "blocked_campaign_count": len(blocked_campaigns),
+        "recommended_first_action": str(morning_payload.get("recommended_first_action") or ""),
+    }
+
+
+def render_text(rows: list[dict[str, Any]], campaign_rows: list[dict[str, Any]], registry_summary: dict[str, Any], p52_summary: dict[str, Any], p56_summary: dict[str, Any], p53_summary: dict[str, Any], p57_summary: dict[str, Any]) -> str:
     lines = [
-        "[dashboard] P49/P51/P52/P56 live progress",
+        "[dashboard] P49/P51/P52/P56/P57 live progress",
         "run_id            component             phase       status    learner      rollout      throughput   gpu_mb   warning",
         "-" * 112,
     ]
@@ -226,6 +244,14 @@ def render_text(rows: list[dict[str, Any]], campaign_rows: list[dict[str, Any]],
                 recommended=str(p53_summary.get("recommended_default_mode") or "n/a"),
                 fallback=str(p53_summary.get("window_mode_fallback") or "n/a"),
                 ops=str(p53_summary.get("ops_ui_url") or "n/a"),
+            ),
+            "",
+            "[p57]",
+            "open_attention={open_count} blocking_attention={block_count} blocked_campaigns={blocked_count} first_action={action}".format(
+                open_count=int(p57_summary.get("open_attention_count") or 0),
+                block_count=int(p57_summary.get("blocking_attention_count") or 0),
+                blocked_count=int(p57_summary.get("blocked_campaign_count") or 0),
+                action=str(p57_summary.get("recommended_first_action") or "n/a"),
             ),
             "",
             "[campaigns]",
@@ -278,8 +304,9 @@ def main() -> int:
         p52_summary = collect_p52_summary(watch_root)
         p56_summary = collect_p56_summary(watch_root)
         p53_summary = collect_p53_summary(watch_root)
+        p57_summary = collect_p57_summary(watch_root)
         os.system("cls" if os.name == "nt" else "clear")
-        print(render_text(rows, campaign_rows, registry_summary, p52_summary, p56_summary, p53_summary))
+        print(render_text(rows, campaign_rows, registry_summary, p52_summary, p56_summary, p53_summary, p57_summary))
         iteration += 1
         if bool(args.once) or (int(args.iterations) > 0 and iteration >= int(args.iterations)):
             break

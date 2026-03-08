@@ -63,6 +63,11 @@ def write_summary_tables(
         "registry_snapshot_path",
         "promotion_queue_path",
         "resume_report_path",
+        "autonomy_mode",
+        "decision_policy_path",
+        "attention_queue_path",
+        "morning_summary_path",
+        "human_gate_triggered",
         "produced_checkpoint_ids",
         "calibration_ref",
         "guard_tuning_ref",
@@ -122,6 +127,11 @@ def write_summary_tables(
                     "registry_snapshot_path": row.get("registry_snapshot_path"),
                     "promotion_queue_path": row.get("promotion_queue_path"),
                     "resume_report_path": row.get("resume_report_path"),
+                    "autonomy_mode": row.get("autonomy_mode"),
+                    "decision_policy_path": row.get("decision_policy_path"),
+                    "attention_queue_path": row.get("attention_queue_path"),
+                    "morning_summary_path": row.get("morning_summary_path"),
+                    "human_gate_triggered": row.get("human_gate_triggered"),
                     "produced_checkpoint_ids": ",".join([str(item) for item in (row.get("produced_checkpoint_ids") or [])]),
                     "calibration_ref": row.get("calibration_ref"),
                     "guard_tuning_ref": row.get("guard_tuning_ref"),
@@ -219,6 +229,11 @@ def write_summary_tables(
                 "registry_snapshot_path",
                 "promotion_queue_path",
                 "resume_report_path",
+                "autonomy_mode",
+                "decision_policy_path",
+                "attention_queue_path",
+                "morning_summary_path",
+                "human_gate_triggered",
                 "produced_checkpoint_ids",
                 "calibration_ref",
                 "guard_tuning_ref",
@@ -254,6 +269,16 @@ def write_summary_tables(
                 md_lines.append(f"  promotion_queue_path: `{row.get('promotion_queue_path')}`")
             if row.get("resume_report_path"):
                 md_lines.append(f"  resume_report_path: `{row.get('resume_report_path')}`")
+            if row.get("autonomy_mode"):
+                md_lines.append(f"  autonomy_mode: `{row.get('autonomy_mode')}`")
+            if row.get("decision_policy_path"):
+                md_lines.append(f"  decision_policy_path: `{row.get('decision_policy_path')}`")
+            if row.get("attention_queue_path"):
+                md_lines.append(f"  attention_queue_path: `{row.get('attention_queue_path')}`")
+            if row.get("morning_summary_path"):
+                md_lines.append(f"  morning_summary_path: `{row.get('morning_summary_path')}`")
+            if row.get("human_gate_triggered") not in (None, ""):
+                md_lines.append(f"  human_gate_triggered: `{row.get('human_gate_triggered')}`")
             if row.get("produced_checkpoint_ids"):
                 md_lines.append(
                     "  produced_checkpoint_ids: `{}`".format(

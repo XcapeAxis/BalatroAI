@@ -45,9 +45,10 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 def _campaign_stage_summary(payload: dict[str, Any]) -> dict[str, Any]:
     stages = [dict(item) for item in (payload.get("stages") or []) if isinstance(item, dict)]
+    blocked = next((item for item in stages if str(item.get("status") or "") == "blocked" or bool(item.get("human_gate_triggered"))), None)
     active = next((item for item in stages if str(item.get("status") or "") == "running"), None)
     failed = next((item for item in stages if str(item.get("status") or "") == "failed"), None)
-    latest = active or failed or (stages[-1] if stages else {})
+    latest = blocked or active or failed or (stages[-1] if stages else {})
     return {
         "campaign_id": str(payload.get("campaign_id") or ""),
         "run_id": str(payload.get("run_id") or ""),
@@ -55,6 +56,10 @@ def _campaign_stage_summary(payload: dict[str, Any]) -> dict[str, Any]:
         "seed": str(payload.get("seed") or ""),
         "stage_id": str((latest or {}).get("stage_id") or ""),
         "status": str((latest or {}).get("status") or ""),
+        "autonomy_decision": str((latest or {}).get("autonomy_decision") or ""),
+        "autonomy_reason": str((latest or {}).get("autonomy_reason") or ""),
+        "attention_item_ref": str((latest or {}).get("attention_item_ref") or ""),
+        "human_gate_triggered": bool((latest or {}).get("human_gate_triggered") or False),
         "state_path": str(payload.get("state_path") or ""),
     }
 
@@ -307,6 +312,55 @@ def _collect_p53_dashboard_data(input_root: Path, campaign_states: list[dict[str
     }
 
 
+def _collect_p57_dashboard_data(input_root: Path, campaign_states: list[dict[str, Any]]) -> dict[str, Any]:
+    attention_path = input_root / "attention_required" / "attention_queue.json"
+    attention_payload = _read_json(attention_path)
+    attention_items = attention_payload.get("items") if isinstance(attention_payload, dict) and isinstance(attention_payload.get("items"), list) else []
+    open_items = [item for item in attention_items if isinstance(item, dict) and str(item.get("status") or "") == "open"]
+    resolved_items = [item for item in attention_items if isinstance(item, dict) and str(item.get("status") or "") == "resolved"]
+
+    morning_json = input_root / "morning_summary" / "latest.json"
+    morning_md = input_root / "morning_summary" / "latest.md"
+    morning_payload = _read_json(morning_json)
+    excerpt = ""
+    if morning_md.exists():
+        excerpt = "\n".join(morning_md.read_text(encoding="utf-8", errors="replace").splitlines()[:24])
+
+    decision_path, decision_payload = _latest_matching_json(input_root, "**/*decision_policy*.json", required_tokens=("p57/",))
+
+    p57_campaign_states = [
+        row
+        for row in campaign_states
+        if isinstance(row, dict)
+        and ("p57" in str(row.get("campaign_id") or "").lower() or "p57" in str(row.get("experiment_id") or "").lower())
+    ]
+    blocked_rows = [
+        row
+        for row in campaign_states
+        if isinstance(row, dict) and (str(row.get("status") or "") == "blocked" or bool(row.get("human_gate_triggered")))
+    ]
+    return {
+        "attention_queue": {
+            "path": str(attention_path.resolve()),
+            "payload": attention_payload if isinstance(attention_payload, dict) else {},
+            "open_items": open_items,
+            "resolved_items": resolved_items,
+        },
+        "morning_summary": {
+            "json_path": str(morning_json.resolve()),
+            "md_path": str(morning_md.resolve()),
+            "payload": morning_payload if isinstance(morning_payload, dict) else {},
+            "excerpt": excerpt,
+        },
+        "decision_policy": {
+            "path": decision_path,
+            "payload": decision_payload if isinstance(decision_payload, dict) else {},
+        },
+        "campaign_states": p57_campaign_states,
+        "blocked_campaigns": blocked_rows,
+        "human_gate_triggered_count": len(blocked_rows),
+    }
+
 def _collect_config_sync_status(input_root: Path) -> dict[str, Any]:
     """P55: Find the latest config sidecar sync report and return a brief status summary."""
     repo_root = input_root.parent
@@ -405,6 +459,7 @@ def collect_dashboard_data(input_root: Path) -> dict[str, Any]:
         "p52": learned_router_payload,
         "p56": p56_payload,
         "p53": _collect_p53_dashboard_data(input_root, campaign_states),
+        "p57": _collect_p57_dashboard_data(input_root, campaign_states),
     }
 
 
@@ -536,6 +591,14 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
     p53_ops_meta_payload = p53_ops_meta.get("payload") if isinstance(p53_ops_meta.get("payload"), dict) else {}
     p53_campaign_rows = p53_payload.get("campaign_states") if isinstance(p53_payload.get("campaign_states"), list) else []
     p53_audit_rows = p53_payload.get("audit_tail") if isinstance(p53_payload.get("audit_tail"), list) else []
+    p57_payload = data.get("p57") if isinstance(data.get("p57"), dict) else {}
+    p57_attention = p57_payload.get("attention_queue") if isinstance(p57_payload.get("attention_queue"), dict) else {}
+    p57_attention_open = p57_attention.get("open_items") if isinstance(p57_attention.get("open_items"), list) else []
+    p57_morning = p57_payload.get("morning_summary") if isinstance(p57_payload.get("morning_summary"), dict) else {}
+    p57_morning_payload = p57_morning.get("payload") if isinstance(p57_morning.get("payload"), dict) else {}
+    p57_blocked_campaigns = p57_payload.get("blocked_campaigns") if isinstance(p57_payload.get("blocked_campaigns"), list) else []
+    p57_decision = p57_payload.get("decision_policy") if isinstance(p57_payload.get("decision_policy"), dict) else {}
+    p57_decision_payload = p57_decision.get("payload") if isinstance(p57_decision.get("payload"), dict) else {}
 
     p52_summary_html = []
     for row in router_summary_rows:
@@ -629,11 +692,24 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
             "</tr>"
         )
 
+    p57_blocked_html = []
+    for row in p57_blocked_campaigns[:12]:
+        if not isinstance(row, dict):
+            continue
+        p57_blocked_html.append(
+            "<tr>"
+            f"<td>{html.escape(str(row.get('campaign_id') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('stage_id') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('status') or ''))}</td>"
+            f"<td>{html.escape(str(row.get('autonomy_decision') or ''))}</td>"
+            "</tr>"
+        )
+
     html_text = f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>P49/Learned-Router/P53 Dashboard</title>
+  <title>P49/Learned-Router/P53/P57 Dashboard</title>
   <style>
     :root {{ --bg: #f4f0e8; --panel: #fffaf2; --ink: #241d16; --muted: #8a745d; --warn: #9d3c2f; }}
     body {{ margin: 0; padding: 24px; font-family: Georgia, 'Times New Roman', serif; background: linear-gradient(180deg, #efe6d6 0%, var(--bg) 100%); color: var(--ink); }}
@@ -648,7 +724,7 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
 </head>
 <body>
   <div class="panel">
-    <h1>P49/P51/Learned-Router/P53 Dashboard</h1>
+    <h1>P49/P51/Learned-Router/P53/P57 Dashboard</h1>
     <p class="muted">Generated from unified progress events and the latest P22 summary.</p>
     <p><strong>Input:</strong> <code>{html.escape(str(input_root))}</code></p>
     <p><strong>Data:</strong> <code>{html.escape(str((output_dir / "dashboard_data.json").resolve()))}</code></p>
@@ -802,6 +878,21 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
         {''.join(p53_audit_html) or '<tr><td colspan="4">No P53 audit rows found.</td></tr>'}
       </tbody>
     </table>
+  </div>
+  <div class="panel">
+    <h2>P57 Overnight Autonomy</h2>
+    <p class="muted">attention_queue: <code>{html.escape(str(p57_attention.get('path') or ''))}</code></p>
+    <p class="muted">morning_summary: <code>{html.escape(str(p57_morning.get('md_path') or ''))}</code></p>
+    <p class="muted">decision_policy: <code>{html.escape(str(p57_decision.get('path') or ''))}</code></p>
+    <p>open_attention_items={html.escape(str(len(p57_attention_open)))} blocked_campaigns={html.escape(str(len(p57_blocked_campaigns)))} recommended_first_action=<code>{html.escape(str(p57_morning_payload.get('recommended_first_action') or ''))}</code></p>
+    <p>policy_actions={html.escape(str(len(p57_decision_payload.get('action_results') or [])))} policy_conditions={html.escape(str(len(p57_decision_payload.get('condition_results') or [])))} </p>
+    <table>
+      <thead><tr><th>Blocked Campaign</th><th>Stage</th><th>Status</th><th>Decision</th></tr></thead>
+      <tbody>
+        {''.join(p57_blocked_html) or '<tr><td colspan="4">No blocked campaigns found.</td></tr>'}
+      </tbody>
+    </table>
+    <pre>{html.escape(str(p57_morning.get('excerpt') or ''))}</pre>
   </div>
 </body>
 </html>

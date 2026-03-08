@@ -24,6 +24,13 @@ def read_json(path: Path) -> Any:
         return None
 
 
+def _read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return ""
+
+
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     if not path.exists():
@@ -83,11 +90,21 @@ def latest_p22_run() -> dict[str, Any]:
     run_dir = runs[0]
     summary_path = run_dir / "summary_table.json"
     summary_rows = read_json(summary_path)
+    rows = (
+        [row for row in summary_rows if isinstance(row, dict)]
+        if isinstance(summary_rows, list)
+        else (
+            [row for row in (summary_rows.get("rows") or []) if isinstance(row, dict)]
+            if isinstance(summary_rows, dict)
+            else []
+        )
+    )
     return {
         "run_id": run_dir.name,
         "run_dir": str(run_dir.resolve()),
         "summary_path": str(summary_path.resolve()),
-        "summary_rows": [row for row in summary_rows if isinstance(row, dict)] if isinstance(summary_rows, list) else [],
+        "summary_rows": rows,
+        "config_provenance": summary_rows.get("config_provenance") if isinstance(summary_rows, dict) and isinstance(summary_rows.get("config_provenance"), dict) else {},
     }
 
 
@@ -170,9 +187,10 @@ def campaign_rows(limit: int = 48) -> list[dict[str, Any]]:
         if not isinstance(payload, dict):
             continue
         stages = [dict(item) for item in (payload.get("stages") or []) if isinstance(item, dict)]
+        blocked = next((item for item in stages if str(item.get("status") or "") == "blocked" or bool(item.get("human_gate_triggered"))), None)
         active = next((item for item in stages if str(item.get("status") or "") == "running"), None)
         failed = next((item for item in stages if str(item.get("status") or "") == "failed"), None)
-        latest_stage = active or failed or (stages[-1] if stages else {})
+        latest_stage = blocked or active or failed or (stages[-1] if stages else {})
         exp_id = str(payload.get("experiment_id") or "")
         rows.append(
             {
@@ -182,9 +200,13 @@ def campaign_rows(limit: int = 48) -> list[dict[str, Any]]:
                 "seed": str(payload.get("seed") or ""),
                 "stage_id": str((latest_stage or {}).get("stage_id") or ""),
                 "status": str((latest_stage or {}).get("status") or ""),
+                "autonomy_decision": str((latest_stage or {}).get("autonomy_decision") or ""),
+                "autonomy_reason": str((latest_stage or {}).get("autonomy_reason") or ""),
+                "attention_item_ref": str((latest_stage or {}).get("attention_item_ref") or ""),
+                "human_gate_triggered": bool((latest_stage or {}).get("human_gate_triggered") or False),
                 "state_path": str(path.resolve()),
                 "resume_command": (
-                    f"powershell -ExecutionPolicy Bypass -File scripts\\run_p22.ps1 -Only {exp_id} -Resume"
+                    f"powershell -ExecutionPolicy Bypass -File scripts\\run_p22.ps1 -Only {exp_id} -ResumeLatestCampaign"
                     if exp_id
                     else ""
                 ),
@@ -237,6 +259,40 @@ def latest_promotion_queue() -> dict[str, Any]:
         "path": str(path.resolve()) if isinstance(path, Path) else "",
         "payload": payload if isinstance(payload, dict) else {},
     }
+
+
+def latest_attention_queue() -> dict[str, Any]:
+    path = artifacts_root() / "attention_required" / "attention_queue.json"
+    payload = read_json(path)
+    items = payload.get("items") if isinstance(payload, dict) and isinstance(payload.get("items"), list) else []
+    open_items = [item for item in items if isinstance(item, dict) and str(item.get("status") or "") == "open"]
+    return {
+        "path": str(path.resolve()),
+        "payload": payload if isinstance(payload, dict) else {},
+        "open_items": open_items,
+    }
+
+
+def latest_morning_summary() -> dict[str, Any]:
+    root = artifacts_root() / "morning_summary"
+    latest_json = root / "latest.json"
+    latest_md = root / "latest.md"
+    payload = read_json(latest_json)
+    excerpt = "\n".join(_read_text(latest_md).splitlines()[:24]) if latest_md.exists() else ""
+    return {
+        "json_path": str(latest_json.resolve()),
+        "md_path": str(latest_md.resolve()),
+        "payload": payload if isinstance(payload, dict) else {},
+        "excerpt": excerpt,
+    }
+
+
+def blocked_campaigns(limit: int = 24) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in campaign_rows(limit=limit)
+        if bool(row.get("human_gate_triggered")) or str(row.get("status") or "") == "blocked"
+    ]
 
 
 def _pid_running(pid: int) -> bool:
@@ -294,7 +350,15 @@ def latest_resume_target() -> dict[str, Any]:
     rows = campaign_rows(limit=24)
     if not rows:
         return {}
-    preferred = next((row for row in rows if str(row.get("status") or "") in {"failed", "running"} and str(row.get("resume_command") or "").strip()), None)
+    preferred = next(
+        (
+            row
+            for row in rows
+            if str(row.get("status") or "") in {"blocked", "failed", "running"}
+            and str(row.get("resume_command") or "").strip()
+        ),
+        None,
+    )
     return preferred or rows[0]
 
 
@@ -311,6 +375,7 @@ def build_ops_state(
         "p22": latest_p22_run(),
         "progress": latest_progress_events(),
         "campaigns": campaign_rows(),
+        "blocked_campaigns": blocked_campaigns(),
         "latest_resume_target": latest_resume_target(),
         "registry": registry_entries(
             family=registry_family,
@@ -319,6 +384,8 @@ def build_ops_state(
             promoted=registry_promoted,
         ),
         "promotion_queue": latest_promotion_queue(),
+        "attention_queue": latest_attention_queue(),
+        "morning_summary": latest_morning_summary(),
         "readiness": latest_readiness_report(),
         "window_state": latest_window_state(),
         "background_validation": latest_background_validation(),

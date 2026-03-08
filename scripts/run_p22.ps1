@@ -22,7 +22,10 @@ param(
   [switch]$RunP52,
   [switch]$RunP54,
   [switch]$RunP56,
+  [switch]$RunP57,
   [switch]$RunP53,
+  [switch]$Overnight,
+  [switch]$ResumeLatestCampaign,
   [string]$Only = "",
   [string]$Exclude = "",
   [string]$TrainingPython = "",
@@ -51,7 +54,7 @@ $resolverArgs = @(
   "-Emit", "json"
 )
 if ($TrainingPython.Trim()) { $resolverArgs += @("-ExplicitPython", $TrainingPython) }
-if ($RunP50 -or $RunP52 -or $RunP54 -or $RunP56) { $resolverArgs += "-RequireCuda" }
+if ($RunP50 -or $RunP52 -or $RunP54 -or $RunP56 -or $RunP57 -or $Overnight) { $resolverArgs += "-RequireCuda" }
 $resolverJson = (& powershell @resolverArgs | Out-String).Trim()
 if (-not $resolverJson) {
   throw "[P22] training python resolver returned empty output"
@@ -177,12 +180,13 @@ $args = @(
 
 if ($DryRun) { $args += "--dry-run" }
 if ($Nightly) { $args += "--nightly" }
+if ($Overnight -and -not ($args -contains "--nightly")) { $args += "--nightly" }
 if ($IncludeLegacy) { $args += "--include-legacy" }
 if ($LegacyOnly) { $args += "--legacy-only" }
 if ($Resume) { $args += "--resume" }
 if ($KeepIntermediate) { $args += "--keep-intermediate" }
 if ($VerboseLogs) { $args += "--verbose" }
-if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $RunP50 -or $RunP51 -or $RunP52 -or $RunP54 -or $RunP56 -or $RunP53) -and [string]::IsNullOrWhiteSpace($Only)) {
+if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $RunP50 -or $RunP51 -or $RunP52 -or $RunP54 -or $RunP56 -or $RunP57 -or $RunP53 -or $Overnight) -and [string]::IsNullOrWhiteSpace($Only)) {
   $selected = @()
   if ($RunP44) { $selected += if ($Nightly) { "p44_rl_nightly" } else { "p44_rl_smoke" } }
   if ($RunP45) { $selected += if ($Nightly) { "p45_world_model_nightly" } else { "p45_world_model_smoke" } }
@@ -195,7 +199,9 @@ if (($RunP44 -or $RunP45 -or $RunP46 -or $RunP47 -or $RunP48 -or $RunP49 -or $Ru
   if ($RunP52) { $selected += if ($Nightly) { "p52_learned_router_nightly" } else { "p52_learned_router_smoke" } }
   if ($RunP54) { $selected += if ($Nightly) { "p54_learned_router_nightly" } else { "p54_learned_router_smoke" } }
   if ($RunP56) { $selected += if ($Nightly) { "p56_router_calibration_nightly" } else { "p56_router_calibration_smoke" } }
+  if ($RunP57) { $selected += if ($Nightly) { "p57_overnight_nightly" } else { "p57_overnight_smoke" } }
   if ($RunP53) { $selected += if ($Nightly) { "p53_background_ops_nightly" } else { "p53_background_ops_smoke" } }
+  if ($Overnight) { $selected += "p57_overnight_nightly" }
   $Only = ($selected -join ",")
 }
 if (-not [string]::IsNullOrWhiteSpace($Only)) { $args += @("--only", $Only) }
@@ -228,6 +234,7 @@ if ($Quick) {
       "p51_registry_smoke",
       "p54_learned_router_smoke",
       "p56_router_calibration_smoke",
+      "p57_overnight_smoke",
       "p53_background_ops_smoke"
     )
     if ($IncludeLegacy -or $LegacyOnly) {
@@ -247,6 +254,29 @@ if ($LegacyOnly) {
   Write-Host "[P22] Selected categories: mainline + legacy_baseline"
 } else {
   Write-Host "[P22] Selected categories: mainline"
+}
+
+if ($ResumeLatestCampaign -and [string]::IsNullOrWhiteSpace($Only)) {
+  $latestCampaign = Get-ChildItem -Path (Join-Path $ProjectRoot "docs\\artifacts") -Recurse -Filter "campaign_state.json" -ErrorAction SilentlyContinue |
+    Sort-Object -Property @{ Expression = "LastWriteTime"; Descending = $true }, @{ Expression = "FullName"; Descending = $true } |
+    Select-Object -First 1
+  if (-not $latestCampaign) {
+    throw "[P22] ResumeLatestCampaign requested but no campaign_state.json was found"
+  }
+  $campaignPayload = Get-Content -LiteralPath $latestCampaign.FullName -Raw | ConvertFrom-Json
+  $expId = [string]$campaignPayload.experiment_id
+  if (-not $expId.Trim()) {
+    throw "[P22] ResumeLatestCampaign could not determine experiment_id from latest campaign state"
+  }
+  $Only = $expId
+  $Resume = $true
+  if ($expId -like "*nightly*" -and -not $Nightly) {
+    $Nightly = $true
+  }
+  if (-not ($args -contains "--resume")) { $args += "--resume" }
+  if ($Nightly -and -not ($args -contains "--nightly")) { $args += "--nightly" }
+  if (-not ($args -contains "--only")) { $args += @("--only", $Only) }
+  Write-Host ("[P22] ResumeLatestCampaign selected experiment: " + $expId)
 }
 
 $selectedExperimentIds = @()
@@ -342,7 +372,7 @@ try {
     throw ("[P22] orchestrator failed with exit code " + $code)
   }
 
-  if ($Dashboard -or $Quick -or $Nightly -or $RunP49 -or $RunP50 -or $RunP51 -or $RunP52 -or $RunP54 -or $RunP56 -or $RunP53) {
+  if ($Dashboard -or $Quick -or $Nightly -or $RunP49 -or $RunP50 -or $RunP51 -or $RunP52 -or $RunP54 -or $RunP56 -or $RunP57 -or $RunP53 -or $Overnight) {
     $dashArgs = @(
       "-B",
       "-m", "trainer.monitoring.dashboard_build",
@@ -388,9 +418,15 @@ if (Test-Path $runsRoot) {
     if (Test-Path $summaryPath) { Write-Host ("[P22] summary=" + $summaryPath) }
     if (Test-Path $summaryPath) {
       try {
-        $rows = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
+        $summaryPayload = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
+        $rows = @()
+        if ($summaryPayload -and $summaryPayload.PSObject.Properties["rows"]) {
+          $rows = @($summaryPayload.rows)
+        } elseif ($summaryPayload) {
+          $rows = @($summaryPayload)
+        }
         if ($rows) {
-          foreach ($row in @($rows)) {
+          foreach ($row in $rows) {
             if (-not $row) { continue }
             $campaignStateProp = $row.PSObject.Properties["campaign_state_path"]
             $registrySnapshotProp = $row.PSObject.Properties["registry_snapshot_path"]
@@ -398,6 +434,14 @@ if (Test-Path $runsRoot) {
             if ($campaignStateProp -and $campaignStateProp.Value) { Write-Host ("[P22] campaign_state=" + [string]$campaignStateProp.Value) }
             if ($registrySnapshotProp -and $registrySnapshotProp.Value) { Write-Host ("[P22] registry_snapshot=" + [string]$registrySnapshotProp.Value) }
             if ($promotionQueueProp -and $promotionQueueProp.Value) { Write-Host ("[P22] promotion_queue=" + [string]$promotionQueueProp.Value) }
+            $attentionQueueProp = $row.PSObject.Properties["attention_queue_path"]
+            $morningSummaryProp = $row.PSObject.Properties["morning_summary_path"]
+            $decisionPolicyProp = $row.PSObject.Properties["decision_policy_path"]
+            $humanGateProp = $row.PSObject.Properties["human_gate_triggered"]
+            if ($attentionQueueProp -and $attentionQueueProp.Value) { Write-Host ("[P22] attention_queue=" + [string]$attentionQueueProp.Value) }
+            if ($morningSummaryProp -and $morningSummaryProp.Value) { Write-Host ("[P22] morning_summary=" + [string]$morningSummaryProp.Value) }
+            if ($decisionPolicyProp -and $decisionPolicyProp.Value) { Write-Host ("[P22] decision_policy=" + [string]$decisionPolicyProp.Value) }
+            if ($humanGateProp) { Write-Host ("[P22] human_gate_triggered=" + [string]$humanGateProp.Value) }
           }
         }
       } catch {

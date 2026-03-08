@@ -1,0 +1,40 @@
+schema: p57_overnight_protocol_config_v1
+autonomy_mode: overnight_smoke
+device_profile: single_gpu_mainline
+
+decision_policy:
+  path: configs/runtime/decision_policy.yaml
+
+runtime:
+  device_profile: single_gpu_mainline
+  readiness_guard: true
+
+campaign:
+  resume_enabled: true
+  block_on_existing_blocked_campaigns: false
+  force_rerun_stages: []
+  stage_ids:
+    - readiness_guard
+    - decision_policy_audit
+    - config_provenance_scan
+    - promotion_queue_scan
+    - campaign_health_scan
+    - dashboard_build
+    - morning_summary
+
+attention_queue:
+  enabled: true
+  artifacts_root: docs/artifacts/attention_required
+
+morning_summary:
+  enabled: true
+  artifacts_root: docs/artifacts/morning_summary
+
+output:
+  artifacts_root: docs/artifacts/p57
+  attention_root: docs/artifacts/attention_required
+  morning_summary_root: docs/artifacts/morning_summary
+
+simulation:
+  allow_missing_readiness_report: true
+  force_human_gate_stage: promotion_queue_scan

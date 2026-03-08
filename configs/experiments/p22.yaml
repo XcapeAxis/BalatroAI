@@ -282,6 +282,21 @@ experiment_groups:
           - BBBBBBB
           - CCCCCCC
           - DDDDDDD
+  overnight_autonomy_protocol_v1:
+    description: "P57 overnight autonomy protocol with decision policy, attention queue, resumable campaigns, and morning summary"
+    variants:
+      - id: p57_overnight_smoke
+        algo: p57_overnight_protocol
+        seeds:
+          - AAAAAAA
+          - BBBBBBB
+      - id: p57_overnight_nightly
+        algo: p57_overnight_protocol
+        seeds:
+          - AAAAAAA
+          - BBBBBBB
+          - CCCCCCC
+          - DDDDDDD
   background_execution_ops_ui_v1:
     description: "P53 background execution validation + local ops UI metadata and campaign integration"
     variants:
@@ -1912,6 +1927,112 @@ matrix:
       config: configs/experiments/p56_router_calibration_nightly.yaml
       quick: false
       timeout_sec: 32400
+
+  - id: p57_overnight_smoke
+    name: p57_overnight_smoke
+    backend: sim
+    policy: overnight_autonomy
+    experiment_type: p57_overnight_protocol
+    category: mainline
+    default_enabled: true
+    seed_mode: regression_fixed
+    seed_set_name: regression_smoke
+    device_profile: single_gpu_mainline
+    decision_policy_path: configs/runtime/decision_policy.yaml
+    attention_queue_enabled: true
+    morning_summary_enabled: true
+    dashboard_enabled: true
+    campaign_resume_enabled: true
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+    gate_flag: RunP22
+    modes:
+      quick: true
+      gate: true
+      nightly: false
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/autonomy/attention_item_schema.py
+      - trainer/autonomy/attention_queue.py
+      - trainer/autonomy/decision_policy.py
+      - trainer/autonomy/morning_summary.py
+      - trainer/autonomy/overnight_protocol.py
+      - trainer/runtime/decision_policy.py
+      - trainer/runtime/decision_policy_check.py
+      - trainer/campaigns/campaign_schema.py
+      - trainer/campaigns/resume_state.py
+      - trainer/campaigns/nightly_campaign.py
+      - trainer/experiments/orchestrator.py
+      - trainer/experiments/report.py
+      - trainer/monitoring/live_dashboard.py
+      - trainer/monitoring/dashboard_build.py
+      - trainer/ops_ui/state_loader.py
+      - trainer/ops_ui/routes.py
+      - trainer/ops_ui/server.py
+    eval:
+      config: configs/experiments/p57_overnight_smoke.yaml
+      quick: true
+      timeout_sec: 7200
+
+  - id: p57_overnight_nightly
+    name: p57_overnight_nightly
+    backend: sim
+    policy: overnight_autonomy
+    experiment_type: p57_overnight_protocol
+    category: mainline
+    default_enabled: true
+    seed_mode: nightly
+    seed_set_name: eval_default
+    device_profile: single_gpu_nightly_balanced
+    decision_policy_path: configs/runtime/decision_policy.yaml
+    attention_queue_enabled: true
+    morning_summary_enabled: true
+    dashboard_enabled: true
+    campaign_resume_enabled: true
+    seeds:
+      - AAAAAAA
+      - BBBBBBB
+      - CCCCCCC
+      - DDDDDDD
+    gate_flag: RunP22
+    modes:
+      quick: false
+      gate: false
+      nightly: true
+    stages:
+      sanity: true
+      gate: false
+      dataset: false
+      train: false
+      eval: true
+    sanity_compile:
+      - trainer/autonomy/attention_item_schema.py
+      - trainer/autonomy/attention_queue.py
+      - trainer/autonomy/decision_policy.py
+      - trainer/autonomy/morning_summary.py
+      - trainer/autonomy/overnight_protocol.py
+      - trainer/runtime/decision_policy.py
+      - trainer/runtime/decision_policy_check.py
+      - trainer/campaigns/campaign_schema.py
+      - trainer/campaigns/resume_state.py
+      - trainer/campaigns/nightly_campaign.py
+      - trainer/experiments/orchestrator.py
+      - trainer/experiments/report.py
+      - trainer/monitoring/live_dashboard.py
+      - trainer/monitoring/dashboard_build.py
+      - trainer/ops_ui/state_loader.py
+      - trainer/ops_ui/routes.py
+      - trainer/ops_ui/server.py
+    eval:
+      config: configs/experiments/p57_overnight_nightly.yaml
+      quick: false
+      timeout_sec: 14400
 
   - id: p53_background_ops_smoke
     name: p53_background_ops_smoke

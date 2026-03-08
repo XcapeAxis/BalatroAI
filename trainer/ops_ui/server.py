@@ -20,6 +20,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 from trainer.monitoring.dashboard_build import build_dashboard
 from trainer.ops_ui import routes
 from trainer.ops_ui.state_loader import build_ops_state, path_in_repo, repo_root
+from trainer.autonomy.attention_queue import resolve_attention_item
 from trainer.registry.checkpoint_registry import list_entries, snapshot_registry
 from trainer.registry.promotion_queue import build_promotion_queue_summary
 from trainer.runtime.background_mode_validation import resolve_effective_window_mode
@@ -70,6 +71,9 @@ def _render_base(title: str, content: str, *, current_path: str, refresh_sec: in
         ("/campaigns", "Campaigns"),
         ("/registry", "Checkpoint Registry"),
         ("/promotion-queue", "Promotion Queue"),
+        ("/attention-queue", "Attention Queue"),
+        ("/morning-summary", "Morning Summary"),
+        ("/blocked-campaigns", "Blocked Campaigns"),
         ("/router-calibration", "Router Calibration"),
         ("/router-canary", "Guard / Canary"),
         ("/runs", "Runs / Metrics"),
@@ -153,7 +157,7 @@ def _spawn_job(action: str, command: list[str]) -> dict[str, Any]:
 def _latest_resume_command() -> str:
     state = build_ops_state()
     target = state.get("latest_resume_target") if isinstance(state.get("latest_resume_target"), dict) else {}
-    return str(target.get("resume_command") or "powershell -ExecutionPolicy Bypass -File scripts\\run_p22.ps1 -Resume")
+    return str(target.get("resume_command") or "powershell -ExecutionPolicy Bypass -File scripts\\run_p22.ps1 -ResumeLatestCampaign")
 
 
 def _artifact_response(target: Path) -> tuple[bytes, str]:
@@ -246,6 +250,15 @@ class OpsRequestHandler(BaseHTTPRequestHandler):
         if route == "/promotion-queue":
             self._send_html(_render_base("Promotion Queue", routes.render_promotion_queue(state), current_path=route))
             return
+        if route == "/attention-queue":
+            self._send_html(_render_base("Attention Queue", routes.render_attention_queue(state), current_path=route))
+            return
+        if route == "/morning-summary":
+            self._send_html(_render_base("Morning Summary", routes.render_morning_summary(state), current_path=route))
+            return
+        if route == "/blocked-campaigns":
+            self._send_html(_render_base("Blocked Campaigns", routes.render_blocked_campaigns(state), current_path=route))
+            return
         if route == "/router-calibration":
             self._send_html(_render_base("Router Calibration", routes.render_router_calibration(state), current_path=route))
             return
@@ -272,6 +285,10 @@ class OpsRequestHandler(BaseHTTPRequestHandler):
                 _spawn_job("run_p22_quick", ["powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts\\run_p22.ps1", "-Quick"])
             elif parsed.path == "/actions/run_p22_p53":
                 _spawn_job("run_p22_p53", ["powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts\\run_p22.ps1", "-RunP53"])
+            elif parsed.path == "/actions/run_p22_p57":
+                _spawn_job("run_p22_p57", ["powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts\\run_p22.ps1", "-RunP57"])
+            elif parsed.path == "/actions/run_p22_overnight":
+                _spawn_job("run_p22_overnight", ["powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts\\run_p22.ps1", "-Overnight"])
             elif parsed.path == "/actions/resume_latest_campaign":
                 _spawn_job("resume_latest_campaign", _latest_resume_command().split(" "))
             elif parsed.path == "/actions/rebuild_dashboard":
@@ -288,6 +305,11 @@ class OpsRequestHandler(BaseHTTPRequestHandler):
                 resolved = resolve_effective_window_mode(requested)
                 payload = set_window_mode(str(resolved.get("effective_mode") or requested))
                 _audit("window_mode", target=requested, success=bool(payload.get("operation_success")), output_ref=str(payload.get("state_path") or ""), details=resolved)
+            elif parsed.path == "/actions/resolve_attention":
+                attention_id = str(form.get("attention_id") or "")
+                note = str(form.get("resolution_note") or "resolved in ops ui")
+                payload = resolve_attention_item(attention_id, resolution_note=note)
+                _audit("resolve_attention", target=attention_id, success=True, output_ref=str(payload.get("item_md_path") or ""), details={"status": payload.get("status")})
             else:
                 raise ValueError(f"unsupported action: {parsed.path}")
         except Exception as exc:

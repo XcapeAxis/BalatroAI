@@ -197,6 +197,7 @@ def normalize_experiment_category(exp: dict[str, Any]) -> str:
         "p52_learned_router_campaign",
         "p54_learned_router_campaign",
         "p56_router_calibration_campaign",
+        "p57_overnight_protocol",
         "background_ops_validation",
         "p53_background_ops_campaign",
         "gpu_mainline_eval",
@@ -3566,6 +3567,42 @@ def _run_p52_learned_router_campaign_seed_experiment(
     }
 
 
+def _run_p57_overnight_campaign_seed_experiment(
+    *,
+    ctx: RunContext,
+    exp: dict[str, Any],
+    exp_dir: Path,
+    seed: str,
+    seed_idx: int,
+    seed_total: int,
+) -> dict[str, Any]:
+    from trainer.autonomy.overnight_protocol import run_overnight_protocol_seed_experiment
+
+    eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+    cfg_rel = str(
+        eval_cfg.get("config")
+        or exp.get("campaign_config")
+        or ("configs/experiments/p57_overnight_smoke.yaml" if ctx.mode == "quick" else "configs/experiments/p57_overnight_nightly.yaml")
+    )
+    cfg_path = (ctx.repo_root / cfg_rel).resolve()
+    cfg = _read_yaml_or_json(cfg_path)
+    result = run_overnight_protocol_seed_experiment(
+        repo_root=ctx.repo_root,
+        run_id=ctx.run_id,
+        exp={**exp, "training_python": sys.executable},
+        exp_dir=exp_dir,
+        seed=seed,
+        seed_idx=seed_idx,
+        seed_total=seed_total,
+        config_path=cfg_path,
+        config_payload=cfg,
+        readiness_report_path=_resolved_readiness_report_path(),
+    )
+    if str(result.get("status") or "") == "blocked":
+        result["status"] = "ok"
+    return result
+
+
 def _run_p53_background_ops_campaign_seed_experiment(
     *,
     ctx: RunContext,
@@ -4336,6 +4373,7 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "p54_learned_router_campaign",
         "p56_router_calibration_campaign",
         "p53_background_ops_campaign",
+        "p57_overnight_protocol",
     }
     if ctx.resume and not allow_seed_level_resume:
         old = read_json(status_path)
@@ -4668,6 +4706,21 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "background_validation_ref": _resolved_background_validation_path(),
             "ops_ui_path": _resolved_ops_ui_path(),
             "dashboard_path": str((ctx.repo_root / "docs/artifacts/dashboard/latest/index.html").resolve()),
+            "readiness_report_path": _resolved_readiness_report_path(),
+            "training_python": sys.executable,
+        }
+    elif exp_type in {"p57_overnight_protocol"}:
+        eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
+        manifest["p57_overnight_protocol"] = {
+            "config": str(
+                eval_cfg.get("config")
+                or exp.get("campaign_config")
+                or ("configs/experiments/p57_overnight_smoke.yaml" if ctx.mode == "quick" else "configs/experiments/p57_overnight_nightly.yaml")
+            ),
+            "decision_policy_path": str(exp.get("decision_policy_path") or "configs/runtime/decision_policy.yaml"),
+            "attention_queue_enabled": bool(exp.get("attention_queue_enabled", True)),
+            "morning_summary_enabled": bool(exp.get("morning_summary_enabled", True)),
+            "dashboard_enabled": bool(exp.get("dashboard_enabled", True)),
             "readiness_report_path": _resolved_readiness_report_path(),
             "training_python": sys.executable,
         }
@@ -5678,6 +5731,54 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                     message=exp_type,
                     extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
                 )
+            elif exp_type in {"p57_overnight_protocol"}:
+                try:
+                    p57_campaign_result = _run_p57_overnight_campaign_seed_experiment(
+                        ctx=ctx,
+                        exp=exp,
+                        exp_dir=exp_dir,
+                        seed=seed,
+                        seed_idx=seed_idx,
+                        seed_total=len(seeds),
+                    )
+                except Exception as exc:
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "failed",
+                            "stage": "eval",
+                            "error": f"p57_campaign_exception: {exc}",
+                            "elapsed_sec": elapsed(),
+                            "metrics": {},
+                        }
+                    )
+                else:
+                    p57_campaign_summary = dict(p57_campaign_result.get("summary") or {})
+                    seed_results.append(
+                        {
+                            "seed": seed,
+                            "status": "ok" if p57_campaign_result["status"] == "ok" else "failed",
+                            "stage": "eval",
+                            "elapsed_sec": elapsed(),
+                            "metrics": dict(p57_campaign_result.get("metrics") or {}),
+                            "summary": p57_campaign_summary,
+                            "p57_campaign_summary": p57_campaign_summary,
+                        }
+                    )
+                append_experiment_progress_event(
+                    progress_path,
+                    run_id=ctx.run_id,
+                    exp_id=exp_id,
+                    phase="eval",
+                    stage="eval",
+                    status=str(seed_results[-1].get("status")),
+                    seed=seed,
+                    step_or_epoch=seed_idx,
+                    elapsed_sec=elapsed(),
+                    metrics=seed_results[-1].get("metrics") or {},
+                    message=exp_type,
+                    extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
+                )
             elif exp_type in {"closed_loop_improvement", "closed_loop", "p40_closed_loop", "closed_loop_improvement_v2", "p41_closed_loop_v2", "closed_loop_v2", "closed_loop_rl_candidate", "rl_candidate_pipeline", "p42_rl_candidate", "p42_rl_candidate_pipeline", "p44_distributed_rl"}:
                 try:
                     closed_loop_result = _run_closed_loop_seed_experiment(
@@ -5916,7 +6017,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             or ""
         ),
         "dashboard_path": str(
-            final_seed_metrics.get("p56_dashboard_path")
+            final_seed_metrics.get("p57_dashboard_path")
+            or final_seed_metrics.get("p56_dashboard_path")
             or final_seed_metrics.get("p53_dashboard_path")
             or final_seed_metrics.get("p52_dashboard_path")
             or final_seed_metrics.get("p51_dashboard_path")
@@ -5925,7 +6027,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             or ""
         ),
         "readiness_report_path": str(
-            final_seed_metrics.get("p56_readiness_report_path")
+            final_seed_metrics.get("p57_readiness_report_path")
+            or final_seed_metrics.get("p56_readiness_report_path")
             or final_seed_metrics.get("p53_readiness_report_path")
             or final_seed_metrics.get("p52_readiness_report_path")
             or final_seed_metrics.get("p51_readiness_report_path")
@@ -5936,21 +6039,26 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             or ""
         ),
         "campaign_state_path": str(
-            final_seed_metrics.get("p56_campaign_state_path")
+            final_seed_metrics.get("campaign_state_path")
+            or final_seed_metrics.get("p57_campaign_state_path")
+            or final_seed_metrics.get("p56_campaign_state_path")
             or final_seed_metrics.get("p53_campaign_state_path")
             or final_seed_metrics.get("p52_campaign_state_path")
             or final_seed_metrics.get("p51_campaign_state_path")
             or ""
         ),
         "registry_snapshot_path": str(
-            final_seed_metrics.get("p56_registry_snapshot_path")
+            final_seed_metrics.get("p57_registry_snapshot_path")
+            or final_seed_metrics.get("registry_snapshot_path")
+            or final_seed_metrics.get("p56_registry_snapshot_path")
             or final_seed_metrics.get("p53_registry_snapshot_path")
             or final_seed_metrics.get("p52_registry_snapshot_path")
             or final_seed_metrics.get("p51_registry_snapshot_path")
             or ""
         ),
         "promotion_queue_path": str(
-            final_seed_metrics.get("p56_promotion_queue_path")
+            final_seed_metrics.get("p57_promotion_queue_path")
+            or final_seed_metrics.get("p56_promotion_queue_path")
             or final_seed_metrics.get("p53_promotion_queue_path")
             or final_seed_metrics.get("p52_promotion_queue_path")
             or final_seed_metrics.get("p51_promotion_queue_path")
@@ -5958,7 +6066,9 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             or ""
         ),
         "resume_report_path": str(
-            final_seed_metrics.get("p56_resume_report_md")
+            final_seed_metrics.get("resume_report_path")
+            or final_seed_metrics.get("p57_resume_report_md")
+            or final_seed_metrics.get("p56_resume_report_md")
             or final_seed_metrics.get("p53_resume_report_md")
             or final_seed_metrics.get("p52_resume_report_md")
             or final_seed_metrics.get("p51_resume_report_md")
@@ -5981,6 +6091,11 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             or _resolved_ops_ui_path()
             or ""
         ),
+        "autonomy_mode": str(final_seed_metrics.get("autonomy_mode") or final_seed_summary.get("autonomy_mode") or ""),
+        "decision_policy_path": str(final_seed_metrics.get("decision_policy_path") or final_seed_summary.get("decision_policy_path") or ""),
+        "attention_queue_path": str(final_seed_metrics.get("attention_queue_path") or final_seed_summary.get("attention_queue_path") or ""),
+        "morning_summary_path": str(final_seed_metrics.get("morning_summary_path") or final_seed_summary.get("morning_summary_path") or ""),
+        "human_gate_triggered": bool(final_seed_metrics.get("human_gate_triggered") or final_seed_summary.get("human_gate_triggered") or False),
         "produced_checkpoint_ids": list(
             final_seed_summary.get("produced_checkpoint_ids")
             or ([str(final_seed_metrics.get("p56_router_checkpoint_id") or "")] if str(final_seed_metrics.get("p56_router_checkpoint_id") or "").strip() else [])
@@ -6150,6 +6265,11 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "registry_snapshot_path": runtime_details.get("registry_snapshot_path"),
         "promotion_queue_path": runtime_details.get("promotion_queue_path"),
         "resume_report_path": runtime_details.get("resume_report_path"),
+        "autonomy_mode": runtime_details.get("autonomy_mode"),
+        "decision_policy_path": runtime_details.get("decision_policy_path"),
+        "attention_queue_path": runtime_details.get("attention_queue_path"),
+        "morning_summary_path": runtime_details.get("morning_summary_path"),
+        "human_gate_triggered": runtime_details.get("human_gate_triggered"),
         "produced_checkpoint_ids": runtime_details.get("produced_checkpoint_ids"),
         "calibration_ref": runtime_details.get("calibration_ref"),
         "guard_tuning_ref": runtime_details.get("guard_tuning_ref"),
