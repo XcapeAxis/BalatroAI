@@ -165,6 +165,7 @@ def _build_policy_adapter(
             learned_router_checkpoint=str(assist.get("learned_router_checkpoint") or ""),
             learned_router_config=(assist.get("learned_router_config") if isinstance(assist.get("learned_router_config"), dict) else {}),
             rule_guard_config=(assist.get("rule_guard_config") if isinstance(assist.get("rule_guard_config"), dict) else {}),
+            canary_config=(assist.get("canary_config") if isinstance(assist.get("canary_config"), dict) else {}),
             search_max_branch=_safe_int(assist.get("search_max_branch"), 80),
             search_max_depth=_safe_int(assist.get("search_max_depth"), 2),
             search_time_budget_ms=_safe_float(assist.get("search_time_budget_ms"), 15.0),

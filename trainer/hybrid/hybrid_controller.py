@@ -22,7 +22,7 @@ except Exception:  # pragma: no cover
 from trainer.closed_loop.regression_triage import run_regression_triage
 from trainer.closed_loop.replay_manifest import build_seeds_payload, now_iso, now_stamp, to_abs_path, write_json, write_markdown
 from trainer.hybrid.controller_registry import build_controller_registry, discover_policy_model_path, discover_world_model_checkpoint
-from trainer.hybrid.router import LearnedHybridRouter, RuleBasedHybridRouter, run_router_smoke, summarize_routing_trace
+from trainer.hybrid.router import LearnedHybridRouter, RuleBasedHybridRouter, is_high_risk_slice, run_router_smoke, summarize_routing_trace
 from trainer.hybrid.routing_features import collect_sample_states, extract_routing_features, run_routing_feature_smoke
 from trainer.policy_arena.adapters.heuristic_adapter import HeuristicAdapter
 from trainer.policy_arena.adapters.model_adapter import ModelAdapter
@@ -147,6 +147,7 @@ class AdaptiveHybridController(BasePolicyAdapter):
         learned_router_checkpoint: str = "",
         learned_router_config: dict[str, Any] | None = None,
         rule_guard_config: dict[str, Any] | None = None,
+        canary_config: dict[str, Any] | None = None,
         trace_path: str = "",
         trace_context: dict[str, Any] | None = None,
     ) -> None:
@@ -161,12 +162,29 @@ class AdaptiveHybridController(BasePolicyAdapter):
         self.router_mode = str(router_mode or "rule").strip().lower() or "rule"
         self.learned_router_checkpoint = str(learned_router_checkpoint or "")
         self.learned_router_config = dict(learned_router_config or {})
+        raw_rule_guard_config = dict(rule_guard_config or {})
         self.rule_guard_config = {
-            "min_confidence": _safe_float((rule_guard_config or {}).get("min_confidence"), 0.45),
-            "high_risk_min_confidence": _safe_float((rule_guard_config or {}).get("high_risk_min_confidence"), 0.60),
-            "min_feature_completeness": _safe_float((rule_guard_config or {}).get("min_feature_completeness"), 0.80),
-            "max_ood_score": _safe_float((rule_guard_config or {}).get("max_ood_score"), 6.0),
-            "max_wm_uncertainty": _safe_float((rule_guard_config or {}).get("max_wm_uncertainty"), 1.0),
+            "router_confidence_min": _safe_float(raw_rule_guard_config.get("router_confidence_min", raw_rule_guard_config.get("min_confidence")), 0.45),
+            "high_risk_router_confidence_min": _safe_float(raw_rule_guard_config.get("high_risk_router_confidence_min", raw_rule_guard_config.get("high_risk_min_confidence")), 0.60),
+            "feature_completeness_min": _safe_float(raw_rule_guard_config.get("feature_completeness_min", raw_rule_guard_config.get("min_feature_completeness")), 0.80),
+            "ood_score_max": _safe_float(raw_rule_guard_config.get("ood_score_max", raw_rule_guard_config.get("max_ood_score")), 6.0),
+            "wm_uncertainty_max": _safe_float(raw_rule_guard_config.get("wm_uncertainty_max", raw_rule_guard_config.get("max_wm_uncertainty")), 1.0),
+            "high_risk_slice_force_rule": bool(raw_rule_guard_config.get("high_risk_slice_force_rule", False)),
+        }
+        self.rule_guard_config["min_confidence"] = self.rule_guard_config["router_confidence_min"]
+        self.rule_guard_config["high_risk_min_confidence"] = self.rule_guard_config["high_risk_router_confidence_min"]
+        self.rule_guard_config["min_feature_completeness"] = self.rule_guard_config["feature_completeness_min"]
+        self.rule_guard_config["max_ood_score"] = self.rule_guard_config["ood_score_max"]
+        self.rule_guard_config["max_wm_uncertainty"] = self.rule_guard_config["wm_uncertainty_max"]
+        raw_canary_config = dict(canary_config or {})
+        self.canary_config = {
+            "router_confidence_min": _safe_float(raw_canary_config.get("router_confidence_min", raw_canary_config.get("min_confidence")), 0.70),
+            "feature_completeness_min": _safe_float(raw_canary_config.get("feature_completeness_min", raw_canary_config.get("min_feature_completeness")), 0.90),
+            "ood_score_max": _safe_float(raw_canary_config.get("ood_score_max", raw_canary_config.get("max_ood_score")), 4.5),
+            "wm_uncertainty_max": _safe_float(raw_canary_config.get("wm_uncertainty_max", raw_canary_config.get("max_wm_uncertainty")), 0.85),
+            "high_risk_slice_force_rule": bool(raw_canary_config.get("high_risk_slice_force_rule", True)),
+            "high_risk_stages": list(raw_canary_config.get("high_risk_stages") or ["late"]),
+            "high_risk_resource_pressures": list(raw_canary_config.get("high_risk_resource_pressures") or ["high"]),
         }
         self.trace_path = str(trace_path or "")
         self.trace_context = dict(trace_context or {})
@@ -225,7 +243,7 @@ class AdaptiveHybridController(BasePolicyAdapter):
                 supports_shop=True,
                 supports_consumables=True,
                 supports_position_actions=False,
-                notes="Adaptive hybrid controller with rule/learned/guarded router modes.",
+                notes="Adaptive hybrid controller with rule/learned/guarded/canary router modes.",
             )
         )
 
@@ -244,6 +262,7 @@ class AdaptiveHybridController(BasePolicyAdapter):
         payload["adapter"]["learned_router_checkpoint"] = self.learned_router_checkpoint
         payload["adapter"]["learned_router"] = self.learned_router.describe() if self.learned_router is not None else {}
         payload["adapter"]["rule_guard_config"] = dict(self.rule_guard_config)
+        payload["adapter"]["canary_config"] = dict(self.canary_config)
         payload["adapter"]["controller_registry"] = self.registry
         payload["adapter"]["trace_path"] = self.trace_path
         return payload
@@ -262,22 +281,78 @@ class AdaptiveHybridController(BasePolicyAdapter):
         confidence = _safe_float(explainability.get("confidence"), 0.0)
         completeness = _safe_float(explainability.get("feature_completeness"), 1.0)
         ood_score = _safe_float(explainability.get("ood_score"), 0.0)
-        high_risk = str(features.get("slice_resource_pressure") or "unknown") == "high" or str(features.get("slice_stage") or "unknown") == "late"
+        high_risk = is_high_risk_slice(features, config=self.rule_guard_config)
         min_confidence = _safe_float(
-            self.rule_guard_config.get("high_risk_min_confidence") if high_risk else self.rule_guard_config.get("min_confidence"),
+            self.rule_guard_config.get("high_risk_router_confidence_min") if high_risk else self.rule_guard_config.get("router_confidence_min"),
             0.45,
         )
         if selected not in available_controllers:
             return "predicted_controller_unavailable"
-        if completeness < _safe_float(self.rule_guard_config.get("min_feature_completeness"), 0.80):
+        if high_risk and bool(self.rule_guard_config.get("high_risk_slice_force_rule")):
+            return "high_risk_slice"
+        if completeness < _safe_float(self.rule_guard_config.get("feature_completeness_min"), 0.80):
             return "feature_completeness_low"
-        if ood_score > _safe_float(self.rule_guard_config.get("max_ood_score"), 6.0):
+        if ood_score > _safe_float(self.rule_guard_config.get("ood_score_max"), 6.0):
             return "ood_score_high"
         if confidence < min_confidence:
             return "confidence_low"
-        if _safe_float(features.get("wm_uncertainty"), 0.0) > _safe_float(self.rule_guard_config.get("max_wm_uncertainty"), 1.0):
+        if _safe_float(features.get("wm_uncertainty"), 0.0) > _safe_float(self.rule_guard_config.get("wm_uncertainty_max"), 1.0):
             return "wm_uncertainty_high"
         return ""
+
+    def _canary_reject_reason(
+        self,
+        *,
+        features: dict[str, Any],
+        available_controllers: dict[str, dict[str, Any]],
+        learned_decision: dict[str, Any],
+    ) -> str:
+        if self.learned_router is None:
+            return "learned_router_unavailable"
+        selected = str(learned_decision.get("selected_controller") or "")
+        explainability = learned_decision.get("explainability") if isinstance(learned_decision.get("explainability"), dict) else {}
+        confidence = _safe_float(explainability.get("confidence"), 0.0)
+        completeness = _safe_float(explainability.get("feature_completeness"), 1.0)
+        ood_score = _safe_float(explainability.get("ood_score"), 0.0)
+        if selected not in available_controllers:
+            return "predicted_controller_unavailable"
+        if bool(self.canary_config.get("high_risk_slice_force_rule")) and is_high_risk_slice(features, config=self.canary_config):
+            return "high_risk_slice"
+        if completeness < _safe_float(self.canary_config.get("feature_completeness_min"), 0.90):
+            return "feature_completeness_low"
+        if ood_score > _safe_float(self.canary_config.get("ood_score_max"), 4.5):
+            return "ood_score_high"
+        if confidence < _safe_float(self.canary_config.get("router_confidence_min"), 0.70):
+            return "confidence_low"
+        if _safe_float(features.get("wm_uncertainty"), 0.0) > _safe_float(self.canary_config.get("wm_uncertainty_max"), 0.85):
+            return "wm_uncertainty_high"
+        return ""
+
+    @staticmethod
+    def _annotate_decision(
+        decision: dict[str, Any],
+        *,
+        router_mode: str,
+        final_action_source: str,
+        rule_choice: str,
+        learned_choice: str,
+        guard_triggered: bool = False,
+        guard_reason: str = "",
+        canary_eligible: bool = False,
+        canary_used: bool = False,
+        canary_reject_reason: str = "",
+    ) -> dict[str, Any]:
+        decision["router_mode"] = router_mode
+        decision["final_action_source"] = final_action_source
+        decision["guard_triggered"] = bool(guard_triggered)
+        decision["guard_reason"] = str(guard_reason or "")
+        decision["rule_choice"] = str(rule_choice or "")
+        decision["learned_choice"] = str(learned_choice or "")
+        decision["canary_eligible"] = bool(canary_eligible)
+        decision["canary_used"] = bool(canary_used)
+        decision["canary_reject_reason"] = str(canary_reject_reason or "")
+        decision["final_controller"] = str(decision.get("selected_controller") or "")
+        return decision
 
     def _route_decision(
         self,
@@ -287,34 +362,39 @@ class AdaptiveHybridController(BasePolicyAdapter):
     ) -> dict[str, Any]:
         rule_decision = self.rule_router.route(features=features, available_controllers=available_controllers)
         if self.router_mode == "rule":
-            decision = dict(rule_decision)
-            decision["router_mode"] = "rule"
-            decision["final_action_source"] = "rule_router"
-            decision["guard_triggered"] = False
-            decision["guard_reason"] = ""
-            decision["rule_choice"] = str(rule_decision.get("selected_controller") or "")
-            decision["learned_choice"] = ""
-            return decision
+            return self._annotate_decision(
+                dict(rule_decision),
+                router_mode="rule",
+                final_action_source="rule_router",
+                rule_choice=str(rule_decision.get("selected_controller") or ""),
+                learned_choice="",
+            )
         if self.learned_router is None:
             if self.router_mode == "learned":
                 raise RuntimeError("learned router mode requested without learned router checkpoint")
             decision = dict(rule_decision)
-            decision["router_mode"] = self.router_mode
-            decision["final_action_source"] = "rule_router"
-            decision["guard_triggered"] = True
-            decision["guard_reason"] = "learned_router_unavailable"
-            decision["rule_choice"] = str(rule_decision.get("selected_controller") or "")
-            decision["learned_choice"] = ""
-            return decision
+            canary_mode = self.router_mode == "canary_learned_router"
+            return self._annotate_decision(
+                decision,
+                router_mode=self.router_mode,
+                final_action_source="rule_router",
+                rule_choice=str(rule_decision.get("selected_controller") or ""),
+                learned_choice="",
+                guard_triggered=not canary_mode,
+                guard_reason=("learned_router_unavailable" if not canary_mode else ""),
+                canary_eligible=False,
+                canary_used=False,
+                canary_reject_reason=("learned_router_unavailable" if canary_mode else ""),
+            )
 
         learned_decision = self.learned_router.route(features=features, available_controllers=available_controllers)
-        decision = dict(learned_decision)
-        decision["router_mode"] = self.router_mode
-        decision["rule_choice"] = str(rule_decision.get("selected_controller") or "")
-        decision["learned_choice"] = str(learned_decision.get("selected_controller") or "")
-        decision["guard_triggered"] = False
-        decision["guard_reason"] = ""
-        decision["final_action_source"] = "learned_router"
+        decision = self._annotate_decision(
+            dict(learned_decision),
+            router_mode=self.router_mode,
+            final_action_source="learned_router",
+            rule_choice=str(rule_decision.get("selected_controller") or ""),
+            learned_choice=str(learned_decision.get("selected_controller") or ""),
+        )
         if self.router_mode == "learned_with_rule_guard":
             guard_reason = self._rule_guard_reason(
                 features=features,
@@ -323,20 +403,64 @@ class AdaptiveHybridController(BasePolicyAdapter):
             )
             if guard_reason:
                 decision = dict(rule_decision)
-                decision["router_mode"] = "learned_with_rule_guard"
-                decision["rule_choice"] = str(rule_decision.get("selected_controller") or "")
-                decision["learned_choice"] = str(learned_decision.get("selected_controller") or "")
                 decision["predicted_probabilities"] = dict(learned_decision.get("predicted_probabilities") or {})
-                decision["guard_triggered"] = True
-                decision["guard_reason"] = guard_reason
-                decision["final_action_source"] = "rule_guard"
-                decision["routing_reason"] = f"guard_fallback:{guard_reason}"
                 learned_explainability = learned_decision.get("explainability") if isinstance(learned_decision.get("explainability"), dict) else {}
                 rule_explainability = decision.get("explainability") if isinstance(decision.get("explainability"), dict) else {}
                 merged_explainability = dict(rule_explainability)
                 merged_explainability["learned_router"] = learned_explainability
                 decision["explainability"] = merged_explainability
-                return decision
+                decision["routing_reason"] = f"guard_fallback:{guard_reason}"
+                return self._annotate_decision(
+                    decision,
+                    router_mode="learned_with_rule_guard",
+                    final_action_source="rule_guard",
+                    rule_choice=str(rule_decision.get("selected_controller") or ""),
+                    learned_choice=str(learned_decision.get("selected_controller") or ""),
+                    guard_triggered=True,
+                    guard_reason=guard_reason,
+                )
+            return self._annotate_decision(
+                decision,
+                router_mode="learned_with_rule_guard",
+                final_action_source="learned_router",
+                rule_choice=str(rule_decision.get("selected_controller") or ""),
+                learned_choice=str(learned_decision.get("selected_controller") or ""),
+            )
+        if self.router_mode == "canary_learned_router":
+            reject_reason = self._canary_reject_reason(
+                features=features,
+                available_controllers=available_controllers,
+                learned_decision=learned_decision,
+            )
+            if reject_reason:
+                fallback = dict(rule_decision)
+                fallback["predicted_probabilities"] = dict(learned_decision.get("predicted_probabilities") or {})
+                learned_explainability = learned_decision.get("explainability") if isinstance(learned_decision.get("explainability"), dict) else {}
+                rule_explainability = fallback.get("explainability") if isinstance(fallback.get("explainability"), dict) else {}
+                merged_explainability = dict(rule_explainability)
+                merged_explainability["learned_router"] = learned_explainability
+                fallback["explainability"] = merged_explainability
+                fallback["routing_reason"] = f"canary_fallback:{reject_reason}"
+                return self._annotate_decision(
+                    fallback,
+                    router_mode="canary_learned_router",
+                    final_action_source="canary_rule_fallback",
+                    rule_choice=str(rule_decision.get("selected_controller") or ""),
+                    learned_choice=str(learned_decision.get("selected_controller") or ""),
+                    canary_eligible=False,
+                    canary_used=False,
+                    canary_reject_reason=reject_reason,
+                )
+            decision["routing_reason"] = str(decision.get("routing_reason") or "canary_learned_router")
+            return self._annotate_decision(
+                decision,
+                router_mode="canary_learned_router",
+                final_action_source="canary_learned_router",
+                rule_choice=str(rule_decision.get("selected_controller") or ""),
+                learned_choice=str(learned_decision.get("selected_controller") or ""),
+                canary_eligible=True,
+                canary_used=True,
+            )
         return decision
 
     def reset(self, seed: str | int | None = None) -> None:
@@ -432,6 +556,10 @@ class AdaptiveHybridController(BasePolicyAdapter):
             "fallback_reason": fallback_reason,
             "guard_triggered": bool(decision.get("guard_triggered")),
             "guard_reason": str(decision.get("guard_reason") or ""),
+            "canary_eligible": bool(decision.get("canary_eligible")),
+            "canary_used": bool(decision.get("canary_used")),
+            "canary_reject_reason": str(decision.get("canary_reject_reason") or ""),
+            "final_controller": str(decision.get("final_controller") or final_selected),
             "final_action_source": str(decision.get("final_action_source") or "rule_router"),
             "router_explainability": decision.get("explainability") if isinstance(decision.get("explainability"), dict) else {},
             "controllers_tried": tried,
@@ -484,8 +612,23 @@ def _routing_summary_from_trace(trace_path: Path) -> dict[str, Any]:
     summary = summarize_routing_trace(rows)
     summary["routing_decision_impact"] = {
         "selection_distribution": _selection_distribution(rows),
+        "final_controller_distribution": _selection_distribution(
+            [
+                {"selected_controller": str((row or {}).get("final_controller") or (row or {}).get("selected_controller") or "unknown")}
+                for row in rows
+            ]
+        ),
         "fallback_rate": float(sum(1 for row in rows if bool((row or {}).get("fallback_used")))) / max(1, len(rows)),
         "guard_trigger_rate": float(sum(1 for row in rows if bool((row or {}).get("guard_triggered")))) / max(1, len(rows)),
+        "canary_eligible_rate": float(sum(1 for row in rows if bool((row or {}).get("canary_eligible")))) / max(1, len(rows)),
+        "canary_usage_rate": float(sum(1 for row in rows if bool((row or {}).get("canary_used")))) / max(1, len(rows)),
+        "canary_reject_reason_distribution": _selection_distribution(
+            [
+                {"selected_controller": str((row or {}).get("canary_reject_reason") or "none")}
+                for row in rows
+                if str((row or {}).get("canary_reject_reason") or "").strip()
+            ]
+        ),
         "router_mode_distribution": _selection_distribution(
             [
                 {"selected_controller": str((row or {}).get("router_mode") or "unknown")}
@@ -503,6 +646,7 @@ def _routing_summary_markdown(summary: dict[str, Any]) -> list[str]:
         f"- decision_count: {int(summary.get('decision_count') or 0)}",
         f"- fallback_rate: {float(((summary.get('routing_decision_impact') or {}).get('fallback_rate') or 0.0)):.3f}",
         f"- guard_trigger_rate: {float(((summary.get('routing_decision_impact') or {}).get('guard_trigger_rate') or 0.0)):.3f}",
+        f"- canary_usage_rate: {float(((summary.get('routing_decision_impact') or {}).get('canary_usage_rate') or 0.0)):.3f}",
         "",
         "## Controller Selection Distribution",
     ]

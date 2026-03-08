@@ -27,7 +27,7 @@ from trainer.hybrid.hybrid_controller import AdaptiveHybridController
 from trainer.hybrid.learned_router_train import run_learned_router_train
 from trainer.hybrid.router_dataset import build_router_dataset
 from trainer.hybrid.routing_features import collect_sample_states
-from trainer.registry.checkpoint_registry import list_entries, snapshot_registry, update_checkpoint_status
+from trainer.registry.checkpoint_registry import list_entries, snapshot_registry, update_checkpoint, update_checkpoint_status
 from trainer.registry.promotion_queue import build_promotion_queue_summary
 
 
@@ -136,11 +136,21 @@ def _default_eval_config() -> dict[str, Any]:
                 "wm_reward_bonus_scale": 0.20,
             },
             "rule_guard": {
-                "min_confidence": 0.45,
-                "high_risk_min_confidence": 0.60,
-                "min_feature_completeness": 0.80,
-                "max_ood_score": 6.0,
-                "max_wm_uncertainty": 1.0,
+                "router_confidence_min": 0.45,
+                "high_risk_router_confidence_min": 0.60,
+                "feature_completeness_min": 0.80,
+                "ood_score_max": 6.0,
+                "wm_uncertainty_max": 1.0,
+                "high_risk_slice_force_rule": False,
+            },
+            "canary": {
+                "router_confidence_min": 0.70,
+                "feature_completeness_min": 0.90,
+                "ood_score_max": 4.5,
+                "wm_uncertainty_max": 0.85,
+                "high_risk_slice_force_rule": True,
+                "high_risk_stages": ["late"],
+                "high_risk_resource_pressures": ["high"],
             },
             "learned_router": {"temperature": 1.0, "device": "auto"},
         },
@@ -159,6 +169,7 @@ def _default_eval_config() -> dict[str, Any]:
                 "hybrid_controller_rule",
                 "hybrid_controller_learned",
                 "hybrid_controller_learned_with_rule_guard",
+                "hybrid_controller_canary_learned_router",
                 "search_baseline",
                 "heuristic_baseline",
             ],
@@ -205,15 +216,25 @@ def _train_artifacts_root(repo_root: Path, cfg: dict[str, Any]) -> Path:
 
 def _routing_trace_summary(rows: list[dict[str, Any]], *, policy_id: str) -> dict[str, Any]:
     selection_counter: Counter[str] = Counter()
+    final_controller_counter: Counter[str] = Counter()
+    reject_counter: Counter[str] = Counter()
     invalid_incidents = 0
     guard_count = 0
     fallback_count = 0
+    canary_eligible_count = 0
+    canary_used_count = 0
     for row in rows:
         selection_counter[str(row.get("selected_controller") or "unknown")] += 1
+        final_controller_counter[str(row.get("final_controller") or row.get("selected_controller") or "unknown")] += 1
         if bool(row.get("guard_triggered")):
             guard_count += 1
         if bool(row.get("fallback_used")):
             fallback_count += 1
+        canary_eligible_count += int(bool(row.get("canary_eligible")))
+        canary_used_count += int(bool(row.get("canary_used")))
+        reject_reason = str(row.get("canary_reject_reason") or "")
+        if reject_reason:
+            reject_counter[reject_reason] += 1
         if str(row.get("selected_controller") or "") not in {
             "policy_baseline",
             "policy_plus_wm_rerank",
@@ -229,8 +250,18 @@ def _routing_trace_summary(rows: list[dict[str, Any]], *, policy_id: str) -> dic
             {"controller_id": controller_id, "count": int(count), "ratio": float(count) / max(1, total)}
             for controller_id, count in sorted(selection_counter.items(), key=lambda item: (-item[1], item[0]))
         ],
+        "final_controller_distribution": [
+            {"controller_id": controller_id, "count": int(count), "ratio": float(count) / max(1, total)}
+            for controller_id, count in sorted(final_controller_counter.items(), key=lambda item: (-item[1], item[0]))
+        ],
         "guard_trigger_rate": float(guard_count) / max(1, total),
         "fallback_rate": float(fallback_count) / max(1, total),
+        "canary_eligible_rate": float(canary_eligible_count) / max(1, total),
+        "canary_usage_rate": float(canary_used_count) / max(1, total),
+        "canary_reject_reason_distribution": [
+            {"reason": reason, "count": int(count), "ratio": float(count) / max(1, total)}
+            for reason, count in sorted(reject_counter.items(), key=lambda item: (-item[1], item[0]))
+        ],
         "invalid_routing_incidents": int(invalid_incidents),
     }
 
@@ -251,6 +282,7 @@ def run_router_inference_smoke(
     router_cfg = routing_cfg.get("router") if isinstance(routing_cfg.get("router"), dict) else {}
     learned_cfg = routing_cfg.get("learned_router") if isinstance(routing_cfg.get("learned_router"), dict) else {}
     rule_guard_cfg = routing_cfg.get("rule_guard") if isinstance(routing_cfg.get("rule_guard"), dict) else {}
+    canary_cfg = routing_cfg.get("canary") if isinstance(routing_cfg.get("canary"), dict) else {}
     output_cfg = cfg.get("output") if isinstance(cfg.get("output"), dict) else {}
 
     chosen_run_id = str(run_id or _now_stamp())
@@ -270,7 +302,7 @@ def run_router_inference_smoke(
     states = collect_sample_states(seed=seed, max_states=max_states, max_steps=max_states * 2)
 
     mode_summaries: list[dict[str, Any]] = []
-    for mode in ("rule", "learned", "learned_with_rule_guard"):
+    for mode in ("rule", "learned", "learned_with_rule_guard", "canary_learned_router"):
         trace_path = run_dir / f"routing_trace_{mode}.jsonl"
         controller = AdaptiveHybridController(
             name=f"hybrid_controller_{mode}",
@@ -282,6 +314,7 @@ def run_router_inference_smoke(
             learned_router_checkpoint=checkpoint_path,
             learned_router_config=learned_cfg,
             rule_guard_config=rule_guard_cfg,
+            canary_config=canary_cfg,
             search_max_branch=_safe_int(search_cfg.get("max_branch"), 80),
             search_max_depth=_safe_int(search_cfg.get("max_depth"), 2),
             search_time_budget_ms=_safe_float(search_cfg.get("time_budget_ms"), 15.0),
@@ -335,6 +368,7 @@ def run_router_inference_smoke(
                     mode=str(row.get("router_mode") or ""),
                     count=int(row.get("decision_count") or 0),
                     guard=float(row.get("guard_trigger_rate") or 0.0),
+                    canary=float(row.get("canary_usage_rate") or 0.0),
                     invalid=int(row.get("invalid_routing_incidents") or 0),
                 )
                 for row in mode_summaries
@@ -461,26 +495,40 @@ def _promotion_payload(summary_rows: list[dict[str, Any]], *, checkpoint_id: str
     rule_row = _pick_summary_row(summary_rows, "hybrid_controller_rule")
     guarded_row = _pick_summary_row(summary_rows, "hybrid_controller_learned_with_rule_guard")
     learned_row = _pick_summary_row(summary_rows, "hybrid_controller_learned")
+    canary_row = _pick_summary_row(summary_rows, "hybrid_controller_canary_learned_router")
     rule_score = _safe_float(rule_row.get("mean_total_score"), 0.0)
     guarded_score = _safe_float(guarded_row.get("mean_total_score"), 0.0)
     learned_score = _safe_float(learned_row.get("mean_total_score"), 0.0)
-    recommend_review = guarded_score >= (rule_score - 1e-6)
+    canary_score = _safe_float(canary_row.get("mean_total_score"), 0.0)
+    recommendation_policy = "hybrid_controller_learned_with_rule_guard"
+    candidate_score = guarded_score
     reasons = []
-    if guarded_score >= rule_score:
+    if canary_row and canary_score >= (rule_score - 1e-6):
+        recommendation_policy = "hybrid_controller_canary_learned_router"
+        candidate_score = canary_score
+        reasons.append("canary router matches or exceeds rule router mean_total_score")
+    elif guarded_score >= (rule_score - 1e-6):
         reasons.append("guarded router matches or exceeds rule router mean_total_score")
     else:
         reasons.append("guarded router does not exceed rule router mean_total_score")
     if learned_score < rule_score:
         reasons.append("unguarded learned router underperforms rule router")
+    if canary_row and canary_score < rule_score:
+        reasons.append("canary router does not exceed rule router mean_total_score")
+    recommend_review = candidate_score >= (rule_score - 1e-6)
     return {
-        "schema": "p52_learned_router_promotion_decision_v1",
+        "schema": "p56_learned_router_promotion_decision_v1",
         "generated_at": _now_iso(),
         "checkpoint_id": checkpoint_id,
-        "candidate_policy": "hybrid_controller_learned_with_rule_guard",
+        "candidate_policy": recommendation_policy,
         "champion_policy": "hybrid_controller_rule",
-        "candidate_score": guarded_score,
+        "candidate_score": candidate_score,
         "champion_score": rule_score,
-        "score_delta": guarded_score - rule_score,
+        "score_delta": candidate_score - rule_score,
+        "guarded_score": guarded_score,
+        "canary_score": canary_score,
+        "learned_score": learned_score,
+        "deployment_mode_recommendation": recommendation_policy.replace("hybrid_controller_", ""),
         "recommendation": ("promotion_review" if recommend_review else "observe"),
         "recommend_promotion": bool(recommend_review),
         "reasons": reasons,
@@ -506,6 +554,7 @@ def run_learned_router_ablation(
     router_cfg = routing_cfg.get("router") if isinstance(routing_cfg.get("router"), dict) else {}
     learned_cfg = routing_cfg.get("learned_router") if isinstance(routing_cfg.get("learned_router"), dict) else {}
     rule_guard_cfg = routing_cfg.get("rule_guard") if isinstance(routing_cfg.get("rule_guard"), dict) else {}
+    canary_cfg = routing_cfg.get("canary") if isinstance(routing_cfg.get("canary"), dict) else {}
     arena_cfg = cfg.get("arena_compare") if isinstance(cfg.get("arena_compare"), dict) else {}
     triage_cfg = cfg.get("triage") if isinstance(cfg.get("triage"), dict) else {}
     output_cfg = cfg.get("output") if isinstance(cfg.get("output"), dict) else {}
@@ -566,18 +615,23 @@ def run_learned_router_ablation(
         )
     checkpoint_id = str(checkpoint_id_override or train_summary.get("checkpoint_id") or "")
     if checkpoint_id:
-        update_checkpoint_status(
-            checkpoint_id,
-            to_status="smoke_passed",
-            reason="p52_learned_router_train_completed",
-            operator="p52_learned_router_eval",
-            refs={"metrics_ref": str(train_summary.get("metrics_json") or "")},
-        )
+        metrics_ref = str(train_summary.get("metrics_json") or "")
+        if checkpoint_id_override or checkpoint_path or train_manifest_path:
+            if metrics_ref:
+                update_checkpoint(checkpoint_id, {"metrics_ref": metrics_ref})
+        else:
+            update_checkpoint_status(
+                checkpoint_id,
+                to_status="smoke_passed",
+                reason="p52_learned_router_train_completed",
+                operator="p52_learned_router_eval",
+                refs={"metrics_ref": metrics_ref},
+            )
 
     inference_summary = run_router_inference_smoke(
         checkpoint_path=str(train_summary.get("best_checkpoint") or ""),
         config_path=config_path,
-        out_dir=repo_root / "docs" / "artifacts" / "p52" / "router_inference",
+        out_dir=(repo_root / str((output_cfg.get("router_inference_root") or "docs/artifacts/p52/router_inference"))).resolve(),
         run_id=f"{chosen_run_id}-inference",
         seed=str((cfg.get("inference_smoke") or {}).get("seed") or "AAAAAAA"),
         max_states=max(4, _safe_int((cfg.get("inference_smoke") or {}).get("max_states"), 8)),
@@ -643,6 +697,7 @@ def run_learned_router_ablation(
             "learned_router_checkpoint": str(train_summary.get("best_checkpoint") or ""),
             "learned_router_config": learned_cfg,
             "rule_guard_config": rule_guard_cfg,
+            "canary_config": canary_cfg,
             "search_max_branch": _safe_int(search_cfg.get("max_branch"), 80),
             "search_max_depth": _safe_int(search_cfg.get("max_depth"), 2),
             "search_time_budget_ms": _safe_float(search_cfg.get("time_budget_ms"), 15.0),
@@ -650,6 +705,23 @@ def run_learned_router_ablation(
             "wm_uncertainty_penalty": _safe_float(wm_cfg.get("uncertainty_penalty"), 0.55),
             "trace_path": str((router_trace_root / "hybrid_controller_learned_with_rule_guard.jsonl").resolve()),
             "trace_context": {"pipeline": "p52", "run_id": chosen_run_id, "router_mode": "learned_with_rule_guard"},
+        },
+        "hybrid_controller_canary_learned_router": {
+            "model_path": model_path,
+            "world_model_checkpoint": wm_checkpoint,
+            "router_mode": "canary_learned_router",
+            "router_config": router_cfg,
+            "learned_router_checkpoint": str(train_summary.get("best_checkpoint") or ""),
+            "learned_router_config": learned_cfg,
+            "rule_guard_config": rule_guard_cfg,
+            "canary_config": canary_cfg,
+            "search_max_branch": _safe_int(search_cfg.get("max_branch"), 80),
+            "search_max_depth": _safe_int(search_cfg.get("max_depth"), 2),
+            "search_time_budget_ms": _safe_float(search_cfg.get("time_budget_ms"), 15.0),
+            "wm_horizon": _safe_int(wm_cfg.get("horizon"), 1),
+            "wm_uncertainty_penalty": _safe_float(wm_cfg.get("uncertainty_penalty"), 0.55),
+            "trace_path": str((router_trace_root / "hybrid_controller_canary_learned_router.jsonl").resolve()),
+            "trace_context": {"pipeline": "p52", "run_id": chosen_run_id, "router_mode": "canary_learned_router"},
         },
     }
     write_json(run_dir / "policy_assist_map.json", policy_assist_map)
@@ -736,35 +808,45 @@ def run_learned_router_ablation(
         "router_inference_summary_json": str(inference_summary.get("routing_summary_json") or ""),
         "controller_registry_json": str((run_dir / "controller_registry.json").resolve()),
         "guarded_policy": "hybrid_controller_learned_with_rule_guard",
+        "canary_policy": "hybrid_controller_canary_learned_router",
         "rule_policy": "hybrid_controller_rule",
     }
     write_json(run_dir / "run_manifest.json", run_manifest)
 
     triage_dir = (repo_root / str(triage_cfg.get("output_artifacts_root") or "docs/artifacts/p52/triage")).resolve() / chosen_run_id
     triage_summary = run_regression_triage(current_run_dir=run_dir, out_dir=triage_dir)
+    reused_checkpoint = bool(checkpoint_id_override or checkpoint_path or train_manifest_path)
     if checkpoint_id:
-        update_checkpoint_status(
-            checkpoint_id,
-            to_status="arena_passed",
-            reason="p52_arena_ablation_completed",
-            operator="p52_learned_router_eval",
-            refs={
-                "arena_ref": str((run_dir / "summary_table.json").resolve()),
-                "triage_ref": str(triage_summary.get("triage_report_json") or ""),
-            },
-        )
-        if bool(promotion_payload.get("recommend_promotion")):
+        arena_refs = {
+            "arena_ref": str((run_dir / "summary_table.json").resolve()),
+            "triage_ref": str(triage_summary.get("triage_report_json") or ""),
+        }
+        if reused_checkpoint:
+            update_checkpoint(checkpoint_id, arena_refs)
+        else:
             update_checkpoint_status(
                 checkpoint_id,
-                to_status="promotion_review",
-                reason="p52_promotion_decision_ready",
+                to_status="arena_passed",
+                reason="p52_arena_ablation_completed",
                 operator="p52_learned_router_eval",
-                refs={
-                    "arena_ref": str((run_dir / "summary_table.json").resolve()),
-                    "triage_ref": str(triage_summary.get("triage_report_json") or ""),
-                    "promotion_decision": str((run_dir / "promotion_decision.json").resolve()),
-                },
+                refs=arena_refs,
             )
+        if bool(promotion_payload.get("recommend_promotion")):
+            promotion_refs = {
+                **arena_refs,
+                "promotion_decision": str((run_dir / "promotion_decision.json").resolve()),
+                "deployment_mode_recommendation": str(promotion_payload.get("deployment_mode_recommendation") or ""),
+            }
+            if reused_checkpoint:
+                update_checkpoint(checkpoint_id, promotion_refs)
+            else:
+                update_checkpoint_status(
+                    checkpoint_id,
+                    to_status="promotion_review",
+                    reason="p52_promotion_decision_ready",
+                    operator="p52_learned_router_eval",
+                    refs=promotion_refs,
+                )
 
     registry_snapshot_path = run_dir / "checkpoint_registry_snapshot.json"
     promotion_queue_path = run_dir / "promotion_queue.json"

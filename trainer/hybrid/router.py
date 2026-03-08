@@ -64,6 +64,23 @@ def _key_feature_values(features: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def is_high_risk_slice(features: dict[str, Any], *, config: dict[str, Any] | None = None) -> bool:
+    cfg = dict(config or {})
+    risky_stages = {
+        str(item).strip().lower()
+        for item in (cfg.get("high_risk_stages") or ["late"])
+        if str(item).strip()
+    }
+    risky_resource_pressures = {
+        str(item).strip().lower()
+        for item in (cfg.get("high_risk_resource_pressures") or ["high"])
+        if str(item).strip()
+    }
+    stage = str(features.get("slice_stage") or "unknown").strip().lower()
+    resource_pressure = str(features.get("slice_resource_pressure") or "unknown").strip().lower()
+    return stage in risky_stages or resource_pressure in risky_resource_pressures
+
+
 class RuleBasedHybridRouter:
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         cfg = dict(config or {})
@@ -290,22 +307,46 @@ class LearnedHybridRouter:
 def summarize_routing_trace(rows: list[dict[str, Any]]) -> dict[str, Any]:
     selected_counter: Counter[str] = Counter()
     reason_counter: Counter[str] = Counter()
+    final_controller_counter: Counter[str] = Counter()
+    canary_reject_counter: Counter[str] = Counter()
+    guard_count = 0
+    canary_eligible_count = 0
+    canary_used_count = 0
     for row in rows:
         if not isinstance(row, dict):
             continue
         selected_counter[str(row.get("selected_controller") or "unknown")] += 1
         reason_counter[str(row.get("routing_reason") or "unknown")] += 1
+        final_controller_counter[str(row.get("final_controller") or row.get("selected_controller") or "unknown")] += 1
+        guard_count += int(bool(row.get("guard_triggered")))
+        canary_eligible_count += int(bool(row.get("canary_eligible")))
+        canary_used_count += int(bool(row.get("canary_used")))
+        reject_reason = str(row.get("canary_reject_reason") or "")
+        if reject_reason:
+            canary_reject_counter[reject_reason] += 1
+    total = max(1, sum(selected_counter.values()))
     return {
         "schema": "p48_routing_summary_v1",
         "generated_at": _now_iso(),
         "decision_count": int(sum(selected_counter.values())),
         "controller_selection_distribution": [
-            {"controller_id": key, "count": int(value), "ratio": float(value) / max(1, sum(selected_counter.values()))}
+            {"controller_id": key, "count": int(value), "ratio": float(value) / total}
             for key, value in sorted(selected_counter.items(), key=lambda kv: (-kv[1], kv[0]))
+        ],
+        "final_controller_distribution": [
+            {"controller_id": key, "count": int(value), "ratio": float(value) / total}
+            for key, value in sorted(final_controller_counter.items(), key=lambda kv: (-kv[1], kv[0]))
         ],
         "top_routing_reasons": [
             {"routing_reason": key, "count": int(value), "ratio": float(value) / max(1, sum(reason_counter.values()))}
             for key, value in sorted(reason_counter.items(), key=lambda kv: (-kv[1], kv[0]))[:10]
+        ],
+        "guard_trigger_rate": float(guard_count) / total,
+        "canary_eligible_rate": float(canary_eligible_count) / total,
+        "canary_usage_rate": float(canary_used_count) / total,
+        "canary_reject_reason_distribution": [
+            {"reason": key, "count": int(value), "ratio": float(value) / total}
+            for key, value in sorted(canary_reject_counter.items(), key=lambda kv: (-kv[1], kv[0]))
         ],
     }
 
