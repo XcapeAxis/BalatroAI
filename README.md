@@ -8,7 +8,7 @@
 [![Workflow](https://img.shields.io/badge/Workflow-mainline--only-2EA44F)](scripts/git_sync.ps1)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Windows Bootstrap](https://img.shields.io/badge/Windows_Bootstrap-P58_ready-6F42C1)](docs/P58_WINDOWS_BOOTSTRAP.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P58-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P59-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](docs/P58_WINDOWS_BOOTSTRAP.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -23,6 +23,7 @@
   <a href="docs/EXPERIMENTS_P22.md">P22 Docs</a> ·
   <a href="docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md">P57 Docs</a> ·
   <a href="docs/P58_WINDOWS_BOOTSTRAP.md">P58 Docs</a>
+  <a href="docs/P59_AGENTS_STANDARDIZATION_AND_AUTONOMY_ENTRY.md">P59 Docs</a>
 </p>
 
 BalatroAI 的目标很明确：把 Balatro 相关实验整理成一套可复现、可追踪、可持续运行的工程系统。  
@@ -154,6 +155,38 @@ Primary references:
 - [docs/P50_CUDA_ENVIRONMENT.md](docs/P50_CUDA_ENVIRONMENT.md)
 - [docs/P50_GPU_TROUBLESHOOTING.md](docs/P50_GPU_TROUBLESHOOTING.md)
 
+## AGENTS & Autonomy (P59)
+
+P59 standardizes the repository rule layer for AI coding agents and unattended local runs.  
+The root `AGENTS.md` defines repo-wide defaults, while `trainer/AGENTS.md`, `sim/AGENTS.md`, `scripts/AGENTS.md`, `docs/AGENTS.md`, and `configs/AGENTS.md` keep only the local rules that matter in those directories.
+
+Main entry:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_autonomy.ps1 -Quick
+powershell -ExecutionPolicy Bypass -File scripts\run_autonomy.ps1 -Overnight
+powershell -ExecutionPolicy Bypass -File scripts\run_autonomy.ps1 -ResumeLatest
+```
+
+What this entry does:
+
+- reads AGENTS + decision policy before starting work
+- inspects attention queue, blocked campaigns, doctor/bootstrap state, and latest summaries
+- decides continue / resume / block instead of silently pushing through
+- writes `docs/artifacts/p59/latest_autonomy_entry.json`
+- refreshes `docs/artifacts/morning_summary/latest.md`
+
+Human-gate boundaries:
+
+- the system does not recreate environments, install dependencies, rewrite git history, or switch live promoted checkpoints on its own
+- unresolved blocking attention items stop autonomy rather than being treated as warnings
+- detailed action classes remain in `docs/DECISION_POLICY.md`
+
+Primary references:
+
+- [docs/P59_AGENTS_STANDARDIZATION_AND_AUTONOMY_ENTRY.md](docs/P59_AGENTS_STANDARDIZATION_AND_AUTONOMY_ENTRY.md)
+- [docs/DECISION_POLICY.md](docs/DECISION_POLICY.md)
+
 ## Architecture Overview
 
 下图展示真实游戏、模拟器、训练、评测与运维之间的主线关系。  
@@ -193,6 +226,7 @@ Key docs behind this flow:
 - [docs/P53_BACKGROUND_EXECUTION_AND_OPS_UI.md](docs/P53_BACKGROUND_EXECUTION_AND_OPS_UI.md)
 - [docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md](docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md)
 - [docs/P58_WINDOWS_BOOTSTRAP.md](docs/P58_WINDOWS_BOOTSTRAP.md)
+- [docs/P59_AGENTS_STANDARDIZATION_AND_AUTONOMY_ENTRY.md](docs/P59_AGENTS_STANDARDIZATION_AND_AUTONOMY_ENTRY.md)
 
 ## Capability Snapshot
 
@@ -202,9 +236,9 @@ This table is the fastest summary of the repository surface.
 | Layer | Simulator | Training | Evaluation | Ops |
 |---|---|---|---|---|
 | Core value | Oracle parity, replay fixtures, canonical traces | RL, world model, hybrid controller, learned router | Arena, triage, calibration, guard, canary | Bootstrap, doctor, registry, campaigns, dashboard, ops UI |
-| Default entry | `scripts\run_regressions.ps1` | `scripts\run_p22.ps1 -Quick` | `scripts\run_p22.ps1 -RunP56` | `scripts\doctor.ps1`, `scripts\run_p22.ps1 -RunP57` |
-| Main artifacts | `sim/tests/fixtures_runtime/*` | `docs/artifacts/p22/*` | `docs/artifacts/p56/*` | `docs/artifacts/p58/*`, `dashboard`, `attention_required`, `morning_summary` |
-| Core docs | `docs/SIM_ALIGNMENT_STATUS.md` | `docs/EXPERIMENTS_P22.md` | `docs/P56_ROUTER_CALIBRATION_AND_CANARY.md` | `docs/P53_BACKGROUND_EXECUTION_AND_OPS_UI.md`, `docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md`, `docs/P58_WINDOWS_BOOTSTRAP.md` |
+| Default entry | `scripts\run_regressions.ps1` | `scripts\run_p22.ps1 -Quick` | `scripts\run_p22.ps1 -RunP56` | `scripts\doctor.ps1`, `scripts\run_p22.ps1 -RunP57`, `scripts\run_autonomy.ps1 -Quick` |
+| Main artifacts | `sim/tests/fixtures_runtime/*` | `docs/artifacts/p22/*` | `docs/artifacts/p56/*` | `docs/artifacts/p58/*`, `docs/artifacts/p59/*`, `dashboard`, `attention_required`, `morning_summary` |
+| Core docs | `docs/SIM_ALIGNMENT_STATUS.md` | `docs/EXPERIMENTS_P22.md` | `docs/P56_ROUTER_CALIBRATION_AND_CANARY.md` | `docs/P53_BACKGROUND_EXECUTION_AND_OPS_UI.md`, `docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md`, `docs/P58_WINDOWS_BOOTSTRAP.md`, `docs/P59_AGENTS_STANDARDIZATION_AND_AUTONOMY_ENTRY.md` |
 
 Current milestone anchors:
 
@@ -212,6 +246,7 @@ Current milestone anchors:
 - **P56**: learned-router calibration + guard + canary
 - **P57**: overnight autonomy + attention queue + morning summary
 - **P58**: Windows bootstrap + doctor + environment portability hardening
+- **P59**: AGENTS hierarchy + consistency checks + unified autonomous iteration entry
 
 ## Command Cheat Sheet
 
@@ -229,6 +264,9 @@ If a command is not listed here, it is intentionally pushed down into `docs/EXPE
 | 启动 Ops UI | `powershell -ExecutionPolicy Bypass -File scripts\run_ops_ui.ps1` | localhost console | 本地审查 |
 | 重建 dashboard | `powershell -ExecutionPolicy Bypass -File scripts\run_dashboard.ps1` | `dashboard/latest/index.html` | 汇总最新 artifacts |
 
+| run autonomy quick | `powershell -ExecutionPolicy Bypass -File scripts\run_autonomy.ps1 -Quick` | `docs/artifacts/p59/latest_autonomy_entry.{json,md}` | AGENTS-aware smoke routing |
+| run autonomy overnight | `powershell -ExecutionPolicy Bypass -File scripts\run_autonomy.ps1 -Overnight` | `docs/artifacts/p59/latest_autonomy_entry.{json,md}`, `morning_summary/latest.md` | unattended mainline progression |
+
 ## Current Repository Status
 
 以下内容由脚本自动更新，用于说明当前默认分支与最近门禁状态。  
@@ -245,7 +283,7 @@ This block is intentionally machine-maintained.
 - trend_rows_count: 20115
 - champion: quick_risk_aware (champion)
 - candidate:  (decision: hold)
-- docs_coverage: P15-P58
+- docs_coverage: P15-P59
 <!-- README_STATUS:END -->
 <!-- STATUS:END -->
 
@@ -293,6 +331,9 @@ These paths are the normal inspection surface after a local run.
 | attention queue | `docs/artifacts/attention_required/attention_queue.json` | 查看需要人工介入的事项 |
 | morning summary | `docs/artifacts/morning_summary/latest.md` | 查看夜间运行摘要 |
 
+| autonomy entry | `docs/artifacts/p59/latest_autonomy_entry.json` | inspect the latest continue / resume / block decision |
+| AGENTS consistency | `docs/artifacts/p59/latest_agents_consistency.json` | inspect AGENTS / README / decision policy consistency |
+
 Sample assets:
 
 - [sample_run_log.txt](docs/assets/readme/sample_run_log.txt)
@@ -310,7 +351,7 @@ Treat this as a snapshot, not as the full milestone archive.
 | Simulator | parity + oracle-trace workflows are established | extend mechanic coverage and keep drift visible |
 | Training | RL, world model, hybrid controller, learned router are wired into P22 | deepen budgets and improve cross-lane coupling |
 | Evaluation | arena, triage, calibration, guard, and canary are available | expand slice coverage and larger-budget comparisons |
-| Ops | dashboard, ops UI, campaigns, overnight autonomy, bootstrap, and doctor are shipped | improve blocked-campaign resolution and cross-machine handoff stability |
+| Ops | dashboard, ops UI, campaigns, overnight autonomy, bootstrap, doctor, and AGENTS-aware autonomy entry are shipped | improve blocked-campaign resolution and cross-machine handoff stability |
 
 Roadmap docs:
 
@@ -318,6 +359,7 @@ Roadmap docs:
 - [docs/P56_ROUTER_CALIBRATION_AND_CANARY.md](docs/P56_ROUTER_CALIBRATION_AND_CANARY.md)
 - [docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md](docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md)
 - [docs/P58_WINDOWS_BOOTSTRAP.md](docs/P58_WINDOWS_BOOTSTRAP.md)
+- [docs/P59_AGENTS_STANDARDIZATION_AND_AUTONOMY_ENTRY.md](docs/P59_AGENTS_STANDARDIZATION_AND_AUTONOMY_ENTRY.md)
 
 ## Known Limitations
 
@@ -343,8 +385,9 @@ Do not read everything; pick the lane you need.
 | CUDA environment | [docs/P50_CUDA_ENVIRONMENT.md](docs/P50_CUDA_ENVIRONMENT.md), [docs/P50_GPU_TROUBLESHOOTING.md](docs/P50_GPU_TROUBLESHOOTING.md) |
 | learned router | [docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md](docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md), [docs/P54_LEARNED_ROUTER.md](docs/P54_LEARNED_ROUTER.md), [docs/P56_ROUTER_CALIBRATION_AND_CANARY.md](docs/P56_ROUTER_CALIBRATION_AND_CANARY.md) |
 | campaigns / registry | [docs/P51_CHECKPOINT_REGISTRY_AND_CAMPAIGNS.md](docs/P51_CHECKPOINT_REGISTRY_AND_CAMPAIGNS.md) |
-| ops UI / overnight autonomy | [docs/P53_BACKGROUND_EXECUTION_AND_OPS_UI.md](docs/P53_BACKGROUND_EXECUTION_AND_OPS_UI.md), [docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md](docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md) |
+| ops UI / overnight autonomy | [docs/P53_BACKGROUND_EXECUTION_AND_OPS_UI.md](docs/P53_BACKGROUND_EXECUTION_AND_OPS_UI.md), [docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md](docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md), [docs/P59_AGENTS_STANDARDIZATION_AND_AUTONOMY_ENTRY.md](docs/P59_AGENTS_STANDARDIZATION_AND_AUTONOMY_ENTRY.md) |
 | Windows handoff / new machine setup | [docs/P58_WINDOWS_BOOTSTRAP.md](docs/P58_WINDOWS_BOOTSTRAP.md) |
+| AGENTS / autonomy entry | [docs/P59_AGENTS_STANDARDIZATION_AND_AUTONOMY_ENTRY.md](docs/P59_AGENTS_STANDARDIZATION_AND_AUTONOMY_ENTRY.md), [docs/DECISION_POLICY.md](docs/DECISION_POLICY.md) |
 
 ## License and Contributing
 

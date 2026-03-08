@@ -83,6 +83,15 @@ Each item includes:
 - `artifact_refs`
 - `status`
 
+P59 extends the same queue surface with additional handoff fields:
+
+- `blocking_scope`
+- `related_campaign`
+- `related_checkpoint_ids`
+- `decision_deadline_hint`
+- `suggested_commands`
+- `summary_for_human`
+
 Current high-value categories are promotion, config provenance, environment, regression, and ambiguity.
 
 ## Campaign Stop / Resume Semantics
@@ -118,6 +127,23 @@ Every overnight run can end with a compact summary built from the latest artifac
 - attention queue
 - dashboard summary
 - latest P22 summary rows
+
+P59 keeps the same summary surface and adds a unified autonomy entry that refreshes morning summary even when a run stops on a human gate.
+
+## P59 Alignment
+
+P59 does not replace the overnight protocol. It standardizes the rule layer and adds a single entrypoint:
+
+- `scripts/run_autonomy.ps1 -Quick`
+- `scripts/run_autonomy.ps1 -Overnight`
+- `scripts/run_autonomy.ps1 -ResumeLatest`
+
+This entrypoint reuses:
+
+- the same decision policy
+- the same attention queue
+- the same morning summary artifacts
+- the same campaign stop/resume semantics
 
 Outputs:
 

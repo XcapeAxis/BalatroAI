@@ -45,6 +45,9 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | P56 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP56` | runs `p56_router_calibration_smoke` with multi-seed benchmark, calibration, guard tuning, canary eval, registry refs, promotion queue refresh, and dashboard build |
 | P57 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP57` | runs `p57_overnight_smoke` with decision-policy audit, attention queue, blocked-stage validation, morning summary, dashboard build, and resumable campaign state |
 | Overnight autonomy | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Overnight` | runs `p57_overnight_nightly` with the overnight stage template and resume-aware human-gate handling |
+| Autonomy entry dry run | `powershell -ExecutionPolicy Bypass -File scripts\run_autonomy.ps1 -DryRun` | inspects AGENTS, decision policy, campaign state, and attention queue before selecting continue / resume / block |
+| Autonomy entry quick | `powershell -ExecutionPolicy Bypass -File scripts\run_autonomy.ps1 -Quick` | runs the unified P59 autonomy entry and writes `docs/artifacts/p59/latest_autonomy_entry.{json,md}` |
+| Autonomy entry overnight | `powershell -ExecutionPolicy Bypass -File scripts\run_autonomy.ps1 -Overnight` | runs the unattended autonomy lane with the same P57 policy and handoff artifacts |
 | Windows bootstrap | `powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Mode auto -SkipSmoke` | creates or repairs the standard CPU/CUDA envs before P22 |
 | Environment doctor | `powershell -ExecutionPolicy Bypass -File scripts\doctor.ps1` | writes machine-readable environment readiness reports used by P22/P57 |
 | P53 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP53` | runs `p53_background_ops_smoke` with background-mode validation, window-mode recording, campaign state, ops-ui metadata, promotion queue refresh, and dashboard build |
@@ -84,6 +87,27 @@ Summary/runtime fields added for P58:
 - `training_env_name`
 
 This keeps new-machine bring-up inside the same P22 workflow instead of requiring manual interpreter selection.
+
+## P59 AGENTS / Autonomy Integration
+
+P59 adds repo-rule awareness to the same orchestration stack rather than building a second workflow.
+
+Key surfaces:
+
+- root + subdirectory `AGENTS.md`
+- `docs/DECISION_POLICY.md`
+- `configs/runtime/decision_policy.yaml`
+- `scripts/run_autonomy.ps1`
+
+Relevant summary/runtime fields:
+
+- `agents_root_present`
+- `autonomy_entry_ref`
+- `decision_policy_path`
+- `attention_queue_path`
+- `morning_summary_path`
+
+This keeps P22, P57 overnight autonomy, dashboard, and Ops UI on one shared control plane.
 
 ## Config Structure (`configs/experiments/p22.yaml`)
 

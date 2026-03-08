@@ -28,15 +28,16 @@
 | P56 | Learned-router calibration + multi-seed benchmark + canary promotion mode | done |
 | P57 | Overnight autonomy protocol + attention queue + morning summary | done |
 | P58 | Windows bootstrap + portability hardening + environment doctor | done |
+| P59 | AGENTS standardization + autonomous iteration entry | done |
 
-## Current Focus: Post-P58 Quality and Durability
+## Current Focus: Post-P59 Quality and Durability
 
 1. Maintain YAML/JSON sidecar parity — run `sync_config_sidecars.ps1` after every YAML edit.
 2. Expand P56 nightly budget, calibration slice coverage, and canary evaluation depth.
-3. Harden P57 blocked-campaign resolution flow and morning-summary prioritization.
+3. Harden P57/P59 blocked-campaign resolution flow and morning-summary prioritization.
 4. Harden P58 cross-machine handoff flow and reduce remaining Windows-specific assumptions.
 5. Harden P53 background-mode validation beyond smoke.
-6. Keep config provenance, readiness guarding, dashboard generation, ops-audit logging, and autonomy policy as default night-ops safety rails.
+6. Keep config provenance, readiness guarding, AGENTS consistency, dashboard generation, ops-audit logging, and autonomy policy as default night-ops safety rails.
 
 ## Near-Term After P58
 

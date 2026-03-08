@@ -97,6 +97,14 @@ P22 integration points:
 - `trainer/experiments/orchestrator.py`
 - `trainer/experiments/report.py`
 
+P59 extends the same operator surface with AGENTS/autonomy state:
+
+- `scripts/run_autonomy.ps1`
+- `trainer/autonomy/run_autonomy.py`
+- `trainer/autonomy/agents_consistency_check.py`
+- dashboard autonomy summary cards
+- Ops UI autonomy overview / attention queue / morning summary links
+
 P53 experiment rows:
 
 - `p53_background_ops_smoke`
