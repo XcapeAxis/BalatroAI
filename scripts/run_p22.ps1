@@ -29,6 +29,9 @@ param(
   [string]$Only = "",
   [string]$Exclude = "",
   [string]$TrainingPython = "",
+  [ValidateSet("auto", "cpu", "cuda")]
+  [string]$SetupMode = "auto",
+  [switch]$SkipDoctor,
   [ValidateSet("visible", "minimized", "hidden", "offscreen", "restore")]
   [string]$WindowMode = "",
   [ValidateSet("visible", "minimized", "hidden", "offscreen", "restore")]
@@ -47,6 +50,57 @@ $PSNativeCommandUseErrorActionPreference = $false
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $ProjectRoot
 
+$env:BALATRO_BOOTSTRAP_STATE = ""
+$env:BALATRO_DOCTOR_REPORT = ""
+$env:BALATRO_SETUP_MODE = [string]$SetupMode
+$env:BALATRO_SETUP_MODE_REQUESTED = [string]$SetupMode
+$env:BALATRO_DOCTOR_RECOMMENDED_MODE = ""
+$env:BALATRO_TRAIN_ENV_SOURCE = ""
+$env:BALATRO_TRAIN_ENV_NAME = ""
+
+$doctorPayload = $null
+$doctorScript = Join-Path $ProjectRoot "scripts\\doctor.ps1"
+if (-not $SkipDoctor -and (Test-Path $doctorScript)) {
+  $doctorArgs = @(
+    "-ExecutionPolicy", "Bypass",
+    "-File", $doctorScript,
+    "-Mode", $SetupMode,
+    "-Emit", "json"
+  )
+  if ($TrainingPython.Trim()) { $doctorArgs += @("-ExplicitPython", $TrainingPython) }
+  $doctorJson = (& powershell @doctorArgs | Out-String).Trim()
+  if (-not $doctorJson) {
+    throw "[P22] doctor returned empty output"
+  }
+  try {
+    $doctorPayload = $doctorJson | ConvertFrom-Json
+  } catch {
+    throw ("[P22] failed to parse doctor output: " + $_.Exception.Message)
+  }
+  if ($doctorPayload.PSObject.Properties["json_path"] -and $doctorPayload.json_path) {
+    $env:BALATRO_DOCTOR_REPORT = [string]$doctorPayload.json_path
+  }
+  if ($doctorPayload.PSObject.Properties["bootstrap_state_path"] -and $doctorPayload.bootstrap_state_path) {
+    $env:BALATRO_BOOTSTRAP_STATE = [string]$doctorPayload.bootstrap_state_path
+  }
+  if ($doctorPayload.PSObject.Properties["recommended_mode"] -and $doctorPayload.recommended_mode) {
+    $env:BALATRO_DOCTOR_RECOMMENDED_MODE = [string]$doctorPayload.recommended_mode
+    if ($SetupMode -eq "auto") {
+      if ([string]$doctorPayload.recommended_mode -eq "cuda_mainline") {
+        $env:BALATRO_SETUP_MODE = "cuda"
+      } elseif ([string]$doctorPayload.recommended_mode -eq "cpu_safe") {
+        $env:BALATRO_SETUP_MODE = "cpu"
+      }
+    }
+  }
+  Write-Host ("[P22] doctor_status=" + [string]$doctorPayload.status + " recommended_mode=" + [string]$doctorPayload.recommended_mode + " report=" + [string]$doctorPayload.json_path)
+  if ([string]$doctorPayload.status -eq "blocked") {
+    $nextSteps = @($doctorPayload.next_steps) | Where-Object { $_ }
+    $hint = if ($nextSteps.Count -gt 0) { " Next: " + ($nextSteps -join " | ") } else { "" }
+    throw ("[P22] doctor blocked this run. Report: " + [string]$doctorPayload.json_path + "." + $hint)
+  }
+}
+
 $resolveTrainingPythonScript = Join-Path $ProjectRoot "scripts\\resolve_training_python.ps1"
 $resolverArgs = @(
   "-ExecutionPolicy", "Bypass",
@@ -54,7 +108,7 @@ $resolverArgs = @(
   "-Emit", "json"
 )
 if ($TrainingPython.Trim()) { $resolverArgs += @("-ExplicitPython", $TrainingPython) }
-if ($RunP50 -or $RunP52 -or $RunP54 -or $RunP56 -or $RunP57 -or $Overnight) { $resolverArgs += "-RequireCuda" }
+if ($RunP49 -or $RunP50) { $resolverArgs += "-RequireCuda" }
 $resolverJson = (& powershell @resolverArgs | Out-String).Trim()
 if (-not $resolverJson) {
   throw "[P22] training python resolver returned empty output"
@@ -65,6 +119,8 @@ if (-not $py.Trim()) {
   throw "[P22] training python resolver did not return a python path"
 }
 $env:BALATRO_TRAIN_PYTHON = $py
+$env:BALATRO_TRAIN_ENV_SOURCE = [string]$resolver.selection_reason
+$env:BALATRO_TRAIN_ENV_NAME = [string]$resolver.selected.env_name
 $env:BALATRO_READINESS_REPORT = ""
 $env:BALATRO_WINDOW_MODE = ""
 $env:BALATRO_WINDOW_MODE_REQUESTED = ""
@@ -229,14 +285,26 @@ if ($Quick) {
       "p46_imagination_smoke",
       "p47_wm_search_smoke",
       "p48_hybrid_controller_smoke",
-      "p49_gpu_mainline_smoke",
-      "p50_gpu_validation_smoke",
       "p51_registry_smoke",
       "p54_learned_router_smoke",
       "p56_router_calibration_smoke",
       "p57_overnight_smoke",
       "p53_background_ops_smoke"
     )
+    $doctorRecommendedMode = if ($doctorPayload -and $doctorPayload.PSObject.Properties["recommended_mode"]) { [string]$doctorPayload.recommended_mode } else { "" }
+    $doctorReadinessStatus = if ($doctorPayload -and $doctorPayload.PSObject.Properties["live_readiness"]) { [string]$doctorPayload.live_readiness.status } else { "" }
+    if ($doctorRecommendedMode -eq "cuda_mainline") {
+      $quickIds += @(
+        "p49_gpu_mainline_smoke",
+        "p50_gpu_validation_smoke"
+      )
+    } else {
+      Write-Host "[P22] quick mode: skipping CUDA-only smoke rows because doctor did not report cuda_mainline readiness"
+    }
+    if ($doctorReadinessStatus -ne "ready") {
+      $quickIds = @($quickIds | Where-Object { $_ -ne "p53_background_ops_smoke" })
+      Write-Host "[P22] quick mode: skipping P53 background ops smoke because live readiness is not ready"
+    }
     if ($IncludeLegacy -or $LegacyOnly) {
       $quickIds += @("legacy_bc_dagger_probe")
     }
@@ -288,8 +356,13 @@ $requiresRealBackend = $RunP53 -or (@($selectedExperimentIds | Where-Object { $_
 Write-Host ("[P22] repo_root: " + $ProjectRoot)
 Write-Host ("[P22] python: " + $py)
 Write-Host ("[P22] python_env_type: " + [string]$resolver.selected.env_type)
+Write-Host ("[P22] python_env_name: " + [string]$resolver.selected.env_name)
+Write-Host ("[P22] python_env_source: " + [string]$resolver.selection_reason)
 Write-Host ("[P22] python_torch: " + [string]$resolver.selected.torch_version)
 Write-Host ("[P22] python_cuda: " + [string]$resolver.selected.cuda_available)
+if ($env:BALATRO_DOCTOR_REPORT) { Write-Host ("[P22] doctor_report=" + $env:BALATRO_DOCTOR_REPORT) }
+if ($env:BALATRO_BOOTSTRAP_STATE) { Write-Host ("[P22] bootstrap_state=" + $env:BALATRO_BOOTSTRAP_STATE) }
+Write-Host ("[P22] setup_mode=" + [string]$env:BALATRO_SETUP_MODE + " requested=" + [string]$env:BALATRO_SETUP_MODE_REQUESTED)
 Write-Host ("[P22] cmd: " + $py + " " + ($args -join " "))
 
 # P55: run sidecar sync/check before the experiment run.
@@ -438,9 +511,19 @@ if (Test-Path $runsRoot) {
             $morningSummaryProp = $row.PSObject.Properties["morning_summary_path"]
             $decisionPolicyProp = $row.PSObject.Properties["decision_policy_path"]
             $humanGateProp = $row.PSObject.Properties["human_gate_triggered"]
+            $doctorReportProp = $row.PSObject.Properties["doctor_report_path"]
+            $bootstrapStateProp = $row.PSObject.Properties["bootstrap_state_path"]
+            $setupModeProp = $row.PSObject.Properties["setup_mode"]
+            $trainEnvSourceProp = $row.PSObject.Properties["training_env_source"]
+            $trainEnvNameProp = $row.PSObject.Properties["training_env_name"]
             if ($attentionQueueProp -and $attentionQueueProp.Value) { Write-Host ("[P22] attention_queue=" + [string]$attentionQueueProp.Value) }
             if ($morningSummaryProp -and $morningSummaryProp.Value) { Write-Host ("[P22] morning_summary=" + [string]$morningSummaryProp.Value) }
             if ($decisionPolicyProp -and $decisionPolicyProp.Value) { Write-Host ("[P22] decision_policy=" + [string]$decisionPolicyProp.Value) }
+            if ($doctorReportProp -and $doctorReportProp.Value) { Write-Host ("[P22] doctor_report=" + [string]$doctorReportProp.Value) }
+            if ($bootstrapStateProp -and $bootstrapStateProp.Value) { Write-Host ("[P22] bootstrap_state=" + [string]$bootstrapStateProp.Value) }
+            if ($setupModeProp -and $setupModeProp.Value) { Write-Host ("[P22] setup_mode=" + [string]$setupModeProp.Value) }
+            if ($trainEnvSourceProp -and $trainEnvSourceProp.Value) { Write-Host ("[P22] training_env_source=" + [string]$trainEnvSourceProp.Value) }
+            if ($trainEnvNameProp -and $trainEnvNameProp.Value) { Write-Host ("[P22] training_env_name=" + [string]$trainEnvNameProp.Value) }
             if ($humanGateProp) { Write-Host ("[P22] human_gate_triggered=" + [string]$humanGateProp.Value) }
           }
         }

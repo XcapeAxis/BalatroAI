@@ -61,7 +61,7 @@ if (-not [string]::IsNullOrWhiteSpace($trainingResolverJson)) {
   try {
     $TrainingPythonInfo = $trainingResolverJson | ConvertFrom-Json
     $env:BALATRO_TRAIN_PYTHON = [string]$TrainingPythonInfo.selected.python
-    Write-Host ("[train-python] selected=" + [string]$TrainingPythonInfo.selected.python + " env_type=" + [string]$TrainingPythonInfo.selected.env_type + " cuda=" + [string]$TrainingPythonInfo.selected.cuda_available)
+    Write-Host ("[train-python] selected=" + [string]$TrainingPythonInfo.selected.python + " env_type=" + [string]$TrainingPythonInfo.selected.env_type + " env_name=" + [string]$TrainingPythonInfo.selected.env_name + " source=" + [string]$TrainingPythonInfo.selection_reason + " cuda=" + [string]$TrainingPythonInfo.selected.cuda_available)
   } catch {
     Write-Host ("[train-python] warning: failed to parse resolver output: " + $_.Exception.Message)
   }

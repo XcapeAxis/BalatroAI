@@ -95,6 +95,30 @@ def _resolved_ops_ui_path() -> str:
     return str(os.environ.get("BALATRO_OPS_UI_PATH") or "").strip()
 
 
+def _resolved_doctor_report_path() -> str:
+    return str(os.environ.get("BALATRO_DOCTOR_REPORT") or "").strip()
+
+
+def _resolved_bootstrap_state_path() -> str:
+    return str(os.environ.get("BALATRO_BOOTSTRAP_STATE") or "").strip()
+
+
+def _resolved_setup_mode() -> str:
+    return str(os.environ.get("BALATRO_SETUP_MODE") or "").strip()
+
+
+def _resolved_doctor_recommended_mode() -> str:
+    return str(os.environ.get("BALATRO_DOCTOR_RECOMMENDED_MODE") or "").strip()
+
+
+def _resolved_training_env_source() -> str:
+    return str(os.environ.get("BALATRO_TRAIN_ENV_SOURCE") or "").strip()
+
+
+def _resolved_training_env_name() -> str:
+    return str(os.environ.get("BALATRO_TRAIN_ENV_NAME") or "").strip()
+
+
 def run_process(
     command: str | list[str],
     *,
@@ -6091,6 +6115,42 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             or _resolved_ops_ui_path()
             or ""
         ),
+        "doctor_report_path": str(
+            final_seed_metrics.get("doctor_report_path")
+            or final_seed_summary.get("doctor_report_path")
+            or _resolved_doctor_report_path()
+            or ""
+        ),
+        "bootstrap_state_path": str(
+            final_seed_metrics.get("bootstrap_state_path")
+            or final_seed_summary.get("bootstrap_state_path")
+            or _resolved_bootstrap_state_path()
+            or ""
+        ),
+        "setup_mode": str(
+            final_seed_metrics.get("setup_mode")
+            or final_seed_summary.get("setup_mode")
+            or _resolved_setup_mode()
+            or ""
+        ),
+        "doctor_recommended_mode": str(
+            final_seed_metrics.get("doctor_recommended_mode")
+            or final_seed_summary.get("doctor_recommended_mode")
+            or _resolved_doctor_recommended_mode()
+            or ""
+        ),
+        "training_env_source": str(
+            final_seed_metrics.get("training_env_source")
+            or final_seed_summary.get("training_env_source")
+            or _resolved_training_env_source()
+            or ""
+        ),
+        "training_env_name": str(
+            final_seed_metrics.get("training_env_name")
+            or final_seed_summary.get("training_env_name")
+            or _resolved_training_env_name()
+            or ""
+        ),
         "autonomy_mode": str(final_seed_metrics.get("autonomy_mode") or final_seed_summary.get("autonomy_mode") or ""),
         "decision_policy_path": str(final_seed_metrics.get("decision_policy_path") or final_seed_summary.get("decision_policy_path") or ""),
         "attention_queue_path": str(final_seed_metrics.get("attention_queue_path") or final_seed_summary.get("attention_queue_path") or ""),
@@ -6261,6 +6321,12 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "window_mode": runtime_details.get("window_mode"),
         "background_validation_ref": runtime_details.get("background_validation_ref"),
         "ops_ui_path": runtime_details.get("ops_ui_path"),
+        "doctor_report_path": runtime_details.get("doctor_report_path"),
+        "bootstrap_state_path": runtime_details.get("bootstrap_state_path"),
+        "setup_mode": runtime_details.get("setup_mode"),
+        "doctor_recommended_mode": runtime_details.get("doctor_recommended_mode"),
+        "training_env_source": runtime_details.get("training_env_source"),
+        "training_env_name": runtime_details.get("training_env_name"),
         "campaign_state_path": runtime_details.get("campaign_state_path"),
         "registry_snapshot_path": runtime_details.get("registry_snapshot_path"),
         "promotion_queue_path": runtime_details.get("promotion_queue_path"),

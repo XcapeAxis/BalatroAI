@@ -59,6 +59,12 @@ def write_summary_tables(
         "window_mode",
         "background_validation_ref",
         "ops_ui_path",
+        "doctor_report_path",
+        "bootstrap_state_path",
+        "setup_mode",
+        "doctor_recommended_mode",
+        "training_env_source",
+        "training_env_name",
         "campaign_state_path",
         "registry_snapshot_path",
         "promotion_queue_path",
@@ -123,6 +129,12 @@ def write_summary_tables(
                     "window_mode": row.get("window_mode"),
                     "background_validation_ref": row.get("background_validation_ref"),
                     "ops_ui_path": row.get("ops_ui_path"),
+                    "doctor_report_path": row.get("doctor_report_path"),
+                    "bootstrap_state_path": row.get("bootstrap_state_path"),
+                    "setup_mode": row.get("setup_mode"),
+                    "doctor_recommended_mode": row.get("doctor_recommended_mode"),
+                    "training_env_source": row.get("training_env_source"),
+                    "training_env_name": row.get("training_env_name"),
                     "campaign_state_path": row.get("campaign_state_path"),
                     "registry_snapshot_path": row.get("registry_snapshot_path"),
                     "promotion_queue_path": row.get("promotion_queue_path"),
@@ -225,6 +237,12 @@ def write_summary_tables(
                 "window_mode",
                 "background_validation_ref",
                 "ops_ui_path",
+                "doctor_report_path",
+                "bootstrap_state_path",
+                "setup_mode",
+                "doctor_recommended_mode",
+                "training_env_source",
+                "training_env_name",
                 "campaign_state_path",
                 "registry_snapshot_path",
                 "promotion_queue_path",
@@ -261,6 +279,18 @@ def write_summary_tables(
                 md_lines.append(f"  background_validation_ref: `{row.get('background_validation_ref')}`")
             if row.get("ops_ui_path"):
                 md_lines.append(f"  ops_ui_path: `{row.get('ops_ui_path')}`")
+            if row.get("doctor_report_path"):
+                md_lines.append(f"  doctor_report_path: `{row.get('doctor_report_path')}`")
+            if row.get("bootstrap_state_path"):
+                md_lines.append(f"  bootstrap_state_path: `{row.get('bootstrap_state_path')}`")
+            if row.get("setup_mode"):
+                md_lines.append(f"  setup_mode: `{row.get('setup_mode')}`")
+            if row.get("doctor_recommended_mode"):
+                md_lines.append(f"  doctor_recommended_mode: `{row.get('doctor_recommended_mode')}`")
+            if row.get("training_env_source"):
+                md_lines.append(f"  training_env_source: `{row.get('training_env_source')}`")
+            if row.get("training_env_name"):
+                md_lines.append(f"  training_env_name: `{row.get('training_env_name')}`")
             if row.get("campaign_state_path"):
                 md_lines.append(f"  campaign_state_path: `{row.get('campaign_state_path')}`")
             if row.get("registry_snapshot_path"):

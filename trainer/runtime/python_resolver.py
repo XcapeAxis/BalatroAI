@@ -9,121 +9,19 @@ if __package__ is None or __package__ == "":
 import argparse
 import json
 import os
-import subprocess
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _write_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-
-def _python_from_env_path(env_path: str | Path) -> Path:
-    candidate = Path(env_path)
-    if candidate.is_file():
-        return candidate.resolve()
-    if os.name == "nt":
-        return (candidate / "Scripts" / "python.exe").resolve()
-    return (candidate / "bin" / "python").resolve()
-
-
-def _normalize_python_path(value: str | Path) -> Path:
-    candidate = Path(value)
-    if candidate.suffix.lower() == ".exe" or candidate.name.lower().startswith("python"):
-        return candidate.resolve()
-    return _python_from_env_path(candidate)
-
-
-def _probe_python(candidate: Path, *, label: str, priority: str, timeout_sec: int) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "label": label,
-        "priority": priority,
-        "candidate": str(candidate),
-        "python": str(candidate),
-        "exists": candidate.exists(),
-        "ok": False,
-        "torch_available": False,
-        "torch_version": None,
-        "cuda_available": False,
-        "device_count": 0,
-        "device_name": None,
-        "env_type": "missing" if not candidate.exists() else "unknown",
-        "error": "",
-    }
-    if not candidate.exists():
-        payload["error"] = "python_not_found"
-        return payload
-
-    probe_code = (
-        "import json, sys\n"
-        "data = {'python': sys.executable, 'python_version': sys.version.replace('\\n', ' ').strip()}\n"
-        "try:\n"
-        "    import torch\n"
-        "    cuda = bool(torch.cuda.is_available())\n"
-        "    data.update({\n"
-        "        'torch_available': True,\n"
-        "        'torch_version': str(torch.__version__),\n"
-        "        'cuda_available': cuda,\n"
-        "        'device_count': int(torch.cuda.device_count()) if cuda else 0,\n"
-        "        'device_name': str(torch.cuda.get_device_name(0)) if cuda and int(torch.cuda.device_count()) > 0 else None,\n"
-        "    })\n"
-        "except Exception as exc:\n"
-        "    data.update({'torch_available': False, 'torch_version': None, 'cuda_available': False, 'device_count': 0, 'device_name': None, 'torch_error': repr(exc)})\n"
-        "print(json.dumps(data))\n"
-    )
-    try:
-        proc = subprocess.run(
-            [str(candidate), "-c", probe_code],
-            cwd=str(_repo_root()),
-            text=True,
-            capture_output=True,
-            timeout=max(5, int(timeout_sec)),
-            encoding="utf-8",
-            errors="replace",
-        )
-    except subprocess.TimeoutExpired:
-        payload["error"] = "probe_timeout"
-        return payload
-    except Exception as exc:
-        payload["error"] = repr(exc)
-        return payload
-
-    if int(proc.returncode) != 0:
-        payload["error"] = (proc.stderr or proc.stdout or f"probe_returncode:{proc.returncode}").strip()
-        return payload
-
-    try:
-        result = json.loads((proc.stdout or "").strip())
-    except Exception as exc:
-        payload["error"] = f"invalid_probe_output:{exc!r}"
-        return payload
-
-    payload.update(
-        {
-            "python": str(result.get("python") or candidate),
-            "python_version": str(result.get("python_version") or ""),
-            "ok": True,
-            "torch_available": bool(result.get("torch_available")),
-            "torch_version": result.get("torch_version"),
-            "cuda_available": bool(result.get("cuda_available")),
-            "device_count": int(result.get("device_count") or 0),
-            "device_name": result.get("device_name"),
-            "env_type": "cuda" if bool(result.get("cuda_available")) else ("cpu" if bool(result.get("torch_available")) else "unknown"),
-            "error": str(result.get("torch_error") or ""),
-        }
-    )
-    return payload
+from trainer.runtime.bootstrap_env import (
+    load_bootstrap_state,
+    normalize_python_path,
+    now_iso,
+    probe_python_interpreter,
+    python_from_env_dir,
+    resolve_repo_root,
+    write_json,
+)
 
 
 def _append_candidate(
@@ -140,20 +38,14 @@ def _append_candidate(
     if not text:
         return
     try:
-        normalized = str(_normalize_python_path(text))
+        normalized = str(normalize_python_path(text))
     except Exception:
         normalized = str(Path(text))
     key = normalized.lower()
     if key in seen:
         return
     seen.add(key)
-    candidates.append(
-        {
-            "label": label,
-            "priority": priority,
-            "python": normalized,
-        }
-    )
+    candidates.append({"label": label, "priority": priority, "python": normalized})
 
 
 def resolve_training_python(
@@ -166,45 +58,47 @@ def resolve_training_python(
     allow_cpu_fallback: bool = True,
     timeout_sec: int = 60,
 ) -> dict[str, Any]:
-    root = Path(repo_root).resolve() if repo_root else _repo_root()
-    candidates: list[dict[str, Any]] = []
-    seen: set[str] = set()
+    root = Path(repo_root).resolve() if repo_root else resolve_repo_root()
     explicit_python = str(explicit_python or os.environ.get("BALATRO_TRAIN_PYTHON") or "").strip()
     explicit_env = str(explicit_env or os.environ.get("BALATRO_TRAIN_ENV") or "").strip()
+    bootstrap_state = load_bootstrap_state(root)
+    bootstrap_envs = bootstrap_state.get("envs") if isinstance(bootstrap_state.get("envs"), dict) else {}
+    bootstrap_selected = str(bootstrap_state.get("selected_training_python") or "").strip()
+    bootstrap_mode = str(bootstrap_state.get("recommended_mode") or "").strip()
 
+    candidates: list[dict[str, Any]] = []
+    seen: set[str] = set()
     _append_candidate(candidates, seen, label="explicit_python", priority="explicit_python", candidate=explicit_python)
     if explicit_env:
-        _append_candidate(
-            candidates,
-            seen,
-            label="explicit_env",
-            priority="explicit_env",
-            candidate=_python_from_env_path(explicit_env),
-        )
-    _append_candidate(
-        candidates,
-        seen,
-        label=".venv_trainer_cuda",
-        priority="venv_cuda",
-        candidate=root / ".venv_trainer_cuda" / "Scripts" / "python.exe",
-    )
-    _append_candidate(
-        candidates,
-        seen,
-        label=".venv_trainer",
-        priority="venv_cpu",
-        candidate=root / ".venv_trainer" / "Scripts" / "python.exe",
-    )
+        _append_candidate(candidates, seen, label="explicit_env", priority="explicit_env", candidate=python_from_env_dir(explicit_env))
+    _append_candidate(candidates, seen, label="bootstrap_selected", priority="bootstrap_selected", candidate=bootstrap_selected)
+
+    cpu_bootstrap = (bootstrap_envs.get("cpu") or {}).get("python") if isinstance(bootstrap_envs.get("cpu"), dict) else ""
+    cuda_bootstrap = (bootstrap_envs.get("cuda") or {}).get("python") if isinstance(bootstrap_envs.get("cuda"), dict) else ""
+    if prefer_cuda:
+        _append_candidate(candidates, seen, label="bootstrap_cuda", priority="bootstrap_cuda", candidate=cuda_bootstrap)
+        _append_candidate(candidates, seen, label=".venv_trainer_cuda", priority="venv_cuda", candidate=root / ".venv_trainer_cuda" / "Scripts" / "python.exe")
+        _append_candidate(candidates, seen, label="bootstrap_cpu", priority="bootstrap_cpu", candidate=cpu_bootstrap)
+        _append_candidate(candidates, seen, label=".venv_trainer", priority="venv_cpu", candidate=root / ".venv_trainer" / "Scripts" / "python.exe")
+    else:
+        _append_candidate(candidates, seen, label="bootstrap_cpu", priority="bootstrap_cpu", candidate=cpu_bootstrap)
+        _append_candidate(candidates, seen, label=".venv_trainer", priority="venv_cpu", candidate=root / ".venv_trainer" / "Scripts" / "python.exe")
+        _append_candidate(candidates, seen, label="bootstrap_cuda", priority="bootstrap_cuda", candidate=cuda_bootstrap)
+        _append_candidate(candidates, seen, label=".venv_trainer_cuda", priority="venv_cuda", candidate=root / ".venv_trainer_cuda" / "Scripts" / "python.exe")
     _append_candidate(candidates, seen, label="current_sys_executable", priority="current", candidate=sys.executable)
 
     probes = [
-        _probe_python(Path(candidate["python"]), label=str(candidate["label"]), priority=str(candidate["priority"]), timeout_sec=timeout_sec)
+        probe_python_interpreter(Path(candidate["python"]), repo_root=root, label=f"{candidate['label']}::{candidate['priority']}", timeout_sec=timeout_sec)
         for candidate in candidates
     ]
+    for probe, candidate in zip(probes, candidates):
+        probe["label"] = str(candidate["label"])
+        probe["priority"] = str(candidate["priority"])
 
     selected: dict[str, Any] | None = None
     selection_reason = ""
     fallback_reason = ""
+    warnings: list[str] = []
 
     def _first(predicate) -> dict[str, Any] | None:
         for probe in probes:
@@ -213,7 +107,7 @@ def resolve_training_python(
         return None
 
     if explicit_python or explicit_env:
-        explicit_selection = _first(lambda probe: probe["priority"] in {"explicit_python", "explicit_env"} and bool(probe["ok"]))
+        explicit_selection = _first(lambda probe: probe["priority"] in {"explicit_python", "explicit_env"} and bool(probe.get("ok")))
         if explicit_selection is not None:
             if require_cuda and not bool(explicit_selection.get("cuda_available")):
                 fallback_reason = "explicit_python_not_cuda_capable"
@@ -224,23 +118,30 @@ def resolve_training_python(
             fallback_reason = "explicit_python_probe_failed"
 
     if selected is None and prefer_cuda:
-        selected = _first(lambda probe: bool(probe.get("ok")) and bool(probe.get("cuda_available")))
+        selected = _first(lambda probe: bool(probe.get("ok")) and bool(probe.get("cuda_available")) and bool(probe.get("yaml_available")))
         if selected is not None:
-            selection_reason = "preferred_cuda_env"
+            selection_reason = "preferred_cuda_env_with_yaml"
+        if selected is None:
+            selected = _first(lambda probe: bool(probe.get("ok")) and bool(probe.get("cuda_available")))
+            if selected is not None:
+                selection_reason = "preferred_cuda_env"
 
     if selected is None and allow_cpu_fallback:
-        selected = _first(lambda probe: bool(probe.get("ok")) and bool(probe.get("torch_available")))
+        selected = _first(lambda probe: bool(probe.get("ok")) and bool(probe.get("torch_available")) and bool(probe.get("yaml_available")))
         if selected is not None:
-            selection_reason = "cpu_fallback_env"
-            if not fallback_reason:
-                fallback_reason = "cuda_env_unavailable"
+            selection_reason = "cpu_fallback_env_with_yaml"
+            fallback_reason = fallback_reason or "cuda_env_unavailable"
+        if selected is None:
+            selected = _first(lambda probe: bool(probe.get("ok")) and bool(probe.get("torch_available")))
+            if selected is not None:
+                selection_reason = "cpu_fallback_env"
+                fallback_reason = fallback_reason or "cuda_env_unavailable"
 
     if selected is None:
         selected = _first(lambda probe: bool(probe.get("ok")))
         if selected is not None:
             selection_reason = "python_fallback_without_torch"
-            if not fallback_reason:
-                fallback_reason = "torch_unavailable_in_known_envs"
+            fallback_reason = fallback_reason or "torch_unavailable_in_known_envs"
 
     status = "ok"
     error = ""
@@ -258,15 +159,28 @@ def resolve_training_python(
             "device_count": 0,
             "device_name": None,
             "env_type": "missing",
+            "yaml_available": False,
+            "yaml_version": None,
+            "env_name": "",
+            "env_dir": "",
+            "health_status": "failed",
+            "warnings": [],
             "error": error,
         }
     elif require_cuda and not bool(selected.get("cuda_available")):
         status = "failed"
         error = "cuda_required_but_not_available"
 
+    if not bool(selected.get("yaml_available")):
+        warnings.append("selected_env_missing_pyyaml")
+    if not bool(selected.get("torch_available")):
+        warnings.append("selected_env_missing_torch")
+    if str(bootstrap_mode or ""):
+        warnings.append(f"bootstrap_recommended_mode:{bootstrap_mode}")
+
     return {
-        "schema": "p50_python_resolver_v1",
-        "generated_at": _now_iso(),
+        "schema": "p50_python_resolver_v2",
+        "generated_at": now_iso(),
         "repo_root": str(root),
         "requested": {
             "explicit_python": explicit_python,
@@ -275,11 +189,14 @@ def resolve_training_python(
             "require_cuda": bool(require_cuda),
             "allow_cpu_fallback": bool(allow_cpu_fallback),
         },
+        "bootstrap_state_path": str((root / "docs" / "artifacts" / "p58" / "bootstrap" / "latest_bootstrap_state.json").resolve()),
+        "bootstrap_recommended_mode": bootstrap_mode,
         "selected": selected,
         "selection_reason": selection_reason,
         "fallback_reason": fallback_reason,
         "status": status,
         "error": error,
+        "warnings": warnings,
         "candidates": probes,
     }
 
@@ -312,8 +229,8 @@ def main() -> int:
     if args.out:
         out_path = Path(args.out)
         if not out_path.is_absolute():
-            out_path = (_repo_root() / out_path).resolve()
-        _write_json(out_path, payload)
+            out_path = (resolve_repo_root() / out_path).resolve()
+        write_json(out_path, payload)
     if args.emit == "path":
         print(str((payload.get("selected") or {}).get("python") or ""))
     else:
