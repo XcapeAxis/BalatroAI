@@ -36,4 +36,5 @@
 - `docs/P53_BACKGROUND_EXECUTION_AND_OPS_UI.md`
 - `docs/EXPERIMENTS_P22.md`
 - `docs/P58_WINDOWS_BOOTSTRAP.md`
+- `docs/P60_AGENTS_STANDARDIZATION_AND_AUTONOMY_ENTRY.md`
 - Directory-specific rules live in `trainer/AGENTS.md`, `sim/AGENTS.md`, `scripts/AGENTS.md`, `docs/AGENTS.md`, and `configs/AGENTS.md`.

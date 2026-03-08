@@ -5,3 +5,4 @@
 - Long-running script actions should prefer `scripts\safe_run.ps1` so logs, timeouts, and summaries remain auditable.
 - New script parameters must preserve compatibility with existing automation, dashboard, and Ops UI flows.
 - If a script launches training or campaign work, pass through resolver, decision-policy, provenance, and autonomy metadata instead of hiding it.
+- Autonomy-facing scripts should leave structured outputs under `docs/artifacts/p60/` and keep fallback readability for older `p59` artifacts when practical.
