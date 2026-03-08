@@ -16,7 +16,7 @@ Set-Location $ProjectRoot
 
 $modeCount = @($Quick, $Overnight, $ResumeLatest | Where-Object { $_ }).Count
 if ($modeCount -gt 1) {
-  throw "[P59] choose only one of -Quick, -Overnight, or -ResumeLatest"
+  throw "[P60] choose only one of -Quick, -Overnight, or -ResumeLatest"
 }
 
 $mode = "quick"
@@ -49,42 +49,42 @@ $args = @("-B", "-m", "trainer.autonomy.run_autonomy", "--mode", $mode)
 if (-not $DryRun) { $args += "--execute" }
 if ($TimeoutSec -gt 0) { $args += @("--timeout-sec", "$TimeoutSec") }
 
-Write-Host ("[P59] repo_root: " + $ProjectRoot)
-Write-Host ("[P59] training_python: " + $py)
-Write-Host ("[P59] requested_mode: " + $mode)
-Write-Host ("[P59] execute: " + (-not $DryRun))
+Write-Host ("[P60] repo_root: " + $ProjectRoot)
+Write-Host ("[P60] training_python: " + $py)
+Write-Host ("[P60] requested_mode: " + $mode)
+Write-Host ("[P60] execute: " + (-not $DryRun))
 
 $payloadJson = (& $py @args | Out-String).Trim()
 if (-not $payloadJson) {
-  throw "[P59] run_autonomy returned empty output"
+  throw "[P60] run_autonomy returned empty output"
 }
 
 try {
   $payload = $payloadJson | ConvertFrom-Json
 } catch {
-  throw ("[P59] failed to parse run_autonomy output: " + $_.Exception.Message)
+  throw ("[P60] failed to parse run_autonomy output: " + $_.Exception.Message)
 }
 
 if ($payload.PSObject.Properties["latest_json"] -and $payload.latest_json) {
-  Write-Host ("[P59] autonomy_entry=" + [string]$payload.latest_json)
+  Write-Host ("[P60] autonomy_entry=" + [string]$payload.latest_json)
 }
 if ($payload.PSObject.Properties["attention_queue_path"] -and $payload.attention_queue_path) {
-  Write-Host ("[P59] attention_queue=" + [string]$payload.attention_queue_path)
+  Write-Host ("[P60] attention_queue=" + [string]$payload.attention_queue_path)
 }
 if ($payload.PSObject.Properties["morning_summary_path"] -and $payload.morning_summary_path) {
-  Write-Host ("[P59] morning_summary=" + [string]$payload.morning_summary_path)
+  Write-Host ("[P60] morning_summary=" + [string]$payload.morning_summary_path)
 }
 if ($payload.PSObject.Properties["dashboard_path"] -and $payload.dashboard_path) {
-  Write-Host ("[P59] dashboard=" + [string]$payload.dashboard_path)
+  Write-Host ("[P60] dashboard=" + [string]$payload.dashboard_path)
 }
-Write-Host ("[P59] autonomy_state=" + [string]$payload.autonomy_state + " selected_plan=" + [string]$payload.selected_plan)
-Write-Host ("[P59] reason=" + [string]$payload.reason)
+Write-Host ("[P60] autonomy_state=" + [string]$payload.autonomy_state + " selected_plan=" + [string]$payload.selected_plan)
+Write-Host ("[P60] reason=" + [string]$payload.reason)
 
 $executionStatus = ""
 if ($payload.PSObject.Properties["execution"] -and $payload.execution) {
   $executionStatus = [string]$payload.execution.status
   if ($payload.execution.PSObject.Properties["safe_run_summary_path"] -and $payload.execution.safe_run_summary_path) {
-    Write-Host ("[P59] safe_run_summary=" + [string]$payload.execution.safe_run_summary_path)
+    Write-Host ("[P60] safe_run_summary=" + [string]$payload.execution.safe_run_summary_path)
   }
 }
 

@@ -20,6 +20,9 @@ from trainer.autonomy.decision_policy import evaluate_autonomy, load_decision_po
 from trainer.autonomy.morning_summary import write_morning_summary
 from trainer.ops_ui.state_loader import build_ops_state, repo_root as ops_repo_root
 
+AUTONOMY_MILESTONE = "P60"
+AUTONOMY_ARTIFACT_FAMILY = "p60"
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -33,12 +36,12 @@ def resolve_repo_root() -> Path:
 
 
 def _out_root(repo_root: Path) -> Path:
-    return (repo_root / "docs" / "artifacts" / "p59").resolve()
+    return (repo_root / "docs" / "artifacts" / AUTONOMY_ARTIFACT_FAMILY).resolve()
 
 
 def _render_md(payload: dict[str, Any]) -> str:
     lines = [
-        "# P59 Autonomy Entry",
+        f"# {AUTONOMY_MILESTONE} Autonomy Entry",
         "",
         f"- generated_at: `{payload.get('generated_at')}`",
         f"- repo_root: `{payload.get('repo_root')}`",
@@ -232,7 +235,7 @@ def build_autonomy_entry(*, repo_root: str | Path | None = None, mode: str = "qu
                 "powershell -ExecutionPolicy Bypass -File scripts\\run_autonomy.ps1 -DryRun",
             ],
             decision_deadline_hint="before next autonomy run",
-            dedupe_key="p59-agents-consistency-error",
+            dedupe_key="p60-agents-consistency-error",
             root=root / "docs" / "artifacts" / "attention_required",
         )
         attention_item_ref = str(created.get("item_md_path") or created.get("attention_file") or "")
@@ -251,7 +254,7 @@ def build_autonomy_entry(*, repo_root: str | Path | None = None, mode: str = "qu
         autonomy_state = "running"
 
     payload: dict[str, Any] = {
-        "schema": "p59_autonomy_entry_v1",
+        "schema": "p60_autonomy_entry_v1",
         "generated_at": _now_iso(),
         "repo_root": str(root),
         "requested_mode": mode,
@@ -339,7 +342,7 @@ def build_autonomy_entry(*, repo_root: str | Path | None = None, mode: str = "qu
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="P59 autonomy entry")
+    parser = argparse.ArgumentParser(description="P60 autonomy entry")
     parser.add_argument("--repo-root", default="")
     parser.add_argument("--mode", choices=("quick", "overnight", "resume-latest"), default="quick")
     parser.add_argument("--execute", action="store_true")
