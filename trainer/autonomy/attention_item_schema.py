@@ -23,12 +23,18 @@ class AttentionItem:
     category: str = "general"
     title: str = ""
     summary: str = ""
+    summary_for_human: str = ""
     blocking_stage: str = ""
+    blocking_scope: str = ""
     attempted_actions: list[str] | None = None
     recommended_options: list[dict[str, str]] | None = None
     recommended_default: str = ""
     required_human_input: list[str] | None = None
     artifact_refs: list[str] | None = None
+    suggested_commands: list[str] | None = None
+    related_campaign: str = ""
+    related_checkpoint_ids: list[str] | None = None
+    decision_deadline_hint: str = ""
     status: str = "open"
     campaign_id: str = ""
     run_id: str = ""
@@ -45,6 +51,8 @@ class AttentionItem:
         payload["recommended_options"] = [dict(item) for item in (self.recommended_options or [])]
         payload["required_human_input"] = list(self.required_human_input or [])
         payload["artifact_refs"] = list(self.artifact_refs or [])
+        payload["suggested_commands"] = list(self.suggested_commands or [])
+        payload["related_checkpoint_ids"] = list(self.related_checkpoint_ids or [])
         return payload
 
 
@@ -71,6 +79,13 @@ def _normalize_required_input(value: Any) -> list[str]:
     return [token] if token else []
 
 
+def _normalize_text_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    token = str(value or "").strip()
+    return [token] if token else []
+
+
 def normalize_item(payload: dict[str, Any]) -> dict[str, Any]:
     item = AttentionItem(
         attention_id=str(payload.get("attention_id") or ""),
@@ -79,7 +94,9 @@ def normalize_item(payload: dict[str, Any]) -> dict[str, Any]:
         category=str(payload.get("category") or "general"),
         title=str(payload.get("title") or ""),
         summary=str(payload.get("summary") or ""),
+        summary_for_human=str(payload.get("summary_for_human") or payload.get("summary") or ""),
         blocking_stage=str(payload.get("blocking_stage") or ""),
+        blocking_scope=str(payload.get("blocking_scope") or ""),
         attempted_actions=[str(item) for item in (payload.get("attempted_actions") or []) if str(item).strip()],
         recommended_options=[
             option
@@ -89,6 +106,10 @@ def normalize_item(payload: dict[str, Any]) -> dict[str, Any]:
         recommended_default=str(payload.get("recommended_default") or ""),
         required_human_input=_normalize_required_input(payload.get("required_human_input")),
         artifact_refs=[str(item) for item in (payload.get("artifact_refs") or []) if str(item).strip()],
+        suggested_commands=_normalize_text_list(payload.get("suggested_commands")),
+        related_campaign=str(payload.get("related_campaign") or payload.get("campaign_id") or ""),
+        related_checkpoint_ids=_normalize_text_list(payload.get("related_checkpoint_ids")),
+        decision_deadline_hint=str(payload.get("decision_deadline_hint") or ""),
         status=str(payload.get("status") or "open"),
         campaign_id=str(payload.get("campaign_id") or ""),
         run_id=str(payload.get("run_id") or ""),

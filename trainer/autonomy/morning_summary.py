@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from trainer.autonomy.attention_queue import load_attention_queue, save_attention_queue
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -62,6 +64,8 @@ def _campaign_rows(root: Path) -> list[dict[str, Any]]:
                 "autonomy_decision": str((current or {}).get("autonomy_decision") or ""),
                 "autonomy_reason": str((current or {}).get("autonomy_reason") or ""),
                 "attention_item_ref": str((current or {}).get("attention_item_ref") or ""),
+                "resume_safe": bool((current or {}).get("resume_safe") if isinstance(current, dict) else True),
+                "error_summary": str((current or {}).get("error_summary") or ""),
                 "state_path": str(path.resolve()),
             }
         )
@@ -146,6 +150,46 @@ def _latest_p22(root: Path) -> dict[str, Any]:
     }
 
 
+def _task_summary(p22: dict[str, Any], campaigns: list[dict[str, Any]]) -> dict[str, Any]:
+    rows = [row for row in (p22.get("summary_rows") or []) if isinstance(row, dict)]
+    counts = {"success": 0, "failed": 0, "blocked": 0, "skipped": 0, "other": 0}
+    tasks: list[dict[str, Any]] = []
+    for row in rows[:24]:
+        status = str(row.get("status") or "").strip().lower()
+        normalized = "other"
+        if status in {"success", "passed", "ok"}:
+            normalized = "success"
+        elif status in {"failed", "error"}:
+            normalized = "failed"
+        elif status == "blocked":
+            normalized = "blocked"
+        elif status == "skipped":
+            normalized = "skipped"
+        counts[normalized] = int(counts.get(normalized, 0)) + 1
+        tasks.append(
+            {
+                "task_id": str(row.get("exp_id") or ""),
+                "status": normalized,
+                "seed_count": int(row.get("seed_count") or 0),
+                "run_dir": str(row.get("run_dir") or ""),
+            }
+        )
+    if not tasks:
+        for row in campaigns[:24]:
+            status = str(row.get("status") or "").strip().lower() or "other"
+            normalized = status if status in {"completed", "failed", "blocked", "skipped", "running"} else "other"
+            counts[normalized if normalized in counts else "other"] = int(counts.get(normalized if normalized in counts else "other", 0)) + 1
+            tasks.append(
+                {
+                    "task_id": str(row.get("experiment_id") or row.get("campaign_id") or ""),
+                    "status": normalized,
+                    "seed_count": 1,
+                    "run_dir": str(row.get("state_path") or ""),
+                }
+            )
+    return {"counts": counts, "tasks": tasks}
+
+
 def _recommended_first_action(
     campaigns: list[dict[str, Any]],
     attention_open: list[dict[str, Any]],
@@ -183,6 +227,7 @@ def build_morning_summary(*, artifacts_root: str | Path | None = None, out_root:
     doctor = _doctor_status(root)
     dashboard = _dashboard_excerpt(root)
     p22 = _latest_p22(root)
+    task_summary = _task_summary(p22, campaigns)
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     latest_md = out_dir / "latest.md"
     latest_json = out_dir / "latest.json"
@@ -198,6 +243,16 @@ def build_morning_summary(*, artifacts_root: str | Path | None = None, out_root:
         f"- attention_queue: `{attention.get('path') or ''}`",
         f"- promotion_queue: `{promotion.get('path') or ''}`",
         f"- doctor_report: `{doctor.get('json_path') or ''}`",
+        "",
+        "## Task Summary",
+        "",
+        "- success=`{}` failed=`{}` blocked=`{}` skipped=`{}` other=`{}`".format(
+            (task_summary.get("counts") or {}).get("success", 0),
+            (task_summary.get("counts") or {}).get("failed", 0),
+            (task_summary.get("counts") or {}).get("blocked", 0),
+            (task_summary.get("counts") or {}).get("skipped", 0),
+            (task_summary.get("counts") or {}).get("other", 0),
+        ),
         "",
         "## Completed Campaigns / Stages",
         "",
@@ -256,11 +311,12 @@ def build_morning_summary(*, artifacts_root: str | Path | None = None, out_root:
         )
     if not (attention.get("open_items") or []):
         lines.append("- No open attention items.")
-    lines += ["", "## Recommended First Action", "", f"- {first_action}", ""]
+    lines += ["", "## Top Priority", "", f"- {first_action}", "", "## Recommended First Action", "", f"- {first_action}", ""]
     payload = {
         "schema": "p57_morning_summary_v1",
         "generated_at": _now_iso(),
         "artifacts_root": str(root),
+        "task_summary": task_summary,
         "campaigns": campaigns,
         "registry": registry,
         "promotion_queue": promotion,
@@ -280,6 +336,11 @@ def build_morning_summary(*, artifacts_root: str | Path | None = None, out_root:
     stamped_md.write_text(text, encoding="utf-8")
     latest_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     stamped_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    queue_root = root / "attention_required"
+    queue = load_attention_queue(queue_root)
+    queue["latest_morning_summary_path"] = str(latest_md.resolve())
+    queue["latest_morning_summary_json"] = str(latest_json.resolve())
+    save_attention_queue(queue, queue_root)
     return payload
 
 

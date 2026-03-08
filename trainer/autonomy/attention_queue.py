@@ -65,6 +65,7 @@ def load_attention_queue(root: str | Path | None = None) -> dict[str, Any]:
             "queue_path": str(path),
             "items": [],
         }
+    payload.setdefault("schema", "p57_attention_queue_v1")
     payload["queue_path"] = str(path)
     payload["items"] = [normalize_item(item) for item in (payload.get("items") or []) if isinstance(item, dict)]
     return payload
@@ -73,6 +74,10 @@ def load_attention_queue(root: str | Path | None = None) -> dict[str, Any]:
 def save_attention_queue(payload: dict[str, Any], root: str | Path | None = None) -> dict[str, Any]:
     path = queue_json_path(root)
     norm = load_attention_queue(root)
+    for key, value in payload.items():
+        if key == "items":
+            continue
+        norm[key] = value
     norm["generated_at"] = now_iso()
     norm["items"] = [normalize_item(item) for item in (payload.get("items") or []) if isinstance(item, dict)]
     _write_json(path, norm)
@@ -92,17 +97,36 @@ def render_attention_item_md(item: dict[str, Any]) -> str:
     ]
     if item.get("blocking_stage"):
         lines.append(f"- blocking_stage: `{item.get('blocking_stage')}`")
+    if item.get("blocking_scope"):
+        lines.append(f"- blocking_scope: `{item.get('blocking_scope')}`")
     if item.get("campaign_id"):
         lines.append(f"- campaign_id: `{item.get('campaign_id')}`")
+    if item.get("related_campaign"):
+        lines.append(f"- related_campaign: `{item.get('related_campaign')}`")
     if item.get("experiment_id"):
         lines.append(f"- experiment_id: `{item.get('experiment_id')}`")
     if item.get("seed"):
         lines.append(f"- seed: `{item.get('seed')}`")
+    related_checkpoint_ids = item.get("related_checkpoint_ids") or []
+    if related_checkpoint_ids:
+        lines.append(f"- related_checkpoint_ids: `{', '.join([str(token) for token in related_checkpoint_ids])}`")
+    if item.get("decision_deadline_hint"):
+        lines.append(f"- decision_deadline_hint: `{item.get('decision_deadline_hint')}`")
     lines += [
         "",
         "## Summary",
         "",
         str(item.get("summary") or ""),
+    ]
+    summary_for_human = str(item.get("summary_for_human") or "").strip()
+    if summary_for_human and summary_for_human != str(item.get("summary") or "").strip():
+        lines += [
+            "",
+            "## Human Summary",
+            "",
+            summary_for_human,
+        ]
+    lines += [
         "",
         "## Attempted Actions",
         "",
@@ -152,6 +176,15 @@ def render_attention_item_md(item: dict[str, Any]) -> str:
         lines.append(f"- `{ref}`")
     if not (item.get("artifact_refs") or []):
         lines.append("- None recorded.")
+    lines += [
+        "",
+        "## Suggested Commands",
+        "",
+    ]
+    for command in item.get("suggested_commands") or []:
+        lines.append(f"- `{command}`")
+    if not (item.get("suggested_commands") or []):
+        lines.append("- None recorded.")
     if item.get("resolution_note"):
         lines += ["", "## Resolution", "", str(item.get("resolution_note") or "")]
     return "\n".join(lines).rstrip() + "\n"
@@ -165,6 +198,7 @@ def render_attention_queue_md(payload: dict[str, Any]) -> str:
         f"- generated_at: `{payload.get('generated_at')}`",
         f"- queue_path: `{payload.get('queue_path')}`",
         f"- open_count: `{sum(1 for item in items if str(item.get('status') or '') == 'open')}`",
+        f"- latest_morning_summary_path: `{payload.get('latest_morning_summary_path') or ''}`",
         "",
         "## Items",
         "",
@@ -173,11 +207,13 @@ def render_attention_queue_md(payload: dict[str, Any]) -> str:
         lines.append("- No attention items.")
     for item in items:
         lines.append(
-            "- `{attention_id}` severity=`{severity}` status=`{status}` category=`{category}` title={title}".format(
+            "- `{attention_id}` severity=`{severity}` status=`{status}` category=`{category}` stage=`{stage}` scope=`{scope}` title={title}".format(
                 attention_id=item.get("attention_id") or "",
                 severity=item.get("severity") or "",
                 status=item.get("status") or "",
                 category=item.get("category") or "",
+                stage=item.get("blocking_stage") or "",
+                scope=item.get("blocking_scope") or "",
                 title=item.get("title") or "",
             )
         )
@@ -231,12 +267,18 @@ def open_attention_item(
     category: str,
     title: str,
     summary: str,
+    summary_for_human: str = "",
     blocking_stage: str = "",
+    blocking_scope: str = "",
     attempted_actions: list[str] | None = None,
     recommended_options: list[dict[str, str]] | list[str] | None = None,
     recommended_default: str = "",
     required_human_input: list[str] | str = "",
     artifact_refs: list[str] | None = None,
+    suggested_commands: list[str] | None = None,
+    related_campaign: str = "",
+    related_checkpoint_ids: list[str] | None = None,
+    decision_deadline_hint: str = "",
     campaign_id: str = "",
     run_id: str = "",
     experiment_id: str = "",
@@ -251,12 +293,18 @@ def open_attention_item(
         "category": category,
         "title": title,
         "summary": summary,
+        "summary_for_human": summary_for_human or summary,
         "blocking_stage": blocking_stage,
+        "blocking_scope": blocking_scope,
         "attempted_actions": attempted_actions or [],
         "recommended_options": recommended_options or [],
         "recommended_default": recommended_default,
         "required_human_input": required_human_input,
         "artifact_refs": artifact_refs or [],
+        "suggested_commands": suggested_commands or [],
+        "related_campaign": related_campaign or campaign_id,
+        "related_checkpoint_ids": related_checkpoint_ids or [],
+        "decision_deadline_hint": decision_deadline_hint,
         "status": "open",
         "campaign_id": campaign_id,
         "run_id": run_id,
@@ -354,11 +402,18 @@ def _smoke(root: str | Path | None = None) -> dict[str, Any]:
         category="promotion",
         title="Promotion requires human approval",
         summary="A checkpoint reached promotion_review. The system can summarize evidence but cannot promote automatically.",
+        summary_for_human="A candidate is waiting in promotion review. A person still needs to decide whether it stays in review or moves to a safer deployment mode.",
         blocking_stage="promotion_queue_scan",
+        blocking_scope="deployment_decision",
         attempted_actions=["scan_promotion_queue", "summarize_registry_state"],
         recommended_options=["Keep candidate in review", "Promote as canary only after human sign-off"],
         recommended_default="Keep candidate in review",
         required_human_input="Choose whether to promote the candidate and in which deployment mode.",
+        suggested_commands=[
+            "powershell -ExecutionPolicy Bypass -File scripts\\run_p22.ps1 -RunP56",
+            "powershell -ExecutionPolicy Bypass -File scripts\\run_ops_ui.ps1",
+        ],
+        decision_deadline_hint="before next overnight run",
         artifact_refs=[],
         dedupe_key="smoke-promotion-human-approval",
         root=root,
@@ -368,11 +423,18 @@ def _smoke(root: str | Path | None = None) -> dict[str, Any]:
         category="config",
         title="Config provenance anomaly",
         summary="Config sidecar drift or provenance mismatch needs confirmation before continuing an overnight branch.",
+        summary_for_human="Config provenance is no longer trustworthy enough for unattended execution. Confirm the authoritative config before resuming.",
         blocking_stage="config_provenance_scan",
+        blocking_scope="config_provenance",
         attempted_actions=["sync_config_sidecars", "inspect_summary_config_provenance"],
         recommended_options=["Re-run config sync", "Inspect config source and sidecar drift manually"],
         recommended_default="Re-run config sync",
         required_human_input="Confirm which config source is authoritative and whether the drift is expected.",
+        suggested_commands=[
+            "powershell -ExecutionPolicy Bypass -File scripts\\run_regressions.ps1 -RunP22",
+            "powershell -ExecutionPolicy Bypass -File scripts\\doctor.ps1",
+        ],
+        decision_deadline_hint="before next nightly launch",
         artifact_refs=[],
         dedupe_key="smoke-config-provenance-anomaly",
         root=root,
