@@ -16,6 +16,9 @@ auto_allow_actions:
   - build_morning_summary
   - inspect_promotion_queue
   - run_environment_doctor
+  - read_agents_rules
+  - run_agents_consistency_check
+  - run_autonomy_entry
 auto_suggest_actions:
   - switch_window_mode
   - archive_checkpoints
@@ -40,6 +43,7 @@ human_required_actions:
 stop_conditions:
   - env_dependency_change_required
   - doctor_blocked_environment
+  - agents_consistency_error
   - config_provenance_mismatch
   - unexplained_major_regression
   - insufficient_statistical_evidence
@@ -51,3 +55,4 @@ continue_on_warning_conditions:
   - blocked_campaign_review_pending
   - background_mode_warning
   - doctor_warning
+  - agents_consistency_warning

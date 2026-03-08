@@ -1,6 +1,12 @@
 # Decision Policy
 
-P57 defines three decision classes so the overnight runner knows when to continue and when to stop for a human.
+P57/P59 define three decision classes so the overnight runner and the unified autonomy entry know when to continue and when to stop for a human.
+
+The rule hierarchy is:
+
+1. root + subdirectory `AGENTS.md`
+2. this human-readable policy
+3. `configs/runtime/decision_policy.yaml` as the machine-usable policy
 
 ## Auto-Approve
 
@@ -12,6 +18,7 @@ These actions are safe to execute automatically inside the repo:
 - Refresh registry snapshots and promotion queues.
 - Switch window mode only within already validated repo-managed modes.
 - Run `doctor` / environment inspection and Python resolver checks.
+- Read `AGENTS.md`, run AGENTS consistency checks, and evaluate the autonomy entry before deciding whether to continue.
 
 ## Auto-Suggest-But-Do-Not-Apply
 
@@ -22,6 +29,7 @@ These actions can be proposed automatically, but the system must not make them e
 - Archive checkpoints or recommend artifact pruning beyond normal cleanup policy.
 - Recommend deployment mode changes such as `rule -> canary` or `guarded -> learned`.
 - Recommend a bootstrap path such as `cpu_safe`, `cuda_mainline`, or a specific `setup_windows.ps1` command.
+- Recommend the next mainline task when no resumable campaign is available.
 
 These cases should usually create an attention item but can still allow the run to continue to final summaries.
 
@@ -35,6 +43,7 @@ These actions must stop the related branch of work and create a blocking attenti
 - Switch a real champion / promoted checkpoint.
 - Continue after an unexplained major regression or irreparable config provenance anomaly.
 - Proceed with a route-changing decision when statistics are insufficient.
+- Continue when the AGENTS / decision-policy layer is missing or contradictory.
 
 ## Example Classification Table
 
@@ -45,6 +54,9 @@ These actions must stop the related branch of work and create a blocking attenti
 | `cleanup_artifacts` | auto-approve |
 | `switch_window_mode` | auto-approve |
 | `run_environment_doctor` | auto-approve |
+| `read_agents_rules` | auto-approve |
+| `run_agents_consistency_check` | auto-approve |
+| `run_autonomy_entry` | auto-approve |
 | `promote_candidate` | auto-suggest-but-do-not-apply |
 | `change_training_profile` | auto-suggest-but-do-not-apply |
 | `archive_checkpoints` | auto-suggest-but-do-not-apply |
@@ -62,6 +74,7 @@ Nightly/campaign execution should stop the affected branch and queue human atten
 - config provenance mismatch that cannot be repaired automatically
 - environment / driver / install requirement
 - doctor blocked the machine because no healthy project environment exists
+- AGENTS / decision-policy consistency failed
 - readiness failure with no safe fallback
 - unexplained major regression
 - insufficient statistics for a route-changing promotion
@@ -75,3 +88,4 @@ Execution may continue, but the warning must be recorded in campaign state and s
 - dashboard rebuild retried successfully
 - open attention items that are advisory rather than blocking
 - doctor found warnings but the machine is still safe for continuation
+- AGENTS consistency warnings that do not change the control boundary
