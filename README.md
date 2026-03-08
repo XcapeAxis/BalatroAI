@@ -134,6 +134,11 @@ Standard environments:
 - `.venv_trainer`: CPU-safe fallback for config checks, docs, dashboard, ops UI, and non-CUDA execution
 - `.venv_trainer_cuda`: CUDA-first training environment for P49/P50/P22 mainline when GPU is healthy
 
+Resolver note:
+
+- the runtime still prefers a live CUDA-first probe
+- if the live Torch probe times out but the latest bootstrap state already validated the same repo-local env, the resolver reuses that bootstrap snapshot and emits an explicit warning instead of silently switching interpreters
+
 Recommended first-run sequence:
 
 ```powershell
@@ -175,6 +180,8 @@ What this entry does:
 - decides continue / resume / block instead of silently pushing through
 - writes `docs/artifacts/p60/latest_autonomy_entry.json`
 - refreshes `docs/artifacts/morning_summary/latest.md`
+- keeps validation-only forced promotion gates for audit, but auto-ignores them on later autonomy decisions
+- falls back to `docs/artifacts/p60/latest_autonomy_entry.json` if nested safe-run output makes stdout non-JSON
 
 Human-gate boundaries:
 

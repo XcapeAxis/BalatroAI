@@ -177,6 +177,12 @@ The resolver now distinguishes:
 - `.venv_trainer`
 - system fallback as last resort
 
+Runtime note:
+
+- the resolver still probes the live environment first
+- if a repo-local Torch probe times out but the latest bootstrap state already validated the same env, the resolver reuses the bootstrap snapshot and surfaces a warning
+- this keeps the CUDA-first mainline stable while still exposing that the live probe path needs review
+
 Scripts using the unified resolver:
 
 - `scripts/run_p22.ps1`

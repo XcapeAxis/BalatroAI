@@ -92,6 +92,8 @@ P60 extends the same queue surface with additional handoff fields:
 - `suggested_commands`
 - `summary_for_human`
 
+Validation-only forced gates are preserved for audit, but they are not supposed to block future autonomy forever. P60 reconciles those synthetic promotion-stop items into an ignored state so old smoke fixtures do not keep later campaigns blocked.
+
 Current high-value categories are promotion, config provenance, environment, regression, and ambiguity.
 
 ## Campaign Stop / Resume Semantics

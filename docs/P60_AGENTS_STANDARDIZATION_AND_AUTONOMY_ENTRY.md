@@ -91,6 +91,12 @@ The unified autonomy entry follows the existing P57 model:
 
 When blocked, the system still refreshes readable handoff outputs instead of leaving only logs.
 
+Validation-only forced gates are treated differently from real operator stops:
+
+- P57/P60 validation may create forced promotion blocks to verify stop semantics
+- those records remain in `docs/artifacts/attention_required/` for audit
+- later autonomy decisions auto-ignore them so historical smoke fixtures do not permanently block unrelated runs
+
 ## Attention Queue And Morning Summary
 
 The attention queue remains the human handoff surface under `docs/artifacts/attention_required/`.
@@ -117,6 +123,11 @@ The latest summary is written to:
 - `docs/artifacts/morning_summary/latest.json`
 
 `run_autonomy` refreshes morning summary both after normal execution and after blocked decisions.
+
+Wrapper behavior:
+
+- `scripts/run_autonomy.ps1` still prints the high-level status lines expected by operators
+- when the executed inner command emits nested safe-run output, the wrapper now falls back to `docs/artifacts/p60/latest_autonomy_entry.json` instead of failing on mixed stdout
 
 ## Dashboard / Ops UI Integration
 
