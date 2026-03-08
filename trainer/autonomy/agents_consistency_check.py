@@ -14,6 +14,10 @@ from typing import Any
 
 from trainer.autonomy.decision_policy import default_policy_path
 
+AUTONOMY_MILESTONE = "P60"
+AUTONOMY_ARTIFACT_FAMILY = "p60"
+AUTONOMY_DOC_PATH = "docs/P60_AGENTS_STANDARDIZATION_AND_AUTONOMY_ENTRY.md"
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -69,6 +73,7 @@ def build_consistency_report(*, repo_root: str | Path | None = None) -> dict[str
             "docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md",
             "docs/P51_CHECKPOINT_REGISTRY_AND_CAMPAIGNS.md",
             "docs/P58_WINDOWS_BOOTSTRAP.md",
+            AUTONOMY_DOC_PATH,
         ]
         for token in required_refs:
             if token in root_text:
@@ -104,7 +109,7 @@ def build_consistency_report(*, repo_root: str | Path | None = None) -> dict[str
 
     readme_path = root / "README.md"
     readme_text = _read_text(readme_path)
-    for token in ("AGENTS.md", "scripts\\run_autonomy.ps1", "docs/P59_AGENTS_STANDARDIZATION_AND_AUTONOMY_ENTRY.md"):
+    for token in ("AGENTS.md", "scripts\\run_autonomy.ps1", AUTONOMY_DOC_PATH):
         if token in readme_text:
             checks.append(_check("pass", f"readme_ref::{token}", "referenced", str(readme_path.resolve())))
         else:
@@ -126,7 +131,7 @@ def build_consistency_report(*, repo_root: str | Path | None = None) -> dict[str
         status = "warning"
 
     return {
-        "schema": "p59_agents_consistency_v1",
+        "schema": "p60_agents_consistency_v1",
         "generated_at": _now_iso(),
         "repo_root": str(root),
         "status": status,
@@ -141,7 +146,7 @@ def build_consistency_report(*, repo_root: str | Path | None = None) -> dict[str
 
 def render_report_md(payload: dict[str, Any]) -> str:
     lines = [
-        "# P59 AGENTS Consistency",
+        f"# {AUTONOMY_MILESTONE} AGENTS Consistency",
         "",
         f"- generated_at: `{payload.get('generated_at')}`",
         f"- repo_root: `{payload.get('repo_root')}`",
@@ -177,7 +182,7 @@ def render_report_md(payload: dict[str, Any]) -> str:
 
 def write_consistency_report(*, repo_root: str | Path | None = None, out_root: str | Path | None = None) -> dict[str, Any]:
     root = Path(repo_root).resolve() if repo_root else resolve_repo_root()
-    out_dir = Path(out_root).resolve() if out_root else (root / "docs" / "artifacts" / "p59").resolve()
+    out_dir = Path(out_root).resolve() if out_root else (root / "docs" / "artifacts" / AUTONOMY_ARTIFACT_FAMILY).resolve()
     payload = build_consistency_report(repo_root=root)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     json_path = out_dir / f"agents_consistency_{stamp}.json"
@@ -199,7 +204,7 @@ def write_consistency_report(*, repo_root: str | Path | None = None, out_root: s
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="P59 AGENTS consistency check")
+    parser = argparse.ArgumentParser(description="P60 AGENTS consistency check")
     parser.add_argument("--repo-root", default="")
     parser.add_argument("--out-root", default="")
     args = parser.parse_args()
