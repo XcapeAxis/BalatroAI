@@ -1,6 +1,6 @@
 <h1 align="center">BalatroAI</h1>
 <p align="center">
-  <strong>一个把 Balatro 的模拟、训练、评测和夜跑运维串起来的工程化平台。</strong><br />
+  <strong>面向 Balatro 的模拟、训练、评测与夜间运维一体化工程平台。</strong><br />
   A simulator-first Balatro research and ops stack for reproducible training, evaluation, and overnight automation.
 </p>
 
@@ -25,21 +25,21 @@
 </p>
 
 BalatroAI focuses on one thing: making Balatro experimentation understandable, reproducible, and operable.  
-它不是“一个神秘大模型仓库”，而是一套可追踪、可比较、可夜跑的工程系统。
+本仓库不是泛化的“大模型项目集合”，而是面向 Balatro 研究、评测与运维的一体化工程平台。
 
 This README is intentionally short and navigational.  
-如果你需要细节，请把这里当成总入口，再跳去对应的 docs。
+如需实现细节，请将本页作为导航入口，再进入对应文档。
 
 ## What This Project Is
 
-先用人话说：这是一个给 Balatro 做研究和工程迭代的平台，不只是训练模型，还包括模拟器对齐、回归门禁、实验编排、dashboard、ops UI、夜跑自治。  
+概括而言：这是一个面向 Balatro 的研究与工程平台，覆盖模拟器对齐、模型训练、回归门禁、实验编排、dashboard、ops UI 与夜间自治运行。  
 BalatroAI combines simulator parity, model training, experiment orchestration, gated evaluation, and overnight ops into one repo.
 
 | 30 秒问题 | 一句话答案 |
 |---|---|
-| 这是什么？ | 一个围绕 Balatro 的“模拟器 + 训练 + 评测 + 运维”平台。 |
-| 它能做什么？ | 跑回归、比较策略、训练候选、校准 learned router、生成 dashboard / ops UI / morning summary。 |
-| 它不是什么？ | 不是外挂，不是无边界自动实盘代理，也不是“装上就稳赢”的黑盒。 |
+| 这是什么？ | 一个围绕 Balatro 构建的“模拟器 + 训练 + 评测 + 运维”平台。 |
+| 它能做什么？ | 运行回归、比较策略、训练候选、校准 learned router，并生成 dashboard / ops UI / morning summary。 |
+| 它不是什么？ | 不提供外挂能力，不执行脱离门禁的自动代理，也不是缺乏验证依据的黑盒系统。 |
 | 今天怎么开始？ | 启动 `balatrobot`，然后跑 `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick`。 |
 
 Core capabilities today:
@@ -51,7 +51,7 @@ Core capabilities today:
 
 ## Scope and Boundaries
 
-先划边界：这个仓库适合工程化研究，不适合脱离门禁的“乱跑自动化”。  
+适用边界如下：本仓库适用于工程化研究与受控运维，不用于脱离门禁的无约束自动化。  
 Use it for controlled experimentation, not for unbounded live automation.
 
 Suitable for:
@@ -70,20 +70,20 @@ Not suitable for:
 
 ## Choose Your Path
 
-不同读者关心的入口不同；如果你只看一张表，就看这一张。  
+不同读者关注的入口不同；下表用于快速定位最常用的起点。  
 Pick the path that matches your job, then dive into the linked docs only if you need more detail.
 
 | 你是谁 | 目标 | 先跑什么 | 你会得到什么 |
 |---|---|---|---|
-| 第一次来看的人 | 先看系统是不是活的 | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | `summary_table.json` + dashboard |
-| 做训练 / 研究的人 | 看主训练和比较链路 | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | multi-seed P22 rows + artifacts |
-| 做 learned router 的人 | 看 calibration / guard / canary | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP56` | P56 benchmark / calibration / canary outputs |
-| 做夜跑 / 运维的人 | 看 attention queue 和 morning summary | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP57` | autonomy campaign state + morning summary |
-| 值班操作的人 | 用本地 UI 看状态 | `powershell -ExecutionPolicy Bypass -File scripts\run_ops_ui.ps1` | localhost ops console |
+| 首次接触项目的读者 | 确认系统主链路可运行 | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | `summary_table.json` + dashboard |
+| 训练 / 研究人员 | 查看主训练与比较链路 | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | multi-seed P22 rows + artifacts |
+| learned router 相关开发者 | 查看 calibration / guard / canary | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP56` | P56 benchmark / calibration / canary outputs |
+| 夜跑 / 运维人员 | 查看 attention queue 与 morning summary | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP57` | autonomy campaign state + morning summary |
+| 值班 / 审核人员 | 通过本地 UI 查看状态 | `powershell -ExecutionPolicy Bypass -File scripts\run_ops_ui.ps1` | localhost ops console |
 
 ## Quick Start
 
-只保留最短 happy path：装依赖、启动服务、跑 quick、看结果。  
+本节仅保留最短启动路径：安装依赖、启动服务、运行 quick、查看结果。  
 If you only remember four commands, remember these.
 
 1. Clone the repo and install trainer dependencies.
@@ -132,7 +132,7 @@ More commands live in [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md).
 
 ## Architecture Overview
 
-先看全景：真实游戏、模拟器、训练、评测、campaign、人工决策是怎么串起来的。  
+下图概括真实游戏、模拟器、训练、评测、campaign 与人工决策之间的关系。  
 The repo is organized as one continuous loop rather than a pile of unrelated scripts.
 
 ```mermaid
@@ -170,7 +170,7 @@ Key docs behind this flow:
 
 ## Capability Snapshot
 
-一句话总结现在“已经能做什么”：模拟器、训练、评测、运维四条线都已打通，但深度和预算仍然是持续改进对象。  
+当前能力分布可概括如下：模拟器、训练、评测和运维四条链路均已打通，但深度、覆盖面和预算仍在持续扩展。  
 This table is the fastest way to see the repo's current surface area.
 
 | Layer | Simulator | Training | Evaluation | Ops |
@@ -188,13 +188,13 @@ Key shipped milestones worth remembering:
 
 ## Command Cheat Sheet
 
-这部分只保留最常用入口；更长的矩阵配置请看 P22 docs。  
-如果你已经熟悉仓库，可以把这一节当成日常速查表。  
+本节仅保留最常用入口；更完整的矩阵与参数说明请参见 P22 文档。  
+如果你已经熟悉仓库，可将这一节作为日常速查表。  
 If a command is missing here, it was intentionally pushed down into the docs.
 
 | 目标 | 命令 | 主要产物 | 适合谁 |
 |---|---|---|---|
-| 跑主线 quick matrix | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | `summary_table.json`, dashboard | 第一次看仓库 / 日常 smoke |
+| 跑主线 quick matrix | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | `summary_table.json`, dashboard | 首次了解项目 / 日常 smoke |
 | 跑 P22 回归门禁 | `powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP22` | regression artifacts | 合并前检查 |
 | 跑 learned router 校准 | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP56` | P56 benchmark / calibration / canary | 研究 / routing |
 | 跑 overnight autonomy smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP57` | attention queue, morning summary | 夜跑协议验证 |
@@ -205,7 +205,7 @@ If a command is missing here, it was intentionally pushed down into the docs.
 
 ## Current Repository Status
 
-下面这块是自动生成状态，不用手写维护。  
+下面这部分为自动生成状态，无需手工维护。  
 This block is intentionally machine-updated by repo scripts.
 
 <!-- STATUS:START -->
@@ -231,7 +231,7 @@ Badge/status refresh source:
 
 ## Reproducibility
 
-这个仓库最重要的工程价值之一就是“结果可复查”。  
+本仓库最重要的工程价值之一，是让实验结果具备可复查性与可追溯性。  
 BalatroAI treats seeds, config provenance, and artifact paths as first-class outputs.
 
 What gets recorded:
@@ -253,15 +253,15 @@ Recommended docs:
 
 ## Example Outputs
 
-先知道“结果长什么样”，会比先读 20 个 milestone 更容易上手。  
+以下列出运行后最值得优先查看的核心输出，有助于快速建立全局认识。  
 These are the main files you inspect after a run.
 
 | 输出 | 路径 | 用途 |
 |---|---|---|
-| P22 summary | `docs/artifacts/p22/runs/<run_id>/summary_table.json` | 看实验行、seed 数、关键 refs |
-| Dashboard | `docs/artifacts/dashboard/latest/index.html` | 看总体状态和最近结果 |
-| Attention queue | `docs/artifacts/attention_required/attention_queue.json` | 看哪些问题必须人工决策 |
-| Morning summary | `docs/artifacts/morning_summary/latest.md` | 早上快速读昨晚发生了什么 |
+| P22 summary | `docs/artifacts/p22/runs/<run_id>/summary_table.json` | 查看实验行、seed 数与关键 refs |
+| Dashboard | `docs/artifacts/dashboard/latest/index.html` | 查看总体状态与最近结果 |
+| Attention queue | `docs/artifacts/attention_required/attention_queue.json` | 查看需要人工决策的问题 |
+| Morning summary | `docs/artifacts/morning_summary/latest.md` | 查看夜间运行摘要与待处理事项 |
 
 Sample assets:
 
@@ -280,7 +280,7 @@ Example summary snippet:
 
 ## Roadmap
 
-README 只保留“今天在哪、接下来做什么”；完整里程碑树放到 docs。  
+README 仅保留当前状态与下一步重点；完整里程碑树请参见 docs。  
 Use this section as a snapshot, not as the full project history.
 
 | Area | Today | Next |
@@ -298,7 +298,7 @@ Roadmap docs:
 
 ## Known Limitations
 
-说清限制比堆更多术语更重要。  
+以下限制有助于正确理解当前系统的适用范围与结果边界。  
 This repo is powerful, but it is intentionally conservative in a few places.
 
 - real runtime workflows depend on local `balatrobot` / Balatro availability
@@ -309,7 +309,7 @@ This repo is powerful, but it is intentionally conservative in a few places.
 
 ## Further Reading
 
-如果你已经看懂首页，下面按角色选文档就够了。  
+如果首页信息已经足够，下面可按关注主题进入对应文档。  
 Do not read everything; pick the lane you care about.
 
 | If you care about... | Read this |
