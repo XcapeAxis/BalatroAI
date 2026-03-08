@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import locale
 import subprocess
 from pathlib import Path
 from typing import Any
+
+from trainer.autonomy.attention_queue import get_attention_item_status, reconcile_attention_queue
 
 
 def repo_root() -> Path:
@@ -201,6 +204,15 @@ def campaign_rows(limit: int = 48) -> list[dict[str, Any]]:
         failed = next((item for item in stages if str(item.get("status") or "") == "failed"), None)
         latest_stage = blocked or active or failed or (stages[-1] if stages else {})
         exp_id = str(payload.get("experiment_id") or "")
+        attention_item_ref = str((latest_stage or {}).get("attention_item_ref") or "")
+        attention_item_status = ""
+        if attention_item_ref:
+            try:
+                attention_item_status = str(get_attention_item_status(attention_item_ref) or "")
+            except Exception:
+                attention_item_status = ""
+        human_gate_triggered = bool((latest_stage or {}).get("human_gate_triggered") or False)
+        human_gate_open = human_gate_triggered and attention_item_status.lower() not in {"resolved", "ignored"}
         rows.append(
             {
                 "campaign_id": str(payload.get("campaign_id") or ""),
@@ -211,8 +223,10 @@ def campaign_rows(limit: int = 48) -> list[dict[str, Any]]:
                 "status": str((latest_stage or {}).get("status") or ""),
                 "autonomy_decision": str((latest_stage or {}).get("autonomy_decision") or ""),
                 "autonomy_reason": str((latest_stage or {}).get("autonomy_reason") or ""),
-                "attention_item_ref": str((latest_stage or {}).get("attention_item_ref") or ""),
-                "human_gate_triggered": bool((latest_stage or {}).get("human_gate_triggered") or False),
+                "attention_item_ref": attention_item_ref,
+                "attention_item_status": attention_item_status,
+                "human_gate_triggered": human_gate_triggered,
+                "human_gate_open": human_gate_open,
                 "state_path": str(path.resolve()),
                 "resume_command": (
                     f"powershell -ExecutionPolicy Bypass -File scripts\\run_p22.ps1 -Only {exp_id} -ResumeLatestCampaign"
@@ -272,7 +286,7 @@ def latest_promotion_queue() -> dict[str, Any]:
 
 def latest_attention_queue() -> dict[str, Any]:
     path = artifacts_root() / "attention_required" / "attention_queue.json"
-    payload = read_json(path)
+    payload = reconcile_attention_queue(path.parent) if path.parent.exists() else read_json(path)
     items = payload.get("items") if isinstance(payload, dict) and isinstance(payload.get("items"), list) else []
     open_items = [item for item in items if isinstance(item, dict) and str(item.get("status") or "") == "open"]
     return {
@@ -384,7 +398,7 @@ def blocked_campaigns(limit: int = 24) -> list[dict[str, Any]]:
     return [
         row
         for row in campaign_rows(limit=limit)
-        if bool(row.get("human_gate_triggered")) or str(row.get("status") or "") == "blocked"
+        if bool(row.get("human_gate_open")) or (str(row.get("status") or "") == "blocked" and not row.get("attention_item_ref"))
     ]
 
 
@@ -398,6 +412,8 @@ def _pid_running(pid: int) -> bool:
             capture_output=True,
             check=False,
             timeout=5,
+            encoding=locale.getpreferredencoding(False) or "mbcs",
+            errors="replace",
         )
     except Exception:
         return False

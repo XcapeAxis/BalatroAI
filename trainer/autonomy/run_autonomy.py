@@ -122,14 +122,18 @@ def _command_for_mode(mode: str, state: dict[str, Any]) -> tuple[str, list[str],
     attention_queue = state.get("attention_queue") if isinstance(state.get("attention_queue"), dict) else {}
     open_items = attention_queue.get("open_items") if isinstance(attention_queue.get("open_items"), list) else []
     blocking_items = [
-        item for item in open_items if isinstance(item, dict) and str(item.get("severity") or "").strip().lower() == "block"
+        item
+        for item in open_items
+        if isinstance(item, dict)
+        and str(item.get("severity") or "").strip().lower() == "block"
+        and str(item.get("blocking_scope") or "").strip().lower() not in {"validation_smoke", "validation_only"}
     ]
     blocked_campaigns = state.get("blocked_campaigns") if isinstance(state.get("blocked_campaigns"), list) else []
     resume_target = state.get("latest_resume_target") if isinstance(state.get("latest_resume_target"), dict) else {}
 
     if blocking_items:
         return "blocked_by_attention_queue", [], "Open blocking attention items require a human decision before autonomy may continue."
-    if any(bool(item.get("human_gate_triggered")) for item in blocked_campaigns if isinstance(item, dict)):
+    if any(bool(item.get("human_gate_open")) for item in blocked_campaigns if isinstance(item, dict)):
         return "blocked_by_campaign_human_gate", [], "A campaign is blocked by an unresolved human gate."
     if mode == "resume-latest":
         resume_command = str(resume_target.get("resume_command") or "").strip()

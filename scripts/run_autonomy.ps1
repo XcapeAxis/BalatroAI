@@ -48,6 +48,7 @@ if (-not $py) { $py = "python" }
 $args = @("-B", "-m", "trainer.autonomy.run_autonomy", "--mode", $mode)
 if (-not $DryRun) { $args += "--execute" }
 if ($TimeoutSec -gt 0) { $args += @("--timeout-sec", "$TimeoutSec") }
+$latestAutonomyJson = Join-Path $ProjectRoot "docs\\artifacts\\p60\\latest_autonomy_entry.json"
 
 Write-Host ("[P60] repo_root: " + $ProjectRoot)
 Write-Host ("[P60] training_python: " + $py)
@@ -62,7 +63,15 @@ if (-not $payloadJson) {
 try {
   $payload = $payloadJson | ConvertFrom-Json
 } catch {
-  throw ("[P60] failed to parse run_autonomy output: " + $_.Exception.Message)
+  if (Test-Path $latestAutonomyJson) {
+    try {
+      $payload = Get-Content -Path $latestAutonomyJson -Raw -Encoding UTF8 | ConvertFrom-Json
+    } catch {
+      throw ("[P60] failed to parse run_autonomy output and fallback JSON: " + $_.Exception.Message)
+    }
+  } else {
+    throw ("[P60] failed to parse run_autonomy output: " + $_.Exception.Message)
+  }
 }
 
 if ($payload.PSObject.Properties["latest_json"] -and $payload.latest_json) {

@@ -12,7 +12,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from trainer.autonomy.attention_queue import load_attention_queue, save_attention_queue
+from trainer.autonomy.attention_queue import (
+    get_attention_item_status,
+    load_attention_queue,
+    reconcile_attention_queue,
+    save_attention_queue,
+)
 
 
 def _now_iso() -> str:
@@ -53,6 +58,15 @@ def _campaign_rows(root: Path) -> list[dict[str, Any]]:
             continue
         stages = [dict(item) for item in (payload.get("stages") or []) if isinstance(item, dict)]
         current = next((stage for stage in stages if str(stage.get("status") or "") in {"running", "failed", "blocked"}), stages[-1] if stages else {})
+        attention_item_ref = str((current or {}).get("attention_item_ref") or "")
+        attention_item_status = ""
+        if attention_item_ref:
+            try:
+                attention_item_status = str(get_attention_item_status(attention_item_ref) or "")
+            except Exception:
+                attention_item_status = ""
+        human_gate_triggered = bool((current or {}).get("human_gate_triggered") if isinstance(current, dict) else False)
+        human_gate_open = human_gate_triggered and attention_item_status.lower() not in {"resolved", "ignored"}
         rows.append(
             {
                 "campaign_id": str(payload.get("campaign_id") or ""),
@@ -63,7 +77,10 @@ def _campaign_rows(root: Path) -> list[dict[str, Any]]:
                 "status": str((current or {}).get("status") or ""),
                 "autonomy_decision": str((current or {}).get("autonomy_decision") or ""),
                 "autonomy_reason": str((current or {}).get("autonomy_reason") or ""),
-                "attention_item_ref": str((current or {}).get("attention_item_ref") or ""),
+                "attention_item_ref": attention_item_ref,
+                "attention_item_status": attention_item_status,
+                "human_gate_triggered": human_gate_triggered,
+                "human_gate_open": human_gate_open,
                 "resume_safe": bool((current or {}).get("resume_safe") if isinstance(current, dict) else True),
                 "error_summary": str((current or {}).get("error_summary") or ""),
                 "state_path": str(path.resolve()),
@@ -103,7 +120,7 @@ def _promotion_queue(root: Path) -> dict[str, Any]:
 
 def _attention_queue(root: Path) -> dict[str, Any]:
     path = root / "attention_required" / "attention_queue.json"
-    payload = _read_json(path)
+    payload = reconcile_attention_queue(path.parent) if path.parent.exists() else _read_json(path)
     items = payload.get("items") if isinstance(payload, dict) and isinstance(payload.get("items"), list) else []
     open_items = [item for item in items if isinstance(item, dict) and str(item.get("status") or "") == "open"]
     return {
@@ -202,7 +219,15 @@ def _recommended_first_action(
     blocking = next((item for item in attention_open if str(item.get("severity") or "") == "block"), None)
     if isinstance(blocking, dict):
         return str(blocking.get("title") or blocking.get("summary") or "Review blocking attention item")
-    blocked_campaign = next((row for row in campaigns if str(row.get("status") or "") == "blocked"), None)
+    blocked_campaign = next(
+        (
+            row
+            for row in campaigns
+            if bool(row.get("human_gate_open"))
+            or (str(row.get("status") or "") == "failed")
+        ),
+        None,
+    )
     if isinstance(blocked_campaign, dict):
         return "Resolve blocked campaign `{}` at stage `{}`".format(
             blocked_campaign.get("campaign_id") or "",

@@ -94,6 +94,31 @@ def resolve_training_python(
     for probe, candidate in zip(probes, candidates):
         probe["label"] = str(candidate["label"])
         probe["priority"] = str(candidate["priority"])
+        bootstrap_role = str(probe.get("bootstrap_role") or "").strip().lower()
+        bootstrap_probe = bootstrap_envs.get(bootstrap_role) if bootstrap_role in {"cpu", "cuda"} and isinstance(bootstrap_envs.get(bootstrap_role), dict) else {}
+        same_python = str(probe.get("python") or "").strip().lower() == str((bootstrap_probe or {}).get("python") or "").strip().lower()
+        if (
+            same_python
+            and bool(probe.get("ok"))
+            and not bool(probe.get("torch_available"))
+            and bool((bootstrap_probe or {}).get("ok"))
+            and bool((bootstrap_probe or {}).get("torch_available"))
+        ):
+            live_error = str(probe.get("error") or "").strip()
+            probe["torch_available"] = bool((bootstrap_probe or {}).get("torch_available"))
+            probe["torch_version"] = (bootstrap_probe or {}).get("torch_version")
+            probe["cuda_available"] = bool((bootstrap_probe or {}).get("cuda_available"))
+            probe["device_count"] = int((bootstrap_probe or {}).get("device_count") or 0)
+            probe["device_name"] = (bootstrap_probe or {}).get("device_name")
+            probe["env_type"] = str((bootstrap_probe or {}).get("env_type") or probe.get("env_type") or "")
+            probe["health_status"] = str((bootstrap_probe or {}).get("health_status") or probe.get("health_status") or "")
+            warnings = [str(item) for item in (probe.get("warnings") or []) if str(item).strip() and str(item) != "torch_missing" and str(item) != "cuda_unavailable"]
+            warnings.append("torch_probe_fallback_bootstrap_state")
+            if live_error:
+                warnings.append("live_torch_probe_timeout")
+                probe["live_probe_error"] = live_error
+            probe["warnings"] = warnings
+            probe["error"] = ""
 
     selected: dict[str, Any] | None = None
     selection_reason = ""

@@ -147,8 +147,11 @@ if (-not $SkipDoctor -and (Test-Path $doctorScript)) {
   }
   Write-Host ("[P22] doctor_status=" + [string]$doctorPayload.status + " recommended_mode=" + [string]$doctorPayload.recommended_mode + " report=" + [string]$doctorPayload.json_path)
   if ([string]$doctorPayload.status -eq "blocked") {
-    $nextSteps = @($doctorPayload.next_steps) | Where-Object { $_ }
-    $hint = if ($nextSteps.Count -gt 0) { " Next: " + ($nextSteps -join " | ") } else { "" }
+    $nextSteps = @()
+    if ($doctorPayload.PSObject.Properties["next_steps"] -and $null -ne $doctorPayload.next_steps) {
+      $nextSteps = @($doctorPayload.next_steps) | Where-Object { $_ }
+    }
+    $hint = if (@($nextSteps).Count -gt 0) { " Next: " + ($nextSteps -join " | ") } else { "" }
     throw ("[P22] doctor blocked this run. Report: " + [string]$doctorPayload.json_path + "." + $hint)
   }
 }

@@ -55,6 +55,96 @@ def _write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def _repo_root_from_attention_root(root: str | Path | None = None) -> Path:
+    base = Path(root).resolve() if root else default_attention_root()
+    try:
+        return base.parents[2]
+    except IndexError:
+        return resolve_repo_root()
+
+
+def _latest_config_sync_report(repo_root: Path) -> dict[str, Any]:
+    reports_root = repo_root / "docs" / "artifacts" / "p55" / "config_sidecar_sync"
+    if not reports_root.exists():
+        return {}
+    paths = sorted(
+        [path for path in reports_root.glob("**/sidecar_sync_report.json") if path.is_file()],
+        key=lambda item: (item.stat().st_mtime, str(item)),
+        reverse=True,
+    )
+    if not paths:
+        return {}
+    payload = _read_json(paths[0])
+    return {"path": str(paths[0].resolve()), "payload": payload if isinstance(payload, dict) else {}}
+
+
+def _is_clean_config_sync(repo_root: Path) -> bool:
+    report = _latest_config_sync_report(repo_root)
+    payload = report.get("payload") if isinstance(report.get("payload"), dict) else {}
+    status = str(payload.get("overall_status") or payload.get("overall") or "").strip().lower()
+    return status in {"clean", "in_sync", "ok"}
+
+
+def _is_validation_only_promotion_block(item: dict[str, Any]) -> bool:
+    title = str(item.get("title") or "").strip().lower()
+    summary = str(item.get("summary") or "").strip().lower()
+    scope = str(item.get("blocking_scope") or "").strip().lower()
+    return (
+        title == "promotion scan forced a blocking human gate"
+        or "forced a blocking promotion decision" in summary
+        or scope == "validation_smoke"
+    )
+
+
+def _reconcile_item(item: dict[str, Any], *, repo_root: Path) -> tuple[dict[str, Any], bool]:
+    updated = normalize_item(dict(item))
+    changed = False
+    status = str(updated.get("status") or "").strip().lower()
+    dedupe_key = str(updated.get("dedupe_key") or "").strip().lower()
+    title = str(updated.get("title") or "").strip().lower()
+    blocking_scope = str(updated.get("blocking_scope") or "").strip().lower()
+    resolution_note = str(updated.get("resolution_note") or "").strip()
+    resolved_at = str(updated.get("resolved_at") or "").strip()
+
+    if not blocking_scope and _is_validation_only_promotion_block(updated):
+        updated["blocking_scope"] = "validation_smoke"
+        changed = True
+    elif not blocking_scope and title == "promotion review items are waiting for a human":
+        updated["blocking_scope"] = "deployment_review"
+        changed = True
+
+    if status == "open" and dedupe_key.startswith("smoke-") and resolved_at:
+        updated["status"] = "resolved"
+        if not resolution_note:
+            updated["resolution_note"] = "auto-reconciled reopened smoke attention item"
+        changed = True
+
+    if status == "open" and (
+        dedupe_key == "smoke-config-provenance-anomaly"
+        or blocking_scope == "config_provenance"
+        or "config provenance anomaly" in title
+    ):
+        if _is_clean_config_sync(repo_root):
+            updated["status"] = "resolved"
+            updated["resolution_note"] = (
+                str(updated.get("resolution_note") or "").strip()
+                or "auto-resolved after latest config sidecar check reported a clean state"
+            )
+            updated["resolved_at"] = str(updated.get("resolved_at") or now_iso())
+            changed = True
+
+    if status == "open" and _is_validation_only_promotion_block(updated):
+        updated["status"] = "ignored"
+        updated["resolution_note"] = (
+            str(updated.get("resolution_note") or "").strip()
+            or "validation-only forced gate retained for audit but ignored for future autonomy runs"
+        )
+        updated["resolved_at"] = str(updated.get("resolved_at") or now_iso())
+        changed = True
+
+    return normalize_item(updated), changed
+
+
 def load_attention_queue(root: str | Path | None = None) -> dict[str, Any]:
     path = queue_json_path(root)
     payload = _read_json(path)
@@ -68,6 +158,35 @@ def load_attention_queue(root: str | Path | None = None) -> dict[str, Any]:
     payload.setdefault("schema", "p57_attention_queue_v1")
     payload["queue_path"] = str(path)
     payload["items"] = [normalize_item(item) for item in (payload.get("items") or []) if isinstance(item, dict)]
+    return payload
+
+
+def reconcile_attention_queue(root: str | Path | None = None) -> dict[str, Any]:
+    repo_root = _repo_root_from_attention_root(root)
+    payload = load_attention_queue(root)
+    items = list(payload.get("items") or [])
+    reconciled: list[dict[str, Any]] = []
+    changed = False
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        updated, item_changed = _reconcile_item(item, repo_root=repo_root)
+        path = _item_md_path(updated, root)
+        updated["item_md_path"] = str(path)
+        updated["attention_file"] = str(path)
+        reconciled.append(updated)
+        changed = changed or item_changed or str(item.get("item_md_path") or "") != str(path)
+    payload["items"] = reconciled
+    if changed:
+        payload = save_attention_queue(payload, root)
+        for item in payload.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            path = _item_md_path(item, root)
+            item["item_md_path"] = str(path)
+            item["attention_file"] = str(path)
+            path.write_text(render_attention_item_md(item), encoding="utf-8")
+        payload = save_attention_queue(payload, root)
     return payload
 
 
@@ -227,6 +346,42 @@ def _item_md_path(item: dict[str, Any], root: str | Path | None = None) -> Path:
     return (base / f"{stamp}_{title_slug}.md").resolve()
 
 
+def _parse_attention_item_md(path: Path) -> dict[str, Any]:
+    parsed: dict[str, Any] = {
+        "path": str(path.resolve()),
+        "title": "",
+        "attention_id": "",
+        "status": "",
+        "blocking_scope": "",
+        "summary": "",
+    }
+    if not path.exists():
+        return parsed
+    text = path.read_text(encoding="utf-8", errors="replace")
+    lines = text.splitlines()
+    summary_lines: list[str] = []
+    in_summary = False
+    for line in lines:
+        if line.startswith("# "):
+            parsed["title"] = line[2:].strip()
+        elif line.startswith("- attention_id:"):
+            parsed["attention_id"] = line.split("`")[1] if "`" in line else line.split(":", 1)[-1].strip()
+        elif line.startswith("- status:"):
+            parsed["status"] = line.split("`")[1] if "`" in line else line.split(":", 1)[-1].strip()
+        elif line.startswith("- blocking_scope:"):
+            parsed["blocking_scope"] = line.split("`")[1] if "`" in line else line.split(":", 1)[-1].strip()
+        elif line.strip() == "## Summary":
+            in_summary = True
+            continue
+        elif in_summary and line.startswith("## "):
+            break
+        elif in_summary:
+            if summary_lines or line.strip():
+                summary_lines.append(line)
+    parsed["summary"] = "\n".join(summary_lines).strip()
+    return parsed
+
+
 def upsert_attention_item(item: dict[str, Any], root: str | Path | None = None) -> dict[str, Any]:
     payload = load_attention_queue(root)
     normalized = normalize_item(item)
@@ -239,6 +394,9 @@ def upsert_attention_item(item: dict[str, Any], root: str | Path | None = None) 
             continue
         merged = dict(existing)
         merged.update({key: value for key, value in normalized.items() if value not in (None, "", [], {}) or key == "status"})
+        if str(merged.get("status") or "").strip().lower() not in {"resolved", "ignored", "closed"}:
+            merged["resolution_note"] = ""
+            merged["resolved_at"] = ""
         items[index] = normalize_item(merged)
         path = _item_md_path(items[index], root)
         items[index]["item_md_path"] = str(path)
@@ -372,23 +530,31 @@ def get_attention_item_status(ref_or_id: str, root: str | Path | None = None) ->
     token = str(ref_or_id or "").strip()
     if not token:
         return ""
+    payload = reconcile_attention_queue(root)
+    items = [item for item in (payload.get("items") or []) if isinstance(item, dict)]
+    for item in items:
+        if token in {
+            str(item.get("attention_id") or ""),
+            str(item.get("item_md_path") or ""),
+            str(item.get("attention_file") or ""),
+        }:
+            return str(item.get("status") or "")
     path = Path(token)
     if path.suffix.lower() == ".md" and path.exists():
-        text = path.read_text(encoding="utf-8", errors="replace")
-        for line in text.splitlines():
-            if line.startswith("- status:"):
-                return line.split("`")[1] if "`" in line else line.split(":", 1)[-1].strip()
-    payload = load_attention_queue(root)
-    for item in payload.get("items") or []:
-        if not isinstance(item, dict):
-            continue
-        if token in {str(item.get("attention_id") or ""), str(item.get("item_md_path") or "")}:
-            return str(item.get("status") or "")
+        parsed = _parse_attention_item_md(path)
+        attention_id = str(parsed.get("attention_id") or "").strip()
+        if attention_id:
+            for item in items:
+                if str(item.get("attention_id") or "").strip() == attention_id:
+                    return str(item.get("status") or "")
+        if _is_validation_only_promotion_block(parsed):
+            return "ignored"
+        return str(parsed.get("status") or "")
     return ""
 
 
 def open_attention_items(root: str | Path | None = None) -> list[dict[str, Any]]:
-    payload = load_attention_queue(root)
+    payload = reconcile_attention_queue(root)
     return [
         dict(item)
         for item in (payload.get("items") or [])

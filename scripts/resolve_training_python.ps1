@@ -39,6 +39,7 @@ $bootstrap = Resolve-BootstrapPython
 $args = @()
 $args += $bootstrap.prefix
 $args += @("-B", "-m", "trainer.runtime.python_resolver", "--emit", $Emit)
+$args += @("--timeout-sec", "180")
 if ($ExplicitPython.Trim()) { $args += @("--explicit-python", $ExplicitPython) }
 if ($ExplicitEnv.Trim()) { $args += @("--explicit-env", $ExplicitEnv) }
 if ($RequireCuda) { $args += "--require-cuda" }

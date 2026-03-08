@@ -121,6 +121,7 @@ def probe_python_interpreter(
 ) -> dict[str, Any]:
     root = repo_root.resolve() if isinstance(repo_root, Path) else resolve_repo_root()
     python_path = normalize_python_path(candidate)
+    probe_script = (root / "scripts" / "python_env_probe.py").resolve()
     env_dir = _env_dir_for_python(python_path)
     env_name = env_dir.name if isinstance(env_dir, Path) else ""
     bootstrap_role = _repo_env_role(env_dir, root)
@@ -150,38 +151,17 @@ def probe_python_interpreter(
         payload["error"] = "python_not_found"
         return payload
 
-    probe_code = (
-        "import json, sys\n"
-        "data = {'python': sys.executable, 'python_version': sys.version.replace('\\n', ' ').strip(), 'prefix': sys.prefix, 'base_prefix': getattr(sys, 'base_prefix', sys.prefix)}\n"
-        "try:\n"
-        "  import yaml\n"
-        "  data['yaml_available'] = True\n"
-        "  data['yaml_version'] = str(getattr(yaml, '__version__', ''))\n"
-        "except Exception as exc:\n"
-        "  data['yaml_available'] = False\n"
-        "  data['yaml_version'] = None\n"
-        "  data['yaml_error'] = repr(exc)\n"
-        "try:\n"
-        "  import torch\n"
-        "  cuda = bool(torch.cuda.is_available())\n"
-        "  data.update({'torch_available': True, 'torch_version': str(torch.__version__), 'cuda_available': cuda, 'device_count': int(torch.cuda.device_count()) if cuda else 0, 'device_name': str(torch.cuda.get_device_name(0)) if cuda and int(torch.cuda.device_count()) > 0 else None})\n"
-        "except Exception as exc:\n"
-        "  data.update({'torch_available': False, 'torch_version': None, 'cuda_available': False, 'device_count': 0, 'device_name': None, 'torch_error': repr(exc)})\n"
-        "try:\n"
-        "  import pip\n"
-        "  data['pip_version'] = str(getattr(pip, '__version__', ''))\n"
-        "except Exception as exc:\n"
-        "  data['pip_version'] = None\n"
-        "  data['pip_error'] = repr(exc)\n"
-        "print(json.dumps(data, ensure_ascii=False))\n"
+    base_result = _run_command(
+        [str(python_path), "-B", str(probe_script), "--kind", "base"],
+        cwd=root,
+        timeout_sec=timeout_sec,
     )
-    result = _run_command([str(python_path), "-c", probe_code], cwd=root, timeout_sec=timeout_sec)
-    if int(result.get("returncode") or 0) != 0:
-        payload["error"] = str(result.get("stderr") or result.get("stdout") or "probe_failed").strip()
+    if int(base_result.get("returncode") or 0) != 0:
+        payload["error"] = str(base_result.get("stderr") or base_result.get("stdout") or "probe_failed").strip()
         payload["health_status"] = "failed"
         return payload
     try:
-        probe = json.loads(str(result.get("stdout") or "").strip())
+        base_probe = json.loads(str(base_result.get("stdout") or "").strip())
     except Exception as exc:
         payload["error"] = f"invalid_probe_output:{exc!r}"
         payload["health_status"] = "failed"
@@ -190,17 +170,39 @@ def probe_python_interpreter(
     payload.update(
         {
             "ok": True,
-            "python": str(probe.get("python") or python_path),
-            "python_version": str(probe.get("python_version") or ""),
-            "torch_available": bool(probe.get("torch_available")),
-            "torch_version": probe.get("torch_version"),
-            "cuda_available": bool(probe.get("cuda_available")),
-            "device_count": int(probe.get("device_count") or 0),
-            "device_name": probe.get("device_name"),
-            "yaml_available": bool(probe.get("yaml_available")),
-            "yaml_version": probe.get("yaml_version"),
-            "pip_version": probe.get("pip_version"),
-            "error": str(probe.get("torch_error") or probe.get("yaml_error") or ""),
+            "python": str(base_probe.get("python") or python_path),
+            "python_version": str(base_probe.get("python_version") or ""),
+            "yaml_available": bool(base_probe.get("yaml_available")),
+            "yaml_version": base_probe.get("yaml_version"),
+            "pip_version": base_probe.get("pip_version"),
+            "error": str(base_probe.get("yaml_error") or ""),
+        }
+    )
+
+    torch_timeout_sec = max(10, min(int(timeout_sec), 30))
+    torch_result = _run_command(
+        [str(python_path), "-B", str(probe_script), "--kind", "torch"],
+        cwd=root,
+        timeout_sec=torch_timeout_sec,
+    )
+    torch_probe: dict[str, Any] = {}
+    if int(torch_result.get("returncode") or 0) == 0:
+        try:
+            parsed = json.loads(str(torch_result.get("stdout") or "").strip())
+            torch_probe = parsed if isinstance(parsed, dict) else {}
+        except Exception as exc:
+            payload["warnings"].append(f"torch_probe_invalid_output:{exc!r}")
+    else:
+        payload["warnings"].append("torch_probe_failed")
+        payload["error"] = str(torch_result.get("stderr") or torch_result.get("stdout") or payload.get("error") or "").strip()
+
+    payload.update(
+        {
+            "torch_available": bool(torch_probe.get("torch_available")),
+            "torch_version": torch_probe.get("torch_version"),
+            "cuda_available": bool(torch_probe.get("cuda_available")),
+            "device_count": int(torch_probe.get("device_count") or 0),
+            "device_name": torch_probe.get("device_name"),
         }
     )
     warnings: list[str] = []
@@ -211,7 +213,7 @@ def probe_python_interpreter(
     if bootstrap_role == "cuda" and not bool(payload.get("cuda_available")):
         warnings.append("cuda_unavailable")
     payload["health_status"] = "ready" if not warnings else ("degraded" if bool(payload.get("ok")) else "failed")
-    payload["warnings"] = warnings
+    payload["warnings"] = warnings + [warning for warning in payload.get("warnings", []) if warning not in warnings]
     payload["env_type"] = "cuda" if bool(payload.get("cuda_available")) else ("cpu" if bool(payload.get("torch_available")) else "unknown")
     return payload
 

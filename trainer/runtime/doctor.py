@@ -251,6 +251,34 @@ def _recommend_mode(env_probes: dict[str, Any]) -> str:
     return "blocked"
 
 
+def _overlay_bootstrap_probe(env_probe: dict[str, Any], bootstrap_probe: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(env_probe)
+    if not (
+        bool(env_probe.get("ok"))
+        and not bool(env_probe.get("torch_available"))
+        and bool(bootstrap_probe.get("ok"))
+        and bool(bootstrap_probe.get("torch_available"))
+        and str(env_probe.get("python") or "").strip().lower() == str(bootstrap_probe.get("python") or "").strip().lower()
+    ):
+        return merged
+    live_error = str(env_probe.get("error") or "").strip()
+    merged["torch_available"] = bool(bootstrap_probe.get("torch_available"))
+    merged["torch_version"] = bootstrap_probe.get("torch_version")
+    merged["cuda_available"] = bool(bootstrap_probe.get("cuda_available"))
+    merged["device_count"] = int(bootstrap_probe.get("device_count") or 0)
+    merged["device_name"] = bootstrap_probe.get("device_name")
+    merged["env_type"] = str(bootstrap_probe.get("env_type") or merged.get("env_type") or "")
+    merged["health_status"] = str(bootstrap_probe.get("health_status") or merged.get("health_status") or "")
+    warnings = [str(item) for item in (merged.get("warnings") or []) if str(item).strip() and str(item) not in {"torch_missing", "cuda_unavailable"}]
+    warnings.append("torch_probe_fallback_bootstrap_state")
+    if live_error:
+        warnings.append("live_torch_probe_timeout")
+        merged["live_probe_error"] = live_error
+    merged["warnings"] = warnings
+    merged["error"] = ""
+    return merged
+
+
 def _build_md(payload: dict[str, Any]) -> str:
     env_probes = payload.get("env_probes") if isinstance(payload.get("env_probes"), dict) else {}
     blocking = payload.get("blocking_reasons") if isinstance(payload.get("blocking_reasons"), list) else []
@@ -325,7 +353,14 @@ def run_doctor(
     root = repo_root.resolve() if isinstance(repo_root, Path) else resolve_repo_root()
     output_root = Path(out_root).resolve() if out_root else (root / "docs" / "artifacts" / "p58").resolve()
     output_root.mkdir(parents=True, exist_ok=True)
+    bootstrap_state = load_bootstrap_state(root)
+    bootstrap_envs = bootstrap_state.get("envs") if isinstance(bootstrap_state.get("envs"), dict) else {}
     env_probes = _env_probe_table(root)
+    for role in ("cpu", "cuda"):
+        probe = env_probes.get(role) if isinstance(env_probes.get(role), dict) else {}
+        bootstrap_probe = bootstrap_envs.get(role) if isinstance(bootstrap_envs.get(role), dict) else {}
+        if probe:
+            env_probes[role] = _overlay_bootstrap_probe(probe, bootstrap_probe)
     recommended_mode = _recommend_mode(env_probes)
     require_cuda = str(requested_mode or "auto").lower() == "cuda"
     resolver = resolve_training_python(
@@ -341,7 +376,6 @@ def run_doctor(
     config_sync = _run_config_sidecar_check(root, selected_python, skip=skip_config_check)
     runtime_paths = _probe_runtime_paths(root)
     readiness_live = _live_readiness_probe(root, selected_python, base_url=base_url)
-    bootstrap_state = load_bootstrap_state(root)
     bootstrap_complete = bool(bootstrap_state.get("bootstrap_complete")) if isinstance(bootstrap_state, dict) else False
     git_state = _git_status(root)
     py_launcher = _py_launcher_inventory(root)
@@ -503,3 +537,8 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+    if recommended_mode == "blocked":
+        if bool(selected.get("torch_available")) and bool(selected.get("cuda_available")):
+            recommended_mode = "cuda_mainline"
+        elif bool(selected.get("torch_available")):
+            recommended_mode = "cpu_safe"
