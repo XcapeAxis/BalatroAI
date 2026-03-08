@@ -182,6 +182,29 @@ def run_process(
         }
 
 
+def _text_tail(value: Any, limit: int = 4000) -> str:
+    return str(value or "")[-max(1, int(limit)) :]
+
+
+def _result_error(
+    result: dict[str, Any],
+    *,
+    label: str,
+    missing_output_reason: str = "",
+) -> str:
+    stderr_tail = _text_tail(result.get("stderr"))
+    if stderr_tail.strip():
+        return stderr_tail.strip()
+    stdout_tail = _text_tail(result.get("stdout"))
+    if stdout_tail.strip():
+        return stdout_tail.strip()
+    if bool(result.get("timed_out")):
+        return f"{label}_timed_out"
+    if missing_output_reason:
+        return missing_output_reason
+    return f"{label}_returncode_{int(result.get('returncode') or 0)}"
+
+
 def parse_csv_list(text: str) -> set[str]:
     if not text:
         return set()
@@ -1772,19 +1795,31 @@ def _run_policy_arena_seed_experiment(
         "summary_path": str(summary_path),
         "bucket_path": str(bucket_path),
         "warnings_path": str(warnings_path),
+        "arena_timed_out": bool(arena_result.get("timed_out")),
+        "arena_elapsed_sec": float(arena_result.get("elapsed_sec") or 0.0),
+        "arena_stdout_tail": _text_tail(arena_result.get("stdout")),
+        "arena_stderr_tail": _text_tail(arena_result.get("stderr")),
+        "champion_rules_timed_out": bool(champion_result.get("timed_out")),
+        "champion_rules_stdout_tail": _text_tail(champion_result.get("stdout")),
+        "champion_rules_stderr_tail": _text_tail(champion_result.get("stderr")),
         "metrics": metrics,
         "champion_decision": champion_payload if isinstance(champion_payload, dict) else {},
     }
-    _append_p39_orchestrator_summary(ctx, summary_payload)
-
+    arena_error = ""
     status = "ok"
     if int(arena_result.get("returncode") or 0) != 0:
         status = "failed"
-    if not isinstance(focus_row, dict):
+        arena_error = _result_error(arena_result, label="policy_arena")
+    elif not isinstance(focus_row, dict):
         status = "failed"
+        arena_error = "policy_arena_missing_focus_row"
+    if arena_error:
+        summary_payload["error"] = arena_error
+    _append_p39_orchestrator_summary(ctx, summary_payload)
 
     return {
         "status": status,
+        "error": arena_error,
         "metrics": metrics,
         "summary": {
             "arena": arena_result,
@@ -4033,6 +4068,11 @@ def _run_closed_loop_seed_experiment(
 
     closed_loop_ok = int(result.get("returncode") or 0) == 0 and run_manifest_path.exists()
     if not closed_loop_ok:
+        closed_loop_error = _result_error(
+            result,
+            label="closed_loop",
+            missing_output_reason="closed_loop_missing_run_manifest",
+        )
         payload = {
             "schema": (
                 "p42_orchestrator_seed_summary_v1"
@@ -4050,6 +4090,11 @@ def _run_closed_loop_seed_experiment(
             "run_manifest_path": str(run_manifest_path),
             "summary_table_path": str(summary_table_path),
             "promotion_decision_path": str(decision_path),
+            "closed_loop_timed_out": bool(result.get("timed_out")),
+            "closed_loop_elapsed_sec": float(result.get("elapsed_sec") or 0.0),
+            "closed_loop_stdout_tail": _text_tail(result.get("stdout")),
+            "closed_loop_stderr_tail": _text_tail(result.get("stderr")),
+            "error": closed_loop_error,
             "summary_row": summary_row if isinstance(summary_row, dict) else {},
             "pipeline_type": (
                 "p44_distributed_rl"
@@ -4066,6 +4111,7 @@ def _run_closed_loop_seed_experiment(
             _append_p40_orchestrator_summary(ctx, payload)
         return {
             "status": "failed",
+            "error": closed_loop_error,
             "metrics": {},
             "summary": {
                 "closed_loop": result,
@@ -4145,6 +4191,10 @@ def _run_closed_loop_seed_experiment(
         "run_manifest_path": str(run_manifest_path),
         "summary_table_path": str(summary_table_path),
         "promotion_decision_path": str(decision_path),
+        "closed_loop_timed_out": bool(result.get("timed_out")),
+        "closed_loop_elapsed_sec": float(result.get("elapsed_sec") or 0.0),
+        "closed_loop_stdout_tail": _text_tail(result.get("stdout")),
+        "closed_loop_stderr_tail": _text_tail(result.get("stderr")),
         "summary_row": summary_row if isinstance(summary_row, dict) else {},
         "pipeline_type": (
             "p44_distributed_rl"
@@ -5239,12 +5289,17 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                         }
                     )
                 else:
+                    arena_summary = arena_result.get("summary") if isinstance(arena_result.get("summary"), dict) else {}
+                    arena_process = arena_summary.get("arena") if isinstance(arena_summary.get("arena"), dict) else {}
+                    arena_elapsed_sec = _as_number(arena_process.get("elapsed_sec"))
+                    arena_error = str(arena_result.get("error") or "").strip()
                     seed_results.append(
                         {
                             "seed": seed,
                             "status": "ok" if arena_result["status"] == "ok" else "failed",
                             "stage": "eval",
-                            "elapsed_sec": elapsed(),
+                            "error": arena_error or None,
+                            "elapsed_sec": arena_elapsed_sec if arena_elapsed_sec is not None else elapsed(),
                             "metrics": dict(arena_result.get("metrics") or {}),
                             "policy_arena_summary": arena_result.get("summary") or {},
                         }
@@ -5850,12 +5905,23 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                         }
                     )
                 else:
+                    closed_loop_summary = (
+                        closed_loop_result.get("summary") if isinstance(closed_loop_result.get("summary"), dict) else {}
+                    )
+                    closed_loop_process = (
+                        closed_loop_summary.get("closed_loop")
+                        if isinstance(closed_loop_summary.get("closed_loop"), dict)
+                        else {}
+                    )
+                    closed_loop_elapsed_sec = _as_number(closed_loop_process.get("elapsed_sec"))
+                    closed_loop_error = str(closed_loop_result.get("error") or "").strip()
                     seed_results.append(
                         {
                             "seed": seed,
                             "status": "ok" if closed_loop_result["status"] == "ok" else "failed",
                             "stage": "eval",
-                            "elapsed_sec": elapsed(),
+                            "error": closed_loop_error or None,
+                            "elapsed_sec": closed_loop_elapsed_sec if closed_loop_elapsed_sec is not None else elapsed(),
                             "metrics": dict(closed_loop_result.get("metrics") or {}),
                             "closed_loop_summary": closed_loop_result.get("summary") or {},
                         }

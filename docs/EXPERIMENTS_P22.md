@@ -356,6 +356,11 @@ Generated artifacts:
 - `docs/artifacts/p22/runs/<run_id>/p39_policy_arena_smoke/policy_arena_runs/seed_*/arena_runs/<seed_run_id>/bucket_metrics.json`
 - optional champion decision outputs under `.../champion_eval/`
 
+Operational notes:
+
+- `p39_summary.json` is the first stop for helper-backed failures; it now records `arena_timed_out`, `arena_elapsed_sec`, `arena_stdout_tail`, `arena_stderr_tail`, and a normalized `error` field per seed.
+- if a seed row in `exp_summary.json` shows `error=null` but the status is failed, inspect the matching seed entry in `p39_summary.json` before digging into raw logs.
+
 ## P53 Background Execution + Ops UI Integration
 
 P53 adds `experiment_type: p53_background_ops_campaign` so P22 can validate background execution and publish the local ops-console metadata as part of the same orchestrated run.
@@ -420,6 +425,8 @@ Operational notes:
 
 - `scripts/run_p22.ps1 -Quick` includes `p40_closed_loop_smoke` by default.
 - `seeds_used.json` is still recorded per experiment; closed-loop internals also emit per-module seed manifests.
+- `p40_summary.json` now persists `closed_loop_timed_out`, `closed_loop_elapsed_sec`, `closed_loop_stdout_tail`, `closed_loop_stderr_tail`, and a normalized `error` field for each helper-backed seed run.
+- if the orchestrator marks a seed as failed before `run_manifest.json` is written, use `p40_summary.json` first; it carries the subprocess timeout/stdio context that is not visible in `summary_table.json`.
 - P40 v1 does not auto-replace champion metadata; output is recommendation-only.
 
 ## P41 Closed-loop Improvement v2 Integration

@@ -12,6 +12,7 @@ import ctypes.wintypes
 import csv
 import io
 import json
+import locale
 import os
 import subprocess
 import time
@@ -108,7 +109,21 @@ def _safe_bool(value: Any, default: bool = False) -> bool:
 def _process_table() -> dict[int, dict[str, str]]:
     if os.name != "nt":
         return {}
-    raw = subprocess.check_output(["tasklist", "/fo", "csv", "/nh"], text=True, encoding="utf-8", errors="ignore")
+    try:
+        proc = subprocess.run(
+            ["tasklist", "/fo", "csv", "/nh"],
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=10,
+            encoding=locale.getpreferredencoding(False) or "mbcs",
+            errors="replace",
+        )
+    except Exception:
+        return {}
+    raw = str(proc.stdout or "")
+    if not raw.strip():
+        return {}
     reader = csv.reader(io.StringIO(raw))
     mapping: dict[int, dict[str, str]] = {}
     for row in reader:
