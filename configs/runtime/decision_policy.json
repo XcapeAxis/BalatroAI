@@ -1,0 +1,52 @@
+{
+  "schema": "p57_decision_policy_v1",
+  "auto_allow_actions": [
+    "code_modify",
+    "config_modify",
+    "update_config_sidecars",
+    "run_training",
+    "run_evaluation",
+    "run_arena",
+    "run_triage",
+    "build_dashboard",
+    "build_morning_summary",
+    "build_attention_queue",
+    "update_registry",
+    "update_campaign_state",
+    "resume_campaign",
+    "cleanup_artifacts",
+    "switch_window_mode"
+  ],
+  "auto_suggest_actions": [
+    "promote_candidate",
+    "change_training_profile",
+    "archive_checkpoints",
+    "recommend_deployment_mode",
+    "recommend_cleanup_exception"
+  ],
+  "human_required_actions": [
+    "install_dependencies",
+    "update_system_drivers",
+    "destructive_git",
+    "force_push",
+    "delete_branches",
+    "promote_checkpoint_live",
+    "rewrite_history",
+    "irreversible_source_delete"
+  ],
+  "stop_conditions": [
+    "unresolved_attention_item",
+    "campaign_stage_blocked",
+    "config_provenance_unrecoverable",
+    "environment_change_required",
+    "readiness_guard_failed_no_fallback",
+    "unexplained_major_regression",
+    "insufficient_statistics_for_promotion"
+  ],
+  "continue_on_warning_conditions": [
+    "promotion_review_pending",
+    "advisory_attention_item_open",
+    "transient_retry_recovered",
+    "dashboard_rebuild_recovered"
+  ]
+}

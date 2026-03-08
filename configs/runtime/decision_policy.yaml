@@ -1,0 +1,46 @@
+schema: p57_decision_policy_v1
+auto_allow_actions:
+  - code_modify
+  - config_modify
+  - run_training
+  - run_evaluation
+  - run_arena
+  - run_triage
+  - run_dashboard_build
+  - run_cleanup
+  - update_config_sidecars
+  - resume_campaign
+  - update_registry
+  - update_campaign_state
+  - create_attention_item
+  - build_morning_summary
+  - inspect_promotion_queue
+auto_suggest_actions:
+  - switch_window_mode
+  - archive_checkpoints
+  - adjust_training_profile
+  - promote_canary_candidate
+must_block_for_human_description: actions that require explicit human sign-off
+human_required_actions:
+  - install_dependencies
+  - change_driver_or_cuda
+  - rewrite_git_history
+  - force_push
+  - delete_source_tree
+  - delete_branches
+  - promote_checkpoint
+  - switch_champion_checkpoint
+  - change_training_profile
+  - destructive_cleanup
+stop_conditions:
+  - env_dependency_change_required
+  - config_provenance_mismatch
+  - unexplained_major_regression
+  - insufficient_statistical_evidence
+  - unresolved_human_gate
+  - campaign_stage_blocked
+continue_on_warning_conditions:
+  - dashboard_build_warning
+  - promotion_review_pending
+  - blocked_campaign_review_pending
+  - background_mode_warning
