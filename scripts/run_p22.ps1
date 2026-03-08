@@ -57,6 +57,15 @@ $env:BALATRO_SETUP_MODE_REQUESTED = [string]$SetupMode
 $env:BALATRO_DOCTOR_RECOMMENDED_MODE = ""
 $env:BALATRO_TRAIN_ENV_SOURCE = ""
 $env:BALATRO_TRAIN_ENV_NAME = ""
+if (-not $env:BALATRO_AGENTS_ROOT_PRESENT) {
+  $env:BALATRO_AGENTS_ROOT_PRESENT = if (Test-Path (Join-Path $ProjectRoot "AGENTS.md")) { "true" } else { "false" }
+}
+if (-not $env:BALATRO_DECISION_POLICY_PATH) {
+  $decisionPolicyPath = Join-Path $ProjectRoot "configs\\runtime\\decision_policy.yaml"
+  if (Test-Path $decisionPolicyPath) {
+    $env:BALATRO_DECISION_POLICY_PATH = $decisionPolicyPath
+  }
+}
 
 $doctorPayload = $null
 $doctorScript = Join-Path $ProjectRoot "scripts\\doctor.ps1"

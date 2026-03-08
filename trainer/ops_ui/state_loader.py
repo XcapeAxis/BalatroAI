@@ -307,6 +307,48 @@ def latest_doctor_report() -> dict[str, Any]:
     }
 
 
+def agents_status() -> dict[str, Any]:
+    root = repo_root()
+    paths = {
+        "root": root / "AGENTS.md",
+        "trainer": root / "trainer" / "AGENTS.md",
+        "sim": root / "sim" / "AGENTS.md",
+        "scripts": root / "scripts" / "AGENTS.md",
+        "docs": root / "docs" / "AGENTS.md",
+        "configs": root / "configs" / "AGENTS.md",
+    }
+    return {
+        "paths": {name: str(path.resolve()) for name, path in paths.items()},
+        "present": {name: path.exists() for name, path in paths.items()},
+        "root_present": paths["root"].exists(),
+        "subdir_present_count": sum(1 for name, path in paths.items() if name != "root" and path.exists()),
+    }
+
+
+def latest_agents_consistency() -> dict[str, Any]:
+    root = artifacts_root() / "p59"
+    latest_json = root / "latest_agents_consistency.json"
+    latest_md = root / "latest_agents_consistency.md"
+    payload = read_json(latest_json)
+    return {
+        "json_path": str(latest_json.resolve()),
+        "md_path": str(latest_md.resolve()),
+        "payload": payload if isinstance(payload, dict) else {},
+    }
+
+
+def latest_autonomy_entry() -> dict[str, Any]:
+    root = artifacts_root() / "p59"
+    latest_json = root / "latest_autonomy_entry.json"
+    latest_md = root / "latest_autonomy_entry.md"
+    payload = read_json(latest_json)
+    return {
+        "json_path": str(latest_json.resolve()),
+        "md_path": str(latest_md.resolve()),
+        "payload": payload if isinstance(payload, dict) else {},
+    }
+
+
 def environment_status() -> dict[str, Any]:
     doctor = latest_doctor_report()
     bootstrap = latest_bootstrap_state()
@@ -428,6 +470,9 @@ def build_ops_state(
         "morning_summary": latest_morning_summary(),
         "bootstrap": latest_bootstrap_state(),
         "doctor": latest_doctor_report(),
+        "agents": agents_status(),
+        "agents_consistency": latest_agents_consistency(),
+        "autonomy_entry": latest_autonomy_entry(),
         "environment": environment_status(),
         "readiness": latest_readiness_report(),
         "window_state": latest_window_state(),

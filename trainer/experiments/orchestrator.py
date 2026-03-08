@@ -119,6 +119,27 @@ def _resolved_training_env_name() -> str:
     return str(os.environ.get("BALATRO_TRAIN_ENV_NAME") or "").strip()
 
 
+def _resolved_autonomy_entry_ref() -> str:
+    return str(os.environ.get("BALATRO_AUTONOMY_ENTRY_REF") or "").strip()
+
+
+def _resolved_agents_root_present() -> bool:
+    token = str(os.environ.get("BALATRO_AGENTS_ROOT_PRESENT") or "").strip().lower()
+    return token in {"1", "true", "yes", "on"}
+
+
+def _resolved_decision_policy_path() -> str:
+    return str(os.environ.get("BALATRO_DECISION_POLICY_PATH") or "").strip()
+
+
+def _resolved_attention_queue_path() -> str:
+    return str(os.environ.get("BALATRO_ATTENTION_QUEUE_PATH") or "").strip()
+
+
+def _resolved_morning_summary_path() -> str:
+    return str(os.environ.get("BALATRO_MORNING_SUMMARY_PATH") or "").strip()
+
+
 def run_process(
     command: str | list[str],
     *,
@@ -6152,9 +6173,11 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             or ""
         ),
         "autonomy_mode": str(final_seed_metrics.get("autonomy_mode") or final_seed_summary.get("autonomy_mode") or ""),
-        "decision_policy_path": str(final_seed_metrics.get("decision_policy_path") or final_seed_summary.get("decision_policy_path") or ""),
-        "attention_queue_path": str(final_seed_metrics.get("attention_queue_path") or final_seed_summary.get("attention_queue_path") or ""),
-        "morning_summary_path": str(final_seed_metrics.get("morning_summary_path") or final_seed_summary.get("morning_summary_path") or ""),
+        "agents_root_present": bool(final_seed_metrics.get("agents_root_present") or final_seed_summary.get("agents_root_present") or _resolved_agents_root_present()),
+        "autonomy_entry_ref": str(final_seed_metrics.get("autonomy_entry_ref") or final_seed_summary.get("autonomy_entry_ref") or _resolved_autonomy_entry_ref() or ""),
+        "decision_policy_path": str(final_seed_metrics.get("decision_policy_path") or final_seed_summary.get("decision_policy_path") or _resolved_decision_policy_path() or ""),
+        "attention_queue_path": str(final_seed_metrics.get("attention_queue_path") or final_seed_summary.get("attention_queue_path") or _resolved_attention_queue_path() or ""),
+        "morning_summary_path": str(final_seed_metrics.get("morning_summary_path") or final_seed_summary.get("morning_summary_path") or _resolved_morning_summary_path() or ""),
         "human_gate_triggered": bool(final_seed_metrics.get("human_gate_triggered") or final_seed_summary.get("human_gate_triggered") or False),
         "produced_checkpoint_ids": list(
             final_seed_summary.get("produced_checkpoint_ids")

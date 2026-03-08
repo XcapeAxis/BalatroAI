@@ -68,6 +68,7 @@ def _render_base(title: str, content: str, *, current_path: str, refresh_sec: in
     style = (template_root / "style.css").read_text(encoding="utf-8")
     nav_items = [
         ("/", "Overview"),
+        ("/autonomy", "Autonomy"),
         ("/environment", "Environment"),
         ("/campaigns", "Campaigns"),
         ("/registry", "Checkpoint Registry"),
@@ -242,6 +243,9 @@ class OpsRequestHandler(BaseHTTPRequestHandler):
         if route == "/":
             self._send_html(_render_base("Overview", routes.render_overview(state, current_path=route), current_path=route))
             return
+        if route == "/autonomy":
+            self._send_html(_render_base("Autonomy", routes.render_autonomy(state), current_path=route))
+            return
         if route == "/environment":
             self._send_html(_render_base("Environment", routes.render_environment(state), current_path=route))
             return
@@ -293,6 +297,12 @@ class OpsRequestHandler(BaseHTTPRequestHandler):
                 _spawn_job("run_p22_p57", ["powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts\\run_p22.ps1", "-RunP57"])
             elif parsed.path == "/actions/run_p22_overnight":
                 _spawn_job("run_p22_overnight", ["powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts\\run_p22.ps1", "-Overnight"])
+            elif parsed.path == "/actions/run_autonomy_quick":
+                _spawn_job("run_autonomy_quick", ["powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts\\run_autonomy.ps1", "-Quick"])
+            elif parsed.path == "/actions/run_autonomy_overnight":
+                _spawn_job("run_autonomy_overnight", ["powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts\\run_autonomy.ps1", "-Overnight"])
+            elif parsed.path == "/actions/run_autonomy_resume":
+                _spawn_job("run_autonomy_resume", ["powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts\\run_autonomy.ps1", "-ResumeLatest"])
             elif parsed.path == "/actions/run_doctor":
                 _spawn_job("run_doctor", ["powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts\\doctor.ps1"])
             elif parsed.path == "/actions/resume_latest_campaign":

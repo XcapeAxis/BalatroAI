@@ -40,6 +40,9 @@ def actions_panel(current_path: str, resume_command: str, ops_ui_url: str) -> st
         <form method="post" action="/actions/run_p22_p53"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Start P53 Smoke</button></form>
         <form method="post" action="/actions/run_p22_p57"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Start P57 Smoke</button></form>
         <form method="post" action="/actions/run_p22_overnight"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Start Overnight</button></form>
+        <form method="post" action="/actions/run_autonomy_quick"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Start Autonomy Quick</button></form>
+        <form method="post" action="/actions/run_autonomy_overnight"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Start Autonomy Overnight</button></form>
+        <form method="post" action="/actions/run_autonomy_resume"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Resume Via Autonomy</button></form>
         <form method="post" action="/actions/run_doctor"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Run Doctor</button></form>
         <form method="post" action="/actions/resume_latest_campaign"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Resume Latest Campaign</button></form>
         <form method="post" action="/actions/rebuild_dashboard"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Rebuild Dashboard</button></form>
@@ -96,6 +99,11 @@ def render_overview(state: dict[str, Any], *, current_path: str) -> str:
     environment = state.get("environment") if isinstance(state.get("environment"), dict) else {}
     doctor = state.get("doctor") if isinstance(state.get("doctor"), dict) else {}
     bootstrap = state.get("bootstrap") if isinstance(state.get("bootstrap"), dict) else {}
+    agents = state.get("agents") if isinstance(state.get("agents"), dict) else {}
+    autonomy_entry = state.get("autonomy_entry") if isinstance(state.get("autonomy_entry"), dict) else {}
+    autonomy_payload = autonomy_entry.get("payload") if isinstance(autonomy_entry.get("payload"), dict) else {}
+    agents_consistency = state.get("agents_consistency") if isinstance(state.get("agents_consistency"), dict) else {}
+    agents_consistency_payload = agents_consistency.get("payload") if isinstance(agents_consistency.get("payload"), dict) else {}
 
     latest_rows = []
     for row in (p22.get("summary_rows") or [])[:8]:
@@ -149,6 +157,7 @@ def render_overview(state: dict[str, Any], *, current_path: str) -> str:
       <div class="card"><h2>Registry</h2><p><strong>{esc(sum((registry.get('counts') or {}).values()) if isinstance(registry.get('counts'), dict) else 0)}</strong></p><p class="muted">{esc(json.dumps(registry.get('counts') or {}, ensure_ascii=False))}</p></div>
       <div class="card"><h2>P57 Attention</h2><p><strong>{esc(len(attention_open))}</strong></p><p class="muted">blocked_campaigns={esc(len(blocked_campaigns))}</p></div>
       <div class="card"><h2>P58 Environment</h2><p><strong>{esc(environment.get('status') or 'n/a')}</strong></p><p class="muted">mode={esc(environment.get('recommended_mode') or '')}</p></div>
+      <div class="card"><h2>P59 Autonomy</h2><p><strong>{esc(autonomy_payload.get('autonomy_state') or 'n/a')}</strong></p><p class="muted">plan={esc(autonomy_payload.get('selected_plan') or '')}</p></div>
     </section>
     """
     return (
@@ -211,6 +220,15 @@ def render_overview(state: dict[str, Any], *, current_path: str) -> str:
           <p>morning_summary: {artifact_link(str(morning_summary.get('md_path') or ''), 'latest.md')}</p>
           <p>open_attention={esc(len(attention_open))} blocked_campaigns={esc(len(blocked_campaigns))}</p>
           <p>recommended_first_action=<code>{esc(morning_payload.get('recommended_first_action') or '')}</code></p>
+        </section>
+        <section class="panel">
+          <h2>P59 AGENTS / Autonomy</h2>
+          <p>root_agents: {artifact_link(str((agents.get('paths') or {}).get('root') or ''), 'AGENTS.md')}</p>
+          <p>autonomy_entry: {artifact_link(str(autonomy_entry.get('json_path') or ''), 'latest_autonomy_entry.json')}</p>
+          <p>consistency: {artifact_link(str(agents_consistency.get('json_path') or ''), 'latest_agents_consistency.json')}</p>
+          <p>autonomy_state=<strong>{esc(autonomy_payload.get('autonomy_state') or '')}</strong> selected_plan=<code>{esc(autonomy_payload.get('selected_plan') or '')}</code> requested_mode=<code>{esc(autonomy_payload.get('requested_mode') or '')}</code></p>
+          <p>root_present={esc(agents.get('root_present'))} subdir_agents={esc(agents.get('subdir_present_count') or 0)} consistency_status=<code>{esc(agents_consistency_payload.get('status') or '')}</code></p>
+          <p>decision_policy_path=<code>{esc(autonomy_payload.get('decision_policy_path') or '')}</code></p>
         </section>
         <section class="panel">
           <h2>Latest P22 Summary</h2>
@@ -409,6 +427,64 @@ def render_environment(state: dict[str, Any]) -> str:
     )
 
 
+def render_autonomy(state: dict[str, Any]) -> str:
+    agents = state.get("agents") if isinstance(state.get("agents"), dict) else {}
+    autonomy = state.get("autonomy_entry") if isinstance(state.get("autonomy_entry"), dict) else {}
+    autonomy_payload = autonomy.get("payload") if isinstance(autonomy.get("payload"), dict) else {}
+    consistency = state.get("agents_consistency") if isinstance(state.get("agents_consistency"), dict) else {}
+    consistency_payload = consistency.get("payload") if isinstance(consistency.get("payload"), dict) else {}
+    attention = state.get("attention_queue") if isinstance(state.get("attention_queue"), dict) else {}
+    morning = state.get("morning_summary") if isinstance(state.get("morning_summary"), dict) else {}
+    blocked = state.get("blocked_campaigns") if isinstance(state.get("blocked_campaigns"), list) else []
+
+    agent_rows = []
+    for name, path in (agents.get("paths") or {}).items():
+        agent_rows.append([esc(name), esc((agents.get("present") or {}).get(name)), artifact_link(str(path), "open")])
+
+    attention_rows = []
+    for item in (attention.get("open_items") or [])[:12]:
+        if not isinstance(item, dict):
+            continue
+        attention_rows.append(
+            [
+                esc(item.get("attention_id") or ""),
+                esc(item.get("severity") or ""),
+                esc(item.get("category") or ""),
+                esc(item.get("blocking_scope") or ""),
+                esc(item.get("title") or ""),
+            ]
+        )
+
+    blocked_rows = []
+    for row in blocked[:12]:
+        if not isinstance(row, dict):
+            continue
+        blocked_rows.append(
+            [
+                esc(row.get("campaign_id") or ""),
+                esc(row.get("stage_id") or ""),
+                esc(row.get("status") or ""),
+                esc(row.get("autonomy_decision") or ""),
+                artifact_link(str(row.get("state_path") or ""), "state"),
+            ]
+        )
+
+    return (
+        f'<section class="panel"><h2>Autonomy Overview</h2>'
+        f'<p>autonomy_entry: {artifact_link(str(autonomy.get("json_path") or ""), "latest_autonomy_entry.json")}</p>'
+        f'<p>agents_consistency: {artifact_link(str(consistency.get("json_path") or ""), "latest_agents_consistency.json")}</p>'
+        f'<p>morning_summary: {artifact_link(str(morning.get("md_path") or ""), "latest.md")}</p>'
+        f'<p>attention_queue: {artifact_link(str(attention.get("path") or ""), "attention_queue.json")}</p>'
+        f'<p>autonomy_state=<strong>{esc(autonomy_payload.get("autonomy_state") or "")}</strong> selected_plan=<code>{esc(autonomy_payload.get("selected_plan") or "")}</code> requested_mode=<code>{esc(autonomy_payload.get("requested_mode") or "")}</code></p>'
+        f'<p>reason=<code>{esc(autonomy_payload.get("reason") or "")}</code></p>'
+        f'<p>consistency_status=<code>{esc(consistency_payload.get("status") or "")}</code> warnings={esc(len(consistency_payload.get("warnings") or []))} errors={esc(len(consistency_payload.get("errors") or []))}</p>'
+        f'<p>decision_policy_path=<code>{esc(autonomy_payload.get("decision_policy_path") or "")}</code></p></section>'
+        f'<section class="panel"><h2>AGENTS Hierarchy</h2>{table(["Scope", "Present", "Path"], agent_rows)}</section>'
+        f'<section class="panel"><h2>Open Attention Items</h2>{table(["Attention ID", "Severity", "Category", "Scope", "Title"], attention_rows)}</section>'
+        f'<section class="panel"><h2>Blocked Campaigns</h2>{table(["Campaign", "Stage", "Status", "Decision", "State"], blocked_rows)}</section>'
+    )
+
+
 def render_windows(state: dict[str, Any], *, current_path: str) -> str:
     window_state = state.get("window_state") if isinstance(state.get("window_state"), dict) else {}
     payload = window_state.get("payload") if isinstance(window_state.get("payload"), dict) else {}
@@ -512,6 +588,7 @@ def render_attention_queue(state: dict[str, Any]) -> str:
                 esc(row.get("attention_id") or ""),
                 esc(row.get("severity") or ""),
                 esc(row.get("category") or ""),
+                esc(row.get("blocking_scope") or ""),
                 esc(row.get("status") or ""),
                 esc(row.get("title") or ""),
                 artifact_link(str(row.get("item_md_path") or ""), "item"),
@@ -520,7 +597,7 @@ def render_attention_queue(state: dict[str, Any]) -> str:
         )
     return (
         f'<section class="panel"><h2>Attention Queue</h2><p class="muted">{artifact_link(str(queue.get("path") or ""), "attention_queue.json")}</p>'
-        f'{table(["Attention ID", "Severity", "Category", "Status", "Title", "Artifact", "Action"], rows)}</section>'
+        f'{table(["Attention ID", "Severity", "Category", "Scope", "Status", "Title", "Artifact", "Action"], rows)}</section>'
     )
 
 
@@ -543,6 +620,7 @@ def render_morning_summary(state: dict[str, Any]) -> str:
         )
     return (
         f'<section class="panel"><h2>Morning Summary</h2><p>{artifact_link(str(summary.get("md_path") or ""), "latest.md")} | {artifact_link(str(summary.get("json_path") or ""), "latest.json")}</p>'
+        f'<p>task_summary=<code>{esc(json.dumps(payload.get("task_summary") or {}, ensure_ascii=False))}</code></p>'
         f'<p>recommended_first_action=<code>{esc(payload.get("recommended_first_action") or "")}</code></p>'
         f'<pre>{esc(summary.get("excerpt") or "")}</pre></section>'
         f'<section class="panel"><h2>Blocked Campaigns</h2>{table(["Campaign", "Experiment", "Stage", "Status", "State"], blocked_rows)}</section>'

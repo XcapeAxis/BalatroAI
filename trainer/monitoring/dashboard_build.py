@@ -380,6 +380,38 @@ def _collect_p58_dashboard_data(input_root: Path) -> dict[str, Any]:
         },
     }
 
+
+def _collect_p59_dashboard_data(input_root: Path, repo_root: Path) -> dict[str, Any]:
+    root_agents = repo_root / "AGENTS.md"
+    sub_agents = {
+        name: repo_root / name / "AGENTS.md"
+        for name in ("trainer", "sim", "scripts", "docs", "configs")
+    }
+    autonomy_json = input_root / "p59" / "latest_autonomy_entry.json"
+    autonomy_md = input_root / "p59" / "latest_autonomy_entry.md"
+    consistency_json = input_root / "p59" / "latest_agents_consistency.json"
+    consistency_md = input_root / "p59" / "latest_agents_consistency.md"
+    autonomy_payload = _read_json(autonomy_json)
+    consistency_payload = _read_json(consistency_json)
+    return {
+        "agents": {
+            "root_path": str(root_agents.resolve()),
+            "root_present": root_agents.exists(),
+            "subdir_paths": {name: str(path.resolve()) for name, path in sub_agents.items()},
+            "subdir_present_count": sum(1 for path in sub_agents.values() if path.exists()),
+        },
+        "autonomy_entry": {
+            "json_path": str(autonomy_json.resolve()),
+            "md_path": str(autonomy_md.resolve()),
+            "payload": autonomy_payload if isinstance(autonomy_payload, dict) else {},
+        },
+        "agents_consistency": {
+            "json_path": str(consistency_json.resolve()),
+            "md_path": str(consistency_md.resolve()),
+            "payload": consistency_payload if isinstance(consistency_payload, dict) else {},
+        },
+    }
+
 def _collect_config_sync_status(input_root: Path) -> dict[str, Any]:
     """P55: Find the latest config sidecar sync report and return a brief status summary."""
     repo_root = input_root.parent
@@ -409,6 +441,7 @@ def _collect_config_sync_status(input_root: Path) -> dict[str, Any]:
 
 
 def collect_dashboard_data(input_root: Path) -> dict[str, Any]:
+    repo = Path(__file__).resolve().parents[2]
     latest: dict[tuple[str, str, str], dict[str, Any]] = {}
     warnings: list[dict[str, Any]] = []
     for path in input_root.glob("**/*progress*.jsonl"):
@@ -462,6 +495,7 @@ def collect_dashboard_data(input_root: Path) -> dict[str, Any]:
     p56_payload = _collect_p56_dashboard_data(input_root, campaign_states, registry_summary)
     # P55: collect latest config sidecar sync report
     config_sync_status = _collect_config_sync_status(input_root)
+    p59_payload = _collect_p59_dashboard_data(input_root, repo)
 
     return {
         "schema": "p49_dashboard_data_v1",
@@ -480,6 +514,7 @@ def collect_dashboard_data(input_root: Path) -> dict[str, Any]:
         "p53": _collect_p53_dashboard_data(input_root, campaign_states),
         "p57": _collect_p57_dashboard_data(input_root, campaign_states),
         "p58": _collect_p58_dashboard_data(input_root),
+        "p59": p59_payload,
     }
 
 
@@ -624,6 +659,12 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
     p58_bootstrap_payload = p58_bootstrap.get("payload") if isinstance(p58_bootstrap.get("payload"), dict) else {}
     p58_doctor = p58_payload.get("doctor") if isinstance(p58_payload.get("doctor"), dict) else {}
     p58_doctor_payload = p58_doctor.get("payload") if isinstance(p58_doctor.get("payload"), dict) else {}
+    p59_payload = data.get("p59") if isinstance(data.get("p59"), dict) else {}
+    p59_agents = p59_payload.get("agents") if isinstance(p59_payload.get("agents"), dict) else {}
+    p59_autonomy = p59_payload.get("autonomy_entry") if isinstance(p59_payload.get("autonomy_entry"), dict) else {}
+    p59_autonomy_payload = p59_autonomy.get("payload") if isinstance(p59_autonomy.get("payload"), dict) else {}
+    p59_consistency = p59_payload.get("agents_consistency") if isinstance(p59_payload.get("agents_consistency"), dict) else {}
+    p59_consistency_payload = p59_consistency.get("payload") if isinstance(p59_consistency.get("payload"), dict) else {}
 
     p52_summary_html = []
     for row in router_summary_rows:
@@ -734,7 +775,7 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>P49/Learned-Router/P53/P57/P58 Dashboard</title>
+  <title>P49/Learned-Router/P53/P57/P58/P59 Dashboard</title>
   <style>
     :root {{ --bg: #f4f0e8; --panel: #fffaf2; --ink: #241d16; --muted: #8a745d; --warn: #9d3c2f; }}
     body {{ margin: 0; padding: 24px; font-family: Georgia, 'Times New Roman', serif; background: linear-gradient(180deg, #efe6d6 0%, var(--bg) 100%); color: var(--ink); }}
@@ -749,7 +790,7 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
 </head>
 <body>
   <div class="panel">
-    <h1>P49/P51/Learned-Router/P53/P57/P58 Dashboard</h1>
+    <h1>P49/P51/Learned-Router/P53/P57/P58/P59 Dashboard</h1>
     <p class="muted">Generated from unified progress events and the latest P22 summary.</p>
     <p><strong>Input:</strong> <code>{html.escape(str(input_root))}</code></p>
     <p><strong>Data:</strong> <code>{html.escape(str((output_dir / "dashboard_data.json").resolve()))}</code></p>
@@ -926,6 +967,14 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
     <p>doctor_status=<strong>{html.escape(str(p58_doctor_payload.get('status') or ''))}</strong> recommended_mode=<code>{html.escape(str(p58_doctor_payload.get('recommended_mode') or p58_bootstrap_payload.get('recommended_mode') or ''))}</code> ready={html.escape(str(p58_doctor_payload.get('ready_for_continuation') if p58_doctor_payload else p58_bootstrap_payload.get('bootstrap_complete')))}</p>
     <p>selected_training_python=<code>{html.escape(str((((p58_doctor_payload.get('resolver') or {}).get('selected')) or {}).get('python') or p58_bootstrap_payload.get('selected_training_python') or ''))}</code></p>
     <p>next_steps=<code>{html.escape(' | '.join([str(item) for item in (p58_doctor_payload.get('next_steps') or [])[:4]]))}</code></p>
+  </div>
+  <div class="panel">
+    <h2>P59 AGENTS / Autonomy</h2>
+    <p class="muted">autonomy_entry: <code>{html.escape(str(p59_autonomy.get('json_path') or ''))}</code></p>
+    <p class="muted">agents_consistency: <code>{html.escape(str(p59_consistency.get('json_path') or ''))}</code></p>
+    <p>root_agents_present=<strong>{html.escape(str(p59_agents.get('root_present') or False))}</strong> subdir_agents={html.escape(str(p59_agents.get('subdir_present_count') or 0))}</p>
+    <p>autonomy_state=<code>{html.escape(str(p59_autonomy_payload.get('autonomy_state') or ''))}</code> selected_plan=<code>{html.escape(str(p59_autonomy_payload.get('selected_plan') or ''))}</code> requested_mode=<code>{html.escape(str(p59_autonomy_payload.get('requested_mode') or ''))}</code></p>
+    <p>consistency_status=<code>{html.escape(str(p59_consistency_payload.get('status') or ''))}</code> warnings={html.escape(str(len(p59_consistency_payload.get('warnings') or [])))} errors={html.escape(str(len(p59_consistency_payload.get('errors') or [])))}</p>
   </div>
 </body>
 </html>

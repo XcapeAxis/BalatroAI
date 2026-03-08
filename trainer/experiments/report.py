@@ -70,6 +70,8 @@ def write_summary_tables(
         "promotion_queue_path",
         "resume_report_path",
         "autonomy_mode",
+        "agents_root_present",
+        "autonomy_entry_ref",
         "decision_policy_path",
         "attention_queue_path",
         "morning_summary_path",
@@ -140,6 +142,8 @@ def write_summary_tables(
                     "promotion_queue_path": row.get("promotion_queue_path"),
                     "resume_report_path": row.get("resume_report_path"),
                     "autonomy_mode": row.get("autonomy_mode"),
+                    "agents_root_present": row.get("agents_root_present"),
+                    "autonomy_entry_ref": row.get("autonomy_entry_ref"),
                     "decision_policy_path": row.get("decision_policy_path"),
                     "attention_queue_path": row.get("attention_queue_path"),
                     "morning_summary_path": row.get("morning_summary_path"),
@@ -248,6 +252,8 @@ def write_summary_tables(
                 "promotion_queue_path",
                 "resume_report_path",
                 "autonomy_mode",
+                "agents_root_present",
+                "autonomy_entry_ref",
                 "decision_policy_path",
                 "attention_queue_path",
                 "morning_summary_path",
@@ -301,6 +307,10 @@ def write_summary_tables(
                 md_lines.append(f"  resume_report_path: `{row.get('resume_report_path')}`")
             if row.get("autonomy_mode"):
                 md_lines.append(f"  autonomy_mode: `{row.get('autonomy_mode')}`")
+            if row.get("agents_root_present") not in (None, ""):
+                md_lines.append(f"  agents_root_present: `{row.get('agents_root_present')}`")
+            if row.get("autonomy_entry_ref"):
+                md_lines.append(f"  autonomy_entry_ref: `{row.get('autonomy_entry_ref')}`")
             if row.get("decision_policy_path"):
                 md_lines.append(f"  decision_policy_path: `{row.get('decision_policy_path')}`")
             if row.get("attention_queue_path"):
