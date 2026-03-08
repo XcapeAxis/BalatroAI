@@ -9,7 +9,7 @@
 [![Seed Governance](https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16)](configs/experiments/seeds_p23.yaml)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Trend Warehouse](https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16)](docs/TREND_WAREHOUSE_P26.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P56-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P57-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -866,6 +866,39 @@ Reference docs:
 - [docs/P54_LEARNED_ROUTER.md](docs/P54_LEARNED_ROUTER.md)
 - [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
 
+## Overnight Autonomy Protocol (P57)
+
+P57 turns the repo into a resumable overnight operator. Campaigns now read a machine-usable decision policy, stop only when a human gate is genuinely required, queue those decisions into a structured attention backlog, and end every run with a morning summary instead of forcing manual log archaeology.
+
+How to run P57:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP57
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Overnight
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -ResumeLatestCampaign
+```
+
+What P57 adds:
+
+- root-level `AGENTS.md` that defines the default autonomy contract on `main`
+- `docs/DECISION_POLICY.md` and `configs/runtime/decision_policy.yaml` for explicit auto-allow / auto-suggest / human-block rules
+- structured attention items under `docs/artifacts/attention_required/`
+- autonomy-aware campaign states that record `continue`, `continue_with_warning`, or `stop_and_queue_attention`
+- morning summaries under `docs/artifacts/morning_summary/`
+- dashboard + Ops UI panels for blocked campaigns, open attention items, and the latest morning brief
+
+Human-in-the-loop boundaries:
+
+- the system can patch code/config/docs, run train/eval/arena/triage/dashboard flows, refresh registry snapshots, and emit promotion suggestions
+- the system does not auto-apply live promotion, destructive git history changes, environment/driver installs, or ambiguous roadmap shifts backed by weak statistics
+- unresolved human gates remain blocking on resume; campaigns do not silently skip them
+
+Reference docs:
+
+- [docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md](docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md)
+- [docs/DECISION_POLICY.md](docs/DECISION_POLICY.md)
+- [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
+
 ## Config Loading Hardening (P55)
 
 P55 eliminates the silent YAML/JSON sidecar drift failure mode discovered during P54 and introduces config provenance tracking across all run summaries, the dashboard, and the ops UI.
@@ -1165,7 +1198,7 @@ P42 builds on this baseline and wires RL candidate training into the closed-loop
 - trend_rows_count: 20115
 - champion: quick_risk_aware (champion)
 - candidate:  (decision: hold)
-- docs_coverage: P15-P41
+- docs_coverage: P15-P57
 <!-- README_STATUS:END -->
 <!-- STATUS:END -->
 
@@ -1274,10 +1307,12 @@ Milestone maturity snapshot:
 | P54 (learned router / guarded meta-controller + ablation + campaign integration) | shipped |
 | P55 (config loading hardening + YAML/JSON sidecar sync + full P54 nightly validation) | shipped |
 | P56 (learned-router calibration + multi-seed benchmark + canary promotion mode) | shipped |
+| P57 (overnight autonomy protocol + attention queue + morning summary) | shipped |
 
 Near-term:
 
 - expand P56 router benchmarks, calibration buckets, and canary slices on larger nightly budgets
+- harden P57 blocked-campaign resolution workflows and richer morning-summary prioritization
 - expand real-CUDA validation from smoke budgets into heavier P44/P46 nightly budgets
 - harden benchmark-derived profiles with longer warm runs and more realistic learner load
 - extend adaptive routing toward RL candidate inference without weakening arena-first gating
@@ -1313,6 +1348,7 @@ Detailed milestone tree: [docs/ROADMAP.md](docs/ROADMAP.md)
 - P50 benchmark recommendations are based on smoke-sized workloads; longer nightlies can hit different memory and throughput ceilings.
 - P51 campaign-state and registry semantics are durable but still operator-light; the system does not yet offer a separate approval UI.
 - P54 learned-router labels are partly inferred from arena/rule outcomes, so dataset bias and controller-class imbalance can distort the learned policy without arena/triage guardrails.
+- P57 autonomy policy is intentionally conservative; blocked decisions still require a human to resolve the queue and rerun the campaign.
 
 ## Further Reading
 

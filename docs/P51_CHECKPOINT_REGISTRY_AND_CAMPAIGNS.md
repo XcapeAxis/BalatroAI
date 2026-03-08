@@ -293,9 +293,26 @@ P53 keeps the registry/campaign system authoritative while adding a localhost-on
 - low-risk UI actions such as registry refresh or dashboard rebuild are audited to `docs/artifacts/p53/ops_audit/ops_audit.jsonl`
 - the promotion queue remains file-backed and readable by both the dashboard and the ops UI
 
+## P57 Overnight Autonomy Extension
+
+P57 builds on the same registry/campaign contract without introducing a second state machine:
+
+- blocked promotion or provenance decisions are written to the attention queue instead of disappearing into logs
+- campaign stages now persist autonomy metadata (`autonomy_decision`, `autonomy_reason`, `attention_item_ref`, `continue_allowed`, `human_gate_triggered`)
+- resume honors unresolved human gates and will not skip across them implicitly
+- morning summaries combine registry, queue, and campaign state into a single operator handoff
+
+Representative P57 artifacts:
+
+- `docs/artifacts/attention_required/attention_queue.json`
+- `docs/artifacts/morning_summary/latest.md`
+- `docs/artifacts/p22/runs/<run_id>/p57_overnight_smoke/campaign_runs/seed_*/campaign_state.json`
+- `docs/artifacts/p22/runs/<run_id>/p57_overnight_smoke/campaign_runs/seed_*/campaign_resume_report.md`
+
 ## Known Limitations
 
 - imported historical checkpoints can be incomplete until their producing pipeline reruns under P51-aware code
 - a local operator UI now exists, but it is intentionally localhost-only and limited to low-risk actions
 - resume safety is stage-granular, not arbitrary checkpointing inside every inner trainer loop
 - registry retention/deduplication is still minimal; imported historical artifacts can produce a noisy draft pool
+- P57 still stops on unresolved human gates by design; the queue records the issue but does not auto-approve it

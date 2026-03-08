@@ -26,24 +26,25 @@
 | P53 | Background execution + local ops UI + window supervision | done |
 | P55 | Config loading hardening + YAML/JSON sidecar sync + full P54 nightly validation | done |
 | P56 | Learned-router calibration + multi-seed benchmark + canary promotion mode | done |
+| P57 | Overnight autonomy protocol + attention queue + morning summary | done |
 
-## Current Focus: Post-P56 Quality and Durability
+## Current Focus: Post-P57 Quality and Durability
 
 1. Maintain YAML/JSON sidecar parity — run `sync_config_sidecars.ps1` after every YAML edit.
 2. Expand P56 nightly budget, calibration slice coverage, and canary evaluation depth.
-3. Harden P53 background-mode validation beyond smoke.
-4. Tighten promotion semantics with explicit human review on top of the state machine.
-5. Keep config provenance, readiness guarding, dashboard generation, and ops-audit logging as default night-ops safety rails.
+3. Harden P57 blocked-campaign resolution flow and morning-summary prioritization.
+4. Harden P53 background-mode validation beyond smoke.
+5. Keep config provenance, readiness guarding, dashboard generation, ops-audit logging, and autonomy policy as default night-ops safety rails.
 
-## Near-Term After P56
+## Near-Term After P57
 
 - broader imagined-root coverage beyond the current replay families
 - tighter P42/P45/P47 coupling through auxiliary losses, rollout-value proxies, and RL-policy routing
 - longer real-CUDA benchmark sweeps beyond smoke-sized learners
 - stronger checkpoint deduplication / retention policy on top of the new registry
-- richer campaign restart policies beyond simple latest-run resume
+- richer campaign restart policies and attention-item resolution workflows beyond simple latest-run resume
 - broader P56 calibration against controller-collapse, OOD, and rare high-risk-slice behavior
-- richer local ops workflows such as better job history, safer queued actions, and stronger window-state diagnostics
+- richer local ops workflows such as better job history, safer queued actions, stronger window-state diagnostics, and better morning-summary triage
 - careful expansion beyond fixed-budget search while preserving uncertainty controls and arena-first evaluation
 - richer GPU telemetry and eventual multi-GPU support once single-GPU runtime remains stable
 

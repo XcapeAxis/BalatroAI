@@ -159,6 +159,9 @@ Pages:
 - `Campaigns`: campaign id, stage status, resume command, state artifact
 - `Checkpoint Registry`: family, status, created_at, source run, artifact ref
 - `Promotion Queue`: promotion-review backlog and refs
+- `Attention Queue`: open / resolved human-required decisions plus resolve-only controls
+- `Morning Summary`: latest overnight brief plus blocked-campaign excerpt
+- `Blocked Campaigns`: campaigns currently held at a human gate
 - `Router Calibration`: latest calibration summary, reliability bins, and checkpoint refs
 - `Router Guard / Canary`: guard recommendations, canary usage, fallback ratios, and deployment recommendation
 - `Runs / Metrics`: progress rows including learner/rollout device, GPU memory, ETA, warnings
@@ -172,6 +175,8 @@ The ops UI is intentionally limited to low-risk local actions:
 - start `P22 Quick`
 - start `P53 Smoke`
 - start `P56 Smoke`
+- start `P57 Smoke`
+- start `Overnight P57`
 - resume the latest resumable campaign
 - rebuild the static dashboard
 - refresh registry + promotion-queue snapshots
@@ -198,6 +203,7 @@ The static dashboard now includes:
 - ops UI URL
 - recent P53 campaign states
 - P56 calibration, guard, and canary summaries
+- P57 autonomy decision summary, attention queue counts, blocked campaigns, and morning-summary excerpt
 - recent ops audit rows
 
 Representative output:
@@ -242,3 +248,4 @@ powershell -ExecutionPolicy Bypass -File scripts\run_ops_ui.ps1 -Detach
 - `hidden` and `minimized` are supported only as long as the latest validation still marks them safe
 - the UI is local-only and intentionally light on controls; destructive process management remains out of scope
 - jobs shown in the UI are actions triggered from the UI itself, not every background process on the workstation
+- P57 resolution controls only clear attention items; they do not apply live promotion or other high-risk changes
