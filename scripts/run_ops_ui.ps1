@@ -47,6 +47,8 @@ if ($Detach) {
 }
 
 Write-Host ("[ops-ui] python: " + $py)
+Write-Host ("[ops-ui] python_env_name: " + [string]$resolver.selected.env_name)
+Write-Host ("[ops-ui] python_env_source: " + [string]$resolver.selection_reason)
 Write-Host ("[ops-ui] cmd: " + $py + " " + ($args -join " "))
 & $py @args
 exit $LASTEXITCODE

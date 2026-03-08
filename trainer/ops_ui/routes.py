@@ -40,6 +40,7 @@ def actions_panel(current_path: str, resume_command: str, ops_ui_url: str) -> st
         <form method="post" action="/actions/run_p22_p53"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Start P53 Smoke</button></form>
         <form method="post" action="/actions/run_p22_p57"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Start P57 Smoke</button></form>
         <form method="post" action="/actions/run_p22_overnight"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Start Overnight</button></form>
+        <form method="post" action="/actions/run_doctor"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Run Doctor</button></form>
         <form method="post" action="/actions/resume_latest_campaign"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Resume Latest Campaign</button></form>
         <form method="post" action="/actions/rebuild_dashboard"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Rebuild Dashboard</button></form>
         <form method="post" action="/actions/refresh_registry"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Refresh Registry Snapshot</button></form>
@@ -92,6 +93,9 @@ def render_overview(state: dict[str, Any], *, current_path: str) -> str:
     resume_target = state.get("latest_resume_target") if isinstance(state.get("latest_resume_target"), dict) else {}
     ops_ui_state = state.get("ops_ui") if isinstance(state.get("ops_ui"), dict) else {}
     ops_ui_payload = ops_ui_state.get("payload") if isinstance(ops_ui_state.get("payload"), dict) else {}
+    environment = state.get("environment") if isinstance(state.get("environment"), dict) else {}
+    doctor = state.get("doctor") if isinstance(state.get("doctor"), dict) else {}
+    bootstrap = state.get("bootstrap") if isinstance(state.get("bootstrap"), dict) else {}
 
     latest_rows = []
     for row in (p22.get("summary_rows") or [])[:8]:
@@ -144,6 +148,7 @@ def render_overview(state: dict[str, Any], *, current_path: str) -> str:
       <div class="card"><h2>Background Mode</h2><p><strong>{esc(background_payload.get('recommended_default_mode') or 'n/a')}</strong></p><p class="muted">fallback={esc(background_payload.get('window_mode_fallback') or '')}</p></div>
       <div class="card"><h2>Registry</h2><p><strong>{esc(sum((registry.get('counts') or {}).values()) if isinstance(registry.get('counts'), dict) else 0)}</strong></p><p class="muted">{esc(json.dumps(registry.get('counts') or {}, ensure_ascii=False))}</p></div>
       <div class="card"><h2>P57 Attention</h2><p><strong>{esc(len(attention_open))}</strong></p><p class="muted">blocked_campaigns={esc(len(blocked_campaigns))}</p></div>
+      <div class="card"><h2>P58 Environment</h2><p><strong>{esc(environment.get('status') or 'n/a')}</strong></p><p class="muted">mode={esc(environment.get('recommended_mode') or '')}</p></div>
     </section>
     """
     return (
@@ -154,6 +159,14 @@ def render_overview(state: dict[str, Any], *, current_path: str) -> str:
         )
         + cards
         + f"""
+        <section class="panel">
+          <h2>P58 Windows Bootstrap</h2>
+          <p>doctor: {artifact_link(str(doctor.get('json_path') or ''), 'latest_doctor.json')}</p>
+          <p>bootstrap: {artifact_link(str(bootstrap.get('path') or ''), 'latest_bootstrap_state.json')}</p>
+          <p>status=<strong>{esc(environment.get('status') or '')}</strong> recommended_mode=<code>{esc(environment.get('recommended_mode') or '')}</code> ready={esc(environment.get('ready_for_continuation'))}</p>
+          <p>training_python=<code>{esc(environment.get('selected_training_python') or '')}</code> env=<code>{esc(environment.get('training_env_name') or '')}</code> source=<code>{esc(environment.get('training_env_source') or '')}</code></p>
+          <p>next_steps=<code>{esc(' | '.join([str(item) for item in (environment.get('next_steps') or [])[:3]]))}</code></p>
+        </section>
         <section class="panel">
           <h2>Dashboard / Paths</h2>
           <p>dashboard: {artifact_link(str(dashboard.get('index_path') or ''), 'latest dashboard')}</p>
@@ -364,6 +377,36 @@ def render_runs(state: dict[str, Any]) -> str:
             ]
         )
     return f'<section class="panel"><h2>Runs / Metrics</h2>{table(["Timestamp", "Run", "Component", "Phase", "Status", "Learner", "Rollout", "GPU MB", "ETA", "Warning"], rows)}</section>'
+
+
+def render_environment(state: dict[str, Any]) -> str:
+    environment = state.get("environment") if isinstance(state.get("environment"), dict) else {}
+    doctor = state.get("doctor") if isinstance(state.get("doctor"), dict) else {}
+    bootstrap = state.get("bootstrap") if isinstance(state.get("bootstrap"), dict) else {}
+    doctor_payload = doctor.get("payload") if isinstance(doctor.get("payload"), dict) else {}
+    bootstrap_payload = bootstrap.get("payload") if isinstance(bootstrap.get("payload"), dict) else {}
+    rows = [
+        ["status", esc(environment.get("status") or "")],
+        ["recommended_mode", esc(environment.get("recommended_mode") or "")],
+        ["ready_for_continuation", esc(environment.get("ready_for_continuation"))],
+        ["selected_training_python", f"<code>{esc(environment.get('selected_training_python') or '')}</code>"],
+        ["training_env_name", esc(environment.get("training_env_name") or "")],
+        ["training_env_source", esc(environment.get("training_env_source") or "")],
+        ["doctor_report", artifact_link(str(doctor.get("json_path") or ""), "latest_doctor.json")],
+        ["doctor_report_md", artifact_link(str(doctor.get("md_path") or ""), "latest_doctor.md")],
+        ["bootstrap_state", artifact_link(str(bootstrap.get("path") or ""), "latest_bootstrap_state.json")],
+        ["bootstrap_complete", esc(bootstrap_payload.get("bootstrap_complete"))],
+    ]
+    blockers = "".join([f"<li>{esc(item)}</li>" for item in (environment.get("blocking_reasons") or [])[:12]]) or "<li>No blocking reasons.</li>"
+    warnings = "".join([f"<li>{esc(item)}</li>" for item in (environment.get("warnings") or [])[:12]]) or "<li>No warnings.</li>"
+    next_steps = "".join([f"<li><code>{esc(item)}</code></li>" for item in (environment.get("next_steps") or [])[:12]]) or "<li>No next steps.</li>"
+    return (
+        f'<section class="panel"><h2>Environment Summary</h2>{table(["Field", "Value"], rows)}</section>'
+        f'<section class="panel"><h2>Doctor Blocking Reasons</h2><ul>{blockers}</ul></section>'
+        f'<section class="panel"><h2>Doctor Warnings</h2><ul>{warnings}</ul></section>'
+        f'<section class="panel"><h2>Recommended Next Steps</h2><ul>{next_steps}</ul></section>'
+        f'<section class="panel"><h2>Doctor Payload</h2><pre>{esc(json.dumps(doctor_payload, ensure_ascii=False, indent=2))}</pre></section>'
+    )
 
 
 def render_windows(state: dict[str, Any], *, current_path: str) -> str:

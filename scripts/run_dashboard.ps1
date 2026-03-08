@@ -1,6 +1,6 @@
 param(
-  [string]$Input = "docs/artifacts",
-  [string]$Output = "docs/artifacts/dashboard/latest",
+  [string]$InputRoot = "docs/artifacts",
+  [string]$OutputRoot = "docs/artifacts/dashboard/latest",
   [switch]$Live,
   [switch]$Once,
   [string]$TrainingPython = ""
@@ -30,9 +30,11 @@ if (-not $py.Trim()) {
   throw "[dashboard] training python resolver did not return a python path"
 }
 
-$buildArgs = @("-B", "-m", "trainer.monitoring.dashboard_build", "--input", $Input, "--output", $Output)
+$buildArgs = @("-B", "-m", "trainer.monitoring.dashboard_build", "--input", $InputRoot, "--output", $OutputRoot)
 Write-Host ("[dashboard] python: " + $py)
 Write-Host ("[dashboard] python_env_type: " + [string]$resolver.selected.env_type)
+Write-Host ("[dashboard] python_env_name: " + [string]$resolver.selected.env_name)
+Write-Host ("[dashboard] python_env_source: " + [string]$resolver.selection_reason)
 Write-Host ("[dashboard] build: " + $py + " " + ($buildArgs -join " "))
 & $py @buildArgs
 if ($LASTEXITCODE -ne 0) {
@@ -40,7 +42,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 if ($Live) {
-  $liveArgs = @("-B", "-m", "trainer.monitoring.live_dashboard", "--watch", $Input)
+  $liveArgs = @("-B", "-m", "trainer.monitoring.live_dashboard", "--watch", $InputRoot)
   if ($Once) { $liveArgs += "--once" }
   Write-Host ("[dashboard] live: " + $py + " " + ($liveArgs -join " "))
   & $py @liveArgs

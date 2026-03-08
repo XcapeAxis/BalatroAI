@@ -361,6 +361,25 @@ def _collect_p57_dashboard_data(input_root: Path, campaign_states: list[dict[str
         "human_gate_triggered_count": len(blocked_rows),
     }
 
+
+def _collect_p58_dashboard_data(input_root: Path) -> dict[str, Any]:
+    bootstrap_path = input_root / "p58" / "bootstrap" / "latest_bootstrap_state.json"
+    doctor_json = input_root / "p58" / "latest_doctor.json"
+    doctor_md = input_root / "p58" / "latest_doctor.md"
+    bootstrap_payload = _read_json(bootstrap_path)
+    doctor_payload = _read_json(doctor_json)
+    return {
+        "bootstrap": {
+            "path": str(bootstrap_path.resolve()),
+            "payload": bootstrap_payload if isinstance(bootstrap_payload, dict) else {},
+        },
+        "doctor": {
+            "json_path": str(doctor_json.resolve()),
+            "md_path": str(doctor_md.resolve()),
+            "payload": doctor_payload if isinstance(doctor_payload, dict) else {},
+        },
+    }
+
 def _collect_config_sync_status(input_root: Path) -> dict[str, Any]:
     """P55: Find the latest config sidecar sync report and return a brief status summary."""
     repo_root = input_root.parent
@@ -460,6 +479,7 @@ def collect_dashboard_data(input_root: Path) -> dict[str, Any]:
         "p56": p56_payload,
         "p53": _collect_p53_dashboard_data(input_root, campaign_states),
         "p57": _collect_p57_dashboard_data(input_root, campaign_states),
+        "p58": _collect_p58_dashboard_data(input_root),
     }
 
 
@@ -599,6 +619,11 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
     p57_blocked_campaigns = p57_payload.get("blocked_campaigns") if isinstance(p57_payload.get("blocked_campaigns"), list) else []
     p57_decision = p57_payload.get("decision_policy") if isinstance(p57_payload.get("decision_policy"), dict) else {}
     p57_decision_payload = p57_decision.get("payload") if isinstance(p57_decision.get("payload"), dict) else {}
+    p58_payload = data.get("p58") if isinstance(data.get("p58"), dict) else {}
+    p58_bootstrap = p58_payload.get("bootstrap") if isinstance(p58_payload.get("bootstrap"), dict) else {}
+    p58_bootstrap_payload = p58_bootstrap.get("payload") if isinstance(p58_bootstrap.get("payload"), dict) else {}
+    p58_doctor = p58_payload.get("doctor") if isinstance(p58_payload.get("doctor"), dict) else {}
+    p58_doctor_payload = p58_doctor.get("payload") if isinstance(p58_doctor.get("payload"), dict) else {}
 
     p52_summary_html = []
     for row in router_summary_rows:
@@ -709,7 +734,7 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>P49/Learned-Router/P53/P57 Dashboard</title>
+  <title>P49/Learned-Router/P53/P57/P58 Dashboard</title>
   <style>
     :root {{ --bg: #f4f0e8; --panel: #fffaf2; --ink: #241d16; --muted: #8a745d; --warn: #9d3c2f; }}
     body {{ margin: 0; padding: 24px; font-family: Georgia, 'Times New Roman', serif; background: linear-gradient(180deg, #efe6d6 0%, var(--bg) 100%); color: var(--ink); }}
@@ -724,7 +749,7 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
 </head>
 <body>
   <div class="panel">
-    <h1>P49/P51/Learned-Router/P53/P57 Dashboard</h1>
+    <h1>P49/P51/Learned-Router/P53/P57/P58 Dashboard</h1>
     <p class="muted">Generated from unified progress events and the latest P22 summary.</p>
     <p><strong>Input:</strong> <code>{html.escape(str(input_root))}</code></p>
     <p><strong>Data:</strong> <code>{html.escape(str((output_dir / "dashboard_data.json").resolve()))}</code></p>
@@ -893,6 +918,14 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
       </tbody>
     </table>
     <pre>{html.escape(str(p57_morning.get('excerpt') or ''))}</pre>
+  </div>
+  <div class="panel">
+    <h2>P58 Windows Bootstrap / Doctor</h2>
+    <p class="muted">bootstrap: <code>{html.escape(str(p58_bootstrap.get('path') or ''))}</code></p>
+    <p class="muted">doctor: <code>{html.escape(str(p58_doctor.get('json_path') or ''))}</code></p>
+    <p>doctor_status=<strong>{html.escape(str(p58_doctor_payload.get('status') or ''))}</strong> recommended_mode=<code>{html.escape(str(p58_doctor_payload.get('recommended_mode') or p58_bootstrap_payload.get('recommended_mode') or ''))}</code> ready={html.escape(str(p58_doctor_payload.get('ready_for_continuation') if p58_doctor_payload else p58_bootstrap_payload.get('bootstrap_complete')))}</p>
+    <p>selected_training_python=<code>{html.escape(str((((p58_doctor_payload.get('resolver') or {}).get('selected')) or {}).get('python') or p58_bootstrap_payload.get('selected_training_python') or ''))}</code></p>
+    <p>next_steps=<code>{html.escape(' | '.join([str(item) for item in (p58_doctor_payload.get('next_steps') or [])[:4]]))}</code></p>
   </div>
 </body>
 </html>

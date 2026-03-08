@@ -287,6 +287,46 @@ def latest_morning_summary() -> dict[str, Any]:
     }
 
 
+def latest_bootstrap_state() -> dict[str, Any]:
+    path = artifacts_root() / "p58" / "bootstrap" / "latest_bootstrap_state.json"
+    payload = read_json(path)
+    return {
+        "path": str(path.resolve()),
+        "payload": payload if isinstance(payload, dict) else {},
+    }
+
+
+def latest_doctor_report() -> dict[str, Any]:
+    json_path = artifacts_root() / "p58" / "latest_doctor.json"
+    md_path = artifacts_root() / "p58" / "latest_doctor.md"
+    payload = read_json(json_path)
+    return {
+        "json_path": str(json_path.resolve()),
+        "md_path": str(md_path.resolve()),
+        "payload": payload if isinstance(payload, dict) else {},
+    }
+
+
+def environment_status() -> dict[str, Any]:
+    doctor = latest_doctor_report()
+    bootstrap = latest_bootstrap_state()
+    doctor_payload = doctor.get("payload") if isinstance(doctor.get("payload"), dict) else {}
+    bootstrap_payload = bootstrap.get("payload") if isinstance(bootstrap.get("payload"), dict) else {}
+    return {
+        "doctor": doctor,
+        "bootstrap": bootstrap,
+        "status": str(doctor_payload.get("status") or ""),
+        "recommended_mode": str(doctor_payload.get("recommended_mode") or bootstrap_payload.get("recommended_mode") or ""),
+        "ready_for_continuation": bool(doctor_payload.get("ready_for_continuation")) if doctor_payload else bool(bootstrap_payload.get("bootstrap_complete")),
+        "selected_training_python": str((((doctor_payload.get("resolver") or {}).get("selected")) or {}).get("python") or bootstrap_payload.get("selected_training_python") or ""),
+        "training_env_name": str((((doctor_payload.get("resolver") or {}).get("selected")) or {}).get("env_name") or ""),
+        "training_env_source": str(((doctor_payload.get("resolver") or {}).get("selection_reason")) or ""),
+        "next_steps": [str(item) for item in (doctor_payload.get("next_steps") or []) if str(item).strip()],
+        "blocking_reasons": [str(item) for item in (doctor_payload.get("blocking_reasons") or []) if str(item).strip()],
+        "warnings": [str(item) for item in (doctor_payload.get("warnings") or []) if str(item).strip()],
+    }
+
+
 def blocked_campaigns(limit: int = 24) -> list[dict[str, Any]]:
     return [
         row
@@ -386,6 +426,9 @@ def build_ops_state(
         "promotion_queue": latest_promotion_queue(),
         "attention_queue": latest_attention_queue(),
         "morning_summary": latest_morning_summary(),
+        "bootstrap": latest_bootstrap_state(),
+        "doctor": latest_doctor_report(),
+        "environment": environment_status(),
         "readiness": latest_readiness_report(),
         "window_state": latest_window_state(),
         "background_validation": latest_background_validation(),
