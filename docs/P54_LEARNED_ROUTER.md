@@ -147,6 +147,8 @@ P54 keeps the router deployment contract explicit:
 2. `learned`
 3. `learned_with_rule_guard`
 
+P56 later adds `canary_learned_router`, which only enables the learned router on low-risk, high-confidence states while keeping the P48 rule path as the default fallback.
+
 The guarded mode falls back to the P48 rule router when one or more of these conditions hold:
 
 - predicted controller is unavailable or invalid
@@ -270,6 +272,27 @@ The dashboard now exposes P54-specific sections when artifacts are present:
 Primary output:
 
 - `docs/artifacts/dashboard/latest/index.html`
+
+## P56 Follow-through
+
+P56 keeps the same `family=learned_router` contract but upgrades deployment readiness:
+
+- multi-seed benchmark harness under `docs/artifacts/p56/router_benchmark/<run_id>/`
+- calibration reports and reliability bins under `docs/artifacts/p56/router_calibration/<run_id>/`
+- guard-threshold sweeps plus `recommended_guard_config.json` under `docs/artifacts/p56/guard_tuning/<run_id>/`
+- `canary_learned_router` arena and fallback summaries under `docs/artifacts/p56/{canary_eval,arena_ablation}/<run_id>/`
+- P22 / registry / dashboard / ops-ui refs for `calibration_ref`, `guard_tuning_ref`, `canary_eval_ref`, and `deployment_mode_recommendation`
+
+Recommended P56 commands:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP56
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP56 -Resume
+```
+
+Reference doc:
+
+- [P56_ROUTER_CALIBRATION_AND_CANARY.md](P56_ROUTER_CALIBRATION_AND_CANARY.md)
 
 ## Known Limitations
 

@@ -1,10 +1,10 @@
 # P53 Background Execution + Ops UI
 
-P53 adds a local operations layer on top of the existing P49/P50/P51/P54 runtime stack:
+P53 adds a local operations layer on top of the existing P49/P50/P51/P54/P56 runtime stack:
 
 - the LOVE/Balatro window becomes a managed runtime resource instead of a manual desktop artifact
 - background-mode selection is validated before being treated as a default
-- a localhost-only ops console reads existing P22/P49/P51/P54 artifacts and exposes low-risk controls with audit logs
+- a localhost-only ops console reads existing P22/P49/P51/P54/P56 artifacts and exposes low-risk controls with audit logs
 
 P53 is intentionally local-first. It does not introduce cloud orchestration, remote multi-user auth, or a second storage system.
 
@@ -145,6 +145,7 @@ Primary sources:
 - `docs/artifacts/p22/runs/**/summary_table.json`
 - `docs/artifacts/p49/readiness/**/service_readiness_report.json`
 - `docs/artifacts/registry/checkpoints_registry.json`
+- `docs/artifacts/p56/**`
 - `**/promotion_queue.json`
 - `**/campaign_state.json`
 - `**/*progress*.jsonl`
@@ -158,6 +159,8 @@ Pages:
 - `Campaigns`: campaign id, stage status, resume command, state artifact
 - `Checkpoint Registry`: family, status, created_at, source run, artifact ref
 - `Promotion Queue`: promotion-review backlog and refs
+- `Router Calibration`: latest calibration summary, reliability bins, and checkpoint refs
+- `Router Guard / Canary`: guard recommendations, canary usage, fallback ratios, and deployment recommendation
 - `Runs / Metrics`: progress rows including learner/rollout device, GPU memory, ETA, warnings
 - `Background Execution / Windows`: managed window list, dominant mode, validation table, safe mode-switch buttons
 - `Jobs / Audit`: UI-triggered jobs plus audited direct actions
@@ -168,6 +171,7 @@ The ops UI is intentionally limited to low-risk local actions:
 
 - start `P22 Quick`
 - start `P53 Smoke`
+- start `P56 Smoke`
 - resume the latest resumable campaign
 - rebuild the static dashboard
 - refresh registry + promotion-queue snapshots
@@ -193,6 +197,7 @@ The static dashboard now includes:
 - latest background validation result
 - ops UI URL
 - recent P53 campaign states
+- P56 calibration, guard, and canary summaries
 - recent ops audit rows
 
 Representative output:

@@ -9,7 +9,7 @@
 [![Seed Governance](https://img.shields.io/badge/Seed_Governance-P23%2B_enabled-0E8A16)](configs/experiments/seeds_p23.yaml)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Trend Warehouse](https://img.shields.io/badge/Trend_Warehouse-P26%2B_enabled-0E8A16)](docs/TREND_WAREHOUSE_P26.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P53-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P56-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](USAGE_GUIDE.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -19,7 +19,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/XcapeAxis/BalatroAI)](https://github.com/XcapeAxis/BalatroAI/issues)
 <!-- BADGES:END -->
 
-BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, a unified action replay contract, P45 world-model / latent-planning, P46 short-horizon imagination augmentation, P47 uncertainty-aware world-model reranking, P48 adaptive hybrid routing across policy/search/world-model assist, P49 GPU-mainline runtime profiles with readiness guards and lightweight dashboards, P50 real local CUDA validation with benchmarked nightly profiles, P51 checkpoint-registry + resumeable nightly campaign operations, P54 learned-router / guarded meta-controller training plus deployment, and P53 background execution plus a local-only ops console for campaigns, registry, dashboard, and window supervision. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised/world-model iteration, not as a cheat injector or memory-hook tool.
+BalatroAI is a high-parity simulator plus strategy experimentation stack for Balatro, backed by oracle traces, seed governance, and gated regressions. Current maturity covers Gold Stake alignment workflows and major mechanics (jokers including stateful behavior, consumables, shop/vouchers/tags, and artifactized experiment operations), and now includes P31/P33/P36 self-supervised entries, P37 SSL pretraining rows, a unified action replay contract, P45 world-model / latent-planning, P46 short-horizon imagination augmentation, P47 uncertainty-aware world-model reranking, P48 adaptive hybrid routing across policy/search/world-model assist, P49 GPU-mainline runtime profiles with readiness guards and lightweight dashboards, P50 real local CUDA validation with benchmarked nightly profiles, P51 checkpoint-registry + resumeable nightly campaign operations, P54 learned-router / guarded meta-controller training plus deployment, P56 learned-router calibration plus canary promotion workflow, and P53 background execution plus a local-only ops console for campaigns, registry, dashboard, and window supervision. It is designed for mechanism research and Search/BC/DAgger/RL/self-supervised/world-model iteration, not as a cheat injector or memory-hook tool.
 
 Badge/status refresh source:
 
@@ -237,6 +237,13 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP54 -Resume
 python -m trainer.hybrid.router_dataset --quick
 ```
 
+Optional P56 learned-router calibration + canary smoke:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP56
+python -m trainer.hybrid.router_benchmark --config configs/experiments/p56_router_calibration_smoke.yaml --quick
+```
+
 Optional P53 background-execution + ops-console smoke:
 
 ```powershell
@@ -257,6 +264,7 @@ powershell -ExecutionPolicy Bypass -File scripts\run_ops_ui.ps1
 - `docs/artifacts/p49/{readiness,rl_cpu_rollout_gpu_learner,wm_gpu_smoke}/`
 - `docs/artifacts/p51/{checkpoint_registry_snapshot_*.json,promotion_queue_smoke_*.json,campaign_resume_validation_*.md}`
 - `docs/artifacts/p54/{router_dataset,router_train,router_inference,arena_ablation,triage}/<run_id>/`
+- `docs/artifacts/p56/{router_benchmark,router_calibration,guard_tuning,canary_eval,arena_ablation}/<run_id>/`
 - `docs/artifacts/p53/{window_supervisor,background_mode_validation,ops_ui,ops_ui_metadata,ops_audit}/`
 - `docs/artifacts/registry/checkpoints_registry.json`
 - `docs/artifacts/dashboard/latest/index.html`
@@ -820,6 +828,44 @@ Reference docs:
 - [docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md](docs/P48_ADAPTIVE_HYBRID_CONTROLLER.md)
 - [docs/P51_CHECKPOINT_REGISTRY_AND_CAMPAIGNS.md](docs/P51_CHECKPOINT_REGISTRY_AND_CAMPAIGNS.md)
 
+## Learned Router Calibration + Canary (P56)
+
+P56 moves the learned router from "trainable" to "comparable, calibratable, and safer to promote." It adds multi-seed router benchmarks, reliability-style calibration analysis, guard-threshold tuning, and a canary deployment mode that only enables learned routing on low-risk, high-confidence states while preserving the P48 rule path everywhere else.
+
+How to run P56 smoke:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP56
+powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
+```
+
+Deployment modes:
+
+- `rule`
+- `learned`
+- `learned_with_rule_guard`
+- `canary_learned_router`
+
+What P56 adds:
+
+- multi-seed benchmark manifests, raw seed results, slice summaries, and controller-selection distributions under `docs/artifacts/p56/router_benchmark/<run_id>/`
+- calibration reports with confidence buckets, ECE-style metrics, per-controller stats, and reliability bins under `docs/artifacts/p56/router_calibration/<run_id>/`
+- guard sweeps with a recommended threshold config under `docs/artifacts/p56/guard_tuning/<run_id>/`
+- canary-only arena summaries and fallback diagnostics under `docs/artifacts/p56/canary_eval/<run_id>/` and `docs/artifacts/p56/arena_ablation/<run_id>/`
+- registry, promotion-queue, dashboard, and ops-ui refs for `calibration_ref`, `guard_tuning_ref`, `canary_eval_ref`, and `deployment_mode_recommendation`
+
+Safety / risk notes:
+
+- offline routing accuracy is insufficient on its own; arena outcomes, triage, and catastrophic-failure counts remain the promotion authority
+- canary mode is the preferred rollout path when learned-only routing is unstable or overly optimistic on high-risk slices
+- calibration and guard thresholds are checkpoint- and slice-dependent, so the latest artifacts should be reviewed before widening deployment
+
+Reference docs:
+
+- [docs/P56_ROUTER_CALIBRATION_AND_CANARY.md](docs/P56_ROUTER_CALIBRATION_AND_CANARY.md)
+- [docs/P54_LEARNED_ROUTER.md](docs/P54_LEARNED_ROUTER.md)
+- [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md)
+
 ## Config Loading Hardening (P55)
 
 P55 eliminates the silent YAML/JSON sidecar drift failure mode discovered during P54 and introduces config provenance tracking across all run summaries, the dashboard, and the ops UI.
@@ -860,6 +906,7 @@ Reference: [docs/P55_CONFIG_HARDENING.md](docs/P55_CONFIG_HARDENING.md)
 - P50 proves local CUDA bring-up and recommended profiles on one RTX 3080 Ti host; it is not a guarantee that every Windows/CUDA stack will behave identically.
 - P51 improves durability and auditability of campaigns, but it does not replace trainer-level checkpoints or manual promotion judgment.
 - P54 learned routing is v1/research-grade; the rule guard remains part of the deployment contract because label quality, uncertainty detection, and controller availability can all shift.
+- P56 calibration and canary outputs improve deployment confidence, but they are still derived from finite seed budgets and can miss rare high-risk slices.
 - BC/DAgger paths are retained as legacy baselines; they are not default mainline training routes.
 - Legacy baseline checks are lightweight smoke/probe checks unless explicitly requested.
 - low-sample CI/bootstrap outcomes remain observation-level and should not be treated as decisive promotion proof.
@@ -1226,10 +1273,11 @@ Milestone maturity snapshot:
 | P51 (checkpoint registry + resumeable nightly campaigns + promotion queue) | shipped |
 | P54 (learned router / guarded meta-controller + ablation + campaign integration) | shipped |
 | P55 (config loading hardening + YAML/JSON sidecar sync + full P54 nightly validation) | shipped |
+| P56 (learned-router calibration + multi-seed benchmark + canary promotion mode) | shipped |
 
 Near-term:
 
-- calibrate P54 routing labels, confidence thresholds, and OOD heuristics on larger multi-seed budgets
+- expand P56 router benchmarks, calibration buckets, and canary slices on larger nightly budgets
 - expand real-CUDA validation from smoke budgets into heavier P44/P46 nightly budgets
 - harden benchmark-derived profiles with longer warm runs and more realistic learner load
 - extend adaptive routing toward RL candidate inference without weakening arena-first gating

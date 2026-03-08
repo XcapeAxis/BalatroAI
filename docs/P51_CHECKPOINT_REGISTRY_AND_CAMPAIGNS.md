@@ -70,6 +70,10 @@ Important optional fields:
 - `imagined_data_used`
 - `curriculum_profile`
 - `git_commit`
+- `calibration_ref`
+- `guard_tuning_ref`
+- `canary_eval_ref`
+- `deployment_mode_recommendation`
 
 ## Candidate State Machine
 
@@ -122,6 +126,18 @@ P54 adds an alternative learned-router campaign stage set:
 - `train_learned_router`
 - `eval_learned_router`
 - `arena_ablation`
+- `triage`
+- `promotion_queue_update`
+- `dashboard_build`
+
+P56 adds an extended learned-router calibration/canary stage set:
+
+- `build_router_dataset`
+- `train_learned_router`
+- `eval_calibration`
+- `tune_guard_thresholds`
+- `arena_ablation`
+- `canary_eval`
 - `triage`
 - `promotion_queue_update`
 - `dashboard_build`
@@ -248,6 +264,24 @@ Representative P54 artifacts:
 - `docs/artifacts/p54/router_train/<run_id>/train_manifest.json`
 - `docs/artifacts/p54/arena_ablation/<run_id>/promotion_decision.json`
 - `docs/artifacts/p22/runs/<run_id>/p54_learned_router_smoke/campaign_runs/seed_*/campaign_state.json`
+
+## P56 Learned Router Calibration / Canary Extension
+
+P56 keeps learned-router checkpoints under `family=learned_router` and extends the registry contract with deployment-readiness refs:
+
+- `calibration_ref`
+- `guard_tuning_ref`
+- `canary_eval_ref`
+- `deployment_mode_recommendation`
+
+Promotion semantics stay recommendation-oriented, but the queue can now explicitly prefer `canary_learned_router` when learned-only routing is unstable while guarded or canary deployment remains acceptable.
+
+Representative P56 artifacts:
+
+- `docs/artifacts/p56/router_calibration/<run_id>/calibration_metrics.json`
+- `docs/artifacts/p56/guard_tuning/<run_id>/recommended_guard_config.json`
+- `docs/artifacts/p56/canary_eval/<run_id>/canary_eval_summary.json`
+- `docs/artifacts/p22/runs/<run_id>/p56_router_calibration_smoke/campaign_runs/seed_*/promotion_queue.json`
 - `docs/artifacts/p22/runs/<run_id>/p54_learned_router_smoke/campaign_runs/seed_*/checkpoint_registry_snapshot.json`
 
 ## P53 Local Ops Console Extension

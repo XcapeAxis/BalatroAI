@@ -205,6 +205,8 @@ P54 keeps the same arena substrate but extends the policy set with learned-routi
 - `hybrid_controller_learned`
 - `hybrid_controller_learned_with_rule_guard`
 
+P56 extends the compare set with `hybrid_controller_canary_learned_router` so rule vs learned vs guarded vs canary routing can be judged under the same arena seeds and slice buckets.
+
 Required compare set in P54 ablations:
 
 - `policy_baseline`
@@ -214,7 +216,11 @@ Required compare set in P54 ablations:
 - `hybrid_controller_learned_with_rule_guard`
 - optional `search_baseline` when stable on the selected config
 
-P54 outputs remain slice-aware and checkpoint-aware because the arena summary now carries learned-router checkpoint refs, controller-selection distributions, and guard-trigger summaries.
+P54 outputs remain slice-aware and checkpoint-aware because the arena summary now carries learned-router checkpoint refs, controller-selection distributions, and guard-trigger summaries. P56 adds canary-usage summaries, fallback ratios, calibration refs, guard-tuning refs, and deployment-mode recommendations to the same arena-facing artifact family.
+
+Reference doc:
+
+- [P56_ROUTER_CALIBRATION_AND_CANARY.md](P56_ROUTER_CALIBRATION_AND_CANARY.md)
 
 ## Artifacts
 

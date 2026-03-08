@@ -271,3 +271,16 @@ The guarded mode falls back to the P48 rule router when:
 Reference docs:
 
 - [P54_LEARNED_ROUTER.md](P54_LEARNED_ROUTER.md)
+
+## P56 Follow-on
+
+P56 keeps the P48 rule router as the safety baseline while adding deployment-readiness checks around the learned router:
+
+- calibrated controller-confidence analysis
+- threshold sweeps for the rule-guard fallback
+- `canary_learned_router`, which only delegates to the learned router on low-risk, high-confidence states
+- richer routing traces with canary eligibility, canary usage, reject reasons, and final-controller distribution
+
+Reference doc:
+
+- [P56_ROUTER_CALIBRATION_AND_CANARY.md](P56_ROUTER_CALIBRATION_AND_CANARY.md)

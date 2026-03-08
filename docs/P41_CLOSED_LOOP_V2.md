@@ -142,6 +142,17 @@ P54 keeps replay/candidate training unchanged but extends arena/triage manifests
 - `routing_trace_jsonl`
 - `guard_trigger_rate`
 
+## Learned Router Calibration + Canary Contract (P56)
+
+P56 keeps replay/candidate training unchanged but extends arena, triage, registry, and promotion manifests with:
+
+- `calibration_metrics_json`
+- `reliability_bins_json`
+- `guard_tuning_results_json`
+- `recommended_guard_config_json`
+- `canary_eval_summary_json`
+- `deployment_mode_recommendation`
+
 ## Imagination Augmentation Contract (P46)
 
 When P46 replay augmentation is enabled, candidate and replay artifacts also record:
@@ -234,6 +245,15 @@ P54-specific triage fields:
 - `learned_router_selection_overuse`
 - `learned_router_guard_condition_correlation`
 - `learned_router_routing_variants`
+
+P56-specific triage fields:
+
+- `guard_effectiveness`
+- `canary_effectiveness`
+- `top_degrading_slices_for_canary`
+- `controller_selection_distribution`
+- `controller_overuse_or_collapse_signals`
+- `deployment_mode_recommendation`
 
 ## Run Commands
 

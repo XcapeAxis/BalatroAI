@@ -10,6 +10,7 @@ P49 turns the P42/P44/P45/P46 training lanes into a shared runtime surface:
 P49 is an operations/runtime milestone. It does not claim that GPU enablement alone improves policy quality.
 P50 then validates that runtime on a real local CUDA host, adds a shared training-python resolver, and benchmarks recommended single-GPU profiles.
 P54 then reuses that CUDA-first resolver for learned-router dataset/train/eval flows and surfaces the new artifacts in the dashboard.
+P56 then adds learned-router benchmark, calibration, guard-tuning, and canary panels on the same dashboard substrate.
 P53 then layers validated background execution plus a localhost ops console on top of the same readiness/dashboard substrate.
 
 ## Architecture
@@ -204,11 +205,13 @@ Artifacts:
 - `docs/artifacts/dashboard/latest/dashboard_data.json`
 - `docs/artifacts/p49/dashboard_smoke_<timestamp>.md`
 
-The dashboard now also surfaces P54-specific data when present:
+The dashboard now also surfaces P54/P56-specific data when present:
 
 - learned-router dataset sample counts and label stats
 - learned-router training progress / checkpoint ids
-- guard trigger rate and controller-selection distribution
+- calibration summary and reliability bins
+- guard trigger rate, guard-tuning summary, and recommended thresholds
+- canary usage / fallback rate and deployment recommendation
 - campaign stage status and promotion-queue state
 
 The same dashboard now also surfaces P53 operational data when present:
@@ -271,6 +274,14 @@ P54 uses the same runtime substrate for meta-controller training:
 - `scripts/run_p22.ps1 -RunP54` rebuilds the dashboard after dataset, train, ablation, and campaign stages complete
 
 This keeps learned-router training in the same operational lane as RL and world-model experiments instead of creating a separate runtime stack.
+
+## P56 Learned Router Calibration + Canary on Top of P49/P50
+
+P56 keeps the same runtime and monitoring base introduced by P49/P50:
+
+- `scripts/run_p22.ps1 -RunP56` uses the same CUDA-first resolver and dashboard build path
+- `trainer.monitoring.dashboard_build` adds P56 calibration, guard, canary, and deployment-mode panels without a separate storage system
+- `trainer.monitoring.live_dashboard` exposes the latest P56 bias/ECE/canary summary in the terminal view
 
 ## P53 Background Execution + Ops Console on Top of P49/P50
 
