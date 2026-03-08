@@ -1,6 +1,6 @@
 <h1 align="center">BalatroAI</h1>
 <p align="center">
-  <strong>面向 Balatro 的模拟、训练、评测与夜间运维一体化工程平台。</strong><br />
+  <strong>面向 Balatro 的模拟、训练、评测与夜间运行一体化工程平台。</strong><br />
   A simulator-first Balatro research and ops stack for reproducible training, evaluation, and overnight automation.
 </p>
 
@@ -25,22 +25,22 @@
 </p>
 
 BalatroAI focuses on one thing: making Balatro experimentation understandable, reproducible, and operable.  
-本仓库不是泛化的“大模型项目集合”，而是面向 Balatro 研究、评测与运维的一体化工程平台。
+本仓库聚焦 Balatro 场景下的研究、评测与运维，不定位为通用模型实验仓库。
 
 This README is intentionally short and navigational.  
 如需实现细节，请将本页作为导航入口，再进入对应文档。
 
 ## What This Project Is
 
-概括而言：这是一个面向 Balatro 的研究与工程平台，覆盖模拟器对齐、模型训练、回归门禁、实验编排、dashboard、ops UI 与夜间自治运行。  
+该仓库覆盖模拟器对齐、模型训练、回归门禁、实验编排、dashboard、ops UI 与夜间自治运行等完整链路。  
 BalatroAI combines simulator parity, model training, experiment orchestration, gated evaluation, and overnight ops into one repo.
 
-| 30 秒问题 | 一句话答案 |
+| 30 秒速览 | 说明 |
 |---|---|
-| 这是什么？ | 一个围绕 Balatro 构建的“模拟器 + 训练 + 评测 + 运维”平台。 |
+| 这是什么？ | 一个围绕 Balatro 构建的“模拟器 + 训练 + 评测 + 运维”工程平台。 |
 | 它能做什么？ | 运行回归、比较策略、训练候选、校准 learned router，并生成 dashboard / ops UI / morning summary。 |
-| 它不是什么？ | 不提供外挂能力，不执行脱离门禁的自动代理，也不是缺乏验证依据的黑盒系统。 |
-| 今天怎么开始？ | 启动 `balatrobot`，然后跑 `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick`。 |
+| 它不是什么？ | 不提供外挂能力，不执行脱离门禁的自动代理，也不依赖缺乏验证依据的黑盒结论。 |
+| 如何开始？ | 启动 `balatrobot`，然后运行 `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick`。 |
 
 Core capabilities today:
 
@@ -51,7 +51,7 @@ Core capabilities today:
 
 ## Scope and Boundaries
 
-适用边界如下：本仓库适用于工程化研究与受控运维，不用于脱离门禁的无约束自动化。  
+本仓库适用于工程化研究与受控运维，不用于脱离门禁的无约束自动化。  
 Use it for controlled experimentation, not for unbounded live automation.
 
 Suitable for:
@@ -70,20 +70,20 @@ Not suitable for:
 
 ## Choose Your Path
 
-不同读者关注的入口不同；下表用于快速定位最常用的起点。  
+不同角色关注的入口不同；下表列出最常用的起点。  
 Pick the path that matches your job, then dive into the linked docs only if you need more detail.
 
-| 你是谁 | 目标 | 先跑什么 | 你会得到什么 |
+| 适用角色 | 关注目标 | 推荐入口 | 主要输出 |
 |---|---|---|---|
-| 首次接触项目的读者 | 确认系统主链路可运行 | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | `summary_table.json` + dashboard |
+| 初次接触项目的读者 | 确认系统主链路可运行 | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | `summary_table.json` + dashboard |
 | 训练 / 研究人员 | 查看主训练与比较链路 | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | multi-seed P22 rows + artifacts |
-| learned router 相关开发者 | 查看 calibration / guard / canary | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP56` | P56 benchmark / calibration / canary outputs |
-| 夜跑 / 运维人员 | 查看 attention queue 与 morning summary | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP57` | autonomy campaign state + morning summary |
+| learned router 开发者 | 查看 calibration / guard / canary | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP56` | P56 benchmark / calibration / canary outputs |
+| 夜间运行 / 运维人员 | 查看 attention queue 与 morning summary | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP57` | autonomy campaign state + morning summary |
 | 值班 / 审核人员 | 通过本地 UI 查看状态 | `powershell -ExecutionPolicy Bypass -File scripts\run_ops_ui.ps1` | localhost ops console |
 
 ## Quick Start
 
-本节仅保留最短启动路径：安装依赖、启动服务、运行 quick、查看结果。  
+本节保留最短启动路径：安装依赖、启动服务、运行 quick、查看结果。  
 If you only remember four commands, remember these.
 
 1. Clone the repo and install trainer dependencies.
@@ -132,7 +132,7 @@ More commands live in [docs/EXPERIMENTS_P22.md](docs/EXPERIMENTS_P22.md).
 
 ## Architecture Overview
 
-下图概括真实游戏、模拟器、训练、评测、campaign 与人工决策之间的关系。  
+下图展示真实游戏、模拟器、训练、评测、campaign 与人工决策之间的关系。  
 The repo is organized as one continuous loop rather than a pile of unrelated scripts.
 
 ```mermaid
@@ -170,7 +170,7 @@ Key docs behind this flow:
 
 ## Capability Snapshot
 
-当前能力分布可概括如下：模拟器、训练、评测和运维四条链路均已打通，但深度、覆盖面和预算仍在持续扩展。  
+目前，模拟器、训练、评测和运维四条链路均已打通，但深度、覆盖面和预算仍在持续扩展。  
 This table is the fastest way to see the repo's current surface area.
 
 | Layer | Simulator | Training | Evaluation | Ops |
@@ -188,13 +188,13 @@ Key shipped milestones worth remembering:
 
 ## Command Cheat Sheet
 
-本节仅保留最常用入口；更完整的矩阵与参数说明请参见 P22 文档。  
-如果你已经熟悉仓库，可将这一节作为日常速查表。  
+本节仅列出最常用入口；更完整的矩阵与参数说明请参见 P22 文档。  
+熟悉仓库后，可将这一节作为日常速查表。  
 If a command is missing here, it was intentionally pushed down into the docs.
 
-| 目标 | 命令 | 主要产物 | 适合谁 |
+| 目标 | 命令 | 主要产物 | 适用场景 |
 |---|---|---|---|
-| 跑主线 quick matrix | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | `summary_table.json`, dashboard | 首次了解项目 / 日常 smoke |
+| 跑主线 quick matrix | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick` | `summary_table.json`, dashboard | 初次了解项目 / 日常 smoke |
 | 跑 P22 回归门禁 | `powershell -ExecutionPolicy Bypass -File scripts\run_regressions.ps1 -RunP22` | regression artifacts | 合并前检查 |
 | 跑 learned router 校准 | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP56` | P56 benchmark / calibration / canary | 研究 / routing |
 | 跑 overnight autonomy smoke | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP57` | attention queue, morning summary | 夜跑协议验证 |
@@ -205,7 +205,7 @@ If a command is missing here, it was intentionally pushed down into the docs.
 
 ## Current Repository Status
 
-下面这部分为自动生成状态，无需手工维护。  
+以下内容由脚本自动生成，无需手工维护。  
 This block is intentionally machine-updated by repo scripts.
 
 <!-- STATUS:START -->
@@ -231,12 +231,12 @@ Badge/status refresh source:
 
 ## Reproducibility
 
-本仓库最重要的工程价值之一，是让实验结果具备可复查性与可追溯性。  
+本仓库的重要工程价值之一，是让实验结果具备可复查性与可追溯性。  
 BalatroAI treats seeds, config provenance, and artifact paths as first-class outputs.
 
 What gets recorded:
 
-| 记录项 | 去哪里看 |
+| 记录项 | 查看位置 |
 |---|---|
 | seeds used | `summary_table.json`, `seeds_used.json` |
 | config provenance | P22 summary rows and sync reports |
@@ -253,7 +253,7 @@ Recommended docs:
 
 ## Example Outputs
 
-以下列出运行后最值得优先查看的核心输出，有助于快速建立全局认识。  
+以下列出运行后应优先查看的核心输出，便于快速建立全局认识。  
 These are the main files you inspect after a run.
 
 | 输出 | 路径 | 用途 |
@@ -309,7 +309,7 @@ This repo is powerful, but it is intentionally conservative in a few places.
 
 ## Further Reading
 
-如果首页信息已经足够，下面可按关注主题进入对应文档。  
+如果首页信息已足够，可按关注主题进入对应文档。  
 Do not read everything; pick the lane you care about.
 
 | If you care about... | Read this |
