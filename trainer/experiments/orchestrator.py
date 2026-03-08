@@ -123,6 +123,10 @@ def _resolved_autonomy_entry_ref() -> str:
     return str(os.environ.get("BALATRO_AUTONOMY_ENTRY_REF") or "").strip()
 
 
+def _resolved_autonomy_mode() -> str:
+    return str(os.environ.get("BALATRO_AUTONOMY_MODE") or "").strip()
+
+
 def _resolved_agents_root_present() -> bool:
     token = str(os.environ.get("BALATRO_AGENTS_ROOT_PRESENT") or "").strip().lower()
     return token in {"1", "true", "yes", "on"}
@@ -6172,7 +6176,7 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             or _resolved_training_env_name()
             or ""
         ),
-        "autonomy_mode": str(final_seed_metrics.get("autonomy_mode") or final_seed_summary.get("autonomy_mode") or ""),
+        "autonomy_mode": str(final_seed_metrics.get("autonomy_mode") or final_seed_summary.get("autonomy_mode") or _resolved_autonomy_mode() or ""),
         "agents_root_present": bool(final_seed_metrics.get("agents_root_present") or final_seed_summary.get("agents_root_present") or _resolved_agents_root_present()),
         "autonomy_entry_ref": str(final_seed_metrics.get("autonomy_entry_ref") or final_seed_summary.get("autonomy_entry_ref") or _resolved_autonomy_entry_ref() or ""),
         "decision_policy_path": str(final_seed_metrics.get("decision_policy_path") or final_seed_summary.get("decision_policy_path") or _resolved_decision_policy_path() or ""),

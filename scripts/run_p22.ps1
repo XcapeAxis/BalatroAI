@@ -50,6 +50,20 @@ $PSNativeCommandUseErrorActionPreference = $false
 $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $ProjectRoot
 
+function Resolve-FirstExistingPath {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string[]]$Candidates
+  )
+  foreach ($candidate in $Candidates) {
+    if ([string]::IsNullOrWhiteSpace($candidate)) { continue }
+    if (Test-Path $candidate) {
+      return (Resolve-Path $candidate).Path
+    }
+  }
+  return ""
+}
+
 $env:BALATRO_BOOTSTRAP_STATE = ""
 $env:BALATRO_DOCTOR_REPORT = ""
 $env:BALATRO_SETUP_MODE = [string]$SetupMode
@@ -57,6 +71,35 @@ $env:BALATRO_SETUP_MODE_REQUESTED = [string]$SetupMode
 $env:BALATRO_DOCTOR_RECOMMENDED_MODE = ""
 $env:BALATRO_TRAIN_ENV_SOURCE = ""
 $env:BALATRO_TRAIN_ENV_NAME = ""
+if (-not $env:BALATRO_AUTONOMY_MODE) {
+  if ($Overnight) {
+    $env:BALATRO_AUTONOMY_MODE = "overnight"
+  } elseif ($RunP57) {
+    $env:BALATRO_AUTONOMY_MODE = "overnight_smoke"
+  } elseif ($Quick) {
+    $env:BALATRO_AUTONOMY_MODE = "quick_matrix"
+  } elseif ($DryRun) {
+    $env:BALATRO_AUTONOMY_MODE = "plan_only"
+  } else {
+    $env:BALATRO_AUTONOMY_MODE = "manual_p22"
+  }
+}
+if (-not $env:BALATRO_AUTONOMY_ENTRY_REF) {
+  $env:BALATRO_AUTONOMY_ENTRY_REF = Resolve-FirstExistingPath @(
+    (Join-Path $ProjectRoot "docs\\artifacts\\p60\\latest_autonomy_entry.json"),
+    (Join-Path $ProjectRoot "docs\\artifacts\\p59\\latest_autonomy_entry.json")
+  )
+}
+if (-not $env:BALATRO_ATTENTION_QUEUE_PATH) {
+  $env:BALATRO_ATTENTION_QUEUE_PATH = Resolve-FirstExistingPath @(
+    (Join-Path $ProjectRoot "docs\\artifacts\\attention_required\\attention_queue.json")
+  )
+}
+if (-not $env:BALATRO_MORNING_SUMMARY_PATH) {
+  $env:BALATRO_MORNING_SUMMARY_PATH = Resolve-FirstExistingPath @(
+    (Join-Path $ProjectRoot "docs\\artifacts\\morning_summary\\latest.md")
+  )
+}
 if (-not $env:BALATRO_AGENTS_ROOT_PRESENT) {
   $env:BALATRO_AGENTS_ROOT_PRESENT = if (Test-Path (Join-Path $ProjectRoot "AGENTS.md")) { "true" } else { "false" }
 }

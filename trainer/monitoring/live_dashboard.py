@@ -112,6 +112,16 @@ def _latest_matching_json(root: Path, pattern: str, *, required_tokens: tuple[st
     return payload if isinstance(payload, dict) else {}
 
 
+def _latest_autonomy_payload(root: Path, filename: str) -> dict[str, Any]:
+    for family in ("p60", "p59"):
+        payload = _read_json(root / family / filename)
+        if isinstance(payload, dict):
+            payload = dict(payload)
+            payload["_artifact_family"] = family
+            return payload
+    return {}
+
+
 def collect_p52_summary(root: Path) -> dict[str, Any]:
     dataset_payload = _latest_matching_json(root, "**/router_dataset_stats.json", required_tokens=("p52/",))
     train_payload = _latest_matching_json(root, "**/metrics.json", required_tokens=("p52/", "router_train/"))
@@ -193,9 +203,9 @@ def collect_p57_summary(root: Path) -> dict[str, Any]:
     }
 
 
-def collect_p59_summary(root: Path) -> dict[str, Any]:
-    autonomy_payload = _read_json(root / "p59" / "latest_autonomy_entry.json") or {}
-    consistency_payload = _read_json(root / "p59" / "latest_agents_consistency.json") or {}
+def collect_p60_summary(root: Path) -> dict[str, Any]:
+    autonomy_payload = _latest_autonomy_payload(root, "latest_autonomy_entry.json")
+    consistency_payload = _latest_autonomy_payload(root, "latest_agents_consistency.json")
     repo = root.parent
     sub_agents = [
         repo / "trainer" / "AGENTS.md",
@@ -205,6 +215,7 @@ def collect_p59_summary(root: Path) -> dict[str, Any]:
         repo / "configs" / "AGENTS.md",
     ]
     return {
+        "artifact_family": str(autonomy_payload.get("_artifact_family") or consistency_payload.get("_artifact_family") or "p60"),
         "autonomy_state": str(autonomy_payload.get("autonomy_state") or ""),
         "selected_plan": str(autonomy_payload.get("selected_plan") or ""),
         "requested_mode": str(autonomy_payload.get("requested_mode") or ""),
@@ -214,7 +225,7 @@ def collect_p59_summary(root: Path) -> dict[str, Any]:
     }
 
 
-def render_text(rows: list[dict[str, Any]], campaign_rows: list[dict[str, Any]], registry_summary: dict[str, Any], p52_summary: dict[str, Any], p56_summary: dict[str, Any], p53_summary: dict[str, Any], p57_summary: dict[str, Any], p59_summary: dict[str, Any]) -> str:
+def render_text(rows: list[dict[str, Any]], campaign_rows: list[dict[str, Any]], registry_summary: dict[str, Any], p52_summary: dict[str, Any], p56_summary: dict[str, Any], p53_summary: dict[str, Any], p57_summary: dict[str, Any], p60_summary: dict[str, Any]) -> str:
     lines = [
         "[dashboard] P49/P51/P52/P56/P57 live progress",
         "run_id            component             phase       status    learner      rollout      throughput   gpu_mb   warning",
@@ -275,14 +286,14 @@ def render_text(rows: list[dict[str, Any]], campaign_rows: list[dict[str, Any]],
                 action=str(p57_summary.get("recommended_first_action") or "n/a"),
             ),
             "",
-            "[p59]",
+            "[p60]",
             "autonomy_state={state} selected_plan={plan} requested_mode={mode} consistency={consistency} root_agents={root_agents} sub_agents={sub_agents}".format(
-                state=str(p59_summary.get("autonomy_state") or "n/a"),
-                plan=str(p59_summary.get("selected_plan") or "n/a"),
-                mode=str(p59_summary.get("requested_mode") or "n/a"),
-                consistency=str(p59_summary.get("consistency_status") or "n/a"),
-                root_agents=str(p59_summary.get("root_agents_present") or False),
-                sub_agents=int(p59_summary.get("subdir_agents_present") or 0),
+                state=str(p60_summary.get("autonomy_state") or "n/a"),
+                plan=str(p60_summary.get("selected_plan") or "n/a"),
+                mode=str(p60_summary.get("requested_mode") or "n/a"),
+                consistency=str(p60_summary.get("consistency_status") or "n/a"),
+                root_agents=str(p60_summary.get("root_agents_present") or False),
+                sub_agents=int(p60_summary.get("subdir_agents_present") or 0),
             ),
             "",
             "[campaigns]",
@@ -336,9 +347,9 @@ def main() -> int:
         p56_summary = collect_p56_summary(watch_root)
         p53_summary = collect_p53_summary(watch_root)
         p57_summary = collect_p57_summary(watch_root)
-        p59_summary = collect_p59_summary(watch_root)
+        p60_summary = collect_p60_summary(watch_root)
         os.system("cls" if os.name == "nt" else "clear")
-        print(render_text(rows, campaign_rows, registry_summary, p52_summary, p56_summary, p53_summary, p57_summary, p59_summary))
+        print(render_text(rows, campaign_rows, registry_summary, p52_summary, p56_summary, p53_summary, p57_summary, p60_summary))
         iteration += 1
         if bool(args.once) or (int(args.iterations) > 0 and iteration >= int(args.iterations)):
             break

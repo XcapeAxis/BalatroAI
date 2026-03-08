@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,14 @@ def _safe_float(v: Any) -> str:
     if isinstance(v, (int, float)):
         return f"{float(v):.6f}"
     return ""
+
+
+def _env_str(name: str) -> str:
+    return str(os.environ.get(name) or "").strip()
+
+
+def _env_bool(name: str) -> bool:
+    return _env_str(name).lower() in {"1", "true", "yes", "on"}
 
 
 def write_summary_tables(
@@ -91,69 +100,86 @@ def write_summary_tables(
         "config_sync_report_path",
     ]
 
+    resolved_autonomy_mode = _env_str("BALATRO_AUTONOMY_MODE")
+    resolved_agents_root_present = _env_bool("BALATRO_AGENTS_ROOT_PRESENT")
+    resolved_autonomy_entry_ref = _env_str("BALATRO_AUTONOMY_ENTRY_REF")
+    resolved_decision_policy_path = _env_str("BALATRO_DECISION_POLICY_PATH")
+    resolved_attention_queue_path = _env_str("BALATRO_ATTENTION_QUEUE_PATH")
+    resolved_morning_summary_path = _env_str("BALATRO_MORNING_SUMMARY_PATH")
+    normalized_rows: list[dict[str, Any]] = []
+
     with csv_path.open("w", newline="", encoding="utf-8") as fp:
         writer = csv.DictWriter(fp, fieldnames=fieldnames)
         writer.writeheader()
         for row in rows:
+            normalized_row = dict(row)
+            normalized_row["autonomy_mode"] = normalized_row.get("autonomy_mode") or resolved_autonomy_mode
+            if normalized_row.get("agents_root_present") in (None, ""):
+                normalized_row["agents_root_present"] = resolved_agents_root_present
+            normalized_row["autonomy_entry_ref"] = normalized_row.get("autonomy_entry_ref") or resolved_autonomy_entry_ref
+            normalized_row["decision_policy_path"] = normalized_row.get("decision_policy_path") or resolved_decision_policy_path
+            normalized_row["attention_queue_path"] = normalized_row.get("attention_queue_path") or resolved_attention_queue_path
+            normalized_row["morning_summary_path"] = normalized_row.get("morning_summary_path") or resolved_morning_summary_path
+            normalized_rows.append(normalized_row)
             writer.writerow(
                 {
-                    "exp_id": row.get("exp_id"),
-                    "category": row.get("category"),
-                    "default_enabled": row.get("default_enabled"),
-                    "status": row.get("status"),
-                    "seed_set_name": row.get("seed_set_name"),
-                    "seed_hash": row.get("seed_hash"),
-                    "seeds_used": ",".join([str(s) for s in (row.get("seeds_used") or [])]),
-                    "seeds": ",".join([str(s) for s in (row.get("seeds_used") or [])]),
+                    "exp_id": normalized_row.get("exp_id"),
+                    "category": normalized_row.get("category"),
+                    "default_enabled": normalized_row.get("default_enabled"),
+                    "status": normalized_row.get("status"),
+                    "seed_set_name": normalized_row.get("seed_set_name"),
+                    "seed_hash": normalized_row.get("seed_hash"),
+                    "seeds_used": ",".join([str(s) for s in (normalized_row.get("seeds_used") or [])]),
+                    "seeds": ",".join([str(s) for s in (normalized_row.get("seeds_used") or [])]),
                     "primary_metric": primary_metric,
-                    "mean": _safe_float(row.get("mean")),
-                    "std": _safe_float(row.get("std")),
-                    "avg_reward": _safe_float(row.get("avg_reward", row.get("mean"))),
-                    "reward_std": _safe_float(row.get("reward_std", row.get("std"))),
-                    "best_episode_reward": _safe_float(row.get("best_episode_reward")),
-                    "avg_ante_reached": _safe_float(row.get("avg_ante_reached")),
-                    "median_ante": _safe_float(row.get("median_ante")),
-                    "win_rate": _safe_float(row.get("win_rate")),
-                    "final_win_rate": _safe_float(row.get("final_win_rate")),
-                    "final_loss": _safe_float(row.get("final_loss")),
-                    "hand_top1": _safe_float(row.get("hand_top1")),
-                    "hand_top3": _safe_float(row.get("hand_top3")),
-                    "shop_top1": _safe_float(row.get("shop_top1")),
-                    "illegal_action_rate": _safe_float(row.get("illegal_action_rate")),
-                    "seed_count": row.get("seed_count"),
-                    "catastrophic_failure_count": row.get("catastrophic_failure_count"),
-                    "elapsed_sec": _safe_float(row.get("elapsed_sec")),
-                    "device_profile": row.get("device_profile"),
-                    "learner_device": row.get("learner_device"),
-                    "training_python": row.get("training_python"),
-                    "dashboard_path": row.get("dashboard_path"),
-                    "readiness_report_path": row.get("readiness_report_path"),
-                    "window_mode": row.get("window_mode"),
-                    "background_validation_ref": row.get("background_validation_ref"),
-                    "ops_ui_path": row.get("ops_ui_path"),
-                    "doctor_report_path": row.get("doctor_report_path"),
-                    "bootstrap_state_path": row.get("bootstrap_state_path"),
-                    "setup_mode": row.get("setup_mode"),
-                    "doctor_recommended_mode": row.get("doctor_recommended_mode"),
-                    "training_env_source": row.get("training_env_source"),
-                    "training_env_name": row.get("training_env_name"),
-                    "campaign_state_path": row.get("campaign_state_path"),
-                    "registry_snapshot_path": row.get("registry_snapshot_path"),
-                    "promotion_queue_path": row.get("promotion_queue_path"),
-                    "resume_report_path": row.get("resume_report_path"),
-                    "autonomy_mode": row.get("autonomy_mode"),
-                    "agents_root_present": row.get("agents_root_present"),
-                    "autonomy_entry_ref": row.get("autonomy_entry_ref"),
-                    "decision_policy_path": row.get("decision_policy_path"),
-                    "attention_queue_path": row.get("attention_queue_path"),
-                    "morning_summary_path": row.get("morning_summary_path"),
-                    "human_gate_triggered": row.get("human_gate_triggered"),
-                    "produced_checkpoint_ids": ",".join([str(item) for item in (row.get("produced_checkpoint_ids") or [])]),
-                    "calibration_ref": row.get("calibration_ref"),
-                    "guard_tuning_ref": row.get("guard_tuning_ref"),
-                    "canary_eval_ref": row.get("canary_eval_ref"),
-                    "deployment_mode_recommendation": row.get("deployment_mode_recommendation"),
-                    "run_dir": row.get("run_dir"),
+                    "mean": _safe_float(normalized_row.get("mean")),
+                    "std": _safe_float(normalized_row.get("std")),
+                    "avg_reward": _safe_float(normalized_row.get("avg_reward", normalized_row.get("mean"))),
+                    "reward_std": _safe_float(normalized_row.get("reward_std", normalized_row.get("std"))),
+                    "best_episode_reward": _safe_float(normalized_row.get("best_episode_reward")),
+                    "avg_ante_reached": _safe_float(normalized_row.get("avg_ante_reached")),
+                    "median_ante": _safe_float(normalized_row.get("median_ante")),
+                    "win_rate": _safe_float(normalized_row.get("win_rate")),
+                    "final_win_rate": _safe_float(normalized_row.get("final_win_rate")),
+                    "final_loss": _safe_float(normalized_row.get("final_loss")),
+                    "hand_top1": _safe_float(normalized_row.get("hand_top1")),
+                    "hand_top3": _safe_float(normalized_row.get("hand_top3")),
+                    "shop_top1": _safe_float(normalized_row.get("shop_top1")),
+                    "illegal_action_rate": _safe_float(normalized_row.get("illegal_action_rate")),
+                    "seed_count": normalized_row.get("seed_count"),
+                    "catastrophic_failure_count": normalized_row.get("catastrophic_failure_count"),
+                    "elapsed_sec": _safe_float(normalized_row.get("elapsed_sec")),
+                    "device_profile": normalized_row.get("device_profile"),
+                    "learner_device": normalized_row.get("learner_device"),
+                    "training_python": normalized_row.get("training_python"),
+                    "dashboard_path": normalized_row.get("dashboard_path"),
+                    "readiness_report_path": normalized_row.get("readiness_report_path"),
+                    "window_mode": normalized_row.get("window_mode"),
+                    "background_validation_ref": normalized_row.get("background_validation_ref"),
+                    "ops_ui_path": normalized_row.get("ops_ui_path"),
+                    "doctor_report_path": normalized_row.get("doctor_report_path"),
+                    "bootstrap_state_path": normalized_row.get("bootstrap_state_path"),
+                    "setup_mode": normalized_row.get("setup_mode"),
+                    "doctor_recommended_mode": normalized_row.get("doctor_recommended_mode"),
+                    "training_env_source": normalized_row.get("training_env_source"),
+                    "training_env_name": normalized_row.get("training_env_name"),
+                    "campaign_state_path": normalized_row.get("campaign_state_path"),
+                    "registry_snapshot_path": normalized_row.get("registry_snapshot_path"),
+                    "promotion_queue_path": normalized_row.get("promotion_queue_path"),
+                    "resume_report_path": normalized_row.get("resume_report_path"),
+                    "autonomy_mode": normalized_row.get("autonomy_mode"),
+                    "agents_root_present": normalized_row.get("agents_root_present"),
+                    "autonomy_entry_ref": normalized_row.get("autonomy_entry_ref"),
+                    "decision_policy_path": normalized_row.get("decision_policy_path"),
+                    "attention_queue_path": normalized_row.get("attention_queue_path"),
+                    "morning_summary_path": normalized_row.get("morning_summary_path"),
+                    "human_gate_triggered": normalized_row.get("human_gate_triggered"),
+                    "produced_checkpoint_ids": ",".join([str(item) for item in (normalized_row.get("produced_checkpoint_ids") or [])]),
+                    "calibration_ref": normalized_row.get("calibration_ref"),
+                    "guard_tuning_ref": normalized_row.get("guard_tuning_ref"),
+                    "canary_eval_ref": normalized_row.get("canary_eval_ref"),
+                    "deployment_mode_recommendation": normalized_row.get("deployment_mode_recommendation"),
+                    "run_dir": normalized_row.get("run_dir"),
                     # P55 provenance (run-level, not per-row; same value for all rows)
                     "config_source_path": (config_provenance or {}).get("config_source_path", ""),
                     "config_source_type": (config_provenance or {}).get("config_source_type", ""),
@@ -171,7 +197,7 @@ def write_summary_tables(
     }
     if config_provenance:
         summary_data["config_provenance"] = config_provenance
-    summary_data["rows"] = rows
+    summary_data["rows"] = normalized_rows
     json_path.write_text(json.dumps(summary_data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     prov = config_provenance or {}

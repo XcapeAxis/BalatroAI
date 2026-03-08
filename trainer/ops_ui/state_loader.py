@@ -17,6 +17,15 @@ def artifacts_root() -> Path:
     return repo_root() / "docs" / "artifacts"
 
 
+def _latest_autonomy_artifact_root() -> Path:
+    root = artifacts_root()
+    for family in ("p60", "p59"):
+        candidate = root / family
+        if candidate.exists():
+            return candidate
+    return root / "p60"
+
+
 def read_json(path: Path) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8-sig"))
@@ -326,11 +335,12 @@ def agents_status() -> dict[str, Any]:
 
 
 def latest_agents_consistency() -> dict[str, Any]:
-    root = artifacts_root() / "p59"
+    root = _latest_autonomy_artifact_root()
     latest_json = root / "latest_agents_consistency.json"
     latest_md = root / "latest_agents_consistency.md"
     payload = read_json(latest_json)
     return {
+        "artifact_family": root.name,
         "json_path": str(latest_json.resolve()),
         "md_path": str(latest_md.resolve()),
         "payload": payload if isinstance(payload, dict) else {},
@@ -338,11 +348,12 @@ def latest_agents_consistency() -> dict[str, Any]:
 
 
 def latest_autonomy_entry() -> dict[str, Any]:
-    root = artifacts_root() / "p59"
+    root = _latest_autonomy_artifact_root()
     latest_json = root / "latest_autonomy_entry.json"
     latest_md = root / "latest_autonomy_entry.md"
     payload = read_json(latest_json)
     return {
+        "artifact_family": root.name,
         "json_path": str(latest_json.resolve()),
         "md_path": str(latest_md.resolve()),
         "payload": payload if isinstance(payload, dict) else {},

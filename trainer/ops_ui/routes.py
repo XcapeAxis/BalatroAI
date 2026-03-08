@@ -157,7 +157,7 @@ def render_overview(state: dict[str, Any], *, current_path: str) -> str:
       <div class="card"><h2>Registry</h2><p><strong>{esc(sum((registry.get('counts') or {}).values()) if isinstance(registry.get('counts'), dict) else 0)}</strong></p><p class="muted">{esc(json.dumps(registry.get('counts') or {}, ensure_ascii=False))}</p></div>
       <div class="card"><h2>P57 Attention</h2><p><strong>{esc(len(attention_open))}</strong></p><p class="muted">blocked_campaigns={esc(len(blocked_campaigns))}</p></div>
       <div class="card"><h2>P58 Environment</h2><p><strong>{esc(environment.get('status') or 'n/a')}</strong></p><p class="muted">mode={esc(environment.get('recommended_mode') or '')}</p></div>
-      <div class="card"><h2>P59 Autonomy</h2><p><strong>{esc(autonomy_payload.get('autonomy_state') or 'n/a')}</strong></p><p class="muted">plan={esc(autonomy_payload.get('selected_plan') or '')}</p></div>
+      <div class="card"><h2>P60 Autonomy</h2><p><strong>{esc(autonomy_payload.get('autonomy_state') or 'n/a')}</strong></p><p class="muted">plan={esc(autonomy_payload.get('selected_plan') or '')}</p></div>
     </section>
     """
     return (
@@ -222,7 +222,7 @@ def render_overview(state: dict[str, Any], *, current_path: str) -> str:
           <p>recommended_first_action=<code>{esc(morning_payload.get('recommended_first_action') or '')}</code></p>
         </section>
         <section class="panel">
-          <h2>P59 AGENTS / Autonomy</h2>
+          <h2>P60 AGENTS / Autonomy</h2>
           <p>root_agents: {artifact_link(str((agents.get('paths') or {}).get('root') or ''), 'AGENTS.md')}</p>
           <p>autonomy_entry: {artifact_link(str(autonomy_entry.get('json_path') or ''), 'latest_autonomy_entry.json')}</p>
           <p>consistency: {artifact_link(str(agents_consistency.get('json_path') or ''), 'latest_agents_consistency.json')}</p>
