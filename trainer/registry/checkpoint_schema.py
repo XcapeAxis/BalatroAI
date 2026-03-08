@@ -77,6 +77,10 @@ class CheckpointEntry:
     metrics_ref: str = ""
     arena_ref: str = ""
     triage_ref: str = ""
+    calibration_ref: str = ""
+    guard_tuning_ref: str = ""
+    canary_eval_ref: str = ""
+    deployment_mode_recommendation: str = ""
     notes: str = ""
     parent_checkpoint_id: str = ""
     wm_checkpoint_ref: str = ""
@@ -126,6 +130,10 @@ def normalize_entry(payload: dict[str, Any]) -> dict[str, Any]:
         metrics_ref=str(item.get("metrics_ref") or ""),
         arena_ref=str(item.get("arena_ref") or ""),
         triage_ref=str(item.get("triage_ref") or ""),
+        calibration_ref=str(item.get("calibration_ref") or ""),
+        guard_tuning_ref=str(item.get("guard_tuning_ref") or ""),
+        canary_eval_ref=str(item.get("canary_eval_ref") or ""),
+        deployment_mode_recommendation=str(item.get("deployment_mode_recommendation") or ""),
         notes=str(item.get("notes") or ""),
         parent_checkpoint_id=str(item.get("parent_checkpoint_id") or ""),
         wm_checkpoint_ref=str(item.get("wm_checkpoint_ref") or ""),

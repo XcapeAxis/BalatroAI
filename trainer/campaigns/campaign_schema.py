@@ -33,6 +33,18 @@ P53_OPS_CAMPAIGN_STAGE_IDS = (
     "ops_ui_metadata",
 )
 
+P56_ROUTER_CAMPAIGN_STAGE_IDS = (
+    "build_router_dataset",
+    "train_learned_router",
+    "eval_calibration",
+    "tune_guard_thresholds",
+    "arena_ablation",
+    "canary_eval",
+    "triage",
+    "promotion_queue_update",
+    "dashboard_build",
+)
+
 CAMPAIGN_STAGE_STATUSES = ("pending", "running", "completed", "failed", "skipped")
 
 

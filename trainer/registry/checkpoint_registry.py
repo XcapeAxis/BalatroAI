@@ -222,6 +222,8 @@ def _guess_family_from_path(path: Path) -> str:
         or "/p52/" in token
         or "\\p54\\" in token
         or "/p54/" in token
+        or "\\p56\\" in token
+        or "/p56/" in token
         or "\\router_train\\" in token
         or "/router_train/" in token
     ):
@@ -239,6 +241,8 @@ def _guess_mode_from_path(path: Path) -> str:
         return "p42_rl_candidate"
     if "\\p48\\" in token or "/p48/" in token:
         return "p48_hybrid_controller"
+    if "\\p56\\" in token or "/p56/" in token:
+        return "p56_learned_router"
     if "\\p54\\" in token or "/p54/" in token:
         return "p54_learned_router"
     if "\\p52\\" in token or "/p52/" in token or "\\router_train\\" in token or "/router_train/" in token:

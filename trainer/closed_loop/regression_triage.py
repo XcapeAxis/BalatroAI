@@ -690,7 +690,7 @@ def _routing_variant_index(run_dir: Path, learned_router_block: dict[str, Any]) 
         for row in variant_rows
         if isinstance(row, dict) and str(row.get("policy_id") or "").strip()
     }
-    for policy_id in ("hybrid_controller_rule", "hybrid_controller_learned", "hybrid_controller_learned_with_rule_guard"):
+    for policy_id in ("hybrid_controller_rule", "hybrid_controller_learned", "hybrid_controller_learned_with_rule_guard", "hybrid_controller_canary_learned_router"):
         if policy_id in index:
             continue
         trace_rows = _p52_trace_rows(run_dir, policy_id)
@@ -719,7 +719,7 @@ def _routing_variant_index(run_dir: Path, learned_router_block: dict[str, Any]) 
 
 def _p52_selection_overuse(variant_index: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for policy_id in ("hybrid_controller_learned", "hybrid_controller_learned_with_rule_guard"):
+    for policy_id in ("hybrid_controller_learned", "hybrid_controller_learned_with_rule_guard", "hybrid_controller_canary_learned_router"):
         variant = variant_index.get(policy_id) if isinstance(variant_index.get(policy_id), dict) else {}
         distribution = (
             variant.get("controller_selection_distribution")
@@ -856,16 +856,21 @@ def _p52_learned_router_impact(
     rule_policy = str(learned_router_block.get("rule_policy") or "hybrid_controller_rule")
     learned_policy = "hybrid_controller_learned"
     guarded_policy = str(learned_router_block.get("guarded_policy") or "hybrid_controller_learned_with_rule_guard")
+    canary_policy = str(learned_router_block.get("canary_policy") or "hybrid_controller_canary_learned_router")
     rule_row = _find_policy_row(summary_rows, rule_policy)
     learned_row = _find_policy_row(summary_rows, learned_policy)
     guarded_row = _find_policy_row(summary_rows, guarded_policy)
+    canary_row = _find_policy_row(summary_rows, canary_policy)
     rule_score = _safe_float(rule_row.get("mean_total_score"), 0.0)
     learned_score = _safe_float(learned_row.get("mean_total_score"), 0.0)
     guarded_score = _safe_float(guarded_row.get("mean_total_score"), 0.0)
+    canary_score = _safe_float(canary_row.get("mean_total_score"), 0.0)
     learned_variant = routing_variants.get(learned_policy) if isinstance(routing_variants.get(learned_policy), dict) else {}
     guarded_variant = routing_variants.get(guarded_policy) if isinstance(routing_variants.get(guarded_policy), dict) else {}
+    canary_variant = routing_variants.get(canary_policy) if isinstance(routing_variants.get(canary_policy), dict) else {}
     learned_trace_rows = _p52_trace_rows(run_dir, learned_policy)
     guarded_trace_rows = _p52_trace_rows(run_dir, guarded_policy)
+    canary_trace_rows = _p52_trace_rows(run_dir, canary_policy)
     learned_top_slices = _top_slice_deltas(
         bucket_payload=bucket_payload,
         baseline_policy=rule_policy,
@@ -876,6 +881,12 @@ def _p52_learned_router_impact(
         bucket_payload=bucket_payload,
         baseline_policy=rule_policy,
         target_policy=guarded_policy,
+        limit=5,
+    )
+    canary_top_slices = _top_slice_deltas(
+        bucket_payload=bucket_payload,
+        baseline_policy=rule_policy,
+        target_policy=canary_policy,
         limit=5,
     )
     selection_overuse = _p52_selection_overuse(routing_variants)
@@ -897,20 +908,32 @@ def _p52_learned_router_impact(
         "rule_policy": rule_policy,
         "learned_policy": learned_policy,
         "guarded_policy": guarded_policy,
+        "canary_policy": canary_policy,
         "rule_score": rule_score,
         "learned_score": learned_score,
         "guarded_score": guarded_score,
+        "canary_score": canary_score,
         "learned_score_delta_vs_rule": learned_score - rule_score,
         "guarded_score_delta_vs_rule": guarded_score - rule_score,
         "guarded_score_delta_vs_learned": guarded_score - learned_score,
+        "canary_score_delta_vs_rule": canary_score - rule_score,
+        "guard_effectiveness": guarded_score - learned_score,
+        "canary_effectiveness": canary_score - rule_score,
         "guard_trigger_rate": _safe_float(guarded_variant.get("guard_trigger_rate"), 0.0),
         "guard_fallback_rate": _safe_float(guarded_variant.get("fallback_rate"), 0.0),
         "guard_invalid_routing_incidents": _safe_int(guarded_variant.get("invalid_routing_incidents"), 0),
+        "canary_usage_rate": _safe_float(canary_variant.get("canary_usage_rate"), 0.0),
+        "canary_eligible_rate": _safe_float(canary_variant.get("canary_eligible_rate"), 0.0),
+        "canary_fallback_rate": _safe_float(canary_variant.get("fallback_rate"), 0.0),
+        "canary_invalid_routing_incidents": _safe_int(canary_variant.get("invalid_routing_incidents"), 0),
     }
     return impact, learned_top_slices, guarded_top_slices, selection_overuse, {
         "guard_condition_correlation": guard_condition_correlation,
         "routing_variants": routing_variants,
         "selection_overuse": selection_overuse,
+        "canary_top_slices": canary_top_slices,
+        "guard_effectiveness": guarded_score - learned_score,
+        "canary_effectiveness": canary_score - rule_score,
     }
 
 
@@ -1017,6 +1040,9 @@ def run_regression_triage(
     wm_uncertainty_gate_impact = hybrid_aux.get("wm_uncertainty_gate_impact") if isinstance(hybrid_aux, dict) else []
     learned_router_guard_correlation = p52_aux.get("guard_condition_correlation") if isinstance(p52_aux, dict) else {}
     learned_router_routing_variants = p52_aux.get("routing_variants") if isinstance(p52_aux, dict) else {}
+    guard_effectiveness = _safe_float(p52_aux.get("guard_effectiveness"), 0.0) if isinstance(p52_aux, dict) else 0.0
+    canary_effectiveness = _safe_float(p52_aux.get("canary_effectiveness"), 0.0) if isinstance(p52_aux, dict) else 0.0
+    top_degrading_slices_for_canary = p52_aux.get("canary_top_slices") if isinstance(p52_aux, dict) else []
     curr_signature = _curriculum_signature(current_candidate_manifest)
     prev_signature = _curriculum_signature(baseline_candidate_manifest)
 
@@ -1106,6 +1132,9 @@ def run_regression_triage(
         "learned_router_impact": learned_router_impact,
         "top_degrading_slices_for_learned_router": top_degrading_slices_for_learned_router,
         "top_degrading_slices_for_guarded_router": top_degrading_slices_for_guarded_router,
+        "top_degrading_slices_for_canary": top_degrading_slices_for_canary,
+        "guard_effectiveness": guard_effectiveness,
+        "canary_effectiveness": canary_effectiveness,
         "learned_router_selection_overuse": learned_router_selection_overuse,
         "learned_router_guard_condition_correlation": learned_router_guard_correlation,
         "learned_router_routing_variants": learned_router_routing_variants,
@@ -1330,12 +1359,14 @@ def run_regression_triage(
     if bool(learned_router_impact.get("learned_router_enabled")):
         md_lines.extend(["", "## Learned Router Impact"])
         md_lines.append(
-            "- checkpoint_id={checkpoint_id} learned_delta_vs_rule={learned_delta:.6f} guarded_delta_vs_rule={guarded_delta:.6f} guarded_lift_vs_learned={lift:.6f} guard_trigger_rate={guard_rate:.3f}".format(
+            "- checkpoint_id={checkpoint_id} learned_delta_vs_rule={learned_delta:.6f} guarded_delta_vs_rule={guarded_delta:.6f} canary_delta_vs_rule={canary_delta:.6f} guarded_lift_vs_learned={lift:.6f} guard_trigger_rate={guard_rate:.3f} canary_usage_rate={canary_rate:.3f}".format(
                 checkpoint_id=learned_router_impact.get("router_checkpoint_id"),
                 learned_delta=float(learned_router_impact.get("learned_score_delta_vs_rule") or 0.0),
                 guarded_delta=float(learned_router_impact.get("guarded_score_delta_vs_rule") or 0.0),
                 lift=float(learned_router_impact.get("guarded_score_delta_vs_learned") or 0.0),
+                canary_delta=float(learned_router_impact.get("canary_score_delta_vs_rule") or 0.0),
                 guard_rate=float(learned_router_impact.get("guard_trigger_rate") or 0.0),
+                canary_rate=float(learned_router_impact.get("canary_usage_rate") or 0.0),
             )
         )
         if learned_router_selection_overuse:
@@ -1368,6 +1399,20 @@ def run_regression_triage(
         if top_degrading_slices_for_guarded_router:
             md_lines.extend(["", "## Top Degrading Slices For Guarded Router"])
             for row in top_degrading_slices_for_guarded_router:
+                if not isinstance(row, dict):
+                    continue
+                md_lines.append(
+                    "- {key}:{label} score_delta={score:.6f} win_delta={win:.6f} count={count}".format(
+                        key=row.get("slice_key"),
+                        label=row.get("slice_label"),
+                        score=float(row.get("score_delta") or 0.0),
+                        win=float(row.get("win_rate_delta") or 0.0),
+                        count=int(row.get("count") or 0),
+                    )
+                )
+        if top_degrading_slices_for_canary:
+            md_lines.extend(["", "## Top Degrading Slices For Canary Router"])
+            for row in top_degrading_slices_for_canary:
                 if not isinstance(row, dict):
                     continue
                 md_lines.append(

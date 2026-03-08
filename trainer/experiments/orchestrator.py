@@ -196,6 +196,7 @@ def normalize_experiment_category(exp: dict[str, Any]) -> str:
         "learned_router_ablation",
         "p52_learned_router_campaign",
         "p54_learned_router_campaign",
+        "p56_router_calibration_campaign",
         "background_ops_validation",
         "p53_background_ops_campaign",
         "gpu_mainline_eval",
@@ -2720,6 +2721,137 @@ def _summary_table_policy_score(summary_path: Path, policy_id: str) -> float:
     return 0.0
 
 
+def _summary_table_policy_row(summary_path: Path, policy_id: str) -> dict[str, Any]:
+    payload = read_json(summary_path)
+    rows = [row for row in payload if isinstance(row, dict)] if isinstance(payload, list) else []
+    return next((dict(row) for row in rows if str(row.get("policy_id") or "") == str(policy_id)), {})
+
+
+def _read_jsonl_rows(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
+        text = line.strip()
+        if not text:
+            continue
+        try:
+            payload = json.loads(text)
+        except Exception:
+            continue
+        if isinstance(payload, dict):
+            rows.append(payload)
+    return rows
+
+
+def _write_canary_eval_summary(
+    *,
+    output_root: Path,
+    run_id: str,
+    checkpoint_id: str,
+    ablation_summary: dict[str, Any],
+) -> dict[str, Any]:
+    run_dir = output_root / str(run_id or now_stamp())
+    run_dir.mkdir(parents=True, exist_ok=True)
+    ablation_run_dir = Path(str(ablation_summary.get("run_dir") or "")).resolve() if str(ablation_summary.get("run_dir") or "").strip() else None
+    summary_table_path = Path(str(ablation_summary.get("summary_table_json") or "")).resolve() if str(ablation_summary.get("summary_table_json") or "").strip() else None
+    routing_summary_path = Path(str(ablation_summary.get("routing_summary_json") or "")).resolve() if str(ablation_summary.get("routing_summary_json") or "").strip() else None
+    promotion_decision_path = Path(str(ablation_summary.get("promotion_decision_json") or "")).resolve() if str(ablation_summary.get("promotion_decision_json") or "").strip() else None
+    canary_row = _summary_table_policy_row(summary_table_path, "hybrid_controller_canary_learned_router") if isinstance(summary_table_path, Path) and summary_table_path.exists() else {}
+    rule_row = _summary_table_policy_row(summary_table_path, "hybrid_controller_rule") if isinstance(summary_table_path, Path) and summary_table_path.exists() else {}
+    routing_payload = read_json(routing_summary_path) if isinstance(routing_summary_path, Path) and routing_summary_path.exists() else {}
+    routing_payload = routing_payload if isinstance(routing_payload, dict) else {}
+    variants = routing_payload.get("variants") if isinstance(routing_payload.get("variants"), list) else []
+    canary_variant = next((dict(row) for row in variants if isinstance(row, dict) and str(row.get("policy_id") or "") == "hybrid_controller_canary_learned_router"), {})
+    promotion_payload = read_json(promotion_decision_path) if isinstance(promotion_decision_path, Path) and promotion_decision_path.exists() else {}
+    promotion_payload = promotion_payload if isinstance(promotion_payload, dict) else {}
+    trace_rows = []
+    if isinstance(ablation_run_dir, Path):
+        trace_rows = _read_jsonl_rows(ablation_run_dir / "router_traces" / "hybrid_controller_canary_learned_router.jsonl")
+
+    slice_counts: dict[tuple[str, str], dict[str, float]] = {}
+    for row in trace_rows:
+        features = row.get("features") if isinstance(row.get("features"), dict) else {}
+        stage = str(features.get("slice_stage") or "unknown")
+        resource = str(features.get("slice_resource_pressure") or "unknown")
+        key = (stage, resource)
+        bucket = slice_counts.setdefault(key, {"count": 0.0, "canary_used": 0.0, "guard_triggered": 0.0})
+        bucket["count"] += 1.0
+        bucket["canary_used"] += 1.0 if bool(row.get("canary_used")) else 0.0
+        bucket["guard_triggered"] += 1.0 if bool(row.get("guard_triggered")) else 0.0
+    per_slice_distribution = [
+        {
+            "slice_stage": stage,
+            "slice_resource_pressure": resource,
+            "count": int(values.get("count") or 0),
+            "canary_used_rate": float(values.get("canary_used") or 0.0) / max(1.0, float(values.get("count") or 0.0)),
+            "fallback_rate": 1.0 - (float(values.get("canary_used") or 0.0) / max(1.0, float(values.get("count") or 0.0))),
+            "guard_trigger_rate": float(values.get("guard_triggered") or 0.0) / max(1.0, float(values.get("count") or 0.0)),
+        }
+        for (stage, resource), values in sorted(slice_counts.items(), key=lambda item: (-int((item[1] or {}).get("count") or 0), item[0][0], item[0][1]))
+    ]
+    canary_usage_rate = float(canary_variant.get("canary_usage_rate") or canary_row.get("canary_usage_rate") or 0.0)
+    canary_eligible_rate = float(canary_variant.get("canary_eligible_rate") or canary_row.get("canary_eligible_rate") or 0.0)
+    payload = {
+        "schema": "p56_canary_eval_v1",
+        "generated_at": now_iso(),
+        "run_id": str(run_id),
+        "checkpoint_id": str(checkpoint_id or ""),
+        "ablation_run_dir": str(ablation_run_dir or ""),
+        "summary_table_json": str(summary_table_path or ""),
+        "routing_summary_json": str(routing_summary_path or ""),
+        "promotion_decision_json": str(promotion_decision_path or ""),
+        "deployment_mode_recommendation": str(promotion_payload.get("deployment_mode_recommendation") or ""),
+        "recommendation": str(promotion_payload.get("recommendation") or ""),
+        "canary_usage_rate": canary_usage_rate,
+        "canary_eligible_rate": canary_eligible_rate,
+        "canary_fallback_rate": max(0.0, 1.0 - canary_usage_rate),
+        "guard_trigger_rate": float(canary_variant.get("guard_trigger_rate") or canary_row.get("guard_trigger_rate") or 0.0),
+        "catastrophic_failure_count": int(canary_row.get("catastrophic_failure_count") or 0),
+        "mean_total_score": float(canary_row.get("mean_total_score") or 0.0),
+        "score_delta_vs_rule": float(canary_row.get("score_delta_vs_rule") or 0.0),
+        "rule_mean_total_score": float(rule_row.get("mean_total_score") or 0.0),
+        "per_slice_distribution": per_slice_distribution,
+    }
+    write_json(run_dir / "canary_eval_summary.json", payload)
+    lines = [
+        "# P56 Canary Evaluation",
+        "",
+        f"- checkpoint_id: `{checkpoint_id}`",
+        f"- deployment_mode_recommendation: `{payload.get('deployment_mode_recommendation')}`",
+        f"- canary_usage_rate: {float(payload.get('canary_usage_rate') or 0.0):.4f}",
+        f"- canary_eligible_rate: {float(payload.get('canary_eligible_rate') or 0.0):.4f}",
+        f"- canary_fallback_rate: {float(payload.get('canary_fallback_rate') or 0.0):.4f}",
+        f"- score_delta_vs_rule: {float(payload.get('score_delta_vs_rule') or 0.0):.4f}",
+        f"- catastrophic_failure_count: {int(payload.get('catastrophic_failure_count') or 0)}",
+        "",
+        "## Per Slice Distribution",
+    ]
+    lines.extend(
+        [
+            "- stage={stage} resource={resource} count={count} canary_used_rate={used:.4f} fallback_rate={fallback:.4f} guard_trigger_rate={guard:.4f}".format(
+                stage=str(row.get("slice_stage") or "unknown"),
+                resource=str(row.get("slice_resource_pressure") or "unknown"),
+                count=int(row.get("count") or 0),
+                used=float(row.get("canary_used_rate") or 0.0),
+                fallback=float(row.get("fallback_rate") or 0.0),
+                guard=float(row.get("guard_trigger_rate") or 0.0),
+            )
+            for row in per_slice_distribution[:16]
+        ]
+        or ["- no canary trace rows found"]
+    )
+    (run_dir / "canary_eval_summary.md").write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    return {
+        "status": "ok",
+        "run_id": str(run_id),
+        "run_dir": str(run_dir.resolve()),
+        "canary_eval_json": str((run_dir / "canary_eval_summary.json").resolve()),
+        "canary_eval_md": str((run_dir / "canary_eval_summary.md").resolve()),
+        "deployment_mode_recommendation": str(payload.get("deployment_mode_recommendation") or ""),
+    }
+
+
 def _run_router_dataset_seed_experiment(
     *,
     ctx: RunContext,
@@ -2922,11 +3054,17 @@ def _learned_router_family_prefix(*, exp: dict[str, Any], cfg_path: Path | None 
         str(cfg_path or ""),
     ]
     joined = " ".join(tokens).lower()
-    return "p54" if "p54" in joined else "p52"
+    if "p56" in joined:
+        return "p56"
+    if "p54" in joined:
+        return "p54"
+    return "p52"
 
 
 def _learned_router_default_config(*, ctx: RunContext, exp: dict[str, Any]) -> str:
     family_prefix = _learned_router_family_prefix(exp=exp)
+    if family_prefix == "p56":
+        return "configs/experiments/p56_router_calibration_smoke.yaml" if ctx.mode == "quick" else "configs/experiments/p56_router_calibration_nightly.yaml"
     if family_prefix == "p54":
         return "configs/experiments/p54_learned_router_smoke.yaml" if ctx.mode == "quick" else "configs/experiments/p54_learned_router_nightly.yaml"
     return "configs/experiments/p52_learned_router_smoke.yaml" if ctx.mode == "quick" else "configs/experiments/p52_learned_router_nightly.yaml"
@@ -2937,12 +3075,18 @@ def _learned_router_artifact_root(repo_root: Path, cfg: dict[str, Any], *, famil
     train_cfg = cfg.get("train") if isinstance(cfg.get("train"), dict) else {}
     output_cfg = cfg.get("output") if isinstance(cfg.get("output"), dict) else {}
     triage_cfg = cfg.get("triage") if isinstance(cfg.get("triage"), dict) else {}
+    calibration_cfg = cfg.get("calibration") if isinstance(cfg.get("calibration"), dict) else {}
+    guard_tuning_cfg = cfg.get("guard_tuning") if isinstance(cfg.get("guard_tuning"), dict) else {}
+    canary_cfg = cfg.get("canary") if isinstance(cfg.get("canary"), dict) else {}
     default_map = {
         "dataset": f"docs/artifacts/{family_prefix}/router_dataset",
         "train": f"docs/artifacts/{family_prefix}/router_train",
         "inference": f"docs/artifacts/{family_prefix}/router_inference",
         "ablation": f"docs/artifacts/{family_prefix}/arena_ablation",
         "triage": f"docs/artifacts/{family_prefix}/triage",
+        "calibration": f"docs/artifacts/{family_prefix}/router_calibration",
+        "guard_tuning": f"docs/artifacts/{family_prefix}/guard_tuning",
+        "canary_eval": f"docs/artifacts/{family_prefix}/canary_eval",
     }
     configured = {
         "dataset": str(dataset_cfg.get("artifacts_root") or ""),
@@ -2950,6 +3094,9 @@ def _learned_router_artifact_root(repo_root: Path, cfg: dict[str, Any], *, famil
         "inference": str(output_cfg.get("router_inference_root") or ""),
         "ablation": str(output_cfg.get("arena_ablation_root") or ""),
         "triage": str(triage_cfg.get("output_artifacts_root") or ""),
+        "calibration": str(calibration_cfg.get("artifacts_root") or ""),
+        "guard_tuning": str(guard_tuning_cfg.get("artifacts_root") or ""),
+        "canary_eval": str(canary_cfg.get("artifacts_root") or output_cfg.get("canary_eval_root") or ""),
     }
     token = configured.get(kind) or default_map[kind]
     return (repo_root / token).resolve()
@@ -2964,7 +3111,7 @@ def _run_p52_learned_router_campaign_seed_experiment(
     seed_idx: int,
     seed_total: int,
 ) -> dict[str, Any]:
-    from trainer.campaigns.campaign_schema import P52_ROUTER_CAMPAIGN_STAGE_IDS, normalize_stage_status
+    from trainer.campaigns.campaign_schema import P52_ROUTER_CAMPAIGN_STAGE_IDS, P56_ROUTER_CAMPAIGN_STAGE_IDS, normalize_stage_status
     from trainer.campaigns.resume_state import (
         get_stage,
         load_campaign_state,
@@ -2975,10 +3122,12 @@ def _run_p52_learned_router_campaign_seed_experiment(
         should_skip_stage,
     )
     from trainer.hybrid.learned_router_eval import run_learned_router_ablation, run_router_inference_smoke
+    from trainer.hybrid.router_calibration import run_router_calibration
+    from trainer.hybrid.router_guard_tuning import run_router_guard_tuning
     from trainer.hybrid.learned_router_train import run_learned_router_train
     from trainer.hybrid.router_dataset import build_router_dataset
     from trainer.monitoring.dashboard_build import build_dashboard
-    from trainer.registry.checkpoint_registry import list_entries, snapshot_registry, update_checkpoint_status
+    from trainer.registry.checkpoint_registry import list_entries, snapshot_registry, update_checkpoint, update_checkpoint_status
     from trainer.registry.promotion_queue import build_promotion_queue_summary
 
     eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
@@ -3009,6 +3158,8 @@ def _run_p52_learned_router_campaign_seed_experiment(
         )
         if str(item).strip()
     }
+    campaign_stage_ids = list(P56_ROUTER_CAMPAIGN_STAGE_IDS) if family_prefix == "p56" else list(P52_ROUTER_CAMPAIGN_STAGE_IDS)
+    metric_prefix = family_prefix if family_prefix == "p56" else "p52"
 
     campaign_root = exp_dir / "campaign_runs" / f"seed_{seed_idx:03d}_{seed}"
     campaign_root.mkdir(parents=True, exist_ok=True)
@@ -3022,7 +3173,7 @@ def _run_p52_learned_router_campaign_seed_experiment(
         run_id=ctx.run_id,
         experiment_id=str(exp.get("id") or ""),
         seed=seed,
-        stage_ids=list(P52_ROUTER_CAMPAIGN_STAGE_IDS),
+        stage_ids=campaign_stage_ids,
         metadata={
             "config_path": str(cfg_path),
             "device_profile": device_profile_name,
@@ -3034,7 +3185,10 @@ def _run_p52_learned_router_campaign_seed_experiment(
     dataset_run_id = f"{ctx.run_id}-{seed}-router-dataset"
     train_run_id = f"{ctx.run_id}-{seed}-router-train"
     inference_run_id = f"{ctx.run_id}-{seed}-router-inference"
+    calibration_run_id = f"{ctx.run_id}-{seed}-router-calibration"
+    guard_tuning_run_id = f"{ctx.run_id}-{seed}-router-guard-tuning"
     ablation_run_id = f"{ctx.run_id}-{seed}-router-ablation"
+    canary_eval_run_id = f"{ctx.run_id}-{seed}-router-canary-eval"
 
     dataset_manifest_path = ""
     train_manifest_path = ""
@@ -3042,6 +3196,12 @@ def _run_p52_learned_router_campaign_seed_experiment(
     checkpoint_id = ""
     learner_device = ""
     inference_summary_json = ""
+    calibration_ref = ""
+    guard_tuning_ref = ""
+    recommended_guard_config_json = ""
+    canary_eval_ref = ""
+    deployment_mode_recommendation = ""
+    effective_cfg_path = cfg_path
     ablation_summary: dict[str, Any] = {}
 
     def _persist() -> None:
@@ -3077,7 +3237,7 @@ def _run_p52_learned_router_campaign_seed_experiment(
         write_json(
             campaign_root / "campaign_failure.json",
             {
-                "schema": "p52_campaign_failure_v1",
+                "schema": f"{metric_prefix}_campaign_failure_v1",
                 "stage_id": stage_id,
                 "error": str(exc),
                 "campaign_state": str(state_path),
@@ -3087,8 +3247,8 @@ def _run_p52_learned_router_campaign_seed_experiment(
             "status": "failed",
             "metrics": {
                 "score": 0.0,
-                "p52_campaign_state_path": str(state_path),
-                "p52_registry_snapshot_path": str(registry_snapshot_path),
+                f"{metric_prefix}_campaign_state_path": str(state_path),
+                f"{metric_prefix}_registry_snapshot_path": str(registry_snapshot_path),
             },
             "summary": {
                 "campaign_state_path": str(state_path),
@@ -3127,7 +3287,7 @@ def _run_p52_learned_router_campaign_seed_experiment(
                 update_checkpoint_status(
                     checkpoint_id,
                     to_status="smoke_passed",
-                    reason="p52_campaign_train_stage_completed",
+                    reason=f"{metric_prefix}_campaign_train_stage_completed",
                     operator="p22_orchestrator",
                     refs={"metrics_ref": str(train_summary.get("metrics_json") or "")},
                 )
@@ -3139,24 +3299,71 @@ def _run_p52_learned_router_campaign_seed_experiment(
             checkpoint_id = str(artifacts.get("checkpoint_id") or "")
             learner_device = str(artifacts.get("learner_device") or "")
 
-        if _start("eval_learned_router"):
-            inference_summary = run_router_inference_smoke(
-                checkpoint_path=checkpoint_path,
-                config_path=cfg_path,
-                out_dir=_learned_router_artifact_root(ctx.repo_root, cfg, family_prefix=family_prefix, kind="inference"),
-                run_id=inference_run_id,
-                seed=seed,
-                max_states=max(4, int(((cfg.get("inference_smoke") or {}).get("max_states") or 8))),
-            )
-            inference_summary_json = str(inference_summary.get("routing_summary_json") or "")
-            _complete("eval_learned_router", dict(inference_summary))
-        else:
-            artifacts = _stage_artifacts("eval_learned_router")
-            inference_summary_json = str(artifacts.get("routing_summary_json") or "")
+        if "eval_learned_router" in campaign_stage_ids:
+            if _start("eval_learned_router"):
+                inference_summary = run_router_inference_smoke(
+                    checkpoint_path=checkpoint_path,
+                    config_path=cfg_path,
+                    out_dir=_learned_router_artifact_root(ctx.repo_root, cfg, family_prefix=family_prefix, kind="inference"),
+                    run_id=inference_run_id,
+                    seed=seed,
+                    max_states=max(4, int(((cfg.get("inference_smoke") or {}).get("max_states") or 8))),
+                )
+                inference_summary_json = str(inference_summary.get("routing_summary_json") or "")
+                _complete("eval_learned_router", dict(inference_summary))
+            else:
+                artifacts = _stage_artifacts("eval_learned_router")
+                inference_summary_json = str(artifacts.get("routing_summary_json") or "")
+
+        if "eval_calibration" in campaign_stage_ids:
+            if _start("eval_calibration"):
+                calibration_summary = run_router_calibration(
+                    config_path=cfg_path,
+                    out_dir=_learned_router_artifact_root(ctx.repo_root, cfg, family_prefix=family_prefix, kind="calibration"),
+                    run_id=calibration_run_id,
+                    checkpoint_path=checkpoint_path or None,
+                    checkpoint_id=checkpoint_id,
+                    dataset_manifest_path=dataset_manifest_path or None,
+                    train_manifest_path=train_manifest_path or None,
+                )
+                calibration_ref = str(calibration_summary.get("calibration_metrics_json") or "")
+                _complete("eval_calibration", dict(calibration_summary))
+            else:
+                artifacts = _stage_artifacts("eval_calibration")
+                calibration_ref = str(artifacts.get("calibration_metrics_json") or "")
+
+        if "tune_guard_thresholds" in campaign_stage_ids:
+            if _start("tune_guard_thresholds"):
+                guard_tuning_summary = run_router_guard_tuning(
+                    config_path=cfg_path,
+                    out_dir=_learned_router_artifact_root(ctx.repo_root, cfg, family_prefix=family_prefix, kind="guard_tuning"),
+                    run_id=guard_tuning_run_id,
+                    checkpoint_path=checkpoint_path or None,
+                    checkpoint_id=checkpoint_id,
+                    train_manifest_path=train_manifest_path or None,
+                    dataset_manifest_path=dataset_manifest_path or None,
+                )
+                guard_tuning_ref = str(guard_tuning_summary.get("guard_tuning_results_json") or "")
+                recommended_guard_config_json = str(guard_tuning_summary.get("recommended_guard_config_json") or "")
+                _complete("tune_guard_thresholds", dict(guard_tuning_summary))
+            else:
+                artifacts = _stage_artifacts("tune_guard_thresholds")
+                guard_tuning_ref = str(artifacts.get("guard_tuning_results_json") or "")
+                recommended_guard_config_json = str(artifacts.get("recommended_guard_config_json") or "")
+
+            if recommended_guard_config_json:
+                recommended_payload = read_json(Path(recommended_guard_config_json)) or {}
+                recommended_guard = dict(recommended_payload.get("guard_config") or {}) if isinstance(recommended_payload.get("guard_config"), dict) else {}
+                if recommended_guard:
+                    effective_cfg = copy.deepcopy(cfg)
+                    routing_cfg = effective_cfg.setdefault("routing", {}) if isinstance(effective_cfg.setdefault("routing", {}), dict) else {}
+                    routing_cfg["rule_guard"] = recommended_guard
+                    effective_cfg_path = campaign_root / f"{family_prefix}_campaign_effective_config.json"
+                    write_json(effective_cfg_path, effective_cfg)
 
         if _start("arena_ablation"):
             ablation_summary = run_learned_router_ablation(
-                config_path=cfg_path,
+                config_path=effective_cfg_path,
                 out_dir=_learned_router_artifact_root(ctx.repo_root, cfg, family_prefix=family_prefix, kind="ablation"),
                 run_id=ablation_run_id,
                 quick=quick_flag,
@@ -3169,6 +3376,30 @@ def _run_p52_learned_router_campaign_seed_experiment(
             _complete("arena_ablation", dict(ablation_summary))
         else:
             ablation_summary = _stage_artifacts("arena_ablation")
+
+        if "canary_eval" in campaign_stage_ids:
+            if _start("canary_eval"):
+                canary_summary = _write_canary_eval_summary(
+                    output_root=_learned_router_artifact_root(ctx.repo_root, cfg, family_prefix=family_prefix, kind="canary_eval"),
+                    run_id=canary_eval_run_id,
+                    checkpoint_id=checkpoint_id,
+                    ablation_summary=ablation_summary,
+                )
+                canary_eval_ref = str(canary_summary.get("canary_eval_json") or "")
+                deployment_mode_recommendation = str(canary_summary.get("deployment_mode_recommendation") or "")
+                if checkpoint_id:
+                    update_checkpoint(
+                        checkpoint_id,
+                        {
+                            "canary_eval_ref": canary_eval_ref,
+                            "deployment_mode_recommendation": deployment_mode_recommendation or None,
+                        },
+                    )
+                _complete("canary_eval", dict(canary_summary))
+            else:
+                artifacts = _stage_artifacts("canary_eval")
+                canary_eval_ref = str(artifacts.get("canary_eval_json") or "")
+                deployment_mode_recommendation = str(artifacts.get("deployment_mode_recommendation") or "")
 
         if _start("triage"):
             triage_artifacts = {
@@ -3204,7 +3435,7 @@ def _run_p52_learned_router_campaign_seed_experiment(
         failed_stage = next(
             (
                 stage
-                for stage in P52_ROUTER_CAMPAIGN_STAGE_IDS
+                for stage in campaign_stage_ids
                 if normalize_stage_status(get_stage(campaign_state, stage).get("status")) == "running"
             ),
             "dashboard_build",
@@ -3217,10 +3448,16 @@ def _run_p52_learned_router_campaign_seed_experiment(
     summary_rows_path = Path(str(ablation_summary.get("summary_table_json") or ""))
     guarded_score = _summary_table_policy_score(summary_rows_path, "hybrid_controller_learned_with_rule_guard") if summary_rows_path.exists() else 0.0
     rule_score = _summary_table_policy_score(summary_rows_path, "hybrid_controller_rule") if summary_rows_path.exists() else 0.0
+    canary_score = _summary_table_policy_score(summary_rows_path, "hybrid_controller_canary_learned_router") if summary_rows_path.exists() else 0.0
+    promotion_payload = read_json(Path(str(ablation_summary.get("promotion_decision_json") or ""))) if str(ablation_summary.get("promotion_decision_json") or "").strip() else {}
+    promotion_payload = promotion_payload if isinstance(promotion_payload, dict) else {}
+    if not deployment_mode_recommendation:
+        deployment_mode_recommendation = str(promotion_payload.get("deployment_mode_recommendation") or "")
+    selected_score = canary_score if family_prefix == "p56" and deployment_mode_recommendation == "canary_learned_router" else guarded_score
     write_json(
         campaign_root / "campaign_summary.json",
         {
-            "schema": "p52_campaign_summary_v1",
+            "schema": f"{metric_prefix}_campaign_summary_v1",
             "generated_at": now_iso(),
             "campaign_state_path": str(state_path),
             "registry_snapshot_path": str(registry_snapshot_path),
@@ -3231,10 +3468,14 @@ def _run_p52_learned_router_campaign_seed_experiment(
             "train_manifest_json": train_manifest_path,
             "inference_summary_json": inference_summary_json,
             "ablation_summary": ablation_summary,
+            "calibration_ref": calibration_ref,
+            "guard_tuning_ref": guard_tuning_ref,
+            "canary_eval_ref": canary_eval_ref,
+            "deployment_mode_recommendation": deployment_mode_recommendation,
         },
     )
     resume_lines = [
-        "# P52 Campaign Resume Report",
+        f"# {metric_prefix.upper()} Campaign Resume Report",
         "",
         f"- campaign_state_path: `{state_path}`",
         f"- registry_snapshot_path: `{registry_snapshot_path}`",
@@ -3246,7 +3487,7 @@ def _run_p52_learned_router_campaign_seed_experiment(
         "",
         "## Stage Status",
     ]
-    for stage_id in P52_ROUTER_CAMPAIGN_STAGE_IDS:
+    for stage_id in campaign_stage_ids:
         stage = get_stage(campaign_state, stage_id)
         resume_lines.append(
             "- {stage}: status={status} attempts={attempts} resume_safe={safe}".format(
@@ -3259,35 +3500,39 @@ def _run_p52_learned_router_campaign_seed_experiment(
     resume_report_path.write_text("\n".join(resume_lines).rstrip() + "\n", encoding="utf-8")
 
     result_metrics = {
-        "score": guarded_score,
-        "avg_reward": guarded_score,
-        "best_episode_reward": max(guarded_score, rule_score),
-        "avg_ante_reached": guarded_score,
-        "median_ante": guarded_score,
+        "score": selected_score,
+        "avg_reward": selected_score,
+        "best_episode_reward": max(guarded_score, rule_score, canary_score),
+        "avg_ante_reached": selected_score,
+        "median_ante": selected_score,
         "win_rate": 0.0,
         "hand_top1": 0.0,
         "hand_top3": 0.0,
         "shop_top1": 0.0,
         "illegal_action_rate": 0.0,
-        "p52_checkpoint_count": 1 if checkpoint_id else 0,
-        "p52_campaign_state_path": str(state_path),
-        "p52_registry_snapshot_path": str(registry_snapshot_path),
-        "p52_promotion_queue_path": str(promotion_queue_path),
-        "p52_resume_report_md": str(resume_report_path),
-        "p52_training_python": sys.executable,
-        "p52_device_profile": device_profile_name,
-        "p52_learner_device": learner_device,
-        "p52_dashboard_path": str((ctx.repo_root / "docs/artifacts/dashboard/latest/index.html").resolve()),
-        "p52_readiness_report_path": _resolved_readiness_report_path(),
-        "p52_router_checkpoint_id": checkpoint_id,
-        "p52_router_checkpoint_path": checkpoint_path,
-        "p52_summary_table_json": str(ablation_summary.get("summary_table_json") or ""),
-        "p52_slice_eval_json": str(ablation_summary.get("slice_eval_json") or ""),
-        "p52_routing_summary_json": str(ablation_summary.get("routing_summary_json") or ""),
-        "p52_triage_report_json": str(ablation_summary.get("triage_report_json") or ""),
+        f"{metric_prefix}_checkpoint_count": 1 if checkpoint_id else 0,
+        f"{metric_prefix}_campaign_state_path": str(state_path),
+        f"{metric_prefix}_registry_snapshot_path": str(registry_snapshot_path),
+        f"{metric_prefix}_promotion_queue_path": str(promotion_queue_path),
+        f"{metric_prefix}_resume_report_md": str(resume_report_path),
+        f"{metric_prefix}_training_python": sys.executable,
+        f"{metric_prefix}_device_profile": device_profile_name,
+        f"{metric_prefix}_learner_device": learner_device,
+        f"{metric_prefix}_dashboard_path": str((ctx.repo_root / "docs/artifacts/dashboard/latest/index.html").resolve()),
+        f"{metric_prefix}_readiness_report_path": _resolved_readiness_report_path(),
+        f"{metric_prefix}_router_checkpoint_id": checkpoint_id,
+        f"{metric_prefix}_router_checkpoint_path": checkpoint_path,
+        f"{metric_prefix}_summary_table_json": str(ablation_summary.get("summary_table_json") or ""),
+        f"{metric_prefix}_slice_eval_json": str(ablation_summary.get("slice_eval_json") or ""),
+        f"{metric_prefix}_routing_summary_json": str(ablation_summary.get("routing_summary_json") or ""),
+        f"{metric_prefix}_triage_report_json": str(ablation_summary.get("triage_report_json") or ""),
+        f"{metric_prefix}_calibration_ref": calibration_ref,
+        f"{metric_prefix}_guard_tuning_ref": guard_tuning_ref,
+        f"{metric_prefix}_canary_eval_ref": canary_eval_ref,
+        f"{metric_prefix}_deployment_mode_recommendation": deployment_mode_recommendation,
     }
     summary_payload = {
-        "schema": "p52_campaign_seed_summary_v1",
+        "schema": f"{metric_prefix}_campaign_seed_summary_v1",
         "generated_at": now_iso(),
         "seed": str(seed),
         "run_dir": str(campaign_root),
@@ -3309,6 +3554,10 @@ def _run_p52_learned_router_campaign_seed_experiment(
         "dashboard_path": str((ctx.repo_root / "docs/artifacts/dashboard/latest/index.html").resolve()),
         "readiness_report_path": _resolved_readiness_report_path(),
         "training_python": sys.executable,
+        "calibration_ref": calibration_ref,
+        "guard_tuning_ref": guard_tuning_ref,
+        "canary_eval_ref": canary_eval_ref,
+        "deployment_mode_recommendation": deployment_mode_recommendation,
     }
     return {
         "status": "ok",
@@ -4085,6 +4334,7 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "p51_registry_campaign",
         "p52_learned_router_campaign",
         "p54_learned_router_campaign",
+        "p56_router_calibration_campaign",
         "p53_background_ops_campaign",
     }
     if ctx.resume and not allow_seed_level_resume:
@@ -4383,7 +4633,7 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             "readiness_report_path": _resolved_readiness_report_path(),
             "training_python": sys.executable,
         }
-    elif exp_type in {"router_dataset_build", "learned_router_train", "learned_router_ablation", "p52_learned_router_campaign", "p54_learned_router_campaign"}:
+    elif exp_type in {"router_dataset_build", "learned_router_train", "learned_router_ablation", "p52_learned_router_campaign", "p54_learned_router_campaign", "p56_router_calibration_campaign"}:
         eval_cfg = exp.get("eval") if isinstance(exp.get("eval"), dict) else {}
         default_cfg = _learned_router_default_config(ctx=ctx, exp=exp)
         manifest["p52_learned_router"] = {
@@ -5332,7 +5582,7 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
                     message=exp_type,
                     extra={"mode": exp_type, "seed_index": seed_idx, "seed_total": len(seeds)},
                 )
-            elif exp_type in {"p52_learned_router_campaign", "p54_learned_router_campaign"}:
+            elif exp_type in {"p52_learned_router_campaign", "p54_learned_router_campaign", "p56_router_calibration_campaign"}:
                 try:
                     p52_campaign_result = _run_p52_learned_router_campaign_seed_experiment(
                         ctx=ctx,
@@ -5636,7 +5886,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
     )
     runtime_details = {
         "device_profile": str(
-            final_seed_metrics.get("p53_device_profile")
+            final_seed_metrics.get("p56_device_profile")
+            or final_seed_metrics.get("p53_device_profile")
             or final_seed_metrics.get("p52_device_profile")
             or final_seed_metrics.get("p51_device_profile")
             or final_seed_metrics.get("p50_device_profile")
@@ -5645,9 +5896,9 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             or ""
         ),
         "learner_device": str(
-            final_seed_metrics.get("p53_learner_device")
-            or
-            final_seed_metrics.get("p52_learner_device")
+            final_seed_metrics.get("p56_learner_device")
+            or final_seed_metrics.get("p53_learner_device")
+            or final_seed_metrics.get("p52_learner_device")
             or final_seed_metrics.get("p51_learner_device")
             or final_seed_metrics.get("p50_learner_device")
             or final_seed_metrics.get("gpu_mainline_learner_device")
@@ -5655,7 +5906,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             or ""
         ),
         "training_python": str(
-            final_seed_metrics.get("p53_training_python")
+            final_seed_metrics.get("p56_training_python")
+            or final_seed_metrics.get("p53_training_python")
             or final_seed_metrics.get("p52_training_python")
             or final_seed_metrics.get("p51_training_python")
             or final_seed_metrics.get("p50_training_python")
@@ -5664,7 +5916,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             or ""
         ),
         "dashboard_path": str(
-            final_seed_metrics.get("p53_dashboard_path")
+            final_seed_metrics.get("p56_dashboard_path")
+            or final_seed_metrics.get("p53_dashboard_path")
             or final_seed_metrics.get("p52_dashboard_path")
             or final_seed_metrics.get("p51_dashboard_path")
             or final_seed_metrics.get("p50_dashboard_path")
@@ -5672,7 +5925,8 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             or ""
         ),
         "readiness_report_path": str(
-            final_seed_metrics.get("p53_readiness_report_path")
+            final_seed_metrics.get("p56_readiness_report_path")
+            or final_seed_metrics.get("p53_readiness_report_path")
             or final_seed_metrics.get("p52_readiness_report_path")
             or final_seed_metrics.get("p51_readiness_report_path")
             or final_seed_metrics.get("p50_readiness_report_path")
@@ -5682,26 +5936,30 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
             or ""
         ),
         "campaign_state_path": str(
-            final_seed_metrics.get("p53_campaign_state_path")
+            final_seed_metrics.get("p56_campaign_state_path")
+            or final_seed_metrics.get("p53_campaign_state_path")
             or final_seed_metrics.get("p52_campaign_state_path")
             or final_seed_metrics.get("p51_campaign_state_path")
             or ""
         ),
         "registry_snapshot_path": str(
-            final_seed_metrics.get("p53_registry_snapshot_path")
+            final_seed_metrics.get("p56_registry_snapshot_path")
+            or final_seed_metrics.get("p53_registry_snapshot_path")
             or final_seed_metrics.get("p52_registry_snapshot_path")
             or final_seed_metrics.get("p51_registry_snapshot_path")
             or ""
         ),
         "promotion_queue_path": str(
-            final_seed_metrics.get("p53_promotion_queue_path")
+            final_seed_metrics.get("p56_promotion_queue_path")
+            or final_seed_metrics.get("p53_promotion_queue_path")
             or final_seed_metrics.get("p52_promotion_queue_path")
             or final_seed_metrics.get("p51_promotion_queue_path")
             or final_seed_summary.get("promotion_queue_path")
             or ""
         ),
         "resume_report_path": str(
-            final_seed_metrics.get("p53_resume_report_md")
+            final_seed_metrics.get("p56_resume_report_md")
+            or final_seed_metrics.get("p53_resume_report_md")
             or final_seed_metrics.get("p52_resume_report_md")
             or final_seed_metrics.get("p51_resume_report_md")
             or final_seed_summary.get("resume_report_md")
@@ -5725,7 +5983,28 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         ),
         "produced_checkpoint_ids": list(
             final_seed_summary.get("produced_checkpoint_ids")
+            or ([str(final_seed_metrics.get("p56_router_checkpoint_id") or "")] if str(final_seed_metrics.get("p56_router_checkpoint_id") or "").strip() else [])
             or ([str(final_seed_metrics.get("p52_router_checkpoint_id") or "")] if str(final_seed_metrics.get("p52_router_checkpoint_id") or "").strip() else [])
+        ),
+        "calibration_ref": str(
+            final_seed_summary.get("calibration_ref")
+            or final_seed_metrics.get("p56_calibration_ref")
+            or ""
+        ),
+        "guard_tuning_ref": str(
+            final_seed_summary.get("guard_tuning_ref")
+            or final_seed_metrics.get("p56_guard_tuning_ref")
+            or ""
+        ),
+        "canary_eval_ref": str(
+            final_seed_summary.get("canary_eval_ref")
+            or final_seed_metrics.get("p56_canary_eval_ref")
+            or ""
+        ),
+        "deployment_mode_recommendation": str(
+            final_seed_summary.get("deployment_mode_recommendation")
+            or final_seed_metrics.get("p56_deployment_mode_recommendation")
+            or ""
         ),
     }
 
@@ -5872,6 +6151,10 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "promotion_queue_path": runtime_details.get("promotion_queue_path"),
         "resume_report_path": runtime_details.get("resume_report_path"),
         "produced_checkpoint_ids": runtime_details.get("produced_checkpoint_ids"),
+        "calibration_ref": runtime_details.get("calibration_ref"),
+        "guard_tuning_ref": runtime_details.get("guard_tuning_ref"),
+        "canary_eval_ref": runtime_details.get("canary_eval_ref"),
+        "deployment_mode_recommendation": runtime_details.get("deployment_mode_recommendation"),
     }
 
 

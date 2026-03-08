@@ -15,6 +15,28 @@ from trainer.registry.checkpoint_query import promoted_by_family, promotion_revi
 from trainer.registry.checkpoint_registry import list_entries
 
 
+def _router_review_summary(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in rows:
+        if str(item.get("family") or "").strip().lower() != "learned_router":
+            continue
+        out.append(
+            {
+                "checkpoint_id": str(item.get("checkpoint_id") or ""),
+                "status": str(item.get("status") or ""),
+                "source_run_id": str(item.get("source_run_id") or ""),
+                "source_experiment_id": str(item.get("source_experiment_id") or ""),
+                "deployment_mode_recommendation": str(item.get("deployment_mode_recommendation") or ""),
+                "calibration_ref": str(item.get("calibration_ref") or ""),
+                "guard_tuning_ref": str(item.get("guard_tuning_ref") or ""),
+                "canary_eval_ref": str(item.get("canary_eval_ref") or ""),
+                "arena_ref": str(item.get("arena_ref") or ""),
+                "triage_ref": str(item.get("triage_ref") or ""),
+            }
+        )
+    return out
+
+
 def build_promotion_queue_summary(entries: list[dict[str, Any]]) -> dict[str, Any]:
     promoted = promoted_by_family(entries)
     review = promotion_review_queue(entries)
@@ -28,11 +50,15 @@ def build_promotion_queue_summary(entries: list[dict[str, Any]]) -> dict[str, An
             "waiting_on_arena": len(arena_wait),
             "stale_drafts": len(drafts),
             "promoted_families": len(promoted),
+            "router_promotion_review": len(_router_review_summary(review)),
+            "router_waiting_on_arena": len(_router_review_summary(arena_wait)),
         },
         "promotion_review": review,
         "waiting_on_arena": arena_wait,
         "stale_drafts": drafts,
         "promoted_by_family": promoted,
+        "learned_router_promotion_review": _router_review_summary(review),
+        "learned_router_waiting_on_arena": _router_review_summary(arena_wait),
     }
 
 

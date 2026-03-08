@@ -53,4 +53,14 @@ def apply_transition(
             normalized["arena_ref"] = str(refs.get("arena_ref") or "")
         if "triage_ref" in refs and not normalized.get("triage_ref"):
             normalized["triage_ref"] = str(refs.get("triage_ref") or "")
+        if "calibration_ref" in refs:
+            normalized["calibration_ref"] = str(refs.get("calibration_ref") or normalized.get("calibration_ref") or "")
+        if "guard_tuning_ref" in refs:
+            normalized["guard_tuning_ref"] = str(refs.get("guard_tuning_ref") or normalized.get("guard_tuning_ref") or "")
+        if "canary_eval_ref" in refs:
+            normalized["canary_eval_ref"] = str(refs.get("canary_eval_ref") or normalized.get("canary_eval_ref") or "")
+        if "deployment_mode_recommendation" in refs:
+            normalized["deployment_mode_recommendation"] = str(
+                refs.get("deployment_mode_recommendation") or normalized.get("deployment_mode_recommendation") or ""
+            )
     return normalize_entry(normalized)
