@@ -21,6 +21,8 @@ const appState = {
   pollCounter: 0,
   ui: {
     inspectionEntry: null,
+    viewMode: "overview",
+    focusPanel: "preview",
   },
 };
 
@@ -33,6 +35,27 @@ const ICONS = {
   sun: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2 12h2.5M19.5 12H22M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>`,
   moon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>`,
   trend: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17 9 11l4 4 8-8"/><path d="M14 7h7v7"/></svg>`,
+  layers: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3 9 4.5-9 4.5-9-4.5z"/><path d="m3 12 9 4.5 9-4.5"/><path d="m3 16.5 9 4.5 9-4.5"/></svg>`,
+  focus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3H5a2 2 0 0 0-2 2v4"/><path d="M15 3h4a2 2 0 0 1 2 2v4"/><path d="M21 15v4a2 2 0 0 1-2 2h-4"/><path d="M3 15v4a2 2 0 0 0 2 2h4"/><circle cx="12" cy="12" r="3.2"/></svg>`,
+  scene: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 14 2.8-3 3.1 3.7 2.2-2.5L19 16"/><circle cx="8.5" cy="8.5" r="1.2"/></svg>`,
+  stage: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20h18"/><path d="M6 20v-8l6-4 6 4v8"/><path d="M9.5 10.8 12 9l2.5 1.8"/></svg>`,
+  risk: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 2.8 19h18.4L12 3Z"/><path d="M12 9v4.5"/><circle cx="12" cy="16.8" r="0.9" fill="currentColor" stroke="none"/></svg>`,
+  decision: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h14"/><path d="M12 4v16"/><path d="m12 8 5 4-5 4"/><path d="m12 8-5 4 5 4"/></svg>`,
+  target: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>`,
+  compare: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 5h6v14H5z"/><path d="M13 5h6v14h-6z"/><path d="M8 9v6"/><path d="M16 8v8"/><path d="M15 12h2"/></svg>`,
+  model: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 4 7v10l8 4 8-4V7l-8-4Z"/><path d="M12 12 4 7"/><path d="M12 12l8-5"/><path d="M12 12v9"/></svg>`,
+  heuristic: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h8"/><path d="m8 8 4 4-4 4"/><path d="M14 6h6"/><path d="M14 12h6"/><path d="M14 18h6"/></svg>`,
+  preview: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z"/><circle cx="12" cy="12" r="2.8"/></svg>`,
+  result: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 19V9"/><path d="M12 19V5"/><path d="M19 19v-7"/></svg>`,
+  timeline: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 6v12"/><path d="M7 10h10"/><circle cx="12" cy="6" r="1.8"/><circle cx="12" cy="18" r="1.8"/></svg>`,
+  training: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19h16"/><path d="M7 16V9"/><path d="M12 16V5"/><path d="M17 16v-3"/></svg>`,
+  hand: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 11V5.5a1.5 1.5 0 0 1 3 0V10"/><path d="M10 10V4.8a1.4 1.4 0 0 1 2.8 0V10"/><path d="M12.8 10V5.6a1.4 1.4 0 1 1 2.8 0V12"/><path d="M7 11 5.2 9.8a1.6 1.6 0 0 0-2.3 2L6 18.5A3 3 0 0 0 8.7 20H15a3 3 0 0 0 3-3v-5"/></svg>`,
+  joker: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 19c0-2 1.5-3.5 3.5-3.5S14 17 14 19"/><path d="M10.5 15.5V13"/><path d="M6 8c1.5 0 2.5-1 2.5-2.5S7.5 3 6 3C4.5 3 3.5 4 3.5 5.5S4.5 8 6 8Z"/><path d="M18 8c1.5 0 2.5-1 2.5-2.5S19.5 3 18 3c-1.5 0-2.5 1-2.5 2.5S16.5 8 18 8Z"/><path d="M12 5c1.5 0 2.5-1 2.5-2.5S13.5 0 12 0 9.5 1 9.5 2.5 10.5 5 12 5Z" transform="translate(0 3)"/><path d="M6 8c0 3 2.5 5 6 5s6-2 6-5"/></svg>`,
+  resources: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 7h14"/><path d="M5 12h14"/><path d="M5 17h9"/><path d="M16.5 17.5 18 19l3-4"/></svg>`,
+  chips: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 4v4"/><path d="M12 16v4"/><path d="M4 12h4"/><path d="M16 12h4"/></svg>`,
+  blind: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 20V9"/><path d="M6 9c4 0 6-3 12-3v8c-6 0-8 3-12 3"/><path d="M6 6V4"/></svg>`,
+  discard: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m7 7 10 10"/><path d="M17 7 7 17"/><rect x="4" y="4" width="16" height="16" rx="3"/></svg>`,
+  money: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.2"/><path d="M7 12h.01M17 12h.01"/></svg>`,
 };
 
 function icon(name) {
@@ -84,7 +107,7 @@ function emptyState(title, description) {
   `;
 }
 
-function metricCard(label, value, subvalue = "") {
+function metricCard(label, value, subvalue = "", iconName = "trend") {
   const template = qs("#metric-template");
   const node = template.content.firstElementChild.cloneNode(true);
   node.querySelector(".metric-label").textContent = label;
@@ -100,6 +123,12 @@ function showToast(message, type = "info") {
   toast.textContent = message;
   root.appendChild(toast);
   setTimeout(() => toast.remove(), 3200);
+}
+
+function trimText(text, maxLength = 88) {
+  const cleaned = String(text || "").trim();
+  if (!cleaned) return "";
+  return cleaned.length <= maxLength ? cleaned : `${cleaned.slice(0, maxLength - 1)}…`;
 }
 
 async function apiFetch(path, options = {}) {
@@ -157,6 +186,29 @@ function renderIconSlots(root = document) {
   });
 }
 
+function renderViewModeControls() {
+  const app = qs("#app");
+  if (!app) return;
+  app.dataset.viewMode = "overview";
+  app.dataset.focusPanel = appState.ui.focusPanel;
+  document.querySelectorAll(".dock-tab[data-focus-panel]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.focusPanel === appState.ui.focusPanel);
+  });
+}
+
+function setViewMode(mode) {
+  appState.ui.viewMode = "overview";
+  renderViewModeControls();
+}
+
+function setFocusPanel(panel, options = {}) {
+  appState.ui.focusPanel = panel || "preview";
+  if (options.viewMode === "focus") {
+    appState.ui.viewMode = "focus";
+  }
+  renderViewModeControls();
+}
+
 function applyTheme(theme) {
   appState.theme = theme;
   document.body.dataset.theme = theme;
@@ -179,7 +231,10 @@ function initTheme() {
 }
 
 function setStatusMessage(text) {
-  qs("#status-message").textContent = text || "";
+  const node = qs("#status-message");
+  if (node) {
+    node.textContent = trimText(text || "", 80);
+  }
 }
 
 function currentRunId() {
@@ -255,6 +310,65 @@ function riskClass(level) {
   if (label.includes("中")) return "medium";
   if (label.includes("低")) return "low";
   return "";
+}
+
+function sourceIconName(source) {
+  return source === "heuristic" ? "heuristic" : "model";
+}
+
+function decisionIconName(text) {
+  const value = String(text || "");
+  if (value.includes("弃牌")) return "discard";
+  if (value.includes("资源")) return "resources";
+  if (value.includes("Joker")) return "joker";
+  return "decision";
+}
+
+function scenarioIconName(scenario) {
+  if (scenario?.has_jokers || String(scenario?.focus || "").includes("Joker")) return "joker";
+  if (String(scenario?.focus || "").includes("弃牌")) return "discard";
+  return "scene";
+}
+
+function riskText(level) {
+  const value = String(level || "").trim();
+  if (!value) return "-";
+  return value.includes("风险") ? value : `${value}风险`;
+}
+
+function resourceIconName(label) {
+  const mapping = {
+    "当前盲注": "blind",
+    "当前筹码": "chips",
+    "距离目标": "target",
+    "剩余出牌": "hand",
+    "剩余弃牌": "discard",
+    "现金": "money",
+    "当前轮次": "timeline",
+    "重掷成本": "money",
+    "上一手牌型": "stage",
+    "牌堆": "hand",
+    "弃牌堆": "discard",
+    "已打出": "play",
+    "Joker": "joker",
+    "回合筹码": "chips",
+    "总筹码": "target",
+    "出牌次数": "hand",
+    "弃牌次数": "discard",
+    "现金变化": "money",
+    "牌堆变化": "hand",
+    "弃牌堆变化": "discard",
+    "已打出变化": "play",
+    "当前运行 ID": "model",
+    "模型状态": "model",
+    "样本规模": "training",
+    "最佳验证损失": "trend",
+    "Top-1 命中": "target",
+    "Top-3 命中": "compare",
+    "训练设备": "training",
+    "当前 checkpoint": "training",
+  };
+  return mapping[label] || "trend";
 }
 
 function expectedScore(recommendation) {
@@ -548,61 +662,33 @@ function renderTopSummary() {
   qs("#status-scenario").textContent = current.scenario.name;
   qs("#status-model").textContent = appState.modelInfo?.model_name || current.model_name || "-";
   qs("#status-run-id").textContent = `运行 ID：${currentRunId()}`;
-  qs("#status-mode").textContent = current.mode === "autoplay" ? "自动演示" : "手动";
-  qs("#status-phase").textContent = current.phase_label || current.phase_text || current.phase;
   qs("#scenario-focus-inline").textContent = current.scenario.focus || "-";
-  qs("#hero-description").textContent =
-    current.scenario.talk_track || "左边选场景，中间看局面，右边看推荐分歧，再执行一步。";
-
-  const selected = getSelectedRecommendation();
-  const focusRoot = qs("#hero-focus-card");
-  if (!selected) {
-    focusRoot.innerHTML = emptyState("正在准备推荐动作", "场景载入后，这里会先给出一句最值得讲的结论。");
-    return;
-  }
-
-  focusRoot.innerHTML = `
-    <span class="section-label">当前一句话</span>
-    <div class="callout-title">${topPolicyLine(selected)}</div>
-    <p class="callout-copy">${normalizeExplanation(selected.reason)}</p>
-    <div class="flow-kpis" style="margin-top:14px;">
-      <span class="kpi-chip">${selected.source_text || selected.source_label || selected.source}</span>
-      <span class="kpi-chip">置信度 ${formatPct(selected.confidence)}</span>
-      <span class="tone-chip ${riskClass(selected.risk_level)}">${selected.risk_level}风险</span>
-      <span class="kpi-chip">预计 ${formatNumber(expectedScore(selected), 0)} 筹码</span>
-    </div>
-  `;
 }
 
 function renderStatusStrip() {
-  const current = appState.currentState;
-  if (!current) return;
-  const insights = currentInsights();
-  qs("#status-risk").textContent = insights.risk_level;
-  qs("#status-decision-type").textContent = insights.decision_type;
-  qs("#status-gap").textContent = `${formatNumber(insights.score_gap, 0)} 筹码`;
-  qs("#status-training").textContent =
-    readableStatusLabel(appState.trainingStatus?.status_label, appState.trainingStatus?.status);
+  return;
 }
 
 function renderScenarios() {
   const container = qs("#scenario-list");
   container.innerHTML = "";
-  appState.scenarios.forEach((scenario) => {
+  appState.scenarios.forEach((scenario, index) => {
     const active = scenario.id === appState.currentScenarioId ? " active" : "";
-    const tags = (scenario.tags || []).map((tag) => `<span class="chip">${tag}</span>`).join("");
     const node = document.createElement("div");
     node.className = `scenario-card${active}`;
     node.innerHTML = `
-      <h4>${scenario.name}</h4>
-      <p class="callout-lead">这场主要看：${scenario.focus}</p>
-      <p>${scenario.summary}</p>
-      <div class="scenario-meta">
-        <span>手数 ${scenario.hands_left} / 弃牌 ${scenario.discards_left}</span>
-        <span>目标 ${formatNumber(scenario.target_chips, 0)} 筹码</span>
+      <div class="scenario-header">
+        <div>
+          <span class="section-label">场景 ${index + 1}</span>
+          <h4>${scenario.name}</h4>
+        </div>
+        <span class="chip ${riskClass(scenario.risk_label)}">${riskText(scenario.risk_label || "中")}</span>
       </div>
-      <div class="tag-row">${tags}</div>
-      <p class="muted">${scenario.talk_track || ""}</p>
+      <p class="summary-sentence">重点看：${scenario.focus}</p>
+      <p class="plain-meta">手数 ${scenario.hands_left} · 弃牌 ${scenario.discards_left} · 目标 ${formatNumber(
+        scenario.target_chips,
+        0
+      )}</p>
       <div class="inline-actions" style="margin-top:12px;">
         <button class="secondary subtle">载入场景</button>
       </div>
@@ -618,11 +704,14 @@ function renderInsightTags() {
   const current = appState.currentState;
   const insights = currentInsights();
   const root = qs("#insight-tags");
-  const tags = [
-    ...(insights.tags || []),
-    current?.scenario?.focus ? `主看：${current.scenario.focus}` : "",
-  ].filter(Boolean);
-  root.innerHTML = tags.map((tag) => `<span class="chip">${tag}</span>`).join("");
+  if (!current) {
+    root.textContent = "";
+    return;
+  }
+  root.textContent =
+    current.scenario.focus ||
+    insights.decision_hint ||
+    "先看当前局面，再对照右侧建议，最后看下方结果摘要。";
 }
 
 function renderStageSpotlight() {
@@ -634,14 +723,22 @@ function renderStageSpotlight() {
   }
   const preview = previewHeadline(selected);
   root.innerHTML = `
-    <span class="section-label">这一步最值得盯住什么</span>
+    <span class="section-label">当前一句话判断</span>
     <div class="callout-title">${preview.title}</div>
     <p class="callout-lead">${preview.lead}</p>
-    <p class="callout-copy">${contrastReason(selected) || selected.risk_hint || normalizeExplanation(preview.copy)}</p>
-    <div class="flow-kpis" style="margin-top:14px;">
-      <span class="kpi-chip">动作：${selected.label}</span>
-      <span class="kpi-chip">后续阶段：${recommendationPhaseAfter(selected)}</span>
-      <span class="kpi-chip">${selected.teacher_agrees_label}</span>
+    <p class="support-copy">${trimText(
+      contrastReason(selected) || selected.risk_hint || normalizeExplanation(preview.copy),
+      100
+    )}</p>
+    <div class="fact-list">
+      <div class="fact-item">
+        <strong>当前动作</strong>
+        <span>${selected.label}</span>
+      </div>
+      <div class="fact-item">
+        <strong>预计收益</strong>
+        <span>${formatNumber(expectedScore(selected), 0)} 筹码</span>
+      </div>
     </div>
   `;
 }
@@ -652,9 +749,13 @@ function renderStateSummary() {
   if (!current) return;
   const insights = currentInsights();
   root.innerHTML = `
+    <span class="section-label">当前局面判断</span>
     <h4>${insights.decision_type}</h4>
     <p class="callout-lead">${insights.decision_hint}</p>
-    <p class="callout-copy">${insights.risk_reason}</p>
+    <p class="support-copy">${insights.risk_reason}</p>
+    <div class="plain-meta">${insights.risk_level} · ${current.phase_label || current.phase_text || current.phase} · ${
+      current.scenario.focus
+    }</div>
   `;
 }
 
@@ -665,28 +766,33 @@ function renderResources() {
   grid.innerHTML = "";
   const resources = current.resources;
   [
-    ["当前盲注", resources.blind_label || resources.blind_text || resources.blind, "这是本回合要跨过去的门槛"],
+    ["当前盲注", resources.blind_label || resources.blind_text || resources.blind, "这回合门槛"],
     [
       "当前筹码",
       `${formatNumber(resources.score_chips, 0)} / ${formatNumber(resources.target_chips, 0)}`,
-      "越接近目标，越能直接结束这一手的讲解",
+      "离目标还有多远",
     ],
-    ["剩余出牌", `${resources.hands_left}`, resources.hands_left <= 1 ? "已经偏紧，要慎重" : "还有试错空间"],
-    ["剩余弃牌", `${resources.discards_left}`, resources.discards_left <= 1 ? "弃牌机会很贵" : "还能继续优化手牌"],
-    ["现金", `$${formatNumber(resources.money, 0)}`, resources.money <= 2 ? "经济偏紧" : "后续还有调整余地"],
-    ["当前轮次", `Ante ${resources.ante} / Round ${resources.round_num}`, "方便解释这是哪一个压力阶段"],
-    ["重掷成本", `$${formatNumber(resources.reroll_cost, 0)}`, "主要和商店决策相关"],
-    ["上一手牌型", current.score.last_hand_type || "无", "帮助解释当前局面的节奏来源"],
-  ].forEach(([label, value, subvalue]) => grid.appendChild(metricCard(label, value, subvalue)));
+    ["距离目标", `${formatNumber(currentInsights().score_gap, 0)} 筹码`, currentInsights().score_gap <= 0 ? "已经够分" : "还要再补一段"],
+    [
+      "剩余资源",
+      `${resources.hands_left} 出牌 / ${resources.discards_left} 弃牌`,
+      resources.hands_left <= 1 || resources.discards_left <= 1 ? "已经偏紧" : "还有操作空间",
+    ],
+  ].forEach(([label, value, subvalue]) =>
+    grid.appendChild(metricCard(label, value, subvalue, resourceIconName(label)))
+  );
 
   const zoneCounts = qs("#zone-counts");
+  if (!zoneCounts) return;
   zoneCounts.innerHTML = "";
   [
     ["牌堆", current.zones.deck_count, "还能抽多少牌"],
     ["弃牌堆", current.zones.discard.length, "已经送走多少牌"],
     ["已打出", current.zones.played.length, "本回合已经用掉多少牌"],
     ["Joker", current.jokers.length, "当前生效的机制数量"],
-  ].forEach(([label, value, subvalue]) => zoneCounts.appendChild(metricCard(label, `${value}`, subvalue)));
+  ].forEach(([label, value, subvalue]) =>
+    zoneCounts.appendChild(metricCard(label, `${value}`, subvalue, resourceIconName(label)))
+  );
 }
 
 function renderHand() {
@@ -740,23 +846,48 @@ function recommendationCard(recommendation, source, index, compareState) {
   const isSelected =
     appState.selectedRecommendation.source === source && appState.selectedRecommendation.index === index;
   const differenceClass = compareState?.same ? "compare-same" : "compare-different";
+  const rankLabel = recommendation.rank === 1 ? "首选动作" : `备选 ${recommendation.rank}`;
+  const differenceText = compareState?.same ? "与另一侧首选一致" : "与另一侧首选不同";
+  const compactClass = recommendation.rank > 1 ? " compact-alt" : "";
+  const postureText =
+    recommendation.risk_level && recommendation.risk_level.includes("高")
+      ? "更激进"
+      : recommendation.risk_level && recommendation.risk_level.includes("低")
+        ? "更稳"
+        : "中性";
+  if (recommendation.rank > 1) {
+    return `
+      <div class="recommendation-card ${differenceClass} compact-alt${isSelected ? " active" : ""}" data-source="${source}" data-index="${index}">
+        <div class="recommendation-header">
+          <div>
+            <span class="section-label">${rankLabel}</span>
+            <h4>${recommendation.label}</h4>
+          </div>
+          <span class="chip">${formatNumber(expectedScore(recommendation), 0)} 筹码</span>
+        </div>
+        <p class="summary-sentence">${differenceText} · ${riskText(recommendation.risk_level)} · ${postureText}</p>
+      </div>
+    `;
+  }
   return `
-    <div class="recommendation-card ${differenceClass}${isSelected ? " active" : ""}" data-source="${source}" data-index="${index}">
-      <span class="section-label">#${recommendation.rank} ${recommendation.rank === 1 ? "首选" : "候选"}</span>
-      <h4>${recommendation.label}</h4>
+    <div class="recommendation-card ${differenceClass}${compactClass}${recommendation.rank === 1 ? " top-pick" : ""}${isSelected ? " active" : ""}" data-source="${source}" data-index="${index}">
+      <div class="recommendation-header">
+        <div>
+          <span class="section-label">${rankLabel}</span>
+          <h4>${recommendation.label}</h4>
+        </div>
+        <span class="chip">${differenceText}</span>
+      </div>
       <p class="callout-lead">${recommendationSummaryLine(recommendation)}</p>
       <div class="recommendation-meta">
         <span class="recommendation-chip">${recommendation.source_text || recommendation.source_label || source}</span>
-        <span class="recommendation-chip ${riskClass(recommendation.risk_level)}">${recommendation.risk_level}风险</span>
+        <span class="recommendation-chip ${riskClass(recommendation.risk_level)}">${riskText(recommendation.risk_level)}</span>
         <span class="recommendation-chip">置信度 ${formatPct(recommendation.confidence)}</span>
         <span class="recommendation-chip">预计 ${formatNumber(expectedScore(recommendation), 0)} 筹码</span>
-        <span class="recommendation-chip">${recommendation.teacher_agrees_label}</span>
       </div>
-      <p>${normalizeExplanation(recommendation.reason)}</p>
-      <div class="recommendation-tags" style="margin-top:10px;">
-        ${(recommendation.tags || []).map((tag) => `<span class="chip">${tag}</span>`).join("")}
-      </div>
-      <p class="muted" style="margin-top:10px;">没选下一名：${contrastReason(recommendation)}</p>
+      <p class="callout-copy">${trimText(normalizeExplanation(recommendation.reason), 92)}</p>
+      <p class="support-copy">风格：${postureText} · ${recommendation.teacher_agrees_label}</p>
+      <p class="decision-footnote">不选下一名：${trimText(contrastReason(recommendation), 68)}</p>
     </div>
   `;
 }
@@ -769,6 +900,7 @@ function setSelectedRecommendation(source, index, options = {}) {
     index,
     signature: actionSignature(recommendation.action),
   };
+  setFocusPanel("preview");
   syncInspectionEntry();
   renderTopSummary();
   renderStageSpotlight();
@@ -791,22 +923,20 @@ function renderCompareSummary() {
     return;
   }
   root.innerHTML = `
-    <span class="section-label">模型 vs 基线首选</span>
+    <span class="section-label">模型 vs 启发式</span>
     <div class="callout-title">${summary.title}</div>
     <p class="callout-lead">${summary.lead}</p>
-    <div class="duo-metrics">
-      <div class="duo-metric">
-        <span class="section-label">是否一致</span>
-        <strong>${summary.sameText}</strong>
-        <p class="muted">一眼看模型和基线是不是同路。</p>
+    <div class="compare-highlight">
+      <div class="fact-item">
+        <strong>首选是否一致</strong>
+        <span>${summary.sameText}</span>
       </div>
-      <div class="duo-metric">
-        <span class="section-label">分歧方向</span>
-        <strong>${summary.postureText}</strong>
-        <p class="muted">${summary.scoreDiffText}</p>
+      <div class="fact-item">
+        <strong>分歧方向</strong>
+        <span>${summary.postureText} · ${summary.scoreDiffText}</span>
       </div>
     </div>
-    <p class="callout-copy">${summary.copy}</p>
+    <p class="support-copy">${trimText(summary.copy, 106)}</p>
   `;
 }
 
@@ -821,15 +951,26 @@ function renderSelectedActionCard() {
     <span class="section-label">当前聚焦动作</span>
     <div class="callout-title">${recommendation.label}</div>
     <p class="callout-lead">${recommendationSummaryLine(recommendation)}</p>
-    <div class="action-summary-grid">
-      <span class="kpi-chip">${recommendation.source_text || recommendation.source_label || recommendation.source}</span>
-      <span class="kpi-chip">后续阶段：${recommendationPhaseAfter(recommendation)}</span>
-      <span class="tone-chip ${riskClass(recommendation.risk_level)}">${recommendation.risk_level}风险</span>
-      <span class="kpi-chip">置信度 ${formatPct(recommendation.confidence)}</span>
-      <span class="kpi-chip">预计 ${formatNumber(expectedScore(recommendation), 0)} 筹码</span>
+    <div class="selected-summary">
+      <div class="fact-item">
+        <strong>建议来源</strong>
+        <span>${recommendation.source_text || recommendation.source_label || recommendation.source}</span>
+      </div>
+      <div class="fact-item">
+        <strong>预计收益</strong>
+        <span>${formatNumber(expectedScore(recommendation), 0)} 筹码</span>
+      </div>
+      <div class="fact-item">
+        <strong>风险判断</strong>
+        <span>${riskText(recommendation.risk_level)}</span>
+      </div>
+      <div class="fact-item">
+        <strong>执行后阶段</strong>
+        <span>${recommendationPhaseAfter(recommendation)}</span>
+      </div>
     </div>
-    <p class="callout-copy">${normalizeExplanation(recommendation.reason)}</p>
-    <p class="help-text">这张卡是整页的主卖点。点“执行当前动作”后，下方结果区和时间线会同步变化。</p>
+    <p class="support-copy">${trimText(normalizeExplanation(recommendation.reason), 108)}</p>
+    <p class="decision-footnote">点击这条动作后，中间牌面、下方结果预览和时间线会一起更新。</p>
   `;
 }
 
@@ -878,35 +1019,45 @@ function renderPreview() {
     <span class="section-label">执行后最重要的变化</span>
     <div class="callout-title">${headline.title}</div>
     <p class="callout-lead">${headline.lead}</p>
-    <p class="callout-copy">${headline.copy}</p>
+    <p class="decision-footnote">${headline.copy}</p>
   `;
 
   summaryRoot.innerHTML = `
-    <h4>${recommendation.label}</h4>
-    <p>${normalizeExplanation(recommendation.reason)}</p>
-    <div class="pill-row" style="margin-top:12px;">
-      <span class="chip">${recommendation.source_text || recommendation.source_label || recommendation.source}</span>
-      <span class="chip">执行后阶段：${recommendationPhaseAfter(recommendation)}</span>
-      <span class="chip">预计牌型：${preview.expected_hand_type || "-"}</span>
-      <span class="chip">预计收益：${formatNumber(expectedScore(recommendation), 0)}</span>
-    </div>
-    <div class="preview-highlight">
-      <span class="button-icon">${icon("trend")}</span>
-      ${contrastReason(recommendation)}
+    <div class="plain-meta">${recommendation.source_text || recommendation.source_label || recommendation.source} · ${riskText(
+      recommendation.risk_level
+    )} · ${recommendationPhaseAfter(recommendation)}</div>
+    <div class="preview-inline-grid">
+      <div class="preview-metric">
+        <strong>预计收益</strong>
+        <span>${formatNumber(expectedScore(recommendation), 0)} 筹码</span>
+      </div>
+      <div class="preview-metric">
+        <strong>回合筹码</strong>
+        <span>${formatNumber(delta.round_chips || 0, 0)}</span>
+      </div>
+      <div class="preview-metric">
+        <strong>出牌变化</strong>
+        <span>${formatNumber(delta.hands_left || 0, 0)}</span>
+      </div>
+      <div class="preview-metric">
+        <strong>弃牌变化</strong>
+        <span>${formatNumber(delta.discards_left || 0, 0)}</span>
+      </div>
     </div>
   `;
 
-  [
+  const deltaRows = [
     ["回合筹码", formatNumber(delta.round_chips || 0, 0), "执行这一手后，当前回合会加多少"],
     ["总筹码", formatNumber(delta.score_chips || 0, 0), "整局筹码变化"],
     ["出牌次数", formatNumber(delta.hands_left || 0, 0), "负数表示会消耗出牌次数"],
     ["弃牌次数", formatNumber(delta.discards_left || 0, 0), "负数表示会消耗弃牌次数"],
     ["现金变化", formatNumber(delta.money || 0, 0), "经济层面的变化"],
     ["牌堆变化", formatNumber(delta.deck_count || 0, 0), "下一轮还能摸到多少牌"],
-    ["弃牌堆变化", formatNumber(delta.discard_count || 0, 0), "会有多少牌进入弃牌堆"],
-    ["已打出变化", formatNumber(delta.played_count || 0, 0), "会有多少牌被真正打出去"],
-  ].forEach(([label, value, subvalue]) => {
-    deltaRoot.appendChild(metricCard(label, `${value}`, subvalue));
+  ];
+  const visibleRows =
+    appState.ui.focusPanel === "preview" ? deltaRows : deltaRows.slice(0, 4);
+  visibleRows.forEach(([label, value, subvalue]) => {
+    deltaRoot.appendChild(metricCard(label, `${value}`, subvalue, resourceIconName(label)));
   });
 }
 
@@ -938,7 +1089,7 @@ function renderTimeline() {
   }
 
   container.innerHTML = entries
-    .slice(0, 7)
+    .slice(0, appState.ui.focusPanel === "timeline" ? 6 : 3)
     .map((entry, index) => {
       let kindClass = "action";
       if (entry.kind === "scenario_loaded") kindClass = "scene";
@@ -956,7 +1107,7 @@ function renderTimeline() {
         <div class="timeline-entry${index === 0 ? " highlight" : ""}">
           <span class="timeline-kind ${kindClass}">${entry.kind_label || entry.kind}</span>
           <h4>${entry.label}</h4>
-          <p>${subtitle}</p>
+          <p>${trimText(subtitle, 88)}</p>
         </div>
       `;
     })
@@ -993,9 +1144,10 @@ function renderTrainingChart(history) {
       <line x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}" stroke="currentColor" opacity="0.12" />
       <polyline fill="none" stroke="#d7a94f" stroke-width="3" points="${trainLine}"></polyline>
       <polyline fill="none" stroke="#0e7c66" stroke-width="3" points="${valLine}"></polyline>
-      <text x="${padding}" y="18" fill="currentColor" opacity="0.65" font-size="12">训练损失（黄） / 验证损失（绿）</text>
-      <text x="${padding}" y="${height - 8}" fill="currentColor" opacity="0.65" font-size="12">第 1 轮</text>
-      <text x="${width - 104}" y="${height - 8}" fill="currentColor" opacity="0.65" font-size="12">第 ${history.length} 轮</text>
+      <text x="${padding}" y="18" fill="currentColor" opacity="0.68" font-size="12">训练损失（黄） / 验证损失（绿）</text>
+      <text x="${padding}" y="${height - 8}" fill="currentColor" opacity="0.65" font-size="12">开始</text>
+      <text x="${width - 74}" y="${height - 8}" fill="currentColor" opacity="0.65" font-size="12">第 ${history.length} 轮</text>
+      <text x="${width - 108}" y="${padding + 14}" fill="currentColor" opacity="0.55" font-size="11">损失越低越好</text>
     </svg>
   `;
 }
@@ -1007,14 +1159,26 @@ function renderTrainingResultCard() {
     <span class="section-label">成果总结</span>
     <div class="callout-title">${narrative.title}</div>
     <p class="callout-lead">${narrative.lead}</p>
-    <div class="training-kpis">
-      <span class="kpi-chip">运行 ID：${currentRunId()}</span>
-      <span class="kpi-chip">样本数 ${appState.modelInfo?.dataset_stats?.total_records || "-"}</span>
-      <span class="kpi-chip">最佳损失 ${formatNumber(appState.modelInfo?.metrics?.best_val_loss || 0, 3)}</span>
-      <span class="kpi-chip">Top-3 ${formatPct(appState.modelInfo?.metrics?.final?.val_acc3 || 0)}</span>
+    <div class="fact-list">
+      <div class="fact-item">
+        <strong>当前模型</strong>
+        <span>${appState.modelInfo?.model_name || "-"}</span>
+      </div>
+      <div class="fact-item">
+        <strong>运行 ID</strong>
+        <span>${currentRunId()}</span>
+      </div>
+      <div class="fact-item">
+        <strong>样本规模</strong>
+        <span>${appState.modelInfo?.dataset_stats?.total_records || "-"}</span>
+      </div>
+      <div class="fact-item">
+        <strong>Top-3</strong>
+        <span>${formatPct(appState.modelInfo?.metrics?.final?.val_acc3 || 0)}</span>
+      </div>
     </div>
-    <p class="callout-copy">已经学会：${narrative.strengths}</p>
-    <p class="help-text">当前边界：${narrative.limitation}</p>
+    <p class="support-copy">已经学会：${narrative.strengths}</p>
+    <p class="decision-footnote">当前边界：${narrative.limitation}</p>
   `;
 }
 
@@ -1038,12 +1202,13 @@ function renderTrainingStatusCard() {
     <div class="progress-shell" style="margin-top:12px;">
       <div class="progress-bar" style="width:${progressValue * 100}%"></div>
     </div>
-    <div class="pill-row" style="margin-top:12px;">
-      <span class="chip">任务 ID：${training.job_id || "-"}</span>
-      <span class="chip">阶段：${stageText(trainingStage())}</span>
-      <span class="chip">预计剩余：${formatDuration(training.training?.eta_sec || training.eta_sec)}</span>
-      <span class="chip">最佳轮次：${training.training?.best_epoch || modelInfo.metrics?.best_epoch || "-"}</span>
-      <span class="chip">最佳损失：${formatNumber(training.training?.best_val_loss || modelInfo.metrics?.best_val_loss || 0, 3)}</span>
+    <div class="plain-meta" style="margin-top:12px;">
+      任务 ${training.job_id || "-"} · 阶段 ${stageText(trainingStage())} · 剩余 ${formatDuration(
+        training.training?.eta_sec || training.eta_sec
+      )} · 最佳轮次 ${training.training?.best_epoch || modelInfo.metrics?.best_epoch || "-"} · 最佳损失 ${formatNumber(
+        training.training?.best_val_loss || modelInfo.metrics?.best_val_loss || 0,
+        3
+      )}
     </div>
   `;
 }
@@ -1052,7 +1217,7 @@ function renderModelMeta() {
   const modelMeta = qs("#model-meta");
   const modelInfo = appState.modelInfo || {};
   modelMeta.innerHTML = "";
-  [
+  const rows = [
     ["当前运行 ID", currentRunId(), modelInfo.loaded ? "当前已经由页面加载" : "当前仍会回退到启发式"],
     ["模型状态", modelInfo.loaded ? "已加载" : "未加载", modelInfo.loaded ? "模型已成功接管推荐" : "建议先训练或加载 checkpoint"],
     ["样本规模", `${modelInfo.dataset_stats?.total_records || modelInfo.metrics?.train_samples || "-"}`, "训练这版模型用到的总样本数"],
@@ -1061,7 +1226,11 @@ function renderModelMeta() {
     ["Top-3 命中", formatPct(modelInfo.metrics?.final?.val_acc3 || 0), "前三候选里命中的比例"],
     ["训练设备", modelInfo.config?.device_used || "-", "最近一次训练跑在什么设备上"],
     ["当前 checkpoint", modelInfo.checkpoint_path ? "已保存" : "缺失", modelInfo.checkpoint_path || "还没有可用模型文件"],
-  ].forEach(([label, value, subvalue]) => modelMeta.appendChild(metricCard(label, value, subvalue)));
+  ];
+  const visibleRows = appState.ui.focusPanel === "training" ? rows : rows.slice(0, 6);
+  visibleRows.forEach(([label, value, subvalue]) =>
+    modelMeta.appendChild(metricCard(label, value, subvalue, resourceIconName(label)))
+  );
 }
 
 function renderTrainingNotes() {
@@ -1074,7 +1243,7 @@ function renderTrainingNotes() {
   notes.push(`
     <div class="note-card">
       <strong>这块为什么重要</strong>
-      <p>训练面板不是监控台，而是用来证明“这页里的模型建议真的是训练出来的”。</p>
+      <p>这块用来证明页面里的建议不是写死规则，而是来自真实训练过的 checkpoint。</p>
     </div>
   `);
   notes.push(`
@@ -1102,7 +1271,7 @@ function renderTrainingNotes() {
     `);
   }
   notes.push(
-    ...evalRows.slice(0, 3).map(
+    ...evalRows.slice(0, appState.ui.focusPanel === "training" ? 3 : 2).map(
       (row) => `
         <div class="note-card">
           <strong>${row.scenario_name}</strong>
@@ -1135,6 +1304,7 @@ function refreshButtonStates() {
 
 function renderAll() {
   if (!appState.currentState) return;
+  renderViewModeControls();
   renderTopSummary();
   renderStatusStrip();
   renderScenarios();
@@ -1150,6 +1320,7 @@ function renderAll() {
   renderTrainingPanel();
   refreshButtonStates();
   renderIconSlots();
+  renderViewModeControls();
 }
 
 async function refreshState() {
@@ -1193,6 +1364,7 @@ async function loadScenario(scenarioId) {
     });
     await refreshState();
     await refreshRecommendations();
+    setFocusPanel("preview");
     syncInspectionEntry();
     renderAll();
     pulsePanels(["scenario", "board", "decision", "preview", "timeline"]);
@@ -1222,6 +1394,7 @@ async function executeSelected() {
     });
     await refreshState();
     await refreshRecommendations();
+    setFocusPanel("preview");
     syncInspectionEntry();
     renderAll();
     pulsePanels(["board", "decision", "preview", "timeline"]);
@@ -1247,6 +1420,7 @@ async function autoplay() {
     });
     await refreshState();
     await refreshRecommendations();
+    setFocusPanel("preview");
     syncInspectionEntry();
     renderAll();
     pulsePanels(["board", "decision", "preview", "timeline"]);
@@ -1290,6 +1464,12 @@ function bindControls() {
       await loadScenario(appState.currentScenarioId);
     }
   });
+  document.querySelectorAll(".dock-tab[data-focus-panel]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setFocusPanel(button.dataset.focusPanel);
+      pulsePanels([button.dataset.focusPanel]);
+    });
+  });
   qs("#step-button").addEventListener("click", executeSelected);
   qs("#autoplay-button").addEventListener("click", autoplay);
   qs("#train-standard-button").addEventListener("click", async () => {
@@ -1308,6 +1488,7 @@ async function refreshAll(initial = false) {
   const previousTrainingStatus = trainingStage();
   await Promise.all([refreshModelInfo(), refreshState(), refreshTrainingStatus()]);
   await refreshRecommendations();
+  renderViewModeControls();
   syncInspectionEntry();
   renderAll();
   setStatusMessage(appState.currentState?.scenario?.talk_track || "");

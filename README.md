@@ -75,10 +75,20 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
 
 当前 Demo 已经能稳定展示这些能力：
 
+- 默认打开是薄顶栏 + 左中右三栏 + 底部摘要带：左边选场景，中间看局面，右边看模型 vs 基线，下方看结果、时间线和训练成果。
+- 界面会根据分辨率和窗口比例自适应：宽屏优先保持一屏总览，较窄窗口自动收成更稳的单列布局。
 - `3` 个内置高质量场景，可直接用于面试演示。
 - 模型与启发式并排推荐，能直接看出差异。
 - 点击推荐后，局面、结果预览和时间线会联动更新。
 - 页面内能看到真实训练出的模型和训练过程状态。
+
+当前最适合现场演示的顺序是：
+
+1. 选一个场景故事。
+2. 看当前局面为什么关键。
+3. 看模型和启发式是否一致、差异在哪里。
+4. 执行当前动作。
+5. 看一步后的因果变化和训练成果。
 
 ## Scope and Boundaries / 适用边界
 
@@ -111,7 +121,7 @@ powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -Quick
 - Demo 说明：[DEMO_README.zh-CN.md](DEMO_README.zh-CN.md)
 - 使用指南：[USAGE_GUIDE.zh-CN.md](USAGE_GUIDE.zh-CN.md)
 - 架构说明：[docs/ARCHITECTURE.zh-CN.md](docs/ARCHITECTURE.zh-CN.md)
-- 演示脚本：[docs/MVP_DEMO_SCRIPT.zh-CN.md](docs/MVP_DEMO_SCRIPT.zh-CN.md)
+- 演示脚本：[docs/MVP_DEMO_SCRIPT.md](docs/MVP_DEMO_SCRIPT.md)
 
 ## Reproducibility / 可复现性
 
