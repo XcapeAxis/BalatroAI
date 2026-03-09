@@ -149,3 +149,23 @@ def test_invalid_integer_query_returns_400(tmp_path: Path) -> None:
     assert status == 400
     body = json.loads(payload.decode("utf-8"))
     assert "invalid integer for 'topk'" in body["error"]
+
+
+def test_static_assets_disable_browser_cache(tmp_path: Path) -> None:
+    static_root = tmp_path / "static"
+    static_root.mkdir()
+    (static_root / "index.html").write_text("<html><body>demo</body></html>", encoding="utf-8")
+    (static_root / "app.css").write_text("body{background:#000;}", encoding="utf-8")
+    server, thread = _run_server(_make_app(static_root))
+    try:
+        status, headers, payload = _request(server, "GET", "/static/app.css?v=20260310s5r2")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
+
+    assert status == 200
+    assert payload.decode("utf-8") == "body{background:#000;}"
+    assert headers["Cache-Control"] == "no-store, max-age=0"
+    assert headers["Pragma"] == "no-cache"
+    assert headers["Expires"] == "0"

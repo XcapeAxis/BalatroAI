@@ -260,7 +260,15 @@ def _read_int_field(body: dict[str, Any], field: str, default: int, *, minimum: 
     return value
 
 
-def _serve_static(app: DemoApplication, request_path: str) -> tuple[int, bytes, str]:
+def _static_headers() -> dict[str, str]:
+    return {
+        "Cache-Control": "no-store, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    }
+
+
+def _serve_static(app: DemoApplication, request_path: str) -> tuple[int, bytes, str, dict[str, str]]:
     static_root = app.static_root.resolve()
     if request_path == "/":
         file_path = static_root / "index.html"
@@ -271,20 +279,30 @@ def _serve_static(app: DemoApplication, request_path: str) -> tuple[int, bytes, 
             file_path.relative_to(static_root)
         except ValueError as exc:
             raise DemoRequestError(403, f"forbidden static path: {request_path}") from exc
+    headers = _static_headers()
     if not file_path.exists() or not file_path.is_file():
-        return 404, _json_bytes({"error": f"静态资源不存在：{request_path}"}), "application/json; charset=utf-8"
+        return 404, _json_bytes({"error": f"静态资源不存在：{request_path}"}), "application/json; charset=utf-8", headers
     content_type = mimetypes.guess_type(str(file_path))[0] or "application/octet-stream"
-    return 200, file_path.read_bytes(), content_type
+    return 200, file_path.read_bytes(), content_type, headers
 
 
 def create_handler(app: DemoApplication):
     class DemoRequestHandler(BaseHTTPRequestHandler):
         server_version = "BalatroMVP/2.0"
 
-        def _send(self, status: int, payload: bytes, content_type: str) -> None:
+        def _send(
+            self,
+            status: int,
+            payload: bytes,
+            content_type: str,
+            *,
+            extra_headers: dict[str, str] | None = None,
+        ) -> None:
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(payload)))
+            for key, value in (extra_headers or {}).items():
+                self.send_header(key, value)
             self.end_headers()
             self.wfile.write(payload)
 
@@ -310,8 +328,8 @@ def create_handler(app: DemoApplication):
                     self._send_json(app.training_status_payload())
                     return
                 if parsed.path == "/" or parsed.path.startswith("/static/"):
-                    status, payload, content_type = _serve_static(app, parsed.path)
-                    self._send(status, payload, content_type)
+                    status, payload, content_type, headers = _serve_static(app, parsed.path)
+                    self._send(status, payload, content_type, extra_headers=headers)
                     return
                 self._send_json({"error": f"未知路由：{parsed.path}"}, status=404)
             except DemoRequestError as exc:

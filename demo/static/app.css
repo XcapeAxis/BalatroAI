@@ -1429,15 +1429,11 @@ button.subtle,
 body {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--bg) 96%, white) 0%, var(--bg) 100%);
-  width: 100vw;
-  min-width: 100vw;
   overflow: auto;
   overflow-x: hidden;
 }
 
 .app-shell {
-  width: 100vw;
-  max-width: 100vw;
   min-height: 100vh;
   height: auto;
   padding: 12px var(--page-pad);
@@ -2183,18 +2179,39 @@ button.accent {
 
 /* S5 adaptive layout hardening */
 html,
-body {
+body,
+#app {
   width: 100%;
   min-width: 0;
+  min-inline-size: 100vw;
+}
+
+html {
+  min-height: 100%;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 96%, white) 0%, var(--bg) 100%);
 }
 
 body {
   min-height: 100dvh;
   overflow-x: hidden;
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 96%, white) 0%, var(--bg) 100%);
 }
 
 .app-shell {
-  width: 100%;
+  margin: 0;
+  inline-size: 100vw;
+  width: 100vw;
+  min-width: 100vw;
   max-width: none;
   min-height: 100dvh;
   padding: clamp(10px, 0.9vw, 20px);
