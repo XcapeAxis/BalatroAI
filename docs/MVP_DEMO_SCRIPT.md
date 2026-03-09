@@ -1,62 +1,163 @@
-# MVP Demo Script
+# MVP Demo 演示脚本
 
-## 15-Second Opening
+## 开场 15 秒
 
-"This is a local Balatro-style decision sandbox. I can load a scenario, show the current position, compare heuristic and model recommendations, preview the one-step resource delta, and execute the action in the simulator. The model behind the recommendation is a real trained checkpoint, not a hardcoded rule list."
+可以直接这样讲：
 
-## Suggested Scenario Order
+“这是一个本地 Balatro 风格 AI 决策沙盘。页面里可以直接加载局面、看模型和启发式的推荐差异、预览执行一步后的资源变化，并且这个推荐背后接的是一个真实训练过的模型，不是硬编码规则页。训练过程本身也能在页面里实时展示。”
 
-1. `basic_play`
-2. `high_risk_discard`
-3. `joker_synergy`
+## 建议演示顺序
 
-## Scenario Talking Points
+1. 高收益起手
+2. 高压弃牌转折
+3. Joker 协同爆发
 
-### 1. `basic_play`
+这个顺序的原因：
 
-- Show the hand and the Top-3 model recommendations.
-- Point out that the model and teacher agree on the straight flush.
-- Click `Execute Selected` and show the chips jump plus the phase move to `ROUND_EVAL`.
-- Emphasize: "The UI is not just static analysis. It is stepping a real local simulator."
+- 先用最直观的场景建立信任
+- 再展示资源压力下的非贪心决策
+- 最后用 Joker 协同把“可解释 AI”故事讲完整
 
-### 2. `high_risk_discard`
+## 场景 1：高收益起手
 
-- Explain the resource pressure: only one hand and one discard remain.
-- Show that the top recommendation is a full redraw, not a greedy low-value play.
-- Use `Autoplay 3 Steps` to show discard first, then the improved follow-up play.
-- Emphasize: "The assistant is reasoning about future opportunity cost, not only immediate chips."
+要讲什么：
 
-### 3. `joker_synergy`
+- 这是最适合开场的场景
+- 局面容易看懂，推荐动作和收益变化都很明显
+- 适合证明 Demo 不是静态卡片，而是真的在驱动本地模拟器
 
-- Point out `Even Steven` in the Joker panel.
-- Show the preview card: expected score is much larger than the raw base flush score.
-- Explain that the recommendation panel includes the projected one-step result and Joker-aware expected score.
-- Emphasize: "This is where the product story becomes explainable AI rather than just card ranking."
+推荐演示动作：
 
-## How To Show The Model Training Result
+1. 载入 `高收益起手`
+2. 指一下左右两列推荐
+3. 说明模型与启发式通常都会收敛到同一手高收益出牌
+4. 点击“执行当前动作”
+5. 展示筹码跳升、阶段变化、时间线新增记录
 
-- Open the `Model & Training` panel in the lower-right.
-- Mention the latest run id: `20260309_121811_fast`.
-- Mention the dataset size: `4254` samples, split into `3615` train and `639` validation.
-- Mention the validation metrics briefly:
-  - `val_acc1`: about `0.12`
-  - `val_acc3`: about `0.16`
-- Frame it correctly: "This is the first deployable supervised checkpoint for the demo, not the final strongest agent."
+建议话术：
 
-## If Something Goes Wrong Live
+“这里最适合讲产品闭环。用户先看局面，再看推荐，再看一步预览，最后直接执行。执行后所有资源变化和时间线都会立刻更新。”
 
-Fallback order:
+## 场景 2：高压弃牌转折
 
-1. Re-run `powershell -ExecutionPolicy Bypass -File scripts\run_mvp_demo.ps1 -OpenBrowser`
-2. If the checkpoint is missing, run `powershell -ExecutionPolicy Bypass -File scripts\bootstrap_mvp_demo.ps1 -OpenBrowser`
-3. If the browser is unreliable, open the fallback screenshots in `docs/artifacts/mvp/fallback/`
-4. If you need a non-interactive proof artifact, show:
-   - `docs/artifacts/mvp/api_smoke_20260309_123508.json`
-   - `docs/artifacts/mvp/model_train/20260309_121811_fast/training_summary.md`
+要讲什么：
 
-## Backup Assets To Keep Open
+- 这个场景最适合展示“AI 不是只看眼前筹码”
+- 当前资源已经很紧，错误动作代价高
+- 重点是弃牌与后续机会的权衡
+
+推荐演示动作：
+
+1. 切到 `高压弃牌转折`
+2. 先指出 `手数 1 / 弃牌 1`
+3. 指出风险等级和决策类型
+4. 对比推荐列表，说明为什么先弃牌更合理
+5. 可以点一次“自动演示 3 步”或者手动执行
+
+建议话术：
+
+“这个场景能说明助手不是机械追逐即时收益，而是在做资源调度。它会考虑现在打出去值不值、如果先弃牌能不能换来更高质量的后续机会。”
+
+## 场景 3：Joker 协同爆发
+
+要讲什么：
+
+- 这是“可解释 AI”最强的场景
+- 推荐不仅告诉你打什么，还告诉你为什么收益会被放大
+- 适合强调 Joker 对预期得分的影响
+
+推荐演示动作：
+
+1. 切到 `Joker 协同爆发`
+2. 指一下 Joker / 机制面板
+3. 打开一个推荐卡
+4. 说明推荐理由、预期收益、一步预览
+5. 执行一次动作，让时间线补上解释链路
+
+建议话术：
+
+“这里不是简单排卡强弱，而是在解释局面里的特殊机制如何改变动作价值。这是我希望把它包装成产品而不是调试页的原因。”
+
+## 如何展示训练面板
+
+训练面板是本轮 MVP-S2 的关键加分项，建议一定展示。
+
+可以按这个顺序讲：
+
+1. 指出当前模型的 `run_id`
+2. 指出数据样本规模
+3. 指出 `Val Loss / Top-1 / Top-3`
+4. 展示 loss 曲线
+5. 说明 UI 内可以直接发起新训练
+6. 如果现场允许，点击“快速烟雾训练”展示状态流转
+
+建议话术：
+
+“我没有把训练放在命令行里藏起来，而是把它产品化了。面试官可以直接看到当前训练到哪一轮、loss 怎么变化、最佳 checkpoint 是哪一个。”
+
+## 如何正确描述模型
+
+建议明确这样说：
+
+- 这是一个真实训练出的最小可用监督模型
+- 它不是最终最强代理
+- 当前重点是把训练、推理、解释、可视化打通成一个可演示产品
+- unsupported phase 仍会回退到启发式，这是有意为之的 MVP 收敛
+
+不要这样讲：
+
+- “已经接近完整 Balatro 通用最优代理”
+- “可以完全替代原版客户端”
+- “已经做完长期主线”
+
+## 现场如果要触发训练
+
+推荐顺序：
+
+1. 先点“快速烟雾训练”
+2. 给面试官看状态从 `排队中 -> 构建数据集 -> 正式训练 / 评估`
+3. 指一下训练面板里的进度条和曲线
+4. 如果时间充裕，再说明也支持 2 小时正式训练
+
+如果要讲 2 小时版本：
+
+- 可以说“这个按钮会在后台启动更像样的一轮训练预算，用于生成正式展示模型”
+- 不建议在时间非常紧的现场从零开始跑完整 2 小时
+
+## fallback 方案
+
+优先级建议：
+
+1. 重新运行 Demo
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_mvp_demo.ps1 -OpenBrowser
+```
+
+2. 如果需要先补最小模型，再启动
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\bootstrap_mvp_demo.ps1 -OpenBrowser
+```
+
+3. 如果浏览器状态不稳，直接展示 fallback 截图
 
 - `docs/artifacts/mvp/fallback/basic_play_demo.png`
 - `docs/artifacts/mvp/fallback/high_risk_discard_demo.png`
 - `docs/artifacts/mvp/fallback/joker_synergy_demo.png`
-- `docs/artifacts/mvp/api_smoke_20260309_123508.json`
+
+4. 如果需要非交互证据，展示这些产物
+
+- `docs/artifacts/mvp/training_status/latest.json`
+- `docs/artifacts/mvp/model_train/latest_run.txt`
+- `docs/artifacts/mvp/api_smoke_20260309_154858.json`
+- `docs/artifacts/mvp/fallback_assets_20260309_144449.md`
+
+## 面试前 30 秒检查清单
+
+- Demo 页面已打开
+- 主题已切到你更习惯展示的模式
+- 当前场景先停在 `高收益起手`
+- 训练面板可见
+- fallback 截图窗口已打开
+- `latest_run.txt` 和 `training_status/latest.json` 可随时切出来证明模型和训练都是真实产物

@@ -17,92 +17,98 @@
 
 ## MVP Demo
 
-This repository now includes an interview-ready local web demo for Balatro-style decision support.
+这个仓库现在已经包含一个适合面试直接展示的本地 Web Demo。它的定位不是研究后台，而是一个可以打开浏览器、切场景、看推荐、做解释、执行一步并展示训练过程的本地 AI 决策产品原型。
 
-What you can show in under two minutes:
+你可以在 2 分钟内展示这些内容：
 
-- a polished local browser UI driven by the simulator, not static mock data
-- three built-in scenarios with clear state, recommendation, explanation, and one-step outcome preview
-- a real trained first-pass policy model served locally alongside a heuristic baseline
-- manual stepping and autoplay without depending on the original game window or network access
+- 本地浏览器 UI，直接由 simulator 驱动，不是静态 mock 数据
+- `3` 个内置高质量场景，覆盖高收益出牌、高压弃牌、Joker 协同
+- 训练模型 vs 启发式基线的 Top-K 推荐对比
+- 一步预览、手动执行、自动演示、时间线回放
+- 一个真实训练出的最小可用模型，以及可在 UI 中看到的训练过程
 
-Quick start for the MVP demo:
+MVP Demo 一键启动：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_mvp_demo.ps1 -OpenBrowser
 ```
 
-If the trained checkpoint is missing and you want the repo to create one first:
+如果希望先自动补一个可用模型，再启动：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\bootstrap_mvp_demo.ps1 -OpenBrowser
 ```
 
-Default local URL:
+默认地址：
 
 ```text
 http://127.0.0.1:8050/
 ```
 
-Primary MVP references:
+推荐先看的文档：
 
 - [DEMO_README.md](DEMO_README.md)
 - [docs/MVP_DEMO_SCRIPT.md](docs/MVP_DEMO_SCRIPT.md)
 - `docs/artifacts/mvp/model_train/latest_run.txt`
+- `docs/artifacts/mvp/training_status/latest.json`
 
 ## MVP Quick Start
 
-1. Clone the repo and enter the workspace.
-2. Use the existing local Python environments prepared for this repo.
-3. Launch the demo with `scripts\run_mvp_demo.ps1`.
-4. Open one of the built-in scenarios: `basic_play`, `high_risk_discard`, or `joker_synergy`.
-5. Compare `model` and `heuristic`, then execute a step or run autoplay.
+1. 克隆仓库并进入目录。
+2. 使用仓库已有的本地 Python 环境。
+3. 运行 `scripts\run_mvp_demo.ps1` 打开本地 Demo。
+4. 先演示 `高收益起手`，再切到 `高压弃牌转折` 和 `Joker 协同爆发`。
+5. 对比模型与启发式推荐，执行一步或点击自动演示。
+6. 打开训练面板，展示 `run_id`、样本量、loss 曲线和实时状态。
 
-Train or refresh the MVP model manually:
+如果你要从命令行手动刷新模型：
 
 ```powershell
-D:\MYFILES\BalatroAI\.venv_trainer_cuda\Scripts\python.exe demo\build_mvp_dataset.py --episodes 220 --max-steps 32 --scenario-copies 64 --run-dir docs\artifacts\mvp\model_train\NEW_RUN
-D:\MYFILES\BalatroAI\.venv_trainer\Scripts\python.exe demo\train_mvp_model.py --dataset docs\artifacts\mvp\model_train\NEW_RUN\dataset.jsonl --run-dir docs\artifacts\mvp\model_train\NEW_RUN_fast --epochs 4 --batch-size 256 --device cpu
+D:\MYFILES\BalatroAI\.venv_trainer_cuda\Scripts\python.exe -m demo.train_mvp_pipeline --status-path docs\artifacts\mvp\training_status\latest.json --budget-minutes 8 --episodes 180 --max-steps 28 --scenario-copies 48 --device auto --batch-size 256 --final-epochs 4 --sweep-epochs 2
 ```
+
+正式 2 小时预算版本可用同一路径，只需把预算和训练规模换成 `standard` 档。
 
 ## MVP Value And Boundaries
 
-Good fit:
+适合：
 
-- AI decision visualization in a Balatro-style simulator
-- scenario-driven product demos with explainable action recommendations
-- small supervised model training and local inference integration
+- Balatro 风格 AI 决策可视化
+- 场景驱动的本地产品 Demo
+- 可解释推荐、一步预览、训练与推理打通
+- 最小监督模型训练与本地部署展示
 
-Not the goal of this MVP:
+不适合：
 
-- direct control of the commercial game client
-- network-dependent or cloud-only demo flows
-- claiming a fully optimal long-horizon agent
-- expanding registry, router, autonomy, or world-model infrastructure just for the demo
+- 直接控制商业游戏客户端
+- 依赖联网或云端的演示流程
+- 把当前模型描述成最终最优代理
+- 为了 Demo 继续扩长期 registry / autonomy / world-model 主线
 
 ## MVP Architecture
 
-The demo is intentionally thin:
+当前 Demo 是一层刻意收敛的产品化薄壳：
 
-- backend: local HTTP app in `demo/` wrapping the simulator and scenario fixtures
-- inference: heuristic policy plus a trained MLP checkpoint for Top-K action ranking
-- frontend: single-page UI served locally from `demo/static/`
-- artifacts: dataset, checkpoint, metrics, smoke logs, and fallback screenshots under `docs/artifacts/mvp/`
+- 后端：`demo/` 下的本地 HTTP 服务，包住 simulator、scenario fixture、状态适配和训练状态轮询
+- 推理：启发式基线 + 真实训练的手牌阶段策略模型
+- 前端：`demo/static/` 下的一页式本地 UI，支持中英文无关的本地演示路径
+- 产物：数据集、checkpoint、metrics、training status、fallback 截图统一写到 `docs/artifacts/mvp/`
 
-Data flow:
+数据流：
 
-1. Load a built-in scenario into the simulator.
-2. Encode the current state and legal actions.
-3. Score actions with the heuristic or the trained model.
-4. Show Top-K recommendations plus projected one-step deltas.
-5. Execute the selected action in the simulator and append the timeline.
+1. 将内置 scenario 载入本地 simulator。
+2. 提取当前状态和合法动作。
+3. 用启发式或训练模型为动作打分。
+4. 在 UI 展示 Top-K 推荐、解释、风险提示和一步预览。
+5. 执行动作，刷新资源、阶段和时间线。
+6. 如发起训练，则把状态与曲线实时写到 `training_status/latest.json` 并由 UI 轮询展示。
 
 ## MVP Roadmap And Known Limits
 
-- The current product is scenario-driven by design so demos stay stable and legible.
-- The shipped model is the first deployable supervised checkpoint, not the strongest future agent.
-- The model only covers the hand phase today; the heuristic remains the fallback for unsupported decisions.
-- The long-term repo still supports RL, hybrid control, and world-model work, but those are deliberately not the center of this MVP lane.
+- 当前 Demo 是 scenario-driven 的，这是为了演示稳定和叙事清晰。
+- 当前模型是第一个可工作的监督学习版本，不是终局形态。
+- 当前模型主要覆盖手牌阶段；其它阶段仍会回退到启发式。
+- 长期主线里的 RL、hybrid、world-model、nightly/autonomy 仍保留，但本轮 MVP 不以它们为展示中心。
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> ·
