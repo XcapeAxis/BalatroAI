@@ -1,0 +1,190 @@
+schema: p61_gate_plan_v1
+
+tiers:
+  tier0_instant:
+    label: Tier 0
+    description: instant fail-fast checks
+    expected_cost: instant
+    default_blocking: must-pass
+  tier1_targeted_smoke:
+    label: Tier 1
+    description: scope-aware targeted smoke validation
+    expected_cost: low
+    default_blocking: must-pass
+  tier2_subsystem_gate:
+    label: Tier 2
+    description: subsystem gate for integration confidence
+    expected_cost: medium
+    default_blocking: must-pass
+  tier3_certification:
+    label: Tier 3
+    description: deferred certification and nightly validation
+    expected_cost: high
+    default_blocking: defer-allowed
+
+checks:
+  py_compile_changed_python:
+    tier: tier0_instant
+    expected_cost: instant
+    blocking_behavior: must-pass
+    timeout_sec: 120
+    command_template: "python -m py_compile <changed_python_files>"
+    default_triggers:
+      - python_code
+  config_sidecar_consistency:
+    tier: tier0_instant
+    expected_cost: instant
+    blocking_behavior: must-pass
+    timeout_sec: 300
+    command_template: "python -m trainer.experiments.config_sidecar_sync --check --quiet"
+    default_triggers:
+      - configs
+      - scripts
+      - trainer_any
+      - sim_core
+  agents_consistency:
+    tier: tier0_instant
+    expected_cost: instant
+    blocking_behavior: must-pass
+    timeout_sec: 180
+    command_template: "python -m trainer.autonomy.agents_consistency_check"
+    default_triggers:
+      - docs
+      - scripts
+      - configs
+      - trainer_any
+      - sim_core
+  decision_policy_smoke:
+    tier: tier0_instant
+    expected_cost: instant
+    blocking_behavior: must-pass
+    timeout_sec: 120
+    command_template: "python -m trainer.runtime.decision_policy_check --action run_autonomy_entry"
+    default_triggers:
+      - docs
+      - scripts
+      - configs
+      - trainer_runtime
+      - trainer_experiments
+      - trainer_any
+  doctor_precheck:
+    tier: tier0_instant
+    expected_cost: low
+    blocking_behavior: must-pass
+    timeout_sec: 600
+    command_template: "powershell -ExecutionPolicy Bypass -File scripts/doctor.ps1"
+    default_triggers:
+      - scripts
+      - configs
+      - trainer_any
+      - sim_core
+  readme_lint:
+    tier: tier0_instant
+    expected_cost: instant
+    blocking_behavior: must-pass
+    timeout_sec: 120
+    command_template: "powershell -ExecutionPolicy Bypass -File scripts/lint_readme_p25.ps1"
+    default_triggers:
+      - readme
+  p22_dry_run:
+    tier: tier1_targeted_smoke
+    expected_cost: low
+    blocking_behavior: must-pass
+    timeout_sec: 1800
+    command_template: "powershell -ExecutionPolicy Bypass -File scripts/run_p22.ps1 -DryRun"
+    default_triggers:
+      - scripts
+      - configs
+      - trainer_experiments
+      - trainer_runtime
+  router_smoke:
+    tier: tier1_targeted_smoke
+    expected_cost: low
+    blocking_behavior: must-pass
+    timeout_sec: 3600
+    command_template: "powershell -ExecutionPolicy Bypass -File scripts/run_p22.ps1 -Only p54_learned_router_smoke"
+    default_triggers:
+      - trainer_hybrid
+  world_model_smoke:
+    tier: tier1_targeted_smoke
+    expected_cost: low
+    blocking_behavior: must-pass
+    timeout_sec: 2400
+    command_template: "powershell -ExecutionPolicy Bypass -File scripts/run_p22.ps1 -Only p47_wm_search_smoke"
+    default_triggers:
+      - trainer_world_model
+  imagination_smoke:
+    tier: tier1_targeted_smoke
+    expected_cost: low
+    blocking_behavior: must-pass
+    timeout_sec: 2400
+    command_template: "powershell -ExecutionPolicy Bypass -File scripts/run_p22.ps1 -Only p46_imagination_smoke"
+    default_triggers:
+      - trainer_world_model
+  rl_smoke:
+    tier: tier1_targeted_smoke
+    expected_cost: low
+    blocking_behavior: must-pass
+    timeout_sec: 2400
+    command_template: "powershell -ExecutionPolicy Bypass -File scripts/run_p22.ps1 -Only p42_rl_candidate_smoke"
+    default_triggers:
+      - trainer_rl
+  closed_loop_smoke:
+    tier: tier1_targeted_smoke
+    expected_cost: low
+    blocking_behavior: must-pass
+    timeout_sec: 2400
+    command_template: "powershell -ExecutionPolicy Bypass -File scripts/run_p22.ps1 -Only p40_closed_loop_smoke"
+    default_triggers:
+      - trainer_closed_loop
+  p22_quick_gate:
+    tier: tier2_subsystem_gate
+    expected_cost: medium
+    blocking_behavior: must-pass
+    timeout_sec: 7200
+    command_template: "powershell -ExecutionPolicy Bypass -File scripts/run_p22.ps1 -Quick"
+    default_triggers:
+      - scripts
+      - configs
+      - trainer_experiments
+      - trainer_runtime
+      - trainer_hybrid
+      - trainer_world_model
+      - trainer_rl
+      - trainer_closed_loop
+  sim_subsystem_gate:
+    tier: tier2_subsystem_gate
+    expected_cost: medium
+    blocking_behavior: must-pass
+    timeout_sec: 7200
+    command_template: "powershell -ExecutionPolicy Bypass -File scripts/run_regressions.ps1 -RunP22"
+    default_triggers:
+      - sim_core
+  run_regressions_p22:
+    tier: tier3_certification
+    expected_cost: high
+    blocking_behavior: defer-allowed
+    timeout_sec: 14400
+    command_template: "powershell -ExecutionPolicy Bypass -File scripts/run_regressions.ps1 -RunP22"
+    default_triggers:
+      - scripts
+      - configs
+      - trainer_experiments
+      - trainer_runtime
+      - trainer_hybrid
+      - trainer_world_model
+      - trainer_rl
+      - trainer_closed_loop
+      - sim_core
+  p22_overnight_certification:
+    tier: tier3_certification
+    expected_cost: high
+    blocking_behavior: defer-allowed
+    timeout_sec: 21600
+    command_template: "powershell -ExecutionPolicy Bypass -File scripts/run_p22.ps1 -Overnight"
+    default_triggers:
+      - trainer_hybrid
+      - trainer_world_model
+      - trainer_rl
+      - trainer_closed_loop
+      - trainer_experiments
