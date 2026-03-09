@@ -214,7 +214,7 @@ class TrainingManager:
     def start(self, profile: str = "standard") -> dict[str, Any]:
         with self._lock:
             current = self.status()
-            if self.running():
+            if str(current.get("status") or "").lower() in _ACTIVE_TRAINING_STATES:
                 return current
 
             cfg = self._profile(profile)
