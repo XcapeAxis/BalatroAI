@@ -71,6 +71,18 @@ def _render_md(payload: dict[str, Any]) -> str:
         lines.append("- `{}`".format(" ".join([str(item) for item in command_argv])))
     else:
         lines.append("- No command selected.")
+    lines += ["", "## Validation Workflow", ""]
+    lines.append(
+        "- fast_check_status=`{}` validation_tiers_completed=`{}` certification_status=`{}` pending_certification_count=`{}`".format(
+            payload.get("fast_check_status") or "",
+            ", ".join([str(item) for item in (payload.get("validation_tiers_completed") or [])]),
+            payload.get("certification_status") or "",
+            int(payload.get("pending_certification_count") or 0),
+        )
+    )
+    lines.append("- fast_check_report=`{}`".format(payload.get("fast_check_report_path") or ""))
+    lines.append("- certification_queue=`{}`".format(payload.get("certification_queue_path") or ""))
+    lines.append("- certification_state=`{}`".format(payload.get("certification_state_path") or ""))
     lines += ["", "## Attention Items", ""]
     for item in payload.get("open_attention_items") or []:
         if not isinstance(item, dict):
@@ -121,6 +133,9 @@ def _write_payload(out_root: Path, payload: dict[str, Any]) -> dict[str, Any]:
 def _command_for_mode(mode: str, state: dict[str, Any]) -> tuple[str, list[str], str]:
     attention_queue = state.get("attention_queue") if isinstance(state.get("attention_queue"), dict) else {}
     open_items = attention_queue.get("open_items") if isinstance(attention_queue.get("open_items"), list) else []
+    certification_queue = state.get("certification_queue") if isinstance(state.get("certification_queue"), dict) else {}
+    pending_certification = certification_queue.get("pending_items") if isinstance(certification_queue.get("pending_items"), list) else []
+    running_certification = certification_queue.get("running_items") if isinstance(certification_queue.get("running_items"), list) else []
     blocking_items = [
         item
         for item in open_items
@@ -136,6 +151,19 @@ def _command_for_mode(mode: str, state: dict[str, Any]) -> tuple[str, list[str],
     if any(bool(item.get("human_gate_open")) for item in blocked_campaigns if isinstance(item, dict)):
         return "blocked_by_campaign_human_gate", [], "A campaign is blocked by an unresolved human gate."
     if mode == "resume-latest":
+        if pending_certification or running_certification:
+            return (
+                "resume_pending_certification",
+                [
+                    "powershell",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    "scripts\\run_certification.ps1",
+                    "-LatestPending",
+                ],
+                "Tier 3 certification is pending, so autonomy will resume the certification queue first.",
+            )
         resume_command = str(resume_target.get("resume_command") or "").strip()
         if resume_command:
             return (
@@ -152,6 +180,19 @@ def _command_for_mode(mode: str, state: dict[str, Any]) -> tuple[str, list[str],
             )
         return "next_mainline_task", [], "No resumable campaign was found. The next mainline task is a new autonomy smoke run."
     if mode == "overnight":
+        if pending_certification or running_certification:
+            return (
+                "run_pending_certification",
+                [
+                    "powershell",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    "scripts\\run_certification.ps1",
+                    "-LatestPending",
+                ],
+                "Tier 3 certification is pending, so overnight autonomy will drain the certification queue before starting a new nightly run.",
+            )
         return (
             "start_overnight",
             [
@@ -178,16 +219,15 @@ def _command_for_mode(mode: str, state: dict[str, Any]) -> tuple[str, list[str],
             "A resumable campaign exists, so autonomy will resume it before starting a new smoke run.",
         )
     return (
-        "start_autonomy_smoke",
+        "start_fast_checks",
         [
             "powershell",
             "-ExecutionPolicy",
             "Bypass",
             "-File",
-            "scripts\\run_p22.ps1",
-            "-RunP57",
+            "scripts\\run_fast_checks.ps1",
         ],
-        "No blockers or resumable failures were found, so autonomy will start the smoke lane.",
+        "No blockers or resumable failures were found, so autonomy will start the fast validation loop.",
     )
 
 
@@ -201,6 +241,12 @@ def build_autonomy_entry(*, repo_root: str | Path | None = None, mode: str = "qu
 
     attention_queue = state.get("attention_queue") if isinstance(state.get("attention_queue"), dict) else {}
     open_attention_items = [item for item in (attention_queue.get("open_items") or []) if isinstance(item, dict)]
+    fast_checks = state.get("fast_checks") if isinstance(state.get("fast_checks"), dict) else {}
+    fast_check_payload = fast_checks.get("payload") if isinstance(fast_checks.get("payload"), dict) else {}
+    certification_queue = state.get("certification_queue") if isinstance(state.get("certification_queue"), dict) else {}
+    certification_state = certification_queue.get("state_payload") if isinstance(certification_queue.get("state_payload"), dict) else {}
+    pending_certification_items = certification_queue.get("pending_items") if isinstance(certification_queue.get("pending_items"), list) else []
+    running_certification_items = certification_queue.get("running_items") if isinstance(certification_queue.get("running_items"), list) else []
     agents = {
         "root_path": str((root / "AGENTS.md").resolve()),
         "root_present": (root / "AGENTS.md").exists(),
@@ -272,6 +318,14 @@ def build_autonomy_entry(*, repo_root: str | Path | None = None, mode: str = "qu
         "attention_queue_path": str(attention_queue.get("path") or ""),
         "morning_summary_path": str(morning.get("latest_md") or ""),
         "dashboard_path": str(((state.get("dashboard") or {}).get("index_path")) or ""),
+        "fast_check_report_path": str(fast_checks.get("json_path") or ""),
+        "fast_check_status": str(fast_check_payload.get("fast_check_status") or ""),
+        "validation_tiers_completed": list(fast_check_payload.get("validation_tiers_completed") or []),
+        "certification_status": str(certification_state.get("status") or ""),
+        "certification_queue_path": str(certification_queue.get("queue_path") or ""),
+        "certification_state_path": str(certification_queue.get("state_path") or ""),
+        "certification_summary_path": str(certification_queue.get("summary_path") or ""),
+        "pending_certification_count": len(pending_certification_items) + len(running_certification_items),
         "latest_resume_target": state.get("latest_resume_target") if isinstance(state.get("latest_resume_target"), dict) else {},
         "open_attention_items": open_attention_items[:12],
         "blocked_campaigns": state.get("blocked_campaigns") if isinstance(state.get("blocked_campaigns"), list) else [],
@@ -286,7 +340,7 @@ def build_autonomy_entry(*, repo_root: str | Path | None = None, mode: str = "qu
         "policy_evaluation": policy_eval,
         "attention_item_ref": attention_item_ref,
         "next_suggested_command": (
-            "powershell -ExecutionPolicy Bypass -File scripts\\run_p22.ps1 -RunP57"
+            "powershell -ExecutionPolicy Bypass -File scripts\\run_fast_checks.ps1"
             if selected_plan == "next_mainline_task"
             else ""
         ),
@@ -307,6 +361,7 @@ def build_autonomy_entry(*, repo_root: str | Path | None = None, mode: str = "qu
         env["BALATRO_MORNING_SUMMARY_PATH"] = str(payload.get("morning_summary_path") or "")
         env["BALATRO_AUTONOMY_ENTRY_REF"] = str(payload.get("latest_json") or payload.get("json_path") or "")
         env["BALATRO_AGENTS_ROOT_PRESENT"] = "true" if agents.get("root_present") else "false"
+        env["BALATRO_CERTIFICATION_QUEUE_REF"] = str(payload.get("certification_queue_path") or "")
         safe_run_script = root / "scripts" / "safe_run.ps1"
         timeout_value = int(timeout_sec) if int(timeout_sec or 0) > 0 else (14400 if mode == "overnight" else 7200)
         cmd = [
