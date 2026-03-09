@@ -73,8 +73,22 @@ flowchart LR
 - Reward is explicitly artifactized (`reward_config.json`) to avoid ambiguous run-to-run comparisons.
 - Action masking is always applied before env step.
 - Invalid action handling is recorded and summarized (`invalid_action_rate`).
+- Hand-action legality must stay identical between RL training and arena inference. The current shared source of truth is `trainer/legal_actions.py`, which filters `PLAY` / `DISCARD` actions against `round.hands_left` and `round.discards_left` before model-policy inference.
 - Arena gating remains required after RL training; RL optimization alone does not imply promotion safety.
 - Low-sample slice CI/bootstrap outputs can remain inconclusive and should be interpreted as observation-level signals.
+
+### Arena / Training Legality Parity
+
+The main failure mode observed in March 2026 was not PPO instability; it was legality drift:
+
+- RL training saw filtered hand masks and reported `invalid_action_rate=0.0`.
+- Arena/model-policy inference originally consumed unfiltered hand IDs and could still emit `PLAY` after `hands_left=0`.
+- That showed up as repeated `no_hands_left` warnings and polluted P42 / P48 / P56 comparisons.
+
+Current expectation:
+
+- RL env, policy arena, and world-model candidate generation all consume the same hand-legality helper.
+- If invalid-action spikes return after this point, treat that as a new semantics bug first, not immediate evidence that the policy is weak.
 
 ## Closed-loop Integration Semantics
 

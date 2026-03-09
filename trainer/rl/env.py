@@ -8,6 +8,7 @@ from trainer import action_space_shop
 from trainer.env_client import create_backend
 from trainer.features import extract_features
 from trainer.features_shop import extract_shop_features
+from trainer.legal_actions import legal_hand_action_ids_for_state
 
 PHASE_TO_ID: dict[str, int] = {
     "BLIND_SELECT": 0,
@@ -267,20 +268,7 @@ class BalatroEnv:
     def _legal_hand_action_ids(self, state: dict[str, Any], hand_size: int) -> list[int]:
         if hand_size <= 0:
             return []
-        hands_left = int((state.get("round") or {}).get("hands_left") or 0)
-        discards_left = int((state.get("round") or {}).get("discards_left") or 0)
-        legal: list[int] = []
-        for aid in action_space.legal_action_ids(hand_size):
-            atype, mask_int = action_space.decode(hand_size, aid)
-            if atype == action_space.PLAY and hands_left <= 0:
-                continue
-            if atype == action_space.DISCARD and discards_left <= 0:
-                continue
-            # Keep a valid fallback when no useful action remains.
-            if atype == action_space.DISCARD and mask_int == 0 and hands_left > 0:
-                continue
-            legal.append(int(aid))
-        return legal
+        return legal_hand_action_ids_for_state(state)
 
     def _build_observation(self, state: dict[str, Any]) -> dict[str, Any]:
         phase = str(state.get("state") or "OTHER")

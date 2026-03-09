@@ -14,13 +14,13 @@ from pathlib import Path
 from typing import Any
 
 from sim.pybind.sim_env import SimEnvBackend
-from trainer import action_space, action_space_shop
 from trainer.common.slices import (
     as_legacy_action_bucket,
     as_legacy_ante_bucket,
     as_legacy_risk_bucket,
     compute_slice_labels,
 )
+from trainer.legal_actions import legal_action_rows_for_state
 from trainer.registry.checkpoint_registry import find_by_artifact_path
 from trainer.policy_arena.adapters import (
     HeuristicAdapter,
@@ -91,25 +91,7 @@ def _checkpoint_ref_for_path(raw_path: str) -> dict[str, Any]:
 
 
 def _legal_actions_hint(state: dict[str, Any]) -> list[dict[str, Any]] | None:
-    phase = phase_from_obs(state)
-    if phase == "SELECTING_HAND":
-        hand_cards = (state.get("hand") or {}).get("cards") if isinstance(state.get("hand"), dict) else []
-        hand_size = min(len(hand_cards or []), action_space.MAX_HAND)
-        if hand_size <= 0:
-            return []
-        legal_ids = action_space.legal_action_ids(hand_size)
-        out: list[dict[str, Any]] = []
-        for aid in legal_ids[:64]:
-            atype, mask = action_space.decode(hand_size, int(aid))
-            out.append({"action_type": atype, "indices": action_space.mask_to_indices(mask, hand_size), "id": int(aid)})
-        return out
-    if phase in {"SHOP", "SMODS_BOOSTER_OPENED"} or "PACK" in phase or "BOOSTER" in phase:
-        legal_ids = action_space_shop.legal_action_ids(state)
-        out = []
-        for aid in legal_ids[:32]:
-            out.append({"id": int(aid), "action": action_space_shop.action_from_id(state, int(aid))})
-        return out
-    return None
+    return legal_action_rows_for_state(state)
 
 
 def _dominant_bucket_value(counts: dict[str, int]) -> str:

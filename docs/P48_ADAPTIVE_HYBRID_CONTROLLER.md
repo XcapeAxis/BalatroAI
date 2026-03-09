@@ -200,6 +200,19 @@ Outputs:
 
 The hybrid controller is judged by the same real arena episodes as other policies. The router does not override the simulator.
 
+## Policy Legality Parity
+
+Hybrid and WM-assisted results are only meaningful if the policy controller sees the same legal-action surface as RL training.
+
+- `trainer/legal_actions.py` is now the shared hand-legality helper for RL env, arena hints, and world-model candidate generation.
+- This closes the earlier drift where `policy_baseline` / `policy_plus_wm_rerank` / `hybrid_controller_v1` could hit `no_hands_left` despite training-time `invalid_action_rate=0.0`.
+- After that repair, zero invalid actions no longer implies the controller is strong; it only means the evaluation is no longer being distorted by a legality bug.
+
+Interpretation rule:
+
+- If hybrid score is still poor with `invalid_action_rate=0.0`, debug policy quality or controller routing next.
+- If invalid-action spikes return, debug legality/parity first before changing router thresholds or world-model weights.
+
 ## P22 Integration
 
 Experiment rows:

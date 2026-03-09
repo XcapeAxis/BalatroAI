@@ -13,8 +13,8 @@ from pathlib import Path
 from typing import Any
 
 from sim.pybind.sim_env import SimEnvBackend
-from trainer import action_space, action_space_shop
 from trainer.closed_loop.replay_manifest import write_json
+from trainer.legal_actions import legal_action_rows_for_state
 from trainer.policy_arena.adapters.heuristic_adapter import HeuristicAdapter
 from trainer.policy_arena.adapters.model_adapter import ModelAdapter
 from trainer.policy_arena.adapters.search_adapter import SearchAdapter
@@ -50,23 +50,7 @@ def _parse_csv(text: str) -> list[str]:
 
 
 def _legal_actions_hint(state: dict[str, Any]) -> list[dict[str, Any]] | None:
-    phase = phase_from_obs(state)
-    if phase == "SELECTING_HAND":
-        hand_cards = (state.get("hand") or {}).get("cards") if isinstance(state.get("hand"), dict) else []
-        hand_size = min(len(hand_cards or []), action_space.MAX_HAND)
-        if hand_size <= 0:
-            return []
-        out: list[dict[str, Any]] = []
-        for aid in action_space.legal_action_ids(hand_size)[:64]:
-            action_type, mask = action_space.decode(hand_size, int(aid))
-            out.append({"action_type": action_type, "indices": action_space.mask_to_indices(mask, hand_size), "id": int(aid)})
-        return out
-    if phase in action_space_shop.SHOP_PHASES:
-        out = []
-        for aid in action_space_shop.legal_action_ids(state)[:32]:
-            out.append({"id": int(aid), "action": action_space_shop.action_from_id(state, int(aid))})
-        return out
-    return None
+    return legal_action_rows_for_state(state)
 
 
 def resolve_candidate_source(source: str) -> str:

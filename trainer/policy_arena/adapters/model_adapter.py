@@ -6,6 +6,7 @@ from typing import Any
 from trainer import action_space, action_space_shop
 from trainer.features import extract_features
 from trainer.features_shop import SHOP_CONTEXT_DIM, extract_shop_features
+from trainer.legal_actions import legal_hand_action_ids_for_state
 from trainer.policy_arena.adapters.heuristic_adapter import HeuristicAdapter
 from trainer.policy_arena.policy_adapter import AdapterDescriptor, BasePolicyAdapter, normalize_action, phase_from_obs
 
@@ -180,16 +181,18 @@ class ModelAdapter(BasePolicyAdapter):
         self._fallback.reset(seed)
 
     def _legal_hand_ids(self, obs: dict[str, Any], legal_actions: list[dict[str, Any]] | None) -> list[int]:
+        state_legal_ids = legal_hand_action_ids_for_state(obs)
         if isinstance(legal_actions, list) and legal_actions:
             ids = [_safe_int(row.get("id"), -1) for row in legal_actions if isinstance(row, dict)]
             ids = [aid for aid in ids if aid >= 0]
             if ids:
+                if state_legal_ids:
+                    state_legal_set = set(state_legal_ids)
+                    filtered = [aid for aid in ids if aid in state_legal_set]
+                    if filtered:
+                        return filtered
                 return ids
-        hand_cards = ((obs.get("hand") or {}).get("cards") or []) if isinstance(obs.get("hand"), dict) else []
-        hand_size = min(len(hand_cards), action_space.MAX_HAND)
-        if hand_size <= 0:
-            return []
-        return action_space.legal_action_ids(hand_size)
+        return state_legal_ids
 
     def _legal_shop_ids(self, obs: dict[str, Any], legal_actions: list[dict[str, Any]] | None) -> list[int]:
         if isinstance(legal_actions, list) and legal_actions:
