@@ -125,6 +125,15 @@ function statusText(status) {
   return mapping[status] || status || "-";
 }
 
+function readableStatusLabel(rawLabel, status) {
+  const fallback = statusText(status || "idle");
+  const label = typeof rawLabel === "string" ? rawLabel.trim() : "";
+  if (!label) return fallback;
+  if (/^\?+$/.test(label)) return fallback;
+  if (label.includes("锟") || label.includes("�")) return fallback;
+  return label;
+}
+
 function trainingStage(status = appState.trainingStatus?.status) {
   return status || "idle";
 }
@@ -243,7 +252,7 @@ function renderStatusStrip() {
   document.querySelector("#status-decision-type").textContent = insights.decision_type;
   document.querySelector("#status-gap").textContent = `${formatNumber(insights.score_gap, 0)} 筹码`;
   document.querySelector("#status-training").textContent =
-    appState.trainingStatus?.status_label || stageText(trainingStage());
+    readableStatusLabel(appState.trainingStatus?.status_label, appState.trainingStatus?.status);
 }
 
 function renderScenarios() {
@@ -520,7 +529,10 @@ function renderTrainingNotes() {
     training.scenario_eval?.results ||
     [];
   const notes = [];
-  const trainingLabel = training.status === "idle" ? statusText("idle") : training.status_label || statusText(training.status);
+  const trainingLabel =
+    training.status === "idle"
+      ? statusText("idle")
+      : readableStatusLabel(training.status_label, training.status);
   notes.push(`
     <div class="note-card">
       <strong>训练状态</strong>
@@ -565,7 +577,10 @@ function renderTrainingPanel() {
   const modelMeta = document.querySelector("#model-meta");
   const history = trainingHistoryRows();
   const progressValue = trainingProgressValue();
-  const displayStatusLabel = training.status === "idle" ? statusText("idle") : training.status_label || statusText(training.status || "idle");
+  const displayStatusLabel =
+    training.status === "idle"
+      ? statusText("idle")
+      : readableStatusLabel(training.status_label, training.status || "idle");
   const displayMessage =
     training.status === "idle"
       ? "当前没有训练任务。可在页面中启动快速烟雾训练或 2 小时训练。"
