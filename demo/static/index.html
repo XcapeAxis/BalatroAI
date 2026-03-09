@@ -25,37 +25,37 @@
         </div>
       </header>
 
-      <section class="hero panel">
+      <section class="hero panel" data-panel="hero">
         <div class="hero-copy">
           <div class="hero-badge-row">
-            <span class="hero-badge">中文演示路径</span>
+            <span class="hero-badge">中文讲解路径</span>
             <span class="hero-badge">本地模拟器驱动</span>
             <span class="hero-badge">真实训练模型</span>
           </div>
-          <h2>先看局面，再看建议，再决定这一步怎么走。</h2>
+          <h2>先选场景，再看 AI 怎么拆这一步。</h2>
           <p id="hero-description" class="hero-description">
-            先选一个场景，看看模型和启发式各自给什么建议，再执行一步或自动演示。
+            左边选故事，中间看局面，右边看模型和基线的分歧，再决定这一步到底该不该出手。
           </p>
-          <div class="guide-steps">
-            <div class="guide-step">
-              <span class="guide-index">1</span>
+          <div class="hero-flow">
+            <div class="flow-card">
+              <span class="flow-index">1</span>
               <div>
-                <strong>选场景</strong>
-                <p>从左侧 3 个内置场景里选一个，建议先从“高收益起手”开始。</p>
+                <strong>选一个场景</strong>
+                <p>先从左侧挑一个最适合你开场的局面，先讲“这一步要解决什么”。</p>
               </div>
             </div>
-            <div class="guide-step">
-              <span class="guide-index">2</span>
+            <div class="flow-card">
+              <span class="flow-index">2</span>
               <div>
-                <strong>看推荐</strong>
-                <p>对比模型和启发式的建议，重点看风险、置信度和一步后的变化。</p>
+                <strong>盯住推荐分歧</strong>
+                <p>重点看模型和启发式是否一致，不一致时就讲“为什么这里不能贪”。</p>
               </div>
             </div>
-            <div class="guide-step">
-              <span class="guide-index">3</span>
+            <div class="flow-card">
+              <span class="flow-index">3</span>
               <div>
-                <strong>做演示</strong>
-                <p>可以手动执行，也可以自动演示；需要时再点训练，直接看状态和指标。</p>
+                <strong>执行并看变化</strong>
+                <p>点击动作后，局面、结果预览和时间线会同时更新，方便直接讲因果。</p>
               </div>
             </div>
           </div>
@@ -79,6 +79,9 @@
               <small id="status-phase">-</small>
             </div>
           </div>
+
+          <div id="hero-focus-card" class="hero-focus-card"></div>
+
           <div class="hero-actions">
             <button id="reload-button" class="secondary">
               <span class="button-icon" data-icon="refresh"></span>
@@ -103,11 +106,11 @@
           <strong id="status-risk">-</strong>
         </div>
         <div class="status-pill">
-          <span class="status-label">决策类型</span>
+          <span class="status-label">当前决策</span>
           <strong id="status-decision-type">-</strong>
         </div>
         <div class="status-pill">
-          <span class="status-label">目标分差</span>
+          <span class="status-label">距离目标</span>
           <strong id="status-gap">-</strong>
         </div>
         <div class="status-pill">
@@ -117,26 +120,27 @@
       </section>
 
       <main class="workspace-grid">
-        <section class="panel scenario-panel">
+        <section class="panel scenario-panel" data-panel="scenario">
           <div class="panel-header">
             <div>
               <p class="eyebrow">场景</p>
               <h3>演示场景</h3>
             </div>
-            <span class="panel-tip">先选一个你要讲的故事</span>
+            <span class="panel-tip">先挑一个你要讲的故事</span>
           </div>
           <div id="scenario-list" class="scenario-list"></div>
         </section>
 
-        <section class="panel board-panel">
+        <section class="panel board-panel" data-panel="board">
           <div class="panel-header">
             <div>
-              <p class="eyebrow">局面</p>
+              <p class="eyebrow">主舞台</p>
               <h3>当前局面</h3>
             </div>
             <div id="insight-tags" class="tag-row"></div>
           </div>
 
+          <div id="stage-spotlight" class="stage-spotlight"></div>
           <div id="state-summary-card" class="summary-card"></div>
           <div id="resource-grid" class="metric-grid"></div>
 
@@ -147,7 +151,7 @@
                   <h4>手牌区</h4>
                   <p id="hand-meta" class="muted">-</p>
                 </div>
-                <small class="muted">高亮表示当前选中的推荐动作会使用哪些牌</small>
+                <small class="muted">高亮表示当前选中动作会真正用到哪些牌</small>
               </div>
               <div id="hand-cards" class="card-grid"></div>
             </div>
@@ -157,7 +161,7 @@
                 <div class="nested-header">
                   <div>
                     <h4>Joker / 机制</h4>
-                    <p class="muted">展示当前局面的特殊加成</p>
+                    <p class="muted">这块用来解释为什么局面价值会被放大</p>
                   </div>
                 </div>
                 <div id="joker-list" class="tag-stack"></div>
@@ -167,7 +171,7 @@
                 <div class="nested-header">
                   <div>
                     <h4>区域计数</h4>
-                    <p class="muted">快速扫视牌堆、弃牌堆与已打出区域</p>
+                    <p class="muted">快速判断还能不能继续换牌、试错或收分</p>
                   </div>
                 </div>
                 <div id="zone-counts" class="metric-grid compact"></div>
@@ -176,75 +180,91 @@
           </div>
         </section>
 
-        <section class="panel decision-panel">
+        <section class="panel decision-panel" data-panel="decision">
           <div class="panel-header">
             <div>
               <p class="eyebrow">推荐</p>
-              <h3>推荐动作对比</h3>
+              <h3>模型 vs 启发式</h3>
             </div>
-            <span class="panel-tip">点击任意候选动作即可联动预览</span>
+            <span class="panel-tip">先看一句结论，再看两边差在哪</span>
           </div>
+
+          <div id="compare-summary" class="compare-summary-card"></div>
+          <div id="selected-action-card" class="selected-action-card"></div>
+
           <div class="compare-columns">
             <div class="compare-column">
               <div class="compare-title">
                 <span class="compare-badge model">训练模型</span>
-                <small>更偏重综合价值与演示场景稳定性</small>
+                <small>更像展示里的 AI 助手，会综合考虑收益、阶段和解释性。</small>
               </div>
               <div id="recommendations-model" class="recommendation-list"></div>
             </div>
             <div class="compare-column">
               <div class="compare-title">
                 <span class="compare-badge heuristic">启发式基线</span>
-                <small>方便解释“为什么新模型值得展示”</small>
+                <small>用来回答“如果没有训练模型，系统通常会怎么做”。</small>
               </div>
               <div id="recommendations-heuristic" class="recommendation-list"></div>
             </div>
           </div>
         </section>
 
-        <section class="panel preview-panel">
+        <section class="panel preview-panel" data-panel="preview">
           <div class="panel-header">
             <div>
-              <p class="eyebrow">预览</p>
-              <h3>一步结果预览</h3>
+              <p class="eyebrow">结果</p>
+              <h3>执行后最重要的变化</h3>
             </div>
-            <span class="panel-tip">这是面试讲解时最重要的“因果解释卡”</span>
+            <span class="panel-tip">这块用来讲“为什么这一步值”</span>
           </div>
+
+          <div id="preview-focus" class="preview-focus-card"></div>
           <div id="preview-summary" class="preview-summary"></div>
           <div id="preview-delta" class="metric-grid"></div>
         </section>
 
-        <section class="panel timeline-panel">
+        <section class="panel timeline-panel" data-panel="timeline">
           <div class="panel-header">
             <div>
               <p class="eyebrow">时间线</p>
-              <h3>演示时间线</h3>
+              <h3>最近发生了什么</h3>
             </div>
-            <span class="panel-tip">区分场景载入、推荐刷新和动作执行</span>
+            <span class="panel-tip">区分场景载入、动作观察、动作执行和训练变化</span>
           </div>
           <div id="timeline" class="timeline"></div>
         </section>
 
-        <section class="panel training-panel">
+        <section class="panel training-panel" data-panel="training">
           <div class="panel-header">
             <div>
-              <p class="eyebrow">训练</p>
+              <p class="eyebrow">训练成果</p>
               <h3>模型与训练过程</h3>
             </div>
             <div class="training-actions">
-              <button id="train-standard-button" class="primary subtle" title="后台启动一次 2 小时预算内的正式训练">
+              <button
+                id="train-standard-button"
+                class="primary subtle"
+                title="后台启动一次 2 小时预算内的正式训练"
+              >
                 <span class="button-icon" data-icon="rocket"></span>
                 开始 2 小时训练
               </button>
-              <button id="train-smoke-button" class="secondary subtle" title="快速验证训练链路是否正常">
+              <button
+                id="train-smoke-button"
+                class="secondary subtle"
+                title="快速验证训练链路是否正常"
+              >
                 <span class="button-icon" data-icon="flask"></span>
                 快速烟雾训练
               </button>
             </div>
           </div>
 
+          <div id="training-result-card" class="training-result-card"></div>
           <div id="training-status-card" class="training-status-card"></div>
           <div id="model-meta" class="metric-grid"></div>
+
           <div class="chart-stack">
             <div id="training-chart" class="chart-shell"></div>
             <div id="training-side-notes" class="side-notes"></div>
@@ -265,4 +285,4 @@
 
     <script src="/static/app.js"></script>
   </body>
-  </html>
+</html>

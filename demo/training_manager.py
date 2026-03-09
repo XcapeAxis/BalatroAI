@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from demo.training_status import infer_profile, latest_status_path, read_status, write_status
+from demo.training_status import infer_profile, latest_status_path, now_iso, patch_status, read_status, write_status
+
+
+_ACTIVE_TRAINING_STATES = {"queued", "building_dataset", "training", "evaluating"}
 
 
 def _read_progress(path: Path, limit: int = 80) -> list[dict[str, Any]]:
@@ -91,6 +96,90 @@ class TrainingManager:
                 break
         return status
 
+    def _parse_time(self, raw: Any) -> datetime | None:
+        text = str(raw or "").strip()
+        if not text:
+            return None
+        try:
+            return datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    def _process_alive(self, pid: int) -> bool:
+        if pid <= 0:
+            return False
+        try:
+            os.kill(pid, 0)
+        except PermissionError:
+            return True
+        except OSError:
+            return False
+        return True
+
+    def _find_external_training_pid(self) -> int:
+        """在当前应用外部查找仍在运行的训练进程，避免重启后把真训练误判成假忙。"""
+
+        status_path = str(self.status_path)
+        script = (
+            "$target = {path}; "
+            "Get-CimInstance Win32_Process | "
+            "Where-Object {{ $_.CommandLine -like '*demo.train_mvp_pipeline*' -and $_.CommandLine -like ('*' + $target + '*') }} | "
+            "Select-Object -ExpandProperty ProcessId"
+        ).format(path=repr(status_path))
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        try:
+            completed = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-Command", script],
+                cwd=str(self.project_root),
+                capture_output=True,
+                text=True,
+                timeout=8,
+                creationflags=creationflags,
+                check=False,
+            )
+        except Exception:
+            return 0
+        candidates: list[int] = []
+        for line in completed.stdout.splitlines():
+            text = line.strip()
+            if not text:
+                continue
+            try:
+                candidates.append(int(text))
+            except ValueError:
+                continue
+        return max(candidates) if candidates else 0
+
+    def _stale_external_status(self, status: dict[str, Any]) -> bool:
+        if status.get("status") not in _ACTIVE_TRAINING_STATES:
+            return False
+        pid = int(status.get("process_id") or 0)
+        external_pid = self._find_external_training_pid()
+        if external_pid > 0:
+            if external_pid != pid:
+                patch_status(self.status_path, process_id=external_pid, finished_at="")
+            return False
+        if pid > 0:
+            return not self._process_alive(pid)
+        updated_at = self._parse_time(status.get("updated_at"))
+        if updated_at is None:
+            return True
+        age_sec = (datetime.now(timezone.utc) - updated_at.astimezone(timezone.utc)).total_seconds()
+        return age_sec >= 90
+
+    def _recover_stale_status(self, status: dict[str, Any]) -> dict[str, Any]:
+        return write_status(
+            {
+                **status,
+                "status": "failed",
+                "status_label": "训练已中断",
+                "message": "检测到上一轮训练进程已经结束，已恢复为可重新启动状态。",
+                "finished_at": now_iso(),
+                "process_id": 0,
+            },
+            self.status_path,
+        )
+
     def status(self) -> dict[str, Any]:
         with self._lock:
             status = read_status(self.status_path)
@@ -105,10 +194,17 @@ class TrainingManager:
                             "status": final_state,
                             "status_label": final_label,
                             "message": final_message,
+                            "finished_at": now_iso(),
+                            "process_id": 0,
                         },
                         self.status_path,
                     )
                 self._process = None
+            elif self._process is None:
+                if self._stale_external_status(status):
+                    status = self._recover_stale_status(status)
+                else:
+                    status = read_status(self.status_path)
             return self._augment_with_progress(status)
 
     def running(self) -> bool:
@@ -170,4 +266,5 @@ class TrainingManager:
             ]
             creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
             self._process = subprocess.Popen(cmd, cwd=str(self.project_root), creationflags=creationflags)
+            patch_status(self.status_path, process_id=self._process.pid)
             return self.status()

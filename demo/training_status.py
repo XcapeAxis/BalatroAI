@@ -30,6 +30,7 @@ def default_status() -> dict[str, Any]:
     return {
         "schema": "mvp_training_status_v1",
         "job_id": "",
+        "process_id": 0,
         "profile": "",
         "status": "idle",
         "status_label": "空闲",
