@@ -12,7 +12,7 @@ import threading
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from sim.core.engine import SimEnv
 
@@ -20,6 +20,13 @@ from demo.model_inference import load_latest_bundle, model_info, recommend_actio
 from demo.scenario_loader import DemoScenario, load_scenarios
 from demo.state_adapter import action_label, build_state_payload, compute_resource_delta, now_iso
 from demo.training_manager import TrainingManager
+
+
+class DemoRequestError(RuntimeError):
+    def __init__(self, status: int, message: str):
+        super().__init__(message)
+        self.status = int(status)
+        self.message = str(message)
 
 
 class DemoSession:
@@ -42,7 +49,14 @@ class DemoSession:
 
     def load_scenario(self, scenario_id: str) -> dict[str, Any]:
         with self._lock:
-            scenario = self.scenarios[str(scenario_id)]
+            key = str(scenario_id).strip()
+            if not key:
+                raise DemoRequestError(400, "missing scenario_id")
+            try:
+                scenario = self.scenarios[key]
+            except KeyError as exc:
+                known = ", ".join(sorted(self.scenarios))
+                raise DemoRequestError(404, f"unknown scenario '{key}', available: {known}") from exc
             self.current_scenario_id = scenario.scenario_id
             seed = str(((scenario.snapshot.get("rng") or {}).get("seed")) or scenario.scenario_id.upper())
             self.env = SimEnv(seed=seed)
@@ -226,14 +240,37 @@ def _read_body(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
     raw = handler.rfile.read(length).decode("utf-8", errors="replace")
     if not raw.strip():
         return {}
-    return json.loads(raw)
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise DemoRequestError(400, f"invalid JSON body: {exc.msg}") from exc
+    if not isinstance(payload, dict):
+        raise DemoRequestError(400, "request body must be a JSON object")
+    return payload
+
+
+def _read_int_field(body: dict[str, Any], field: str, default: int, *, minimum: int = 1) -> int:
+    raw = body.get(field, default)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise DemoRequestError(400, f"invalid integer for '{field}'") from exc
+    if value < minimum:
+        raise DemoRequestError(400, f"'{field}' must be >= {minimum}")
+    return value
 
 
 def _serve_static(app: DemoApplication, request_path: str) -> tuple[int, bytes, str]:
+    static_root = app.static_root.resolve()
     if request_path == "/":
-        file_path = app.static_root / "index.html"
+        file_path = static_root / "index.html"
     else:
-        file_path = app.static_root / request_path.removeprefix("/static/")
+        relative = Path(unquote(request_path.removeprefix("/static/")))
+        file_path = (static_root / relative).resolve()
+        try:
+            file_path.relative_to(static_root)
+        except ValueError as exc:
+            raise DemoRequestError(403, f"forbidden static path: {request_path}") from exc
     if not file_path.exists() or not file_path.is_file():
         return 404, _json_bytes({"error": f"静态资源不存在：{request_path}"}), "application/json; charset=utf-8"
     content_type = mimetypes.guess_type(str(file_path))[0] or "application/octet-stream"
@@ -277,6 +314,8 @@ def create_handler(app: DemoApplication):
                     self._send(status, payload, content_type)
                     return
                 self._send_json({"error": f"未知路由：{parsed.path}"}, status=404)
+            except DemoRequestError as exc:
+                self._send_json({"error": exc.message}, status=exc.status)
             except Exception as exc:
                 self._send_json({"error": str(exc)}, status=500)
 
@@ -285,10 +324,18 @@ def create_handler(app: DemoApplication):
             try:
                 body = _read_body(self)
                 if parsed.path == "/api/scenario/load":
-                    self._send_json(app.session.load_scenario(str(body.get("scenario_id") or body.get("id") or "")))
+                    scenario_id = str(body.get("scenario_id") or body.get("id") or "").strip()
+                    if not scenario_id:
+                        raise DemoRequestError(400, "missing scenario_id")
+                    self._send_json(app.session.load_scenario(scenario_id))
                     return
                 if parsed.path == "/api/recommend":
-                    self._send_json(app.session.recommendations(policy=str(body.get("policy") or "model"), topk=int(body.get("topk") or 3)))
+                    self._send_json(
+                        app.session.recommendations(
+                            policy=str(body.get("policy") or "model"),
+                            topk=_read_int_field(body, "topk", 3),
+                        )
+                    )
                     return
                 if parsed.path == "/api/step":
                     self._send_json(
@@ -299,7 +346,12 @@ def create_handler(app: DemoApplication):
                     )
                     return
                 if parsed.path == "/api/autoplay":
-                    self._send_json(app.session.autoplay(steps=int(body.get("steps") or 4), policy=str(body.get("policy") or "model")))
+                    self._send_json(
+                        app.session.autoplay(
+                            steps=_read_int_field(body, "steps", 4),
+                            policy=str(body.get("policy") or "model"),
+                        )
+                    )
                     return
                 if parsed.path == "/api/training/start":
                     raw_profile = str(body.get("profile") or "").lower()
@@ -307,6 +359,8 @@ def create_handler(app: DemoApplication):
                     self._send_json(app.start_training(profile=profile))
                     return
                 self._send_json({"error": f"未知路由：{parsed.path}"}, status=404)
+            except DemoRequestError as exc:
+                self._send_json({"error": exc.message}, status=exc.status)
             except Exception as exc:
                 self._send_json({"error": str(exc)}, status=500)
 
