@@ -43,6 +43,8 @@ def actions_panel(current_path: str, resume_command: str, ops_ui_url: str) -> st
         <form method="post" action="/actions/run_autonomy_quick"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Start Autonomy Quick</button></form>
         <form method="post" action="/actions/run_autonomy_overnight"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Start Autonomy Overnight</button></form>
         <form method="post" action="/actions/run_autonomy_resume"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Resume Via Autonomy</button></form>
+        <form method="post" action="/actions/run_fast_checks"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Run Fast Checks</button></form>
+        <form method="post" action="/actions/run_certification_latest"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Run Latest Certification</button></form>
         <form method="post" action="/actions/run_doctor"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Run Doctor</button></form>
         <form method="post" action="/actions/resume_latest_campaign"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Resume Latest Campaign</button></form>
         <form method="post" action="/actions/rebuild_dashboard"><input type="hidden" name="return_to" value="{return_to}"><button type="submit">Rebuild Dashboard</button></form>
@@ -104,6 +106,12 @@ def render_overview(state: dict[str, Any], *, current_path: str) -> str:
     autonomy_payload = autonomy_entry.get("payload") if isinstance(autonomy_entry.get("payload"), dict) else {}
     agents_consistency = state.get("agents_consistency") if isinstance(state.get("agents_consistency"), dict) else {}
     agents_consistency_payload = agents_consistency.get("payload") if isinstance(agents_consistency.get("payload"), dict) else {}
+    fast_checks = state.get("fast_checks") if isinstance(state.get("fast_checks"), dict) else {}
+    fast_checks_payload = fast_checks.get("payload") if isinstance(fast_checks.get("payload"), dict) else {}
+    certification_queue = state.get("certification_queue") if isinstance(state.get("certification_queue"), dict) else {}
+    certification_state = certification_queue.get("state_payload") if isinstance(certification_queue.get("state_payload"), dict) else {}
+    pending_certification = certification_queue.get("pending_items") if isinstance(certification_queue.get("pending_items"), list) else []
+    latest_certified_runs = certification_queue.get("latest_certified_runs") if isinstance(certification_queue.get("latest_certified_runs"), list) else []
 
     latest_rows = []
     for row in (p22.get("summary_rows") or [])[:8]:
@@ -158,6 +166,8 @@ def render_overview(state: dict[str, Any], *, current_path: str) -> str:
       <div class="card"><h2>P57 Attention</h2><p><strong>{esc(len(attention_open))}</strong></p><p class="muted">blocked_campaigns={esc(len(blocked_campaigns))}</p></div>
       <div class="card"><h2>P58 Environment</h2><p><strong>{esc(environment.get('status') or 'n/a')}</strong></p><p class="muted">mode={esc(environment.get('recommended_mode') or '')}</p></div>
       <div class="card"><h2>P60 Autonomy</h2><p><strong>{esc(autonomy_payload.get('autonomy_state') or 'n/a')}</strong></p><p class="muted">plan={esc(autonomy_payload.get('selected_plan') or '')}</p></div>
+      <div class="card"><h2>P61 Fast Loop</h2><p><strong>{esc(fast_checks_payload.get('fast_check_status') or 'n/a')}</strong></p><p class="muted">tiers={esc(','.join([str(item) for item in (fast_checks_payload.get('validation_tiers_completed') or [])]))}</p></div>
+      <div class="card"><h2>P61 Certification</h2><p><strong>{esc(certification_state.get('status') or 'n/a')}</strong></p><p class="muted">pending={esc(len(pending_certification))}</p></div>
     </section>
     """
     return (
@@ -168,6 +178,13 @@ def render_overview(state: dict[str, Any], *, current_path: str) -> str:
         )
         + cards
         + f"""
+        <section class="panel">
+          <h2>P61 Validation Workflow</h2>
+          <p>fast_check: {artifact_link(str(fast_checks.get('json_path') or ''), 'latest_fast_check_report.json')}</p>
+          <p>certification_queue: {artifact_link(str(certification_queue.get('queue_path') or ''), 'certification_queue.json')} | {artifact_link(str(certification_queue.get('state_path') or ''), 'certification_state.json')}</p>
+          <p>fast_check_status=<strong>{esc(fast_checks_payload.get('fast_check_status') or '')}</strong> validation_tiers=<code>{esc(','.join([str(item) for item in (fast_checks_payload.get('validation_tiers_completed') or [])]))}</code></p>
+          <p>certification_status=<strong>{esc(certification_state.get('status') or '')}</strong> pending={esc(len(pending_certification))} certified_runs={esc(len(latest_certified_runs))} next_gate=<code>{esc(fast_checks_payload.get('recommended_next_gate') or '')}</code></p>
+        </section>
         <section class="panel">
           <h2>P58 Windows Bootstrap</h2>
           <p>doctor: {artifact_link(str(doctor.get('json_path') or ''), 'latest_doctor.json')}</p>
@@ -436,6 +453,12 @@ def render_autonomy(state: dict[str, Any]) -> str:
     attention = state.get("attention_queue") if isinstance(state.get("attention_queue"), dict) else {}
     morning = state.get("morning_summary") if isinstance(state.get("morning_summary"), dict) else {}
     blocked = state.get("blocked_campaigns") if isinstance(state.get("blocked_campaigns"), list) else []
+    fast_checks = state.get("fast_checks") if isinstance(state.get("fast_checks"), dict) else {}
+    fast_checks_payload = fast_checks.get("payload") if isinstance(fast_checks.get("payload"), dict) else {}
+    certification_queue = state.get("certification_queue") if isinstance(state.get("certification_queue"), dict) else {}
+    certification_state = certification_queue.get("state_payload") if isinstance(certification_queue.get("state_payload"), dict) else {}
+    pending_certification = certification_queue.get("pending_items") if isinstance(certification_queue.get("pending_items"), list) else []
+    latest_certified_runs = certification_queue.get("latest_certified_runs") if isinstance(certification_queue.get("latest_certified_runs"), list) else []
 
     agent_rows = []
     for name, path in (agents.get("paths") or {}).items():
@@ -475,9 +498,13 @@ def render_autonomy(state: dict[str, Any]) -> str:
         f'<p>agents_consistency: {artifact_link(str(consistency.get("json_path") or ""), "latest_agents_consistency.json")}</p>'
         f'<p>morning_summary: {artifact_link(str(morning.get("md_path") or ""), "latest.md")}</p>'
         f'<p>attention_queue: {artifact_link(str(attention.get("path") or ""), "attention_queue.json")}</p>'
+        f'<p>fast_check_report: {artifact_link(str(fast_checks.get("json_path") or ""), "latest_fast_check_report.json")}</p>'
+        f'<p>certification_queue: {artifact_link(str(certification_queue.get("queue_path") or ""), "certification_queue.json")} | {artifact_link(str(certification_queue.get("state_path") or ""), "certification_state.json")}</p>'
         f'<p>autonomy_state=<strong>{esc(autonomy_payload.get("autonomy_state") or "")}</strong> selected_plan=<code>{esc(autonomy_payload.get("selected_plan") or "")}</code> requested_mode=<code>{esc(autonomy_payload.get("requested_mode") or "")}</code></p>'
         f'<p>reason=<code>{esc(autonomy_payload.get("reason") or "")}</code></p>'
         f'<p>consistency_status=<code>{esc(consistency_payload.get("status") or "")}</code> warnings={esc(len(consistency_payload.get("warnings") or []))} errors={esc(len(consistency_payload.get("errors") or []))}</p>'
+        f'<p>fast_check_status=<code>{esc(fast_checks_payload.get("fast_check_status") or "")}</code> validation_tiers=<code>{esc(",".join([str(item) for item in (fast_checks_payload.get("validation_tiers_completed") or [])]))}</code></p>'
+        f'<p>certification_status=<code>{esc(certification_state.get("status") or "")}</code> pending_certification={esc(len(pending_certification))} latest_certified_runs={esc(len(latest_certified_runs))}</p>'
         f'<p>decision_policy_path=<code>{esc(autonomy_payload.get("decision_policy_path") or "")}</code></p></section>'
         f'<section class="panel"><h2>AGENTS Hierarchy</h2>{table(["Scope", "Present", "Path"], agent_rows)}</section>'
         f'<section class="panel"><h2>Open Attention Items</h2>{table(["Attention ID", "Severity", "Category", "Scope", "Title"], attention_rows)}</section>'

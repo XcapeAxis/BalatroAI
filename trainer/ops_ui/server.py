@@ -303,6 +303,10 @@ class OpsRequestHandler(BaseHTTPRequestHandler):
                 _spawn_job("run_autonomy_overnight", ["powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts\\run_autonomy.ps1", "-Overnight"])
             elif parsed.path == "/actions/run_autonomy_resume":
                 _spawn_job("run_autonomy_resume", ["powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts\\run_autonomy.ps1", "-ResumeLatest"])
+            elif parsed.path == "/actions/run_fast_checks":
+                _spawn_job("run_fast_checks", ["powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts\\run_fast_checks.ps1"])
+            elif parsed.path == "/actions/run_certification_latest":
+                _spawn_job("run_certification_latest", ["powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts\\run_certification.ps1", "-LatestPending"])
             elif parsed.path == "/actions/run_doctor":
                 _spawn_job("run_doctor", ["powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts\\doctor.ps1"])
             elif parsed.path == "/actions/resume_latest_campaign":

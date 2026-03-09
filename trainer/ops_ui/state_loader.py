@@ -22,7 +22,11 @@ def artifacts_root() -> Path:
 
 def _latest_autonomy_artifact_root() -> Path:
     root = artifacts_root()
-    for family in ("p60", "p59"):
+    for family in ("p61", "p60", "p59"):
+        candidate = root / family
+        if (candidate / "latest_autonomy_entry.json").exists() or (candidate / "latest_agents_consistency.json").exists():
+            return candidate
+    for family in ("p61", "p60", "p59"):
         candidate = root / family
         if candidate.exists():
             return candidate
@@ -374,6 +378,46 @@ def latest_autonomy_entry() -> dict[str, Any]:
     }
 
 
+def latest_fast_check_report() -> dict[str, Any]:
+    root = artifacts_root() / "p61"
+    json_path = root / "latest_fast_check_report.json"
+    md_path = root / "latest_fast_check_report.md"
+    payload = read_json(json_path)
+    return {
+        "json_path": str(json_path.resolve()),
+        "md_path": str(md_path.resolve()),
+        "payload": payload if isinstance(payload, dict) else {},
+    }
+
+
+def latest_certification_queue() -> dict[str, Any]:
+    root = artifacts_root() / "certification_queue"
+    queue_path = root / "certification_queue.json"
+    state_path = root / "certification_state.json"
+    summary_path = root / "certification_summary.md"
+    queue_payload = read_json(queue_path)
+    state_payload = read_json(state_path)
+    latest_p22 = latest_p22_run()
+    latest_certified_runs = [
+        row
+        for row in (latest_p22.get("summary_rows") or [])
+        if isinstance(row, dict) and str(row.get("certification_status") or "").strip().lower() == "passed"
+    ][:8]
+    items = queue_payload.get("items") if isinstance(queue_payload, dict) and isinstance(queue_payload.get("items"), list) else []
+    pending_items = [item for item in items if isinstance(item, dict) and str(item.get("status") or "") == "pending"]
+    running_items = [item for item in items if isinstance(item, dict) and str(item.get("status") or "") == "running"]
+    return {
+        "queue_path": str(queue_path.resolve()),
+        "state_path": str(state_path.resolve()),
+        "summary_path": str(summary_path.resolve()),
+        "queue_payload": queue_payload if isinstance(queue_payload, dict) else {},
+        "state_payload": state_payload if isinstance(state_payload, dict) else {},
+        "pending_items": pending_items,
+        "running_items": running_items,
+        "latest_certified_runs": latest_certified_runs,
+    }
+
+
 def environment_status() -> dict[str, Any]:
     doctor = latest_doctor_report()
     bootstrap = latest_bootstrap_state()
@@ -500,6 +544,8 @@ def build_ops_state(
         "agents": agents_status(),
         "agents_consistency": latest_agents_consistency(),
         "autonomy_entry": latest_autonomy_entry(),
+        "fast_checks": latest_fast_check_report(),
+        "certification_queue": latest_certification_queue(),
         "environment": environment_status(),
         "readiness": latest_readiness_report(),
         "window_state": latest_window_state(),

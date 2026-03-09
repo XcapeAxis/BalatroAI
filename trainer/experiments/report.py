@@ -85,6 +85,12 @@ def write_summary_tables(
         "attention_queue_path",
         "morning_summary_path",
         "human_gate_triggered",
+        "validation_tiers_completed",
+        "fast_check_status",
+        "certification_status",
+        "certification_queue_ref",
+        "pending_certification",
+        "recommended_next_gate",
         "produced_checkpoint_ids",
         "calibration_ref",
         "guard_tuning_ref",
@@ -106,6 +112,12 @@ def write_summary_tables(
     resolved_decision_policy_path = _env_str("BALATRO_DECISION_POLICY_PATH")
     resolved_attention_queue_path = _env_str("BALATRO_ATTENTION_QUEUE_PATH")
     resolved_morning_summary_path = _env_str("BALATRO_MORNING_SUMMARY_PATH")
+    resolved_validation_tiers_completed = _env_str("BALATRO_VALIDATION_TIERS_COMPLETED")
+    resolved_fast_check_status = _env_str("BALATRO_FAST_CHECK_STATUS")
+    resolved_certification_status = _env_str("BALATRO_CERTIFICATION_STATUS")
+    resolved_certification_queue_ref = _env_str("BALATRO_CERTIFICATION_QUEUE_REF")
+    resolved_pending_certification = _env_bool("BALATRO_PENDING_CERTIFICATION")
+    resolved_recommended_next_gate = _env_str("BALATRO_RECOMMENDED_NEXT_GATE")
     normalized_rows: list[dict[str, Any]] = []
 
     with csv_path.open("w", newline="", encoding="utf-8") as fp:
@@ -120,6 +132,13 @@ def write_summary_tables(
             normalized_row["decision_policy_path"] = normalized_row.get("decision_policy_path") or resolved_decision_policy_path
             normalized_row["attention_queue_path"] = normalized_row.get("attention_queue_path") or resolved_attention_queue_path
             normalized_row["morning_summary_path"] = normalized_row.get("morning_summary_path") or resolved_morning_summary_path
+            normalized_row["validation_tiers_completed"] = normalized_row.get("validation_tiers_completed") or resolved_validation_tiers_completed
+            normalized_row["fast_check_status"] = normalized_row.get("fast_check_status") or resolved_fast_check_status
+            normalized_row["certification_status"] = normalized_row.get("certification_status") or resolved_certification_status
+            normalized_row["certification_queue_ref"] = normalized_row.get("certification_queue_ref") or resolved_certification_queue_ref
+            if normalized_row.get("pending_certification") in (None, ""):
+                normalized_row["pending_certification"] = resolved_pending_certification
+            normalized_row["recommended_next_gate"] = normalized_row.get("recommended_next_gate") or resolved_recommended_next_gate
             normalized_rows.append(normalized_row)
             writer.writerow(
                 {
@@ -174,6 +193,12 @@ def write_summary_tables(
                     "attention_queue_path": normalized_row.get("attention_queue_path"),
                     "morning_summary_path": normalized_row.get("morning_summary_path"),
                     "human_gate_triggered": normalized_row.get("human_gate_triggered"),
+                    "validation_tiers_completed": normalized_row.get("validation_tiers_completed"),
+                    "fast_check_status": normalized_row.get("fast_check_status"),
+                    "certification_status": normalized_row.get("certification_status"),
+                    "certification_queue_ref": normalized_row.get("certification_queue_ref"),
+                    "pending_certification": normalized_row.get("pending_certification"),
+                    "recommended_next_gate": normalized_row.get("recommended_next_gate"),
                     "produced_checkpoint_ids": ",".join([str(item) for item in (normalized_row.get("produced_checkpoint_ids") or [])]),
                     "calibration_ref": normalized_row.get("calibration_ref"),
                     "guard_tuning_ref": normalized_row.get("guard_tuning_ref"),
@@ -284,6 +309,12 @@ def write_summary_tables(
                 "attention_queue_path",
                 "morning_summary_path",
                 "human_gate_triggered",
+                "validation_tiers_completed",
+                "fast_check_status",
+                "certification_status",
+                "certification_queue_ref",
+                "pending_certification",
+                "recommended_next_gate",
                 "produced_checkpoint_ids",
                 "calibration_ref",
                 "guard_tuning_ref",
@@ -345,6 +376,18 @@ def write_summary_tables(
                 md_lines.append(f"  morning_summary_path: `{row.get('morning_summary_path')}`")
             if row.get("human_gate_triggered") not in (None, ""):
                 md_lines.append(f"  human_gate_triggered: `{row.get('human_gate_triggered')}`")
+            if row.get("validation_tiers_completed"):
+                md_lines.append(f"  validation_tiers_completed: `{row.get('validation_tiers_completed')}`")
+            if row.get("fast_check_status"):
+                md_lines.append(f"  fast_check_status: `{row.get('fast_check_status')}`")
+            if row.get("certification_status"):
+                md_lines.append(f"  certification_status: `{row.get('certification_status')}`")
+            if row.get("certification_queue_ref"):
+                md_lines.append(f"  certification_queue_ref: `{row.get('certification_queue_ref')}`")
+            if row.get("pending_certification") not in (None, ""):
+                md_lines.append(f"  pending_certification: `{row.get('pending_certification')}`")
+            if row.get("recommended_next_gate"):
+                md_lines.append(f"  recommended_next_gate: `{row.get('recommended_next_gate')}`")
             if row.get("produced_checkpoint_ids"):
                 md_lines.append(
                     "  produced_checkpoint_ids: `{}`".format(

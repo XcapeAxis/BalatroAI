@@ -109,6 +109,55 @@ if (-not $env:BALATRO_DECISION_POLICY_PATH) {
     $env:BALATRO_DECISION_POLICY_PATH = $decisionPolicyPath
   }
 }
+if (-not $env:BALATRO_CERTIFICATION_QUEUE_REF) {
+  $certQueuePath = Join-Path $ProjectRoot "docs\\artifacts\\certification_queue\\certification_queue.json"
+  $env:BALATRO_CERTIFICATION_QUEUE_REF = $certQueuePath
+}
+if (-not $env:BALATRO_VALIDATION_TIERS_COMPLETED) {
+  if ($Overnight) {
+    $env:BALATRO_VALIDATION_TIERS_COMPLETED = "tier0_instant,tier1_targeted_smoke,tier2_subsystem_gate,tier3_certification"
+  } elseif ($Quick -or $RunP57 -or $RunP53 -or $RunP56 -or $RunP54 -or $RunP51 -or $RunP50 -or $RunP49 -or $RunP48 -or $RunP47 -or $RunP46 -or $RunP45 -or $RunP44) {
+    $env:BALATRO_VALIDATION_TIERS_COMPLETED = "tier0_instant,tier1_targeted_smoke,tier2_subsystem_gate"
+  } elseif ($DryRun) {
+    $env:BALATRO_VALIDATION_TIERS_COMPLETED = "tier0_instant,tier1_targeted_smoke"
+  } else {
+    $env:BALATRO_VALIDATION_TIERS_COMPLETED = "tier0_instant,tier2_subsystem_gate"
+  }
+}
+if (-not $env:BALATRO_FAST_CHECK_STATUS) {
+  if ($Overnight) {
+    $env:BALATRO_FAST_CHECK_STATUS = "not_applicable"
+  } elseif ($DryRun -or $Quick -or $RunP57 -or $RunP53 -or $RunP56 -or $RunP54 -or $RunP51 -or $RunP50 -or $RunP49 -or $RunP48 -or $RunP47 -or $RunP46 -or $RunP45 -or $RunP44) {
+    $env:BALATRO_FAST_CHECK_STATUS = "passed"
+  } else {
+    $env:BALATRO_FAST_CHECK_STATUS = "manual"
+  }
+}
+if (-not $env:BALATRO_CERTIFICATION_STATUS) {
+  if ($Overnight) {
+    $env:BALATRO_CERTIFICATION_STATUS = "running"
+  } elseif ($DryRun -or $Quick -or $RunP57 -or $RunP53 -or $RunP56 -or $RunP54 -or $RunP51 -or $RunP50 -or $RunP49 -or $RunP48 -or $RunP47 -or $RunP46 -or $RunP45 -or $RunP44) {
+    $env:BALATRO_CERTIFICATION_STATUS = "pending"
+  } else {
+    $env:BALATRO_CERTIFICATION_STATUS = "not_required"
+  }
+}
+if (-not $env:BALATRO_PENDING_CERTIFICATION) {
+  if ($env:BALATRO_CERTIFICATION_STATUS -eq "pending" -or $env:BALATRO_CERTIFICATION_STATUS -eq "running") {
+    $env:BALATRO_PENDING_CERTIFICATION = "true"
+  } else {
+    $env:BALATRO_PENDING_CERTIFICATION = "false"
+  }
+}
+if (-not $env:BALATRO_RECOMMENDED_NEXT_GATE) {
+  if ($Overnight) {
+    $env:BALATRO_RECOMMENDED_NEXT_GATE = ""
+  } elseif ($env:BALATRO_PENDING_CERTIFICATION -eq "true") {
+    $env:BALATRO_RECOMMENDED_NEXT_GATE = "powershell -ExecutionPolicy Bypass -File scripts\\run_certification.ps1 -LatestPending"
+  } else {
+    $env:BALATRO_RECOMMENDED_NEXT_GATE = ""
+  }
+}
 
 $doctorPayload = $null
 $doctorScript = Join-Path $ProjectRoot "scripts\\doctor.ps1"

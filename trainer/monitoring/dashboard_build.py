@@ -143,7 +143,7 @@ def _latest_matching_json_by_prefix(
 
 
 def _latest_autonomy_artifact_paths(input_root: Path, filename: str) -> tuple[Path, dict[str, Any] | None]:
-    for family in ("p60", "p59"):
+    for family in ("p61", "p60", "p59"):
         path = input_root / family / filename
         if path.exists():
             payload = _read_json(path)
@@ -420,6 +420,43 @@ def _collect_p60_dashboard_data(input_root: Path, repo_root: Path) -> dict[str, 
         },
     }
 
+
+def _collect_p61_dashboard_data(input_root: Path, latest_p22_summary: list[dict[str, Any]]) -> dict[str, Any]:
+    fast_check_json = input_root / "p61" / "latest_fast_check_report.json"
+    fast_check_md = input_root / "p61" / "latest_fast_check_report.md"
+    fast_check_payload = _read_json(fast_check_json)
+    cert_queue_json = input_root / "certification_queue" / "certification_queue.json"
+    cert_state_json = input_root / "certification_queue" / "certification_state.json"
+    cert_summary_md = input_root / "certification_queue" / "certification_summary.md"
+    cert_queue_payload = _read_json(cert_queue_json)
+    cert_state_payload = _read_json(cert_state_json)
+    pending_items = [
+        item
+        for item in ((cert_queue_payload.get("items") or []) if isinstance(cert_queue_payload, dict) else [])
+        if isinstance(item, dict) and str(item.get("status") or "") == "pending"
+    ]
+    certified_rows = [
+        row
+        for row in latest_p22_summary
+        if isinstance(row, dict) and str(row.get("certification_status") or "").strip().lower() == "passed"
+    ][:8]
+    return {
+        "fast_check": {
+            "json_path": str(fast_check_json.resolve()),
+            "md_path": str(fast_check_md.resolve()),
+            "payload": fast_check_payload if isinstance(fast_check_payload, dict) else {},
+        },
+        "certification_queue": {
+            "queue_path": str(cert_queue_json.resolve()),
+            "state_path": str(cert_state_json.resolve()),
+            "summary_path": str(cert_summary_md.resolve()),
+            "queue_payload": cert_queue_payload if isinstance(cert_queue_payload, dict) else {},
+            "state_payload": cert_state_payload if isinstance(cert_state_payload, dict) else {},
+            "pending_items": pending_items,
+        },
+        "latest_certified_runs": certified_rows,
+    }
+
 def _collect_config_sync_status(input_root: Path) -> dict[str, Any]:
     """P55: Find the latest config sidecar sync report and return a brief status summary."""
     repo_root = input_root.parent
@@ -504,6 +541,7 @@ def collect_dashboard_data(input_root: Path) -> dict[str, Any]:
     # P55: collect latest config sidecar sync report
     config_sync_status = _collect_config_sync_status(input_root)
     p60_payload = _collect_p60_dashboard_data(input_root, repo)
+    p61_payload = _collect_p61_dashboard_data(input_root, latest_p22_summary)
 
     return {
         "schema": "p49_dashboard_data_v1",
@@ -522,6 +560,7 @@ def collect_dashboard_data(input_root: Path) -> dict[str, Any]:
         "p53": _collect_p53_dashboard_data(input_root, campaign_states),
         "p57": _collect_p57_dashboard_data(input_root, campaign_states),
         "p58": _collect_p58_dashboard_data(input_root),
+        "p61": p61_payload,
         "p60": p60_payload,
         "p59": p60_payload,
     }
@@ -675,6 +714,13 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
     p60_consistency = p60_payload.get("agents_consistency") if isinstance(p60_payload.get("agents_consistency"), dict) else {}
     p60_consistency_payload = p60_consistency.get("payload") if isinstance(p60_consistency.get("payload"), dict) else {}
     p60_family = str(p60_payload.get("artifact_family") or "p60").upper()
+    p61_payload = data.get("p61") if isinstance(data.get("p61"), dict) else {}
+    p61_fast_check = p61_payload.get("fast_check") if isinstance(p61_payload.get("fast_check"), dict) else {}
+    p61_fast_check_payload = p61_fast_check.get("payload") if isinstance(p61_fast_check.get("payload"), dict) else {}
+    p61_cert_queue = p61_payload.get("certification_queue") if isinstance(p61_payload.get("certification_queue"), dict) else {}
+    p61_cert_state = p61_cert_queue.get("state_payload") if isinstance(p61_cert_queue.get("state_payload"), dict) else {}
+    p61_pending_items = p61_cert_queue.get("pending_items") if isinstance(p61_cert_queue.get("pending_items"), list) else []
+    p61_latest_certified_runs = p61_payload.get("latest_certified_runs") if isinstance(p61_payload.get("latest_certified_runs"), list) else []
 
     p52_summary_html = []
     for row in router_summary_rows:
@@ -785,7 +831,7 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>P49/Learned-Router/P53/P57/P58/P60 Dashboard</title>
+  <title>P49/Learned-Router/P53/P57/P58/P60/P61 Dashboard</title>
   <style>
     :root {{ --bg: #f4f0e8; --panel: #fffaf2; --ink: #241d16; --muted: #8a745d; --warn: #9d3c2f; }}
     body {{ margin: 0; padding: 24px; font-family: Georgia, 'Times New Roman', serif; background: linear-gradient(180deg, #efe6d6 0%, var(--bg) 100%); color: var(--ink); }}
@@ -800,7 +846,7 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
 </head>
 <body>
   <div class="panel">
-    <h1>P49/P51/Learned-Router/P53/P57/P58/P60 Dashboard</h1>
+    <h1>P49/P51/Learned-Router/P53/P57/P58/P60/P61 Dashboard</h1>
     <p class="muted">Generated from unified progress events and the latest P22 summary.</p>
     <p><strong>Input:</strong> <code>{html.escape(str(input_root))}</code></p>
     <p><strong>Data:</strong> <code>{html.escape(str((output_dir / "dashboard_data.json").resolve()))}</code></p>
@@ -985,6 +1031,15 @@ def build_dashboard(input_root: Path, output_dir: Path) -> dict[str, Any]:
     <p>root_agents_present=<strong>{html.escape(str(p60_agents.get('root_present') or False))}</strong> subdir_agents={html.escape(str(p60_agents.get('subdir_present_count') or 0))}</p>
     <p>autonomy_state=<code>{html.escape(str(p60_autonomy_payload.get('autonomy_state') or ''))}</code> selected_plan=<code>{html.escape(str(p60_autonomy_payload.get('selected_plan') or ''))}</code> requested_mode=<code>{html.escape(str(p60_autonomy_payload.get('requested_mode') or ''))}</code></p>
     <p>consistency_status=<code>{html.escape(str(p60_consistency_payload.get('status') or ''))}</code> warnings={html.escape(str(len(p60_consistency_payload.get('warnings') or [])))} errors={html.escape(str(len(p60_consistency_payload.get('errors') or [])))}</p>
+  </div>
+  <div class="panel">
+    <h2>P61 Validation Workflow</h2>
+    <p class="muted">fast_check: <code>{html.escape(str(p61_fast_check.get('json_path') or ''))}</code></p>
+    <p class="muted">certification_queue: <code>{html.escape(str(p61_cert_queue.get('queue_path') or ''))}</code></p>
+    <p>fast_check_status=<code>{html.escape(str(p61_fast_check_payload.get('fast_check_status') or ''))}</code> validation_tiers=<code>{html.escape(','.join([str(item) for item in (p61_fast_check_payload.get('validation_tiers_completed') or [])]))}</code></p>
+    <p>certification_status=<code>{html.escape(str(p61_cert_state.get('status') or ''))}</code> pending_items={html.escape(str(len(p61_pending_items)))}</p>
+    <p>latest_certified_runs={html.escape(str(len(p61_latest_certified_runs)))}</p>
+    <p>recommended_next_gate=<code>{html.escape(str(p61_fast_check_payload.get('recommended_next_gate') or ''))}</code></p>
   </div>
 </body>
 </html>

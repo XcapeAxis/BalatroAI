@@ -113,7 +113,7 @@ def _latest_matching_json(root: Path, pattern: str, *, required_tokens: tuple[st
 
 
 def _latest_autonomy_payload(root: Path, filename: str) -> dict[str, Any]:
-    for family in ("p60", "p59"):
+    for family in ("p61", "p60", "p59"):
         payload = _read_json(root / family / filename)
         if isinstance(payload, dict):
             payload = dict(payload)
@@ -225,9 +225,24 @@ def collect_p60_summary(root: Path) -> dict[str, Any]:
     }
 
 
-def render_text(rows: list[dict[str, Any]], campaign_rows: list[dict[str, Any]], registry_summary: dict[str, Any], p52_summary: dict[str, Any], p56_summary: dict[str, Any], p53_summary: dict[str, Any], p57_summary: dict[str, Any], p60_summary: dict[str, Any]) -> str:
+def collect_p61_summary(root: Path) -> dict[str, Any]:
+    fast_check_payload = _read_json(root / "p61" / "latest_fast_check_report.json") or {}
+    cert_queue_payload = _read_json(root / "certification_queue" / "certification_queue.json") or {}
+    cert_state_payload = _read_json(root / "certification_queue" / "certification_state.json") or {}
+    items = cert_queue_payload.get("items") if isinstance(cert_queue_payload.get("items"), list) else []
+    pending_items = [item for item in items if isinstance(item, dict) and str(item.get("status") or "") == "pending"]
+    return {
+        "fast_check_status": str(fast_check_payload.get("fast_check_status") or ""),
+        "validation_tiers_completed": [str(item) for item in (fast_check_payload.get("validation_tiers_completed") or []) if str(item).strip()],
+        "certification_status": str(cert_state_payload.get("status") or ""),
+        "pending_certification_count": len(pending_items),
+        "recommended_next_gate": str(fast_check_payload.get("recommended_next_gate") or ""),
+    }
+
+
+def render_text(rows: list[dict[str, Any]], campaign_rows: list[dict[str, Any]], registry_summary: dict[str, Any], p52_summary: dict[str, Any], p56_summary: dict[str, Any], p53_summary: dict[str, Any], p57_summary: dict[str, Any], p60_summary: dict[str, Any], p61_summary: dict[str, Any]) -> str:
     lines = [
-        "[dashboard] P49/P51/P52/P56/P57 live progress",
+        "[dashboard] P49/P51/P52/P56/P57/P60/P61 live progress",
         "run_id            component             phase       status    learner      rollout      throughput   gpu_mb   warning",
         "-" * 112,
     ]
@@ -296,6 +311,15 @@ def render_text(rows: list[dict[str, Any]], campaign_rows: list[dict[str, Any]],
                 sub_agents=int(p60_summary.get("subdir_agents_present") or 0),
             ),
             "",
+            "[p61]",
+            "fast_check_status={status} validation_tiers={tiers} certification_status={cert} pending_certification={pending} next_gate={next_gate}".format(
+                status=str(p61_summary.get("fast_check_status") or "n/a"),
+                tiers=",".join([str(item) for item in (p61_summary.get("validation_tiers_completed") or [])]) or "n/a",
+                cert=str(p61_summary.get("certification_status") or "n/a"),
+                pending=int(p61_summary.get("pending_certification_count") or 0),
+                next_gate=str(p61_summary.get("recommended_next_gate") or "n/a"),
+            ),
+            "",
             "[campaigns]",
             "campaign_id                 experiment              seed      stage                status",
             "-" * 96,
@@ -348,8 +372,9 @@ def main() -> int:
         p53_summary = collect_p53_summary(watch_root)
         p57_summary = collect_p57_summary(watch_root)
         p60_summary = collect_p60_summary(watch_root)
+        p61_summary = collect_p61_summary(watch_root)
         os.system("cls" if os.name == "nt" else "clear")
-        print(render_text(rows, campaign_rows, registry_summary, p52_summary, p56_summary, p53_summary, p57_summary, p60_summary))
+        print(render_text(rows, campaign_rows, registry_summary, p52_summary, p56_summary, p53_summary, p57_summary, p60_summary, p61_summary))
         iteration += 1
         if bool(args.once) or (int(args.iterations) > 0 and iteration >= int(args.iterations)):
             break

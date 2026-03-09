@@ -144,6 +144,31 @@ def _resolved_morning_summary_path() -> str:
     return str(os.environ.get("BALATRO_MORNING_SUMMARY_PATH") or "").strip()
 
 
+def _resolved_validation_tiers_completed() -> str:
+    return str(os.environ.get("BALATRO_VALIDATION_TIERS_COMPLETED") or "").strip()
+
+
+def _resolved_fast_check_status() -> str:
+    return str(os.environ.get("BALATRO_FAST_CHECK_STATUS") or "").strip()
+
+
+def _resolved_certification_status() -> str:
+    return str(os.environ.get("BALATRO_CERTIFICATION_STATUS") or "").strip()
+
+
+def _resolved_certification_queue_ref() -> str:
+    return str(os.environ.get("BALATRO_CERTIFICATION_QUEUE_REF") or "").strip()
+
+
+def _resolved_pending_certification() -> bool:
+    token = str(os.environ.get("BALATRO_PENDING_CERTIFICATION") or "").strip().lower()
+    return token in {"1", "true", "yes", "on"}
+
+
+def _resolved_recommended_next_gate() -> str:
+    return str(os.environ.get("BALATRO_RECOMMENDED_NEXT_GATE") or "").strip()
+
+
 def run_process(
     command: str | list[str],
     *,
@@ -6249,6 +6274,45 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "attention_queue_path": str(final_seed_metrics.get("attention_queue_path") or final_seed_summary.get("attention_queue_path") or _resolved_attention_queue_path() or ""),
         "morning_summary_path": str(final_seed_metrics.get("morning_summary_path") or final_seed_summary.get("morning_summary_path") or _resolved_morning_summary_path() or ""),
         "human_gate_triggered": bool(final_seed_metrics.get("human_gate_triggered") or final_seed_summary.get("human_gate_triggered") or False),
+        "validation_tiers_completed": str(
+            final_seed_metrics.get("validation_tiers_completed")
+            or final_seed_summary.get("validation_tiers_completed")
+            or _resolved_validation_tiers_completed()
+            or ""
+        ),
+        "fast_check_status": str(
+            final_seed_metrics.get("fast_check_status")
+            or final_seed_summary.get("fast_check_status")
+            or _resolved_fast_check_status()
+            or ""
+        ),
+        "certification_status": str(
+            final_seed_metrics.get("certification_status")
+            or final_seed_summary.get("certification_status")
+            or _resolved_certification_status()
+            or ""
+        ),
+        "certification_queue_ref": str(
+            final_seed_metrics.get("certification_queue_ref")
+            or final_seed_summary.get("certification_queue_ref")
+            or _resolved_certification_queue_ref()
+            or ""
+        ),
+        "pending_certification": bool(
+            final_seed_metrics.get("pending_certification")
+            if final_seed_metrics.get("pending_certification") is not None
+            else (
+                final_seed_summary.get("pending_certification")
+                if final_seed_summary.get("pending_certification") is not None
+                else _resolved_pending_certification()
+            )
+        ),
+        "recommended_next_gate": str(
+            final_seed_metrics.get("recommended_next_gate")
+            or final_seed_summary.get("recommended_next_gate")
+            or _resolved_recommended_next_gate()
+            or ""
+        ),
         "produced_checkpoint_ids": list(
             final_seed_summary.get("produced_checkpoint_ids")
             or ([str(final_seed_metrics.get("p56_router_checkpoint_id") or "")] if str(final_seed_metrics.get("p56_router_checkpoint_id") or "").strip() else [])
@@ -6429,6 +6493,12 @@ def run_single_experiment(ctx: RunContext, exp: dict[str, Any], exp_index: int, 
         "attention_queue_path": runtime_details.get("attention_queue_path"),
         "morning_summary_path": runtime_details.get("morning_summary_path"),
         "human_gate_triggered": runtime_details.get("human_gate_triggered"),
+        "validation_tiers_completed": runtime_details.get("validation_tiers_completed"),
+        "fast_check_status": runtime_details.get("fast_check_status"),
+        "certification_status": runtime_details.get("certification_status"),
+        "certification_queue_ref": runtime_details.get("certification_queue_ref"),
+        "pending_certification": runtime_details.get("pending_certification"),
+        "recommended_next_gate": runtime_details.get("recommended_next_gate"),
         "produced_checkpoint_ids": runtime_details.get("produced_checkpoint_ids"),
         "calibration_ref": runtime_details.get("calibration_ref"),
         "guard_tuning_ref": runtime_details.get("guard_tuning_ref"),
