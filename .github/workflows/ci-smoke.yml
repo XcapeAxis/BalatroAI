@@ -38,6 +38,11 @@ jobs:
         run: |
           powershell -ExecutionPolicy Bypass -File scripts/update_readme_badges.ps1 -DryRun
 
+      - name: README lint smoke
+        shell: pwsh
+        run: |
+          powershell -ExecutionPolicy Bypass -File scripts/lint_readme_p25.ps1
+
       - name: Dashboard build smoke
         shell: pwsh
         run: |
