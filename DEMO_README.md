@@ -44,7 +44,7 @@ http://127.0.0.1:8050/
 
 The first interview-ready run produced:
 
-- dataset size: `3615` hand-phase samples
+- dataset size: `4254` hand-phase samples (`3615` train / `639` validation)
 - checkpoint: `docs/artifacts/mvp/model_train/20260309_121811_fast/mvp_policy.pt`
 - metrics: `docs/artifacts/mvp/model_train/20260309_121811_fast/metrics.json`
 
@@ -77,4 +77,3 @@ Not the goal of this MVP:
 - network-dependent demo flows
 - full long-horizon optimal play
 - new registry/router/world-model infrastructure
-

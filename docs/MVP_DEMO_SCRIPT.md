@@ -37,7 +37,7 @@
 
 - Open the `Model & Training` panel in the lower-right.
 - Mention the latest run id: `20260309_121811_fast`.
-- Mention the dataset size: `3615` samples.
+- Mention the dataset size: `4254` samples, split into `3615` train and `639` validation.
 - Mention the validation metrics briefly:
   - `val_acc1`: about `0.12`
   - `val_acc3`: about `0.16`
@@ -60,4 +60,3 @@ Fallback order:
 - `docs/artifacts/mvp/fallback/high_risk_discard_demo.png`
 - `docs/artifacts/mvp/fallback/joker_synergy_demo.png`
 - `docs/artifacts/mvp/api_smoke_20260309_123508.json`
-
