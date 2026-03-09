@@ -58,6 +58,12 @@ def _read_json(path: Path) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
+def _read_safe_run_summary(path: str | Path | None) -> dict[str, Any] | None:
+    if not path:
+        return None
+    return _read_json(Path(path).resolve())
+
+
 def _write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -86,6 +92,26 @@ def _normalize_item(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _reconcile_item(item: dict[str, Any]) -> dict[str, Any]:
+    normalized = _normalize_item(item)
+    if normalized.get("status") != "running":
+        return normalized
+    summary = (
+        _read_safe_run_summary(normalized.get("last_safe_run_summary_path"))
+        or _read_safe_run_summary(normalized.get("result_summary_path"))
+    )
+    if not isinstance(summary, dict):
+        return normalized
+    if not summary.get("end_at_utc"):
+        return normalized
+    exit_code = int(summary.get("exit_code") or 0)
+    normalized["last_exit_code"] = exit_code
+    normalized["updated_at"] = _now_iso()
+    normalized["status"] = "passed" if exit_code == 0 and not bool(summary.get("timed_out")) else "failed"
+    normalized["result_summary_path"] = str(normalized.get("result_summary_path") or normalized.get("last_safe_run_summary_path") or "")
+    return normalized
+
+
 def load_queue(repo_root: str | Path | None = None) -> dict[str, Any]:
     path = queue_json_path(repo_root)
     payload = _read_json(path)
@@ -97,7 +123,7 @@ def load_queue(repo_root: str | Path | None = None) -> dict[str, Any]:
             "items": [],
         }
     payload["queue_path"] = str(path.resolve())
-    payload["items"] = [_normalize_item(item) for item in (payload.get("items") or []) if isinstance(item, dict)]
+    payload["items"] = [_reconcile_item(item) for item in (payload.get("items") or []) if isinstance(item, dict)]
     return payload
 
 
