@@ -520,10 +520,11 @@ function renderTrainingNotes() {
     training.scenario_eval?.results ||
     [];
   const notes = [];
+  const trainingLabel = training.status === "idle" ? statusText("idle") : training.status_label || statusText(training.status);
   notes.push(`
     <div class="note-card">
       <strong>训练状态</strong>
-      <p>${training.status_label || statusText(training.status)} / ${stageText(trainingStage())}</p>
+      <p>${trainingLabel} / ${stageText(trainingStage())}</p>
     </div>
   `);
   if (modelInfo.verdict?.new_best_val_loss || modelInfo.verdict?.improved_over_previous !== undefined) {
@@ -564,10 +565,15 @@ function renderTrainingPanel() {
   const modelMeta = document.querySelector("#model-meta");
   const history = trainingHistoryRows();
   const progressValue = trainingProgressValue();
+  const displayStatusLabel = training.status === "idle" ? statusText("idle") : training.status_label || statusText(training.status || "idle");
+  const displayMessage =
+    training.status === "idle"
+      ? "当前没有训练任务。可在页面中启动快速烟雾训练或 2 小时训练。"
+      : training.message || "尚未启动训练。当前界面会展示最近一次已完成的模型结果。";
 
   statusRoot.innerHTML = `
-    <h4>${training.status_label || statusText(training.status || "idle")} / ${stageText(trainingStage())}</h4>
-    <p>${training.message || "尚未启动训练。当前界面会展示最近一次已完成的模型结果。"}</p>
+    <h4>${displayStatusLabel} / ${stageText(trainingStage())}</h4>
+    <p>${displayMessage}</p>
     <div class="progress-shell" style="margin-top:12px;">
       <div class="progress-bar" style="width:${progressValue * 100}%"></div>
     </div>
