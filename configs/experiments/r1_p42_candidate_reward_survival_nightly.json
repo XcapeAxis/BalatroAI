@@ -1,0 +1,24 @@
+{
+  "schema": "p42_candidate_train_config_v1",
+  "candidate_modes": [
+    "rl_ppo_lite"
+  ],
+  "allow_legacy_fallback": false,
+  "legacy_fallback_modes": [
+    "bc_finetune"
+  ],
+  "output": {
+    "artifacts_root": "docs/artifacts/research/r1_candidate_train"
+  },
+  "seeds": [
+    "AAAAAAA",
+    "BBBBBBB",
+    "CCCCCCC",
+    "DDDDDDD"
+  ],
+  "rl_config": "configs/experiments/r1_p42_rl_reward_survival_nightly.yaml",
+  "training": {
+    "timeout_sec": 7200
+  },
+  "__yaml_source_sha256__": "5851b032729a07b8ed3e10554605da246d38ef0f5999268e9efae26db99e083e"
+}

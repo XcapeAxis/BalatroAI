@@ -224,6 +224,35 @@ Closed-loop promotion wiring now updates RL checkpoint state along the path:
 - `arena_passed -> promotion_review`
 - optional `promotion_review -> promoted|rejected`
 
+## R1 Research Update (2026-03-10)
+
+The post-legality R1 research round produced three important conclusions:
+
+1. fixing legality parity was necessary but not sufficient; it removed false invalid-action failures, but the RL lane still remained weak
+2. at the current PPO budget, a flat survival-biased reward outperformed both a harsher loss/invalid penalty variant and two curriculum variants
+3. even the best surviving RL variant still failed the closed-loop nightly certification against `heuristic_baseline`
+
+Useful evidence from the R1 branch:
+
+- reward-survival smoke:
+  - direct eval `148.5`
+- loss-penalty smoke:
+  - direct eval `105.5`
+- curriculum easy:
+  - direct eval `99.0`
+- curriculum failure-mining:
+  - direct eval `82.5`
+- certification nightly:
+  - candidate `67.75` vs heuristic `303.0`
+  - recommendation `observe`
+
+Interpretation:
+
+- the next high-value lever is no longer more reward tuning or early curriculum tuning
+- the RL line now needs better data pressure:
+  - real hard-case / failure-case sampling that actually reaches PPO
+  - or a real supervised / BC warm-start path instead of the current stubbed `selfsup_warm_bc`
+
 ## Known Gaps
 
 - PPO-lite intentionally omits advanced PPO/distributed features (opponent pools, large-batch parallel rollouts).

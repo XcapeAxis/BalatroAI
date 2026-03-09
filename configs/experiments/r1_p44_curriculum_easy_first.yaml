@@ -1,0 +1,58 @@
+schema: p44_curriculum_config_v1
+
+schedule:
+  - stage: stage1_basic
+    start_iteration: 1
+    until_iteration: 2
+  - stage: stage2_transition
+    start_iteration: 3
+    until_iteration: 4
+  - stage: stage3_midrisk
+    start_iteration: 5
+    until_iteration: 0
+
+stages:
+  stage1_basic:
+    source_sampling_weights:
+      self_play: 0.85
+      replay_mix: 0.10
+      arena_failures: 0.05
+    reward:
+      survival_bonus: 0.12
+      score_delta_weight: 0.60
+      invalid_action_penalty: 0.12
+    rollout:
+      max_steps: 70
+    difficulty:
+      max_ante: 0
+      stake: WHITE
+
+  stage2_transition:
+    source_sampling_weights:
+      self_play: 0.70
+      replay_mix: 0.15
+      arena_failures: 0.15
+    reward:
+      survival_bonus: 0.05
+      score_delta_weight: 0.90
+      invalid_action_penalty: 0.12
+    rollout:
+      max_steps: 110
+    difficulty:
+      max_ante: 1
+      stake: WHITE
+
+  stage3_midrisk:
+    source_sampling_weights:
+      self_play: 0.55
+      replay_mix: 0.20
+      arena_failures: 0.25
+    reward:
+      survival_bonus: 0.02
+      score_delta_weight: 1.20
+      invalid_action_penalty: 0.15
+    rollout:
+      max_steps: 160
+    difficulty:
+      max_ante: 2
+      stake: WHITE

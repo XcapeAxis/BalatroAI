@@ -1,0 +1,80 @@
+{
+  "schema": "p44_curriculum_config_v1",
+  "schedule": [
+    {
+      "stage": "stage1_bootstrap",
+      "start_iteration": 1,
+      "until_iteration": 1
+    },
+    {
+      "stage": "stage2_failures",
+      "start_iteration": 2,
+      "until_iteration": 3
+    },
+    {
+      "stage": "stage3_highrisk",
+      "start_iteration": 4,
+      "until_iteration": 0
+    }
+  ],
+  "stages": {
+    "stage1_bootstrap": {
+      "source_sampling_weights": {
+        "self_play": 0.75,
+        "replay_mix": 0.15,
+        "arena_failures": 0.1
+      },
+      "reward": {
+        "survival_bonus": 0.04,
+        "score_delta_weight": 0.9,
+        "invalid_action_penalty": 0.12
+      },
+      "rollout": {
+        "max_steps": 80
+      },
+      "difficulty": {
+        "max_ante": 0,
+        "stake": "WHITE"
+      }
+    },
+    "stage2_failures": {
+      "source_sampling_weights": {
+        "self_play": 0.45,
+        "replay_mix": 0.2,
+        "arena_failures": 0.35
+      },
+      "reward": {
+        "survival_bonus": 0.03,
+        "score_delta_weight": 1.1,
+        "invalid_action_penalty": 0.18
+      },
+      "rollout": {
+        "max_steps": 140
+      },
+      "difficulty": {
+        "max_ante": 1,
+        "stake": "WHITE"
+      }
+    },
+    "stage3_highrisk": {
+      "source_sampling_weights": {
+        "self_play": 0.35,
+        "replay_mix": 0.2,
+        "arena_failures": 0.45
+      },
+      "reward": {
+        "survival_bonus": 0.01,
+        "score_delta_weight": 1.4,
+        "invalid_action_penalty": 0.22
+      },
+      "rollout": {
+        "max_steps": 220
+      },
+      "difficulty": {
+        "max_ante": 2,
+        "stake": "WHITE"
+      }
+    }
+  },
+  "__yaml_source_sha256__": "9e9bc41521f87ffe02bc0780cae83ec1ce5dc351a3efd1d88339990f83e7b7aa"
+}
