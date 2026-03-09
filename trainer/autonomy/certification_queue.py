@@ -191,7 +191,7 @@ def save_queue(payload: dict[str, Any], repo_root: str | Path | None = None, *, 
     path = queue_json_path(repo_root)
     payload["generated_at"] = _now_iso()
     payload["queue_path"] = str(path.resolve())
-    payload["items"] = [_normalize_item(item) for item in (payload.get("items") or []) if isinstance(item, dict)]
+    payload["items"] = [_reconcile_item(item) for item in (payload.get("items") or []) if isinstance(item, dict)]
     _write_json(path, payload)
     _write_summary_files(repo_root, payload, state_payload=state_payload)
     return payload
