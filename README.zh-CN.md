@@ -1,6 +1,6 @@
 # BalatroAI
 
-> 语言切换： [简体中文](README.zh-CN.md) | [English](README.en.md)
+> English README: [README.en.md](README.en.md)
 
 BalatroAI 是一个面向 Balatro 的本地工程仓库。它把模拟器对齐、训练、评测、夜间运行和本地展示整合成一条可复现、可追踪、可交接的工作流。
 

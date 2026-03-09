@@ -1,6 +1,6 @@
 # BalatroAI
 
-> Language: [简体中文](README.zh-CN.md) | [English](README.en.md)
+> Chinese homepage: [README.md](README.md)
 
 BalatroAI is a local engineering stack for Balatro-focused simulation, training, evaluation, overnight execution, and demo delivery. The repository is organized so another engineer can reproduce runs, inspect artifacts, and continue the project on a Windows machine without rebuilding the workflow from scratch.
 

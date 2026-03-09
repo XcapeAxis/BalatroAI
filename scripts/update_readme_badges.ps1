@@ -20,7 +20,7 @@ function Read-Json([string]$Path) {
   if (-not (Test-Path $Path)) {
     throw "missing json file: $Path"
   }
-  $raw = Get-Content -LiteralPath $Path -Raw
+  $raw = Get-Content -LiteralPath $Path -Raw -Encoding utf8
   try {
     return ($raw | ConvertFrom-Json)
   } catch {
@@ -137,20 +137,22 @@ $repoSlug = Get-GitHubRepoSlug
 $badgesBlock = New-BadgesBlock -badgesObj $badgesObj -RepoSlug $repoSlug
 $statusBlock = New-StatusBlock -statusObj $statusObj
 
-$readmeBefore = Get-Content -LiteralPath $readmeFullPath -Raw
+$readmeBefore = Get-Content -LiteralPath $readmeFullPath -Raw -Encoding utf8
 $patched = Replace-Block -Text $readmeBefore -StartMarker "<!-- BADGES:START -->" -EndMarker "<!-- BADGES:END -->" -Inner $badgesBlock
 $patched = Replace-Block -Text $patched -StartMarker "<!-- STATUS:START -->" -EndMarker "<!-- STATUS:END -->" -Inner $statusBlock
 
 $changed = ($patched -ne $readmeBefore)
 if ($DryRun) {
-  $tmp = Join-Path $env:TEMP ("readme_patch_preview_" + [guid]::NewGuid().ToString("N") + ".md")
-  $patched | Out-File -LiteralPath $tmp -Encoding utf8
   Write-Host ("[dry-run] changed=" + $changed)
-  & git --no-pager diff --no-index -- $readmeFullPath $tmp
-  if ($LASTEXITCODE -gt 1) {
-    throw "git diff preview failed with exit code $LASTEXITCODE"
+  if ($changed) {
+    $tmp = Join-Path $env:TEMP ("readme_patch_preview_" + [guid]::NewGuid().ToString("N") + ".md")
+    $patched | Out-File -LiteralPath $tmp -Encoding utf8
+    & git --no-pager diff --no-index -- $readmeFullPath $tmp
+    if ($LASTEXITCODE -gt 1) {
+      throw "git diff preview failed with exit code $LASTEXITCODE"
+    }
+    Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
   }
-  Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
 }
 
 if ($Apply) {
