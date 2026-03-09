@@ -8,7 +8,7 @@
 [![Workflow](https://img.shields.io/badge/Workflow-mainline--only-2EA44F)](scripts/git_sync.ps1)
 [![Experiment Orchestrator](https://img.shields.io/badge/Experiment_Orchestrator-P22%2B_enabled-1F6FEB)](scripts/run_p22.ps1)
 [![Windows Bootstrap](https://img.shields.io/badge/Windows_Bootstrap-P58_ready-6F42C1)](docs/P58_WINDOWS_BOOTSTRAP.md)
-[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P60-6E7781)](docs/)
+[![Docs Coverage](https://img.shields.io/badge/Docs_Coverage-P15--P61-6E7781)](docs/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D6)](docs/P58_WINDOWS_BOOTSTRAP.md)
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB)](trainer/requirements.txt)
 [![License](https://img.shields.io/badge/License-Not_Specified-6E7781)](#license-and-contributing)
@@ -24,6 +24,7 @@
   <a href="docs/P57_OVERNIGHT_AUTONOMY_PROTOCOL.md">P57 Docs</a> ·
   <a href="docs/P58_WINDOWS_BOOTSTRAP.md">P58 Docs</a>
   <a href="docs/P60_AGENTS_STANDARDIZATION_AND_AUTONOMY_ENTRY.md">P60 Docs</a>
+  <a href="docs/P61_WORKFLOW_ACCELERATION.md">P61 Docs</a>
 </p>
 
 BalatroAI 的目标很明确：把 Balatro 相关实验整理成一套可复现、可追踪、可持续运行的工程系统。  
@@ -194,6 +195,37 @@ Primary references:
 - [docs/P60_AGENTS_STANDARDIZATION_AND_AUTONOMY_ENTRY.md](docs/P60_AGENTS_STANDARDIZATION_AND_AUTONOMY_ENTRY.md)
 - [docs/DECISION_POLICY.md](docs/DECISION_POLICY.md)
 
+## Validation Workflow (P61)
+
+P61 将默认开发循环调整为 **Fast Loop + Targeted Validation + Deferred Certification**。  
+The default path is no longer “wait for the full gate after every edit”; it is “run the smallest defensible checks now, queue certification explicitly, and only wait for Tier 3 when the decision really needs it.”
+
+Main entrypoints:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_fast_checks.ps1
+powershell -ExecutionPolicy Bypass -File scripts\run_certification.ps1 -LatestPending
+powershell -ExecutionPolicy Bypass -File scripts\run_autonomy.ps1 -Quick
+```
+
+Validation tiers:
+
+- Tier 0: instant checks such as `py_compile`, config sidecar consistency, AGENTS consistency, and doctor precheck
+- Tier 1: targeted smoke chosen from changed files
+- Tier 2: subsystem gate only when the scope requires it
+- Tier 3: certification / nightly / full regression as an explicit follow-up lane
+
+Status semantics:
+
+- `fast_check_status=passed` means the scoped fast loop passed
+- `certification_status=pending` means full certification is still queued
+- `certification_status=passed` means the deferred certification lane completed
+
+Primary references:
+
+- [docs/P61_WORKFLOW_ACCELERATION.md](docs/P61_WORKFLOW_ACCELERATION.md)
+- [docs/P61_VALIDATION_PYRAMID.md](docs/P61_VALIDATION_PYRAMID.md)
+
 ## Architecture Overview
 
 下图展示真实游戏、模拟器、训练、评测与运维之间的主线关系。  
@@ -254,6 +286,7 @@ Current milestone anchors:
 - **P57**: overnight autonomy + attention queue + morning summary
 - **P58**: Windows bootstrap + doctor + environment portability hardening
 - **P60**: AGENTS hierarchy + consistency checks + unified autonomous iteration entry
+- **P61**: validation pyramid + change-scope fast loop + deferred certification queue
 
 ## Command Cheat Sheet
 

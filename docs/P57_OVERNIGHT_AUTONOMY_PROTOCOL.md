@@ -147,6 +147,12 @@ This entrypoint reuses:
 - the same morning summary artifacts
 - the same campaign stop/resume semantics
 
+P61 extends the same control plane:
+
+- `scripts/run_autonomy.ps1 -Quick` now prefers `scripts/run_fast_checks.ps1`
+- `scripts/run_autonomy.ps1 -Overnight` can consume `docs/artifacts/certification_queue/certification_queue.json` before starting a fresh nightly lane
+- P22 summaries, dashboard, and Ops UI now distinguish `fast_check_status` from `certification_status`
+
 Outputs:
 
 - `docs/artifacts/morning_summary/latest.md`

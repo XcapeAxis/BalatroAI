@@ -48,6 +48,8 @@ python -B -m trainer.experiments.orchestrator --config configs/experiments/p22.y
 | Autonomy entry dry run | `powershell -ExecutionPolicy Bypass -File scripts\run_autonomy.ps1 -DryRun` | inspects AGENTS, decision policy, campaign state, and attention queue before selecting continue / resume / block |
 | Autonomy entry quick | `powershell -ExecutionPolicy Bypass -File scripts\run_autonomy.ps1 -Quick` | runs the unified P60 autonomy entry and writes `docs/artifacts/p60/latest_autonomy_entry.{json,md}` |
 | Autonomy entry overnight | `powershell -ExecutionPolicy Bypass -File scripts\run_autonomy.ps1 -Overnight` | runs the unattended autonomy lane with the same P57 policy and handoff artifacts |
+| Fast checks | `powershell -ExecutionPolicy Bypass -File scripts\run_fast_checks.ps1` | runs P61 Tier 0/1/2 validation chosen from the changed-file scope and writes `docs/artifacts/p61/fast_checks/*` |
+| Run latest certification | `powershell -ExecutionPolicy Bypass -File scripts\run_certification.ps1 -LatestPending` | consumes the deferred certification queue without forcing every edit loop to wait |
 | Windows bootstrap | `powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1 -Mode auto -SkipSmoke` | creates or repairs the standard CPU/CUDA envs before P22 |
 | Environment doctor | `powershell -ExecutionPolicy Bypass -File scripts\doctor.ps1` | writes machine-readable environment readiness reports used by P22/P57 |
 | P53 smoke only | `powershell -ExecutionPolicy Bypass -File scripts\run_p22.ps1 -RunP53` | runs `p53_background_ops_smoke` with background-mode validation, window-mode recording, campaign state, ops-ui metadata, promotion queue refresh, and dashboard build |
@@ -108,6 +110,25 @@ Relevant summary/runtime fields:
 - `morning_summary_path`
 
 This keeps P22, P57 overnight autonomy, dashboard, and Ops UI on one shared control plane.
+
+## P61 Validation Workflow Acceleration
+
+P61 changes the default validation posture around P22:
+
+- use `scripts\run_fast_checks.ps1` for Tier 0 / Tier 1 and scope-selected Tier 2 work
+- keep full certification explicit via `scripts\run_certification.ps1 -LatestPending`
+- let `scripts\run_autonomy.ps1 -Quick` prefer the fast loop, while `-Overnight` can drain the certification queue first
+
+Relevant summary/runtime fields:
+
+- `validation_tiers_completed`
+- `fast_check_status`
+- `certification_status`
+- `certification_queue_ref`
+- `pending_certification`
+- `recommended_next_gate`
+
+This makes it clear whether a run is only fast-validated or fully certified.
 
 ## Config Structure (`configs/experiments/p22.yaml`)
 

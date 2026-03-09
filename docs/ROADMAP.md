@@ -30,15 +30,16 @@
 | P58 | Windows bootstrap + portability hardening + environment doctor | done |
 | P59 | AGENTS standardization + autonomous iteration entry | done |
 | P60 | AGENTS hierarchy refresh + autonomy entry standardization | done |
+| P61 | Workflow acceleration + validation pyramid + deferred certification | done |
 
-## Current Focus: Post-P60 Quality and Durability
+## Current Focus: Post-P61 Quality and Durability
 
 1. Maintain YAML/JSON sidecar parity — run `sync_config_sidecars.ps1` after every YAML edit.
 2. Expand P56 nightly budget, calibration slice coverage, and canary evaluation depth.
-3. Harden P57/P60 blocked-campaign resolution flow and morning-summary prioritization.
+3. Harden P57/P60/P61 blocked-campaign resolution, certification draining, and morning-summary prioritization.
 4. Harden P58 cross-machine handoff flow and reduce remaining Windows-specific assumptions.
 5. Harden P53 background-mode validation beyond smoke.
-6. Keep config provenance, readiness guarding, AGENTS consistency, dashboard generation, ops-audit logging, and autonomy policy as default night-ops safety rails.
+6. Keep config provenance, readiness guarding, AGENTS consistency, fast-loop planning, certification queue handling, dashboard generation, ops-audit logging, and autonomy policy as default safety rails.
 
 ## Near-Term After P60
 

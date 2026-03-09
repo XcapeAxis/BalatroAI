@@ -19,6 +19,8 @@ auto_allow_actions:
   - read_agents_rules
   - run_agents_consistency_check
   - run_autonomy_entry
+  - run_fast_checks
+  - run_certification_queue
 auto_suggest_actions:
   - switch_window_mode
   - archive_checkpoints
@@ -56,3 +58,4 @@ continue_on_warning_conditions:
   - background_mode_warning
   - doctor_warning
   - agents_consistency_warning
+  - certification_pending

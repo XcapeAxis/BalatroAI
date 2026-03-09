@@ -212,11 +212,18 @@ The static dashboard now includes:
 - recent P53 campaign states
 - P56 calibration, guard, and canary summaries
 - P57 autonomy decision summary, attention queue counts, blocked campaigns, and morning-summary excerpt
+- P61 fast-check status, validation tiers, certification queue state, and pending certification count
 - recent ops audit rows
 
 Representative output:
 
 - `docs/artifacts/dashboard/latest/index.html`
+
+P61 additions in the Ops UI:
+
+- action buttons for `run_fast_checks.ps1` and `run_certification.ps1 -LatestPending`
+- overview/autonomy sections that distinguish `fast_check_status` from `certification_status`
+- direct links to `docs/artifacts/p61/latest_fast_check_report.json` and `docs/artifacts/certification_queue/certification_queue.json`
 
 The ops UI links back to the same dashboard artifact instead of rebuilding overlapping charts.
 

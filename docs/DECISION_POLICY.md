@@ -15,6 +15,7 @@ These actions are safe to execute automatically inside the repo:
 - Update config sidecars after edits.
 - Resume a campaign from a safe completed-stage boundary.
 - Run training, evaluation, arena, triage, dashboard build, morning summary build, and cleanup.
+- Run P61 fast checks and consume the deferred certification queue when the queued command stays inside repo-managed entrypoints.
 - Refresh registry snapshots and promotion queues.
 - Switch window mode only within already validated repo-managed modes.
 - Run `doctor` / environment inspection and Python resolver checks.
@@ -57,6 +58,8 @@ These actions must stop the related branch of work and create a blocking attenti
 | `read_agents_rules` | auto-approve |
 | `run_agents_consistency_check` | auto-approve |
 | `run_autonomy_entry` | auto-approve |
+| `run_fast_checks` | auto-approve |
+| `run_certification_queue` | auto-approve |
 | `promote_candidate` | auto-suggest-but-do-not-apply |
 | `change_training_profile` | auto-suggest-but-do-not-apply |
 | `archive_checkpoints` | auto-suggest-but-do-not-apply |
@@ -73,6 +76,7 @@ Nightly/campaign execution should stop the affected branch and queue human atten
 - unresolved human gate from a prior blocked stage
 - config provenance mismatch that cannot be repaired automatically
 - environment / driver / install requirement
+- certification is still pending when the next decision explicitly requires a certified result
 - doctor blocked the machine because no healthy project environment exists
 - AGENTS / decision-policy consistency failed
 - readiness failure with no safe fallback
@@ -89,3 +93,4 @@ Execution may continue, but the warning must be recorded in campaign state and s
 - open attention items that are advisory rather than blocking
 - doctor found warnings but the machine is still safe for continuation
 - AGENTS consistency warnings that do not change the control boundary
+- fast checks passed and certification is explicitly deferred rather than required immediately
