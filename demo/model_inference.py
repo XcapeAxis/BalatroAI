@@ -13,30 +13,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from demo.model_arch import MAX_ACTIONS, MVPHandPolicy, MVPHandPolicyConfig
+from demo.state_adapter import action_label, compute_resource_delta, phase_label
+from demo.training_status import infer_profile, read_status
 from sim.core.score_basic import evaluate_selected_breakdown
 from sim.score.expected_basic import compute_expected_for_action
 from trainer import action_space
 from trainer.expert_policy import choose_action
 from trainer.features import extract_features
 
-from demo.state_adapter import action_label, compute_resource_delta, state_jokers
-
-
-MAX_ACTIONS = action_space.max_actions()
-
-try:
-    import torch.nn as _torch_nn_base
-except Exception:
-    _torch_nn_base = None
-
 
 def _require_torch():
     try:
         import torch
-        import torch.nn as nn
     except Exception as exc:
-        raise RuntimeError("PyTorch is required for the MVP demo model") from exc
-    return torch, nn
+        raise RuntimeError("MVP Demo 推理需要 PyTorch。") from exc
+    return torch
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -51,50 +43,6 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return int(value)
     except Exception:
         return default
-
-
-class MVPHandPolicy(_torch_nn_base.Module if _torch_nn_base is not None else object):
-    def __init__(self, nn, max_actions: int = MAX_ACTIONS):
-        super().__init__()
-        self.rank_emb = nn.Embedding(16, 16)
-        self.suit_emb = nn.Embedding(8, 8)
-        self.card_proj = nn.Sequential(
-            nn.Linear(16 + 8 + 4, 64),
-            nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-        )
-        self.ctx_proj = nn.Sequential(
-            nn.Linear(12, 64),
-            nn.ReLU(),
-            nn.Linear(64, 64),
-            nn.ReLU(),
-        )
-        self.head = nn.Sequential(
-            nn.Linear(128, 128),
-            nn.ReLU(),
-            nn.Linear(128, max_actions),
-        )
-
-    def forward(self, batch):
-        torch = __import__("torch")
-        rank = batch["rank"]
-        suit = batch["suit"]
-        chip = batch["chip"].unsqueeze(-1)
-        enh = batch["enh"].unsqueeze(-1)
-        edt = batch["edt"].unsqueeze(-1)
-        seal = batch["seal"].unsqueeze(-1)
-        pad = batch["pad"]
-
-        rank_h = self.rank_emb(rank)
-        suit_h = self.suit_emb(suit)
-        card_x = torch.cat([rank_h, suit_h, chip, enh, edt, seal], dim=-1)
-        card_h = self.card_proj(card_x)
-        denom = pad.sum(dim=1, keepdim=True).clamp(min=1.0)
-        pooled = (card_h * pad.unsqueeze(-1)).sum(dim=1) / denom
-        ctx_h = self.ctx_proj(batch["context"])
-        fused = torch.cat([pooled, ctx_h], dim=-1)
-        return self.head(fused)
 
 
 @dataclass
@@ -131,7 +79,7 @@ def latest_run_dir(root: Path | None = None) -> Path | None:
     return sorted(candidates, key=lambda path: path.stat().st_mtime, reverse=True)[0]
 
 
-def _read_json(path: Path, default: dict[str, Any] | list[Any] | None = None) -> Any:
+def _read_json(path: Path, default: Any | None = None) -> Any:
     if not path.exists():
         return default if default is not None else {}
     return json.loads(path.read_text(encoding="utf-8"))
@@ -160,9 +108,11 @@ def load_latest_bundle(run_dir: Path | None = None) -> ModelBundle:
     train_summary = (actual_run_dir / "training_summary.md").read_text(encoding="utf-8") if (actual_run_dir / "training_summary.md").exists() else ""
 
     try:
-        torch, nn = _require_torch()
+        torch = _require_torch()
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = MVPHandPolicy(nn, max_actions=int(config.get("max_actions") or MAX_ACTIONS))
+        arch_payload = config.get("architecture") if isinstance(config.get("architecture"), dict) else config
+        model_cfg = MVPHandPolicyConfig.from_dict(arch_payload)
+        model = MVPHandPolicy(torch.nn, config=model_cfg)
         state_dict = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(state_dict, strict=True)
         model.to(device)
@@ -193,6 +143,11 @@ def load_latest_bundle(run_dir: Path | None = None) -> ModelBundle:
             loaded=False,
             error=str(exc),
         )
+
+
+def build_policy_model(nn, raw_config: dict[str, Any] | None = None):
+    config = MVPHandPolicyConfig.from_dict(raw_config)
+    return MVPHandPolicy(nn, config=config)
 
 
 def _state_to_batch(state: dict[str, Any], torch):
@@ -292,10 +247,10 @@ def _heuristic_hand_candidates(state: dict[str, Any], topk: int) -> list[dict[st
             selected = [cards[idx] for idx in indices]
             breakdown = evaluate_selected_breakdown(selected)
             proxy_score = _safe_float(breakdown.get("total_delta"))
-            reason = f"{breakdown.get('hand_type') or 'play'} projects {_safe_float(breakdown.get('total_delta')):.0f} chips"
+            reason = f"启发式判断这手更接近 {breakdown.get('hand_type') or '高收益出牌'}，预计基础收益 {_safe_float(breakdown.get('total_delta')):.0f}。"
         else:
             proxy_score = _score_discard(cards, indices)
-            reason = f"Discard {len(indices)} weak cards to improve the redraw"
+            reason = f"启发式建议先弃掉 {len(indices)} 张弱牌，争取更好的重抽。"
         ranked.append(
             {
                 "action_id": int(action_id),
@@ -332,14 +287,23 @@ def _phase_fallback_action(state: dict[str, Any], seed: str = "MVP") -> tuple[di
 
 def _preview_action(state: dict[str, Any], env: Any | None, action: dict[str, Any]) -> dict[str, Any]:
     if env is None:
-        return {"reward": 0.0, "done": False, "delta": {}, "phase_after": str(state.get("state") or "UNKNOWN")}
+        phase_after = str(state.get("state") or "UNKNOWN")
+        return {
+            "reward": 0.0,
+            "done": False,
+            "delta": {},
+            "phase_after": phase_after,
+            "phase_after_text": phase_label(phase_after),
+        }
     probe = copy.deepcopy(env)
     before = probe.get_state()
     after, reward, done, _info = probe.step(action)
+    phase_after = str(after.get("state") or "UNKNOWN")
     preview = {
         "reward": _safe_float(reward),
         "done": bool(done),
-        "phase_after": str(after.get("state") or "UNKNOWN"),
+        "phase_after": phase_after,
+        "phase_after_text": phase_label(phase_after),
         "delta": compute_resource_delta(before, after),
         "score_after": _safe_float((after.get("score") or {}).get("chips")),
         "money_after": _safe_float(after.get("money")),
@@ -356,6 +320,26 @@ def _preview_action(state: dict[str, Any], env: Any | None, action: dict[str, An
             preview["expected_score"] = _safe_float(breakdown.get("total_delta"))
             preview["expected_hand_type"] = str(breakdown.get("hand_type") or "")
     return preview
+
+
+def _source_label(source: str) -> str:
+    return {
+        "model": "模型",
+        "heuristic": "启发式",
+        "teacher": "教师策略",
+    }.get(str(source or "").lower(), str(source or "未知"))
+
+
+def _recommendation_risk(preview: dict[str, Any], *, teacher_agrees: bool) -> tuple[str, str]:
+    delta = preview.get("delta") or {}
+    score_gain = _safe_float(preview.get("expected_score") or preview.get("reward"))
+    hands_delta = _safe_int(delta.get("hands_left"))
+    discards_delta = _safe_int(delta.get("discards_left"))
+    if not teacher_agrees and score_gain <= 0:
+        return "高", "与教师策略不一致，且当前动作不能立即兑现收益。"
+    if hands_delta < 0 or discards_delta < 0:
+        return "中", "会消耗当前回合资源，适合强调收益与试错空间的权衡。"
+    return "低", "当前动作更偏稳健，适合作为面试演示中的基线建议。"
 
 
 def _decorate_recommendations(
@@ -375,9 +359,12 @@ def _decorate_recommendations(
         expert_agrees = selected_signature == teacher_signature
         reason = str(item.get("reason") or "").strip()
         if expert_agrees and teacher_reason:
-            reason = f"{reason}. Teacher agrees: {teacher_reason}." if reason else f"Teacher agrees: {teacher_reason}."
+            reason = f"{reason} 教师策略也支持这个动作（{teacher_reason}）。"
         elif teacher_reason:
-            reason = f"{reason}. Teacher default would be {action_label(teacher_action, state).lower()} ({teacher_reason})."
+            reason = f"{reason} 教师策略会优先 {action_label(teacher_action, state)}（{teacher_reason}）。"
+        preview_score = _safe_float((preview.get("expected_score") or preview.get("reward")))
+        risk_level, risk_reason = _recommendation_risk(preview, teacher_agrees=expert_agrees)
+        why_not_next = teacher_reason or "次优动作更多是在保留资源，而不是立刻兑现当前收益。"
         out.append(
             {
                 "rank": rank,
@@ -385,11 +372,20 @@ def _decorate_recommendations(
                 "label": action_label(action, state),
                 "score": round(_safe_float(item.get("score")), 4),
                 "confidence": round(_safe_float(item.get("confidence")), 4),
+                "confidence_pct": round(_safe_float(item.get("confidence")) * 100.0, 1),
                 "source": source,
+                "source_label": _source_label(source),
+                "source_text": _source_label(source),
                 "reason": reason,
                 "teacher_reason": teacher_reason,
                 "teacher_agrees": expert_agrees,
+                "teacher_agrees_label": "与教师一致" if expert_agrees else "与教师不同",
+                "risk_level": risk_level,
+                "risk_hint": risk_reason,
                 "preview": preview,
+                "tags": [source == "model" and "训练模型" or "启发式", expert_agrees and "教师一致" or "偏离教师"],
+                "why_not_next": why_not_next,
+                "summary": f"预计单步收益 {preview_score:.0f}，后续阶段 {preview.get('phase_after') or '未知'}。",
             }
         )
     return out
@@ -412,11 +408,12 @@ def recommend_actions(
         return {
             "phase": phase,
             "policy": "heuristic",
+            "policy_label": "启发式",
             "model_loaded": bool(loaded_bundle.loaded),
             "recommendations": _decorate_recommendations(
                 state,
                 env,
-                [{"action": action, "score": 1.0, "confidence": 1.0, "reason": reason}],
+                [{"action": action, "score": 1.0, "confidence": 1.0, "reason": f"当前阶段使用教师/启发式 fallback：{reason}。"}],
                 source="heuristic",
             ),
             "model_name": loaded_bundle.model_name,
@@ -432,7 +429,7 @@ def recommend_actions(
         device = torch.device(loaded_bundle.device_name)
         batch = _state_to_batch(state, torch)
         batch = {key: value.to(device) for key, value in batch.items()}
-        legal_mask = torch.zeros((1, int(loaded_bundle.config.get("max_actions") or MAX_ACTIONS)), dtype=torch.float32, device=device)
+        legal_mask = torch.zeros((1, MAX_ACTIONS), dtype=torch.float32, device=device)
         for aid in legal_ids:
             legal_mask[0, int(aid)] = 1.0
         with torch.no_grad():
@@ -445,13 +442,13 @@ def recommend_actions(
         for idx in range(k):
             action_id = int(top_ids[0, idx].item())
             action = _action_from_id(hand_size, action_id)
-            reason = "Model-ranked action"
+            reason = "模型认为这是当前合法动作里的最优选择。"
             if str(action.get("action_type") or "").upper() == "PLAY":
                 selected = [cards[i] for i in action.get("indices") or []]
                 breakdown = evaluate_selected_breakdown(selected)
-                reason = f"Model favors {breakdown.get('hand_type') or 'play'} with projected base delta {_safe_float(breakdown.get('total_delta')):.0f}"
+                reason = f"模型更偏向 {breakdown.get('hand_type') or '高收益出牌'}，预计基础收益 {_safe_float(breakdown.get('total_delta')):.0f}。"
             elif str(action.get("action_type") or "").upper() == "DISCARD":
-                reason = f"Model prefers a redraw of {len(action.get('indices') or [])} cards"
+                reason = f"模型倾向先弃掉 {len(action.get('indices') or [])} 张牌，换取更高质量重抽。"
             raw.append(
                 {
                     "action": action,
@@ -463,6 +460,7 @@ def recommend_actions(
         return {
             "phase": phase,
             "policy": "model",
+            "policy_label": "模型",
             "model_loaded": True,
             "recommendations": _decorate_recommendations(state, env, raw, source="model"),
             "model_name": loaded_bundle.model_name,
@@ -472,6 +470,7 @@ def recommend_actions(
     return {
         "phase": phase,
         "policy": "heuristic",
+        "policy_label": "启发式",
         "model_loaded": bool(loaded_bundle.loaded),
         "recommendations": _decorate_recommendations(state, env, heuristics, source="heuristic"),
         "model_name": loaded_bundle.model_name,
@@ -494,8 +493,40 @@ def model_info(bundle: ModelBundle | None = None) -> dict[str, Any]:
                         "val_loss": _safe_float(row.get("val_loss")),
                         "val_acc1": _safe_float(row.get("val_acc1")),
                         "val_acc3": _safe_float(row.get("val_acc3")),
+                        "lr": _safe_float(row.get("lr")),
                     }
                 )
+    scenario_eval = {}
+    if loaded_bundle.run_dir:
+        scenario_eval = _read_json(loaded_bundle.run_dir / "demo_scenario_eval.json", default={})
+        if not scenario_eval:
+            scenario_eval = _read_json(loaded_bundle.run_dir / "scenario_eval.json", default={})
+    verdict = _read_json(loaded_bundle.run_dir / "training_verdict.json", default={}) if loaded_bundle.run_dir else {}
+    raw_training_status = dict(read_status())
+    training_status = {
+        "job_id": raw_training_status.get("job_id"),
+        "status": raw_training_status.get("status"),
+        "status_label": raw_training_status.get("status_label"),
+        "message": raw_training_status.get("message"),
+        "updated_at": raw_training_status.get("updated_at"),
+        "finished_at": raw_training_status.get("finished_at"),
+        "budget_minutes": raw_training_status.get("budget_minutes"),
+        "profile": infer_profile(raw_training_status),
+        "final_run_dir": raw_training_status.get("final_run_dir"),
+        "dataset": {
+            "episodes_target": ((raw_training_status.get("dataset") or {}).get("episodes_target")),
+            "progress": ((raw_training_status.get("dataset") or {}).get("progress")),
+            "records": ((raw_training_status.get("dataset") or {}).get("records")),
+        },
+        "training": {
+            "epoch": ((raw_training_status.get("training") or {}).get("epoch")),
+            "epochs_total": ((raw_training_status.get("training") or {}).get("epochs_total")),
+            "progress": ((raw_training_status.get("training") or {}).get("progress")),
+            "best_val_loss": ((raw_training_status.get("training") or {}).get("best_val_loss")),
+            "best_epoch": ((raw_training_status.get("training") or {}).get("best_epoch")),
+            "eta_sec": ((raw_training_status.get("training") or {}).get("eta_sec")),
+        },
+    }
     return {
         "loaded": bool(loaded_bundle.loaded),
         "model_name": loaded_bundle.model_name,
@@ -507,4 +538,7 @@ def model_info(bundle: ModelBundle | None = None) -> dict[str, Any]:
         "dataset_stats": dataset_stats,
         "history": curve_rows or list(metrics.get("history") or []),
         "train_summary": loaded_bundle.train_summary,
+        "scenario_eval": scenario_eval,
+        "verdict": verdict,
+        "training_status": training_status,
     }

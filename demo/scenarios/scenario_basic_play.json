@@ -1,9 +1,9 @@
 {
   "id": "basic_play",
-  "name": "Obvious High-Value Play",
-  "summary": "A clean opening where the best move is visibly strong and immediately clears the blind.",
-  "focus": "Play selection and one-step payoff",
-  "talk_track": "Use this first. The model and heuristic should converge on the same straight flush and the chips jump in one click.",
+  "name": "高收益起手",
+  "summary": "这是一个非常适合开场展示的局面。最优动作足够直观，而且一步就能明显拉高分数。",
+  "focus": "出牌选择与一步兑现收益",
+  "talk_track": "建议第一个展示它。模型和启发式通常都会收敛到同一手顺同花，点击一次就能看到筹码明显跃升。",
   "snapshot": {
     "phase": "SELECTING_HAND",
     "zones": {
@@ -51,4 +51,3 @@
     "tags": []
   }
 }
-

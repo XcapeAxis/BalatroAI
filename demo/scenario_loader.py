@@ -19,6 +19,16 @@ class DemoScenario:
     def to_summary(self) -> dict[str, Any]:
         round_info = self.snapshot.get("round") if isinstance(self.snapshot.get("round"), dict) else {}
         score_info = self.snapshot.get("score") if isinstance(self.snapshot.get("score"), dict) else {}
+        hands_left = int(round_info.get("hands_left") or 0)
+        discards_left = int(round_info.get("discards_left") or 0)
+        has_jokers = bool(self.snapshot.get("jokers"))
+        tags: list[str] = []
+        if has_jokers:
+            tags.append("Joker 协同")
+        if hands_left <= 1 or discards_left <= 1:
+            tags.append("高风险")
+        if not tags:
+            tags.append("稳态演示")
         return {
             "id": self.scenario_id,
             "name": self.name,
@@ -26,12 +36,13 @@ class DemoScenario:
             "focus": self.focus,
             "talk_track": self.talk_track,
             "phase": str(self.snapshot.get("phase") or "UNKNOWN"),
-            "hands_left": int(round_info.get("hands_left") or 0),
-            "discards_left": int(round_info.get("discards_left") or 0),
+            "hands_left": hands_left,
+            "discards_left": discards_left,
             "chips": float(score_info.get("chips") or 0.0),
             "target_chips": float(score_info.get("target_chips") or 0.0),
-            "has_jokers": bool(self.snapshot.get("jokers")),
+            "has_jokers": has_jokers,
             "path": str(self.path),
+            "tags": tags,
         }
 
 
@@ -74,4 +85,3 @@ def load_scenario(scenario_id: str, root: Path | None = None) -> DemoScenario:
     except KeyError as exc:
         known = ", ".join(sorted(scenarios))
         raise KeyError(f"unknown scenario '{scenario_id}', available: {known}") from exc
-

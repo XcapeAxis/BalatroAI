@@ -1,9 +1,9 @@
 {
   "id": "high_risk_discard",
-  "name": "High-Risk Discard Pivot",
-  "summary": "One hand and one discard remain. The current hand is weak, so the right move is to throw it back and redraw.",
-  "focus": "Resource pressure and discard judgment",
-  "talk_track": "This is the scenario that proves the assistant is not just greedy for immediate chips. It will spend the last discard to improve the next draw.",
+  "name": "高压弃牌转折",
+  "summary": "只剩 1 次出牌和 1 次弃牌机会，当前手牌又偏弱。这个场景最适合展示“为什么先弃牌比强行打出更好”。",
+  "focus": "资源压力与弃牌判断",
+  "talk_track": "这个场景可以证明助手不是只看眼前筹码，而是在权衡最后一次弃牌换来的后续机会。",
   "snapshot": {
     "phase": "SELECTING_HAND",
     "zones": {

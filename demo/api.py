@@ -9,7 +9,6 @@ if __package__ is None or __package__ == "":
 import json
 import mimetypes
 import threading
-from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any
@@ -20,6 +19,7 @@ from sim.core.engine import SimEnv
 from demo.model_inference import load_latest_bundle, model_info, recommend_actions
 from demo.scenario_loader import DemoScenario, load_scenarios
 from demo.state_adapter import action_label, build_state_payload, compute_resource_delta, now_iso
+from demo.training_manager import TrainingManager
 
 
 class DemoSession:
@@ -51,8 +51,9 @@ class DemoSession:
                 {
                     "timestamp": now_iso(),
                     "kind": "scenario_loaded",
+                    "kind_label": "场景载入",
                     "scenario_id": scenario.scenario_id,
-                    "label": f"Loaded {scenario.name}",
+                    "label": f"已载入：{scenario.name}",
                     "summary": scenario.summary,
                     "focus": scenario.focus,
                 }
@@ -73,15 +74,15 @@ class DemoSession:
 
     def recommendations(self, *, policy: str | None = None, topk: int = 3) -> dict[str, Any]:
         with self._lock:
+            self.refresh_bundle()
             self.policy = str(policy or self.policy or "model").lower()
-            payload = recommend_actions(
+            return recommend_actions(
                 self.env.get_state(),
                 env=self.env,
                 policy=self.policy,
                 topk=max(1, int(topk)),
                 bundle=self.bundle,
             )
-            return payload
 
     def _record_transition(
         self,
@@ -97,6 +98,7 @@ class DemoSession:
         transition = {
             "timestamp": now_iso(),
             "kind": "step",
+            "kind_label": "执行一步",
             "action": action,
             "label": action_label(action, before),
             "reward": float(reward),
@@ -112,6 +114,7 @@ class DemoSession:
 
     def step(self, *, action: dict[str, Any] | None = None, policy: str | None = None) -> dict[str, Any]:
         with self._lock:
+            self.refresh_bundle()
             self.policy = str(policy or self.policy or "model").lower()
             recommendation = None
             if action is None:
@@ -124,7 +127,7 @@ class DemoSession:
                 )
                 recommendations = list(payload.get("recommendations") or [])
                 if not recommendations:
-                    raise RuntimeError("no recommendation available for current state")
+                    raise RuntimeError("当前状态没有可执行推荐。")
                 recommendation = recommendations[0]
                 action = dict(recommendation["action"])
 
@@ -140,15 +143,11 @@ class DemoSession:
                 recommendation=recommendation,
             )
             self.mode = "manual"
-            return {
-                "ok": True,
-                "action": action,
-                "transition": transition,
-                "state": self.state(),
-            }
+            return {"ok": True, "action": action, "transition": transition, "state": self.state()}
 
     def autoplay(self, *, steps: int = 4, policy: str | None = None) -> dict[str, Any]:
         with self._lock:
+            self.refresh_bundle()
             self.policy = str(policy or self.policy or "model").lower()
             self.mode = "autoplay"
             transitions: list[dict[str, Any]] = []
@@ -167,25 +166,21 @@ class DemoSession:
                 action = dict(recommendation["action"])
                 before = self.env.get_state()
                 after, reward, done, info = self.env.step(action)
-                transition = self._record_transition(
-                    before=before,
-                    after=after,
-                    action=action,
-                    reward=reward,
-                    done=done,
-                    info=info,
-                    recommendation=recommendation,
+                transitions.append(
+                    self._record_transition(
+                        before=before,
+                        after=after,
+                        action=action,
+                        reward=reward,
+                        done=done,
+                        info=info,
+                        recommendation=recommendation,
+                    )
                 )
-                transitions.append(transition)
                 if done:
                     break
             self.mode = "manual"
-            return {
-                "ok": True,
-                "steps_executed": len(transitions),
-                "transitions": transitions,
-                "state": self.state(),
-            }
+            return {"ok": True, "steps_executed": len(transitions), "transitions": transitions, "state": self.state()}
 
 
 class DemoApplication:
@@ -193,14 +188,17 @@ class DemoApplication:
         self.static_root = static_root or (Path(__file__).resolve().parent / "static")
         self.scenarios = load_scenarios()
         self.session = DemoSession(self.scenarios)
+        self.training = TrainingManager()
 
     def health(self) -> dict[str, Any]:
+        training = self.training.status()
         return {
             "status": "ok",
             "scenario_count": len(self.scenarios),
             "current_scenario": self.session.current_scenario_id,
             "model_loaded": bool(self.session.bundle.loaded),
             "model_name": self.session.bundle.model_name,
+            "training_status": training.get("status"),
         }
 
     def scenarios_payload(self) -> dict[str, Any]:
@@ -209,6 +207,12 @@ class DemoApplication:
     def model_payload(self) -> dict[str, Any]:
         self.session.refresh_bundle()
         return model_info(self.session.bundle)
+
+    def training_status_payload(self) -> dict[str, Any]:
+        return self.training.status()
+
+    def start_training(self, profile: str = "standard") -> dict[str, Any]:
+        return self.training.start(profile=profile)
 
 
 def _json_bytes(payload: Any) -> bytes:
@@ -229,17 +233,16 @@ def _serve_static(app: DemoApplication, request_path: str) -> tuple[int, bytes, 
     if request_path == "/":
         file_path = app.static_root / "index.html"
     else:
-        relative = request_path.removeprefix("/static/")
-        file_path = app.static_root / relative
+        file_path = app.static_root / request_path.removeprefix("/static/")
     if not file_path.exists() or not file_path.is_file():
-        return 404, _json_bytes({"error": f"static asset not found: {request_path}"}), "application/json; charset=utf-8"
+        return 404, _json_bytes({"error": f"静态资源不存在：{request_path}"}), "application/json; charset=utf-8"
     content_type = mimetypes.guess_type(str(file_path))[0] or "application/octet-stream"
     return 200, file_path.read_bytes(), content_type
 
 
 def create_handler(app: DemoApplication):
     class DemoRequestHandler(BaseHTTPRequestHandler):
-        server_version = "BalatroMVP/1.0"
+        server_version = "BalatroMVP/2.0"
 
         def _send(self, status: int, payload: bytes, content_type: str) -> None:
             self.send_response(status)
@@ -266,11 +269,14 @@ def create_handler(app: DemoApplication):
                 if parsed.path == "/api/model_info":
                     self._send_json(app.model_payload())
                     return
+                if parsed.path in {"/api/training/status", "/api/training_status"}:
+                    self._send_json(app.training_status_payload())
+                    return
                 if parsed.path == "/" or parsed.path.startswith("/static/"):
                     status, payload, content_type = _serve_static(app, parsed.path)
                     self._send(status, payload, content_type)
                     return
-                self._send_json({"error": f"unknown route: {parsed.path}"}, status=404)
+                self._send_json({"error": f"未知路由：{parsed.path}"}, status=404)
             except Exception as exc:
                 self._send_json({"error": str(exc)}, status=500)
 
@@ -279,31 +285,28 @@ def create_handler(app: DemoApplication):
             try:
                 body = _read_body(self)
                 if parsed.path == "/api/scenario/load":
-                    scenario_id = str(body.get("scenario_id") or body.get("id") or "")
-                    self._send_json(app.session.load_scenario(scenario_id))
+                    self._send_json(app.session.load_scenario(str(body.get("scenario_id") or body.get("id") or "")))
                     return
                 if parsed.path == "/api/recommend":
-                    payload = app.session.recommendations(
-                        policy=str(body.get("policy") or "model"),
-                        topk=int(body.get("topk") or 3),
-                    )
-                    self._send_json(payload)
+                    self._send_json(app.session.recommendations(policy=str(body.get("policy") or "model"), topk=int(body.get("topk") or 3)))
                     return
                 if parsed.path == "/api/step":
-                    payload = app.session.step(
-                        action=body.get("action") if isinstance(body.get("action"), dict) else None,
-                        policy=str(body.get("policy") or "model"),
+                    self._send_json(
+                        app.session.step(
+                            action=body.get("action") if isinstance(body.get("action"), dict) else None,
+                            policy=str(body.get("policy") or "model"),
+                        )
                     )
-                    self._send_json(payload)
                     return
                 if parsed.path == "/api/autoplay":
-                    payload = app.session.autoplay(
-                        steps=int(body.get("steps") or 4),
-                        policy=str(body.get("policy") or "model"),
-                    )
-                    self._send_json(payload)
+                    self._send_json(app.session.autoplay(steps=int(body.get("steps") or 4), policy=str(body.get("policy") or "model")))
                     return
-                self._send_json({"error": f"unknown route: {parsed.path}"}, status=404)
+                if parsed.path == "/api/training/start":
+                    raw_profile = str(body.get("profile") or "").lower()
+                    profile = raw_profile if raw_profile in {"smoke", "fast", "standard"} else "standard"
+                    self._send_json(app.start_training(profile=profile))
+                    return
+                self._send_json({"error": f"未知路由：{parsed.path}"}, status=404)
             except Exception as exc:
                 self._send_json({"error": str(exc)}, status=500)
 
@@ -311,4 +314,3 @@ def create_handler(app: DemoApplication):
             return None
 
     return DemoRequestHandler
-

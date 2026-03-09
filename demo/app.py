@@ -15,7 +15,7 @@ from demo.api import DemoApplication, create_handler
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the BalatroAI MVP local web demo.")
+    parser = argparse.ArgumentParser(description="启动 BalatroAI MVP-S2 本地 Web Demo。")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8050)
     parser.add_argument("--open-browser", action="store_true")
@@ -43,4 +43,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

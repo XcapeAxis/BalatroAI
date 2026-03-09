@@ -1,9 +1,9 @@
 {
   "id": "joker_synergy",
-  "name": "Joker Synergy Spike",
-  "summary": "A flush looks good already, but the Joker makes the exact card set dramatically better.",
-  "focus": "Explainable Joker-aware recommendation",
-  "talk_track": "Use this to show that the demo is not just ranking cards. It can surface how a Joker changes the projected score.",
+  "name": "Joker 协同爆发",
+  "summary": "表面上只是一次普通同花，但 Joker 会让特定牌组的收益陡增。这个场景最适合展示“可解释 AI 推荐”。",
+  "focus": "带解释的 Joker 协同推荐",
+  "talk_track": "用它来说明 Demo 不只是排卡强弱，还能把 Joker 如何改变预期得分直接展示出来。",
   "snapshot": {
     "phase": "SELECTING_HAND",
     "zones": {
