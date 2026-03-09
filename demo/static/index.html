@@ -1,130 +1,265 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>BalatroAI MVP Demo</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23146356'/%3E%3Ctext x='32' y='41' font-size='28' text-anchor='middle' fill='%23f8f3ea' font-family='Bahnschrift,Arial'%3EB%3C/text%3E%3C/svg%3E" />
+    <title>BalatroAI 决策沙盘演示</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1' y1='0' y2='1'%3E%3Cstop offset='0%25' stop-color='%230e7c66'/%3E%3Cstop offset='100%25' stop-color='%23d3a046'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='18' fill='url(%23g)'/%3E%3Ctext x='32' y='41' font-size='28' text-anchor='middle' fill='white' font-family='Bahnschrift,Segoe UI Variable,Arial'%3EB%3C/text%3E%3C/svg%3E"
+    />
     <link rel="stylesheet" href="/static/app.css" />
   </head>
   <body>
-    <div class="app-shell">
-      <header class="hero">
-        <div>
-          <p class="eyebrow">BalatroAI MVP Demo</p>
-          <h1>Local decision sandbox with a real trained first-pass model</h1>
-          <p class="hero-copy">
-            Inspect a scenario, compare heuristic and model choices, preview the projected delta,
-            and execute one step inside the local simulator.
-          </p>
+    <div id="app" class="app-shell">
+      <header class="topbar">
+        <div class="brand-block">
+          <div class="brand-mark">B</div>
+          <div>
+            <p class="eyebrow">BalatroAI 本地演示</p>
+            <h1>本地 AI 决策沙盘</h1>
+          </div>
         </div>
-        <div class="hero-actions">
-          <button id="reload-button" class="secondary">Reset Scenario</button>
-          <button id="autoplay-button" class="accent">Autoplay 3 Steps</button>
-          <button id="step-button" class="primary">Execute Selected</button>
+        <div class="topbar-actions">
+          <div class="theme-toggle" id="theme-toggle" title="切换浅色 / 深色模式"></div>
         </div>
       </header>
 
-      <section class="status-bar panel">
-        <div class="status-pill">
-          <span class="status-label">Scenario</span>
-          <strong id="status-scenario">-</strong>
+      <section class="hero panel">
+        <div class="hero-copy">
+          <div class="hero-badge-row">
+            <span class="hero-badge">中文演示路径</span>
+            <span class="hero-badge">本地模拟器驱动</span>
+            <span class="hero-badge">真实训练模型</span>
+          </div>
+          <h2>用一页式界面把“局面、推荐、解释、训练过程”讲清楚。</h2>
+          <p id="hero-description" class="hero-description">
+            先选择一个内置场景，再查看模型与启发式的推荐差异，最后执行动作或自动演示。
+          </p>
+          <div class="guide-steps">
+            <div class="guide-step">
+              <span class="guide-index">1</span>
+              <div>
+                <strong>选场景</strong>
+                <p>从左侧 3 个高质量场景开始，优先展示“高收益起手”。</p>
+              </div>
+            </div>
+            <div class="guide-step">
+              <span class="guide-index">2</span>
+              <div>
+                <strong>看推荐</strong>
+                <p>对比训练模型与启发式，关注来源、风险、置信度和预计收益。</p>
+              </div>
+            </div>
+            <div class="guide-step">
+              <span class="guide-index">3</span>
+              <div>
+                <strong>做演示</strong>
+                <p>点击执行、自动演示或直接触发训练，让“模型真的在工作”可见。</p>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="status-pill">
-          <span class="status-label">Model</span>
-          <strong id="status-model">-</strong>
-        </div>
-        <div class="status-pill">
-          <span class="status-label">Phase</span>
-          <strong id="status-phase">-</strong>
-        </div>
-        <div class="status-pill">
-          <span class="status-label">Mode</span>
-          <strong id="status-mode">manual</strong>
+
+        <div class="hero-side">
+          <div class="hero-status">
+            <div class="hero-status-card">
+              <span class="hero-status-label">当前场景</span>
+              <strong id="status-scenario">-</strong>
+              <small id="scenario-focus-inline">-</small>
+            </div>
+            <div class="hero-status-card">
+              <span class="hero-status-label">模型版本</span>
+              <strong id="status-model">-</strong>
+              <small id="status-run-id">-</small>
+            </div>
+            <div class="hero-status-card">
+              <span class="hero-status-label">当前模式</span>
+              <strong id="status-mode">手动</strong>
+              <small id="status-phase">-</small>
+            </div>
+          </div>
+          <div class="hero-actions">
+            <button id="reload-button" class="secondary">
+              <span class="button-icon" data-icon="refresh"></span>
+              重置当前场景
+            </button>
+            <button id="autoplay-button" class="accent">
+              <span class="button-icon" data-icon="spark"></span>
+              自动演示 3 步
+            </button>
+            <button id="step-button" class="primary">
+              <span class="button-icon" data-icon="play"></span>
+              执行当前动作
+            </button>
+          </div>
+          <div id="status-message" class="status-message" role="status"></div>
         </div>
       </section>
 
-      <main class="dashboard-grid">
+      <section class="status-strip">
+        <div class="status-pill">
+          <span class="status-label">风险等级</span>
+          <strong id="status-risk">-</strong>
+        </div>
+        <div class="status-pill">
+          <span class="status-label">决策类型</span>
+          <strong id="status-decision-type">-</strong>
+        </div>
+        <div class="status-pill">
+          <span class="status-label">目标分差</span>
+          <strong id="status-gap">-</strong>
+        </div>
+        <div class="status-pill">
+          <span class="status-label">训练状态</span>
+          <strong id="status-training">空闲</strong>
+        </div>
+      </section>
+
+      <main class="workspace-grid">
         <section class="panel scenario-panel">
           <div class="panel-header">
-            <h2>Demo Scenarios</h2>
-            <div id="policy-toggle" class="policy-toggle">
-              <button data-policy="model" class="toggle-button active">Model</button>
-              <button data-policy="heuristic" class="toggle-button">Heuristic</button>
+            <div>
+              <p class="eyebrow">场景</p>
+              <h3>演示场景</h3>
             </div>
+            <span class="panel-tip">先选一个你要讲的故事</span>
           </div>
           <div id="scenario-list" class="scenario-list"></div>
         </section>
 
-        <section class="panel state-panel">
+        <section class="panel board-panel">
           <div class="panel-header">
-            <h2>Current Position</h2>
-            <p id="state-summary" class="panel-subtitle"></p>
-          </div>
-          <div id="resource-grid" class="resource-grid"></div>
-          <div class="zone-block">
-            <div class="zone-header">
-              <h3>Hand</h3>
-              <span id="hand-meta" class="zone-meta"></span>
+            <div>
+              <p class="eyebrow">局面</p>
+              <h3>当前局面</h3>
             </div>
-            <div id="hand-cards" class="card-grid"></div>
+            <div id="insight-tags" class="tag-row"></div>
           </div>
-          <div class="secondary-zones">
-            <div class="mini-zone">
-              <div class="zone-header">
-                <h3>Jokers</h3>
+
+          <div id="state-summary-card" class="summary-card"></div>
+          <div id="resource-grid" class="metric-grid"></div>
+
+          <div class="subgrid">
+            <div class="panel nested-panel">
+              <div class="nested-header">
+                <div>
+                  <h4>手牌区</h4>
+                  <p id="hand-meta" class="muted">-</p>
+                </div>
+                <small class="muted">高亮表示当前选中的推荐动作会使用哪些牌</small>
               </div>
-              <div id="joker-list" class="tag-stack"></div>
+              <div id="hand-cards" class="card-grid"></div>
             </div>
-            <div class="mini-zone">
-              <div class="zone-header">
-                <h3>Zone Counts</h3>
+
+            <div class="side-stack">
+              <div class="panel nested-panel">
+                <div class="nested-header">
+                  <div>
+                    <h4>Joker / 机制</h4>
+                    <p class="muted">展示当前局面的特殊加成</p>
+                  </div>
+                </div>
+                <div id="joker-list" class="tag-stack"></div>
               </div>
-              <div id="zone-counts" class="resource-grid compact"></div>
+
+              <div class="panel nested-panel">
+                <div class="nested-header">
+                  <div>
+                    <h4>区域计数</h4>
+                    <p class="muted">快速扫视牌堆、弃牌堆与已打出区域</p>
+                  </div>
+                </div>
+                <div id="zone-counts" class="metric-grid compact"></div>
+              </div>
             </div>
           </div>
         </section>
 
-        <section class="panel recommendation-panel">
+        <section class="panel decision-panel">
           <div class="panel-header">
-            <h2>AI Recommendations</h2>
-            <p class="panel-subtitle">Top-3 actions ranked by the current policy.</p>
+            <div>
+              <p class="eyebrow">推荐</p>
+              <h3>推荐动作对比</h3>
+            </div>
+            <span class="panel-tip">点击任意候选动作即可联动预览</span>
           </div>
-          <div id="recommendations" class="recommendation-list"></div>
+          <div class="compare-columns">
+            <div class="compare-column">
+              <div class="compare-title">
+                <span class="compare-badge model">训练模型</span>
+                <small>更偏重综合价值与演示场景稳定性</small>
+              </div>
+              <div id="recommendations-model" class="recommendation-list"></div>
+            </div>
+            <div class="compare-column">
+              <div class="compare-title">
+                <span class="compare-badge heuristic">启发式基线</span>
+                <small>方便解释“为什么新模型值得展示”</small>
+              </div>
+              <div id="recommendations-heuristic" class="recommendation-list"></div>
+            </div>
+          </div>
         </section>
 
         <section class="panel preview-panel">
           <div class="panel-header">
-            <h2>Projected One-Step Result</h2>
-            <p class="panel-subtitle">Preview of the currently selected action.</p>
+            <div>
+              <p class="eyebrow">预览</p>
+              <h3>一步结果预览</h3>
+            </div>
+            <span class="panel-tip">这是面试讲解时最重要的“因果解释卡”</span>
           </div>
           <div id="preview-summary" class="preview-summary"></div>
-          <div id="preview-delta" class="resource-grid"></div>
+          <div id="preview-delta" class="metric-grid"></div>
         </section>
 
         <section class="panel timeline-panel">
           <div class="panel-header">
-            <h2>Execution Timeline</h2>
-            <p class="panel-subtitle">Recent scenario loads and executed steps.</p>
+            <div>
+              <p class="eyebrow">时间线</p>
+              <h3>演示时间线</h3>
+            </div>
+            <span class="panel-tip">区分场景载入、推荐刷新和动作执行</span>
           </div>
           <div id="timeline" class="timeline"></div>
         </section>
 
-        <section class="panel model-panel">
+        <section class="panel training-panel">
           <div class="panel-header">
-            <h2>Model & Training</h2>
-            <p class="panel-subtitle">Shows the local checkpoint currently serving inference.</p>
+            <div>
+              <p class="eyebrow">训练</p>
+              <h3>模型与训练过程</h3>
+            </div>
+            <div class="training-actions">
+              <button id="train-standard-button" class="primary subtle" title="后台启动一次 2 小时预算内的正式训练">
+                <span class="button-icon" data-icon="rocket"></span>
+                开始 2 小时训练
+              </button>
+              <button id="train-smoke-button" class="secondary subtle" title="快速验证训练链路是否正常">
+                <span class="button-icon" data-icon="flask"></span>
+                快速烟雾训练
+              </button>
+            </div>
           </div>
-          <div id="model-meta" class="model-meta"></div>
-          <div id="model-chart" class="chart-shell"></div>
+
+          <div id="training-status-card" class="training-status-card"></div>
+          <div id="model-meta" class="metric-grid"></div>
+          <div class="chart-stack">
+            <div id="training-chart" class="chart-shell"></div>
+            <div id="training-side-notes" class="side-notes"></div>
+          </div>
         </section>
       </main>
     </div>
+
+    <div id="toast-root" class="toast-root" aria-live="polite"></div>
 
     <template id="metric-template">
       <div class="metric-card">
         <span class="metric-label"></span>
         <strong class="metric-value"></strong>
+        <small class="metric-subvalue"></small>
       </div>
     </template>
 
