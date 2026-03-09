@@ -1,0 +1,2 @@
+"""BalatroAI MVP demo package."""
+

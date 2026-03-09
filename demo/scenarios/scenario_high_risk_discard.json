@@ -1,0 +1,51 @@
+{
+  "id": "high_risk_discard",
+  "name": "High-Risk Discard Pivot",
+  "summary": "One hand and one discard remain. The current hand is weak, so the right move is to throw it back and redraw.",
+  "focus": "Resource pressure and discard judgment",
+  "talk_track": "This is the scenario that proves the assistant is not just greedy for immediate chips. It will spend the last discard to improve the next draw.",
+  "snapshot": {
+    "phase": "SELECTING_HAND",
+    "zones": {
+      "deck": [
+        { "uid": "risk-deck-01", "rank": "10", "suit": "H", "key": "H_T" },
+        { "uid": "risk-deck-02", "rank": "J", "suit": "H", "key": "H_J" },
+        { "uid": "risk-deck-03", "rank": "K", "suit": "H", "key": "H_K" },
+        { "uid": "risk-deck-04", "rank": "A", "suit": "H", "key": "H_A" },
+        { "uid": "risk-deck-05", "rank": "Q", "suit": "H", "key": "H_Q" },
+        { "uid": "risk-deck-06", "rank": "4", "suit": "S", "key": "S_4" },
+        { "uid": "risk-deck-07", "rank": "6", "suit": "C", "key": "C_6" }
+      ],
+      "discard": [],
+      "hand": [
+        { "uid": "risk-hand-01", "rank": "2", "suit": "C", "key": "C_2" },
+        { "uid": "risk-hand-02", "rank": "5", "suit": "D", "key": "D_5" },
+        { "uid": "risk-hand-03", "rank": "8", "suit": "S", "key": "S_8" },
+        { "uid": "risk-hand-04", "rank": "J", "suit": "H", "key": "H_J" },
+        { "uid": "risk-hand-05", "rank": "3", "suit": "C", "key": "C_3" }
+      ],
+      "played": []
+    },
+    "round": {
+      "hands_left": 1,
+      "discards_left": 1,
+      "ante": 1,
+      "round_num": 1,
+      "blind": "small"
+    },
+    "score": {
+      "chips": 225,
+      "mult": 1,
+      "target_chips": 300,
+      "last_hand_type": "HIGH_CARD",
+      "last_base_chips": 5,
+      "last_base_mult": 1
+    },
+    "economy": { "money": 2 },
+    "jokers": [],
+    "rng": { "seed": "MVPRISK", "cursor": 0, "events": [] },
+    "flags": { "done": false, "won": false },
+    "rules": { "stake": "white", "applied_modifiers": [], "degraded": false },
+    "tags": []
+  }
+}

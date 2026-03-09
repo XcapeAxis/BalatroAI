@@ -1,0 +1,54 @@
+{
+  "id": "joker_synergy",
+  "name": "Joker Synergy Spike",
+  "summary": "A flush looks good already, but the Joker makes the exact card set dramatically better.",
+  "focus": "Explainable Joker-aware recommendation",
+  "talk_track": "Use this to show that the demo is not just ranking cards. It can surface how a Joker changes the projected score.",
+  "snapshot": {
+    "phase": "SELECTING_HAND",
+    "zones": {
+      "deck": [
+        { "uid": "joker-deck-01", "rank": "5", "suit": "C", "key": "C_5" },
+        { "uid": "joker-deck-02", "rank": "7", "suit": "D", "key": "D_7" },
+        { "uid": "joker-deck-03", "rank": "9", "suit": "S", "key": "S_9" },
+        { "uid": "joker-deck-04", "rank": "J", "suit": "C", "key": "C_J" },
+        { "uid": "joker-deck-05", "rank": "K", "suit": "D", "key": "D_K" }
+      ],
+      "discard": [],
+      "hand": [
+        { "uid": "joker-hand-01", "rank": "10", "suit": "H", "key": "H_T" },
+        { "uid": "joker-hand-02", "rank": "8", "suit": "H", "key": "H_8" },
+        { "uid": "joker-hand-03", "rank": "6", "suit": "H", "key": "H_6" },
+        { "uid": "joker-hand-04", "rank": "4", "suit": "H", "key": "H_4" },
+        { "uid": "joker-hand-05", "rank": "2", "suit": "H", "key": "H_2" },
+        { "uid": "joker-hand-06", "rank": "A", "suit": "S", "key": "S_A" },
+        { "uid": "joker-hand-07", "rank": "K", "suit": "C", "key": "C_K" },
+        { "uid": "joker-hand-08", "rank": "Q", "suit": "D", "key": "D_Q" }
+      ],
+      "played": []
+    },
+    "round": {
+      "hands_left": 2,
+      "discards_left": 2,
+      "ante": 2,
+      "round_num": 4,
+      "blind": "big"
+    },
+    "score": {
+      "chips": 320,
+      "mult": 1,
+      "target_chips": 900,
+      "last_hand_type": "FLUSH",
+      "last_base_chips": 35,
+      "last_base_mult": 4
+    },
+    "economy": { "money": 6 },
+    "jokers": [
+      { "key": "j_even_steven", "label": "Even Steven", "set": "JOKER" }
+    ],
+    "rng": { "seed": "MVPJOKER", "cursor": 0, "events": [] },
+    "flags": { "done": false, "won": false },
+    "rules": { "stake": "white", "applied_modifiers": [], "degraded": false },
+    "tags": []
+  }
+}

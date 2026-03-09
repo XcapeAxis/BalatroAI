@@ -1,0 +1,54 @@
+{
+  "id": "basic_play",
+  "name": "Obvious High-Value Play",
+  "summary": "A clean opening where the best move is visibly strong and immediately clears the blind.",
+  "focus": "Play selection and one-step payoff",
+  "talk_track": "Use this first. The model and heuristic should converge on the same straight flush and the chips jump in one click.",
+  "snapshot": {
+    "phase": "SELECTING_HAND",
+    "zones": {
+      "deck": [
+        { "uid": "basic-deck-01", "rank": "4", "suit": "C", "key": "C_4" },
+        { "uid": "basic-deck-02", "rank": "5", "suit": "D", "key": "D_5" },
+        { "uid": "basic-deck-03", "rank": "6", "suit": "S", "key": "S_6" },
+        { "uid": "basic-deck-04", "rank": "7", "suit": "H", "key": "H_7" },
+        { "uid": "basic-deck-05", "rank": "8", "suit": "C", "key": "C_8" },
+        { "uid": "basic-deck-06", "rank": "9", "suit": "D", "key": "D_9" }
+      ],
+      "discard": [],
+      "hand": [
+        { "uid": "basic-hand-01", "rank": "A", "suit": "H", "key": "H_A" },
+        { "uid": "basic-hand-02", "rank": "K", "suit": "H", "key": "H_K" },
+        { "uid": "basic-hand-03", "rank": "Q", "suit": "H", "key": "H_Q" },
+        { "uid": "basic-hand-04", "rank": "J", "suit": "H", "key": "H_J" },
+        { "uid": "basic-hand-05", "rank": "10", "suit": "H", "key": "H_T" },
+        { "uid": "basic-hand-06", "rank": "2", "suit": "C", "key": "C_2" },
+        { "uid": "basic-hand-07", "rank": "3", "suit": "D", "key": "D_3" },
+        { "uid": "basic-hand-08", "rank": "7", "suit": "S", "key": "S_7" }
+      ],
+      "played": []
+    },
+    "round": {
+      "hands_left": 2,
+      "discards_left": 2,
+      "ante": 1,
+      "round_num": 1,
+      "blind": "small"
+    },
+    "score": {
+      "chips": 120,
+      "mult": 1,
+      "target_chips": 300,
+      "last_hand_type": "PAIR",
+      "last_base_chips": 10,
+      "last_base_mult": 2
+    },
+    "economy": { "money": 4 },
+    "jokers": [],
+    "rng": { "seed": "MVPBASIC", "cursor": 0, "events": [] },
+    "flags": { "done": false, "won": false },
+    "rules": { "stake": "white", "applied_modifiers": [], "degraded": false },
+    "tags": []
+  }
+}
+
