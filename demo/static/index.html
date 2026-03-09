@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BalatroAI MVP Demo</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23146356'/%3E%3Ctext x='32' y='41' font-size='28' text-anchor='middle' fill='%23f8f3ea' font-family='Bahnschrift,Arial'%3EB%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">BalatroAI MVP Demo</p>
+          <h1>Local decision sandbox with a real trained first-pass model</h1>
+          <p class="hero-copy">
+            Inspect a scenario, compare heuristic and model choices, preview the projected delta,
+            and execute one step inside the local simulator.
+          </p>
+        </div>
+        <div class="hero-actions">
+          <button id="reload-button" class="secondary">Reset Scenario</button>
+          <button id="autoplay-button" class="accent">Autoplay 3 Steps</button>
+          <button id="step-button" class="primary">Execute Selected</button>
+        </div>
+      </header>
+
+      <section class="status-bar panel">
+        <div class="status-pill">
+          <span class="status-label">Scenario</span>
+          <strong id="status-scenario">-</strong>
+        </div>
+        <div class="status-pill">
+          <span class="status-label">Model</span>
+          <strong id="status-model">-</strong>
+        </div>
+        <div class="status-pill">
+          <span class="status-label">Phase</span>
+          <strong id="status-phase">-</strong>
+        </div>
+        <div class="status-pill">
+          <span class="status-label">Mode</span>
+          <strong id="status-mode">manual</strong>
+        </div>
+      </section>
+
+      <main class="dashboard-grid">
+        <section class="panel scenario-panel">
+          <div class="panel-header">
+            <h2>Demo Scenarios</h2>
+            <div id="policy-toggle" class="policy-toggle">
+              <button data-policy="model" class="toggle-button active">Model</button>
+              <button data-policy="heuristic" class="toggle-button">Heuristic</button>
+            </div>
+          </div>
+          <div id="scenario-list" class="scenario-list"></div>
+        </section>
+
+        <section class="panel state-panel">
+          <div class="panel-header">
+            <h2>Current Position</h2>
+            <p id="state-summary" class="panel-subtitle"></p>
+          </div>
+          <div id="resource-grid" class="resource-grid"></div>
+          <div class="zone-block">
+            <div class="zone-header">
+              <h3>Hand</h3>
+              <span id="hand-meta" class="zone-meta"></span>
+            </div>
+            <div id="hand-cards" class="card-grid"></div>
+          </div>
+          <div class="secondary-zones">
+            <div class="mini-zone">
+              <div class="zone-header">
+                <h3>Jokers</h3>
+              </div>
+              <div id="joker-list" class="tag-stack"></div>
+            </div>
+            <div class="mini-zone">
+              <div class="zone-header">
+                <h3>Zone Counts</h3>
+              </div>
+              <div id="zone-counts" class="resource-grid compact"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel recommendation-panel">
+          <div class="panel-header">
+            <h2>AI Recommendations</h2>
+            <p class="panel-subtitle">Top-3 actions ranked by the current policy.</p>
+          </div>
+          <div id="recommendations" class="recommendation-list"></div>
+        </section>
+
+        <section class="panel preview-panel">
+          <div class="panel-header">
+            <h2>Projected One-Step Result</h2>
+            <p class="panel-subtitle">Preview of the currently selected action.</p>
+          </div>
+          <div id="preview-summary" class="preview-summary"></div>
+          <div id="preview-delta" class="resource-grid"></div>
+        </section>
+
+        <section class="panel timeline-panel">
+          <div class="panel-header">
+            <h2>Execution Timeline</h2>
+            <p class="panel-subtitle">Recent scenario loads and executed steps.</p>
+          </div>
+          <div id="timeline" class="timeline"></div>
+        </section>
+
+        <section class="panel model-panel">
+          <div class="panel-header">
+            <h2>Model & Training</h2>
+            <p class="panel-subtitle">Shows the local checkpoint currently serving inference.</p>
+          </div>
+          <div id="model-meta" class="model-meta"></div>
+          <div id="model-chart" class="chart-shell"></div>
+        </section>
+      </main>
+    </div>
+
+    <template id="metric-template">
+      <div class="metric-card">
+        <span class="metric-label"></span>
+        <strong class="metric-value"></strong>
+      </div>
+    </template>
+
+    <script src="/static/app.js"></script>
+  </body>
+  </html>
