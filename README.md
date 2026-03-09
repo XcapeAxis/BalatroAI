@@ -15,6 +15,95 @@
 [![Latest Tag](https://img.shields.io/github/v/tag/XcapeAxis/BalatroAI)](https://github.com/XcapeAxis/BalatroAI/tags)
 <!-- BADGES:END -->
 
+## MVP Demo
+
+This repository now includes an interview-ready local web demo for Balatro-style decision support.
+
+What you can show in under two minutes:
+
+- a polished local browser UI driven by the simulator, not static mock data
+- three built-in scenarios with clear state, recommendation, explanation, and one-step outcome preview
+- a real trained first-pass policy model served locally alongside a heuristic baseline
+- manual stepping and autoplay without depending on the original game window or network access
+
+Quick start for the MVP demo:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_mvp_demo.ps1 -OpenBrowser
+```
+
+If the trained checkpoint is missing and you want the repo to create one first:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\bootstrap_mvp_demo.ps1 -OpenBrowser
+```
+
+Default local URL:
+
+```text
+http://127.0.0.1:8050/
+```
+
+Primary MVP references:
+
+- [DEMO_README.md](DEMO_README.md)
+- [docs/MVP_DEMO_SCRIPT.md](docs/MVP_DEMO_SCRIPT.md)
+- `docs/artifacts/mvp/model_train/latest_run.txt`
+
+## MVP Quick Start
+
+1. Clone the repo and enter the workspace.
+2. Use the existing local Python environments prepared for this repo.
+3. Launch the demo with `scripts\run_mvp_demo.ps1`.
+4. Open one of the built-in scenarios: `basic_play`, `high_risk_discard`, or `joker_synergy`.
+5. Compare `model` and `heuristic`, then execute a step or run autoplay.
+
+Train or refresh the MVP model manually:
+
+```powershell
+D:\MYFILES\BalatroAI\.venv_trainer_cuda\Scripts\python.exe demo\build_mvp_dataset.py --episodes 220 --max-steps 32 --scenario-copies 64 --run-dir docs\artifacts\mvp\model_train\NEW_RUN
+D:\MYFILES\BalatroAI\.venv_trainer\Scripts\python.exe demo\train_mvp_model.py --dataset docs\artifacts\mvp\model_train\NEW_RUN\dataset.jsonl --run-dir docs\artifacts\mvp\model_train\NEW_RUN_fast --epochs 4 --batch-size 256 --device cpu
+```
+
+## MVP Value And Boundaries
+
+Good fit:
+
+- AI decision visualization in a Balatro-style simulator
+- scenario-driven product demos with explainable action recommendations
+- small supervised model training and local inference integration
+
+Not the goal of this MVP:
+
+- direct control of the commercial game client
+- network-dependent or cloud-only demo flows
+- claiming a fully optimal long-horizon agent
+- expanding registry, router, autonomy, or world-model infrastructure just for the demo
+
+## MVP Architecture
+
+The demo is intentionally thin:
+
+- backend: local HTTP app in `demo/` wrapping the simulator and scenario fixtures
+- inference: heuristic policy plus a trained MLP checkpoint for Top-K action ranking
+- frontend: single-page UI served locally from `demo/static/`
+- artifacts: dataset, checkpoint, metrics, smoke logs, and fallback screenshots under `docs/artifacts/mvp/`
+
+Data flow:
+
+1. Load a built-in scenario into the simulator.
+2. Encode the current state and legal actions.
+3. Score actions with the heuristic or the trained model.
+4. Show Top-K recommendations plus projected one-step deltas.
+5. Execute the selected action in the simulator and append the timeline.
+
+## MVP Roadmap And Known Limits
+
+- The current product is scenario-driven by design so demos stay stable and legible.
+- The shipped model is the first deployable supervised checkpoint, not the strongest future agent.
+- The model only covers the hand phase today; the heuristic remains the fallback for unsupported decisions.
+- The long-term repo still supports RL, hybrid control, and world-model work, but those are deliberately not the center of this MVP lane.
+
 <p align="center">
   <a href="#quick-start">Quick Start</a> ·
   <a href="#windows-bootstrap-p58">Windows Bootstrap</a> ·
