@@ -248,10 +248,38 @@ Useful evidence from the R1 branch:
 
 Interpretation:
 
-- the next high-value lever is no longer more reward tuning or early curriculum tuning
-- the RL line now needs better data pressure:
+- the next high-value lever was no longer more reward tuning or early curriculum tuning
+- the RL line needed better data pressure:
   - real hard-case / failure-case sampling that actually reaches PPO
   - or a real supervised / BC warm-start path instead of the current stubbed `selfsup_warm_bc`
+
+## R1 Phase 2 Update (2026-03-10)
+
+Phase 2 answered the hard-case question directly:
+
+1. real failure-case data now reaches PPO end-to-end through `hard_case_sampling`
+2. the research worktree now launches candidate training and arena evaluation through the resolver-selected training Python, so R1 closed-loop runs no longer silently fall back to a torch-missing shell interpreter
+3. a heavier hard-case replay ratio improved smoke-scale closed-loop score modestly, but the gain did not survive certification
+
+Useful evidence from Phase 2:
+
+- Batch 5 hard-case smoke:
+  - failure pack `selected_failures=6`
+  - hard-case status `ok`
+  - arena candidate `91.5` vs heuristic `400.0`
+- Batch 6 hard-case heavy smoke:
+  - arena candidate `107.0` vs heuristic `400.0`
+  - still `invalid_action_rate=0.0`
+- Certification C2 (`hardcase-heavy` nightly):
+  - candidate `51.0` vs heuristic `303.0`
+  - certified score delta worsened by `-16.75` versus the earlier certification
+  - recommendation remained `observe`
+
+Phase-2 interpretation:
+
+- real hard-case ingestion is now infrastructure, not a hypothesis
+- pure RL + hard-case pressure is still not the next winning deployment path
+- the next phase should keep hard-case PPO finetuning, but shift the primary lever to a real supervised / BC warm-start
 
 ## Known Gaps
 
