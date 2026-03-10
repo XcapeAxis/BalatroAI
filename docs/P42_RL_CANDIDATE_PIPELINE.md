@@ -366,6 +366,64 @@ R2-S2 结论：
   - 继续保持 late-stage low-ratio self-imitation，只把它当受控辅助
   - 在 richer failure coverage 上重新做 bucket-aware curriculum 认证
 
+## R2-S3 纯 RL 夜间自迭代更新（2026-03-11）
+
+R2-S3 没有切换主线，仍然坚持 pure RL scaling。  
+这轮的核心问题不是“要不要换到 teacher / warm-start”，而是：
+
+1. 把 `failure buckets` 从概念变成正式训练输入
+2. 让 replay 真正按 bucket / slice / risk 配比进入 PPO
+3. 把 self-imitation 进一步收缩到后期、低比例、allowlist 约束下
+4. 用新的认证级 compare 判断 strongest certified pure-RL recipe 是否继续前进
+
+本轮关键证据：
+
+- Batch 1（failure taxonomy）：
+  - 当前 failure pack 不再被粗粒度 `early_collapse` 主导
+  - 实际主导 bucket 为 `discard_mismanagement=6`
+- Batch 2（bucket-aware replay smoke）：
+  - candidate `61.0` vs heuristic `400.0`
+  - `selected_failure_count=6`
+  - `failure_type_coverage=2`
+  - `failure_bucket_coverage=1`
+  - replay wiring 有效，但 source 仍窄
+- Batch 3（controlled self-imitation smoke）：
+  - candidate `94.0`
+  - 但 `selected_episode_total=0`
+  - 说明这轮 gain 不是 imitation 真正带来的
+- Batch 4（curriculum / reward refine smoke）：
+  - candidate `103.5`
+  - 这是当前最强 smoke recipe
+  - 但 `selected_failure_count=1`，source 甚至进一步收窄
+- Certification C4：
+  - certified candidate `98.25` vs heuristic `303.0`
+  - `score_delta_change_vs_baseline = +24.25`
+  - recommendation 仍为 `observe`
+- 统一 compare：
+  - `r2s3_bucket_curriculum_cert = 87.0`
+  - `reward_survival_baseline = 84.25`
+  - `r2s3_controlled_selfimit = 73.75`
+  - `r2s1_curriculum_cert = 59.75`
+  - `r2s3_bucket_replay = 47.0`
+
+R2-S3 结论：
+
+- strongest certified pure-RL recipe 已更新为：
+  - bucket-aware replay
+  - stage-aware curriculum / reward refine
+  - 受控 self-imitation 仅作为次级辅助约束
+- 这轮最重要的正面结论不是“self-imitation 找到了增益区间”，而是：
+  - pure RL strongest certified recipe 继续向前推进了
+  - 但主要增益来自 curriculum / reward refine，而不是 imitation
+- 这轮最重要的负面结论是：
+  - failure coverage 仍然太窄
+  - 当前 dominant source 仍主要集中在 `discard_mismanagement`
+  - `resource_pressure_misplay` / `shop_or_economy_misallocation` / `position_sensitive_misplay` / `stateful_joker_misplay` 仍未真正进入主训练压力面
+- 因此下一阶段不应回到 warm-start 主线，而应继续 pure RL，并优先做：
+  - richer failure source ingestion
+  - slice-targeted replay
+  - richer bucket mix 下的 curriculum certification
+
 ## Known Gaps
 
 - PPO-lite intentionally omits advanced PPO/distributed features (opponent pools, large-batch parallel rollouts).
