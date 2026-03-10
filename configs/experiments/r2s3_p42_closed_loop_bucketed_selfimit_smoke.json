@@ -1,0 +1,53 @@
+{
+  "schema": "p42_closed_loop_rl_config_v1",
+  "output": {
+    "artifacts_root": "docs/artifacts/research/r2s3_closed_loop"
+  },
+  "seeds": [
+    "AAAAAAA",
+    "BBBBBBB"
+  ],
+  "replay_mixer": {
+    "config": "configs/experiments/p41_replay_mix_smoke.yaml",
+    "quick": false
+  },
+  "failure_mining": {
+    "enabled": true,
+    "config": "configs/experiments/r2s3_p40_failure_mining_batch3.yaml",
+    "quick": false
+  },
+  "candidate_train": {
+    "config": "configs/experiments/r2s3_p42_candidate_bucketed_selfimit_smoke.yaml",
+    "quick": false
+  },
+  "arena_eval": {
+    "enabled": true,
+    "backend": "sim",
+    "mode": "long_episode",
+    "policies": [
+      "heuristic_baseline",
+      "model_policy"
+    ],
+    "candidate_policy": "model_policy",
+    "champion_policy": "heuristic_baseline",
+    "episodes_per_seed": 1,
+    "max_steps": 180
+  },
+  "champion_rules": {
+    "enabled": true,
+    "champion_json": "docs/artifacts/p22/champion.json",
+    "min_seeds": 2,
+    "max_invalid_increase": 0.02,
+    "max_timeout_increase": 0.01,
+    "min_score_improvement": 0.02,
+    "max_score_regression": 0.03,
+    "min_win_improvement": 0.0,
+    "bootstrap_iterations": 200,
+    "slice_min_samples": 2
+  },
+  "regression_triage": {
+    "enabled": true,
+    "baseline_run_dir": "docs/artifacts/research/r2s3_closed_loop/r2s3-b2-bucket-replay"
+  },
+  "__yaml_source_sha256__": "ac3a17d0f88f9485e847245d2caaa4a38b57955f1bf91304c43d68774a812af2"
+}

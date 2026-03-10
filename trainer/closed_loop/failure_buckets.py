@@ -86,61 +86,87 @@ def classify_failure_bucket(
         return {
             "failure_bucket": "invalid_or_wasted_decision",
             "bucket_reason": "invalid_or_execution_signal",
+            "failure_bucket_candidates": ["invalid_or_wasted_decision"],
+            "failure_bucket_signals": ["invalid_or_execution_signal"],
         }
+
+    candidate_signals: list[dict[str, Any]] = []
+
+    def _append_signal(bucket: str, reason: str, priority: int) -> None:
+        candidate_signals.append(
+            {
+                "failure_bucket": str(bucket),
+                "bucket_reason": str(reason),
+                "priority": int(priority),
+            }
+        )
+
+    if position_sensitive not in {"", "unknown"}:
+        _append_signal("position_sensitive_misplay", f"slice_position_sensitive:{position_sensitive}", 100)
+
+    if stateful_joker_present not in {"", "unknown", "absent", "false", "none"}:
+        _append_signal("stateful_joker_misplay", f"slice_stateful_joker_present:{stateful_joker_present}", 96)
+
+    if action_type == "shop":
+        _append_signal("shop_or_economy_misallocation", "shop_dominant_failure", 90)
+
+    if action_type == "discard":
+        _append_signal("discard_mismanagement", "discard_dominant_failure", 88)
+
+    if resource_pressure == "high" or risk_label == "resource_tight":
+        if action_type == "play" and (
+            rounds_survived <= max(2, int(high_risk_round_threshold) + 1)
+            or total_score <= low_score_threshold
+        ):
+            _append_signal("risk_overcommit", "play_under_resource_tight", 86)
+        _append_signal("resource_pressure_misplay", f"resource_pressure:{resource_pressure or risk_label}", 82)
+
+    if resource_pressure in {"low", "medium"} or risk_label == "resource_relaxed":
+        if action_type == "play":
+            _append_signal(
+                "risk_undercommit",
+                f"play_without_conversion:{resource_pressure or risk_label or 'balanced'}",
+                78,
+            )
+        elif total_score <= low_score_threshold:
+            _append_signal(
+                "risk_undercommit",
+                f"resource_pressure:{resource_pressure or risk_label or 'balanced'}",
+                72,
+            )
 
     if rounds_survived <= max(1, int(high_risk_round_threshold)) and (
         slice_stage == "early" or total_score <= low_score_threshold
     ):
-        return {
-            "failure_bucket": "early_collapse",
-            "bucket_reason": f"rounds_survived<={max(1, int(high_risk_round_threshold))}",
-        }
+        _append_signal("early_collapse", f"rounds_survived<={max(1, int(high_risk_round_threshold))}", 65)
 
-    if position_sensitive not in {"", "unknown"}:
-        return {
-            "failure_bucket": "position_sensitive_misplay",
-            "bucket_reason": f"slice_position_sensitive:{position_sensitive}",
-        }
+    if total_score <= low_score_threshold:
+        _append_signal("low_score_survival", "fallback_low_score_survival", 40)
 
-    if stateful_joker_present not in {"", "unknown", "absent", "false", "none"}:
-        return {
-            "failure_bucket": "stateful_joker_misplay",
-            "bucket_reason": f"slice_stateful_joker_present:{stateful_joker_present}",
-        }
-
-    if action_type == "discard":
-        return {
-            "failure_bucket": "discard_mismanagement",
-            "bucket_reason": "discard_dominant_failure",
-        }
-
-    if action_type == "shop":
-        return {
-            "failure_bucket": "shop_or_economy_misallocation",
-            "bucket_reason": "shop_dominant_failure",
-        }
-
-    if resource_pressure == "high" or risk_label == "resource_tight":
-        if action_type == "play" and rounds_survived <= max(2, int(high_risk_round_threshold) + 1):
-            return {
-                "failure_bucket": "risk_overcommit",
-                "bucket_reason": "play_under_resource_tight",
+    if not candidate_signals:
+        candidate_signals.append(
+            {
+                "failure_bucket": "low_score_survival",
+                "bucket_reason": "fallback_low_score_survival",
+                "priority": 1,
             }
-        return {
-            "failure_bucket": "resource_pressure_misplay",
-            "bucket_reason": f"resource_pressure:{resource_pressure or risk_label}",
-        }
+        )
 
-    if resource_pressure == "low" or risk_label == "resource_relaxed":
-        return {
-            "failure_bucket": "risk_undercommit",
-            "bucket_reason": f"resource_pressure:{resource_pressure or risk_label}",
-        }
-
-    return {
-        "failure_bucket": "low_score_survival",
-        "bucket_reason": "fallback_low_score_survival",
-    }
+    candidate_signals.sort(
+        key=lambda item: (
+            -_safe_int(item.get("priority"), 0),
+            str(item.get("failure_bucket") or ""),
+        )
+    )
+    chosen = dict(candidate_signals[0])
+    chosen["failure_bucket_candidates"] = [
+        str(item.get("failure_bucket") or "") for item in candidate_signals if str(item.get("failure_bucket") or "").strip()
+    ]
+    chosen["failure_bucket_signals"] = [
+        str(item.get("bucket_reason") or "") for item in candidate_signals if str(item.get("bucket_reason") or "").strip()
+    ]
+    chosen.pop("priority", None)
+    return chosen
 
 
 def scarce_failure_buckets(counts: dict[str, int] | Counter[str], *, threshold: int = 2) -> list[str]:

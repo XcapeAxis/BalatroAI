@@ -434,6 +434,7 @@ def run_failure_mining(
     by_risk: Counter[str] = Counter()
     by_policy: Counter[str] = Counter()
     by_seed: Counter[str] = Counter()
+    by_bucket_reason: Counter[str] = Counter()
     bucket_fail_counter: Counter[str] = Counter()
     selection_by_type: Counter[str] = Counter()
     selection_by_seed: Counter[str] = Counter()
@@ -513,6 +514,8 @@ def run_failure_mining(
             "failure_types": sorted(failure_types),
             "failure_bucket": failure_bucket,
             "bucket_reason": str(bucket_payload.get("bucket_reason") or ""),
+            "failure_bucket_candidates": list(bucket_payload.get("failure_bucket_candidates") or []),
+            "failure_bucket_signals": list(bucket_payload.get("failure_bucket_signals") or []),
             "slice_tags": slice_tags,
             "risk_tags": risk_tags,
             "source_type": "arena_failure_mining",
@@ -554,6 +557,7 @@ def run_failure_mining(
             by_type[token] += 1
             selection_by_type[token] += 1
         by_bucket[str(payload.get("failure_bucket") or "unknown")] += 1
+        by_bucket_reason[str(payload.get("bucket_reason") or "unknown")] += 1
         for tag in payload.get("slice_tags") if isinstance(payload.get("slice_tags"), list) else []:
             by_slice[str(tag)] += 1
         for tag in payload.get("risk_tags") if isinstance(payload.get("risk_tags"), list) else []:
@@ -581,6 +585,8 @@ def run_failure_mining(
                     "failure_types": item["failure_types"],
                     "failure_bucket": item["failure_bucket"],
                     "bucket_reason": item["bucket_reason"],
+                    "failure_bucket_candidates": list(item.get("failure_bucket_candidates") or []),
+                    "failure_bucket_signals": list(item.get("failure_bucket_signals") or []),
                     "slice_tags": item["slice_tags"],
                     "risk_tags": item["risk_tags"],
                     "source_type": item["source_type"],
@@ -635,6 +641,8 @@ def run_failure_mining(
                 "failure_types": item["failure_types"],
                 "failure_bucket": item["failure_bucket"],
                 "bucket_reason": item["bucket_reason"],
+                "failure_bucket_candidates": list(item.get("failure_bucket_candidates") or []),
+                "failure_bucket_signals": list(item.get("failure_bucket_signals") or []),
                 "slice_tags": item["slice_tags"],
                 "risk_tags": item["risk_tags"],
                 "source_type": item["source_type"],
@@ -667,6 +675,7 @@ def run_failure_mining(
         "by_risk_tag": dict(sorted(by_risk.items())),
         "by_policy": dict(sorted(by_policy.items())),
         "by_seed": dict(sorted(by_seed.items())),
+        "by_bucket_reason": dict(sorted(by_bucket_reason.items())),
         "risk_bucket_failures": dict(sorted(bucket_fail_counter.items())),
         "replay_weight": {
             "mean": round(sum(_safe_float(item.get("replay_weight"), 0.0) for item in selected) / max(1, len(selected)), 4),

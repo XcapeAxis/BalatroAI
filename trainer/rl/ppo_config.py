@@ -142,6 +142,12 @@ class PPOHardCaseSamplingConfig:
     bucket_sampling_weights: dict[str, float] = field(default_factory=dict)
     bucket_quota_caps: dict[str, int] = field(default_factory=dict)
     bucket_seed_caps: dict[str, int] = field(default_factory=dict)
+    slice_allowlist: list[str] = field(default_factory=list)
+    slice_sampling_weights: dict[str, float] = field(default_factory=dict)
+    slice_quota_caps: dict[str, int] = field(default_factory=dict)
+    risk_tag_allowlist: list[str] = field(default_factory=list)
+    risk_tag_sampling_weights: dict[str, float] = field(default_factory=dict)
+    risk_tag_quota_caps: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -157,6 +163,9 @@ class PPOSelfImitationConfig:
     selection_metric: str = "final_score"
     stage_min: str = ""
     bucket_allowlist: list[str] = field(default_factory=list)
+    slice_allowlist: list[str] = field(default_factory=list)
+    phase_allowlist: list[str] = field(default_factory=list)
+    action_type_allowlist: list[str] = field(default_factory=list)
     quality_threshold: float = 0.0
 
 
@@ -261,6 +270,12 @@ class PPOConfig:
             bucket_sampling_weights=_as_float_mapping(hard_case_raw.get("bucket_sampling_weights")),
             bucket_quota_caps=_as_int_mapping(hard_case_raw.get("bucket_quota_caps")),
             bucket_seed_caps=_as_int_mapping(hard_case_raw.get("bucket_seed_caps")),
+            slice_allowlist=_as_string_list(hard_case_raw.get("slice_allowlist")),
+            slice_sampling_weights=_as_float_mapping(hard_case_raw.get("slice_sampling_weights")),
+            slice_quota_caps=_as_int_mapping(hard_case_raw.get("slice_quota_caps")),
+            risk_tag_allowlist=_as_string_list(hard_case_raw.get("risk_tag_allowlist")),
+            risk_tag_sampling_weights=_as_float_mapping(hard_case_raw.get("risk_tag_sampling_weights")),
+            risk_tag_quota_caps=_as_int_mapping(hard_case_raw.get("risk_tag_quota_caps")),
         )
         self_imitation_cfg = PPOSelfImitationConfig(
             enabled=bool(self_imitation_raw.get("enabled", False)),
@@ -277,6 +292,9 @@ class PPOConfig:
             selection_metric=str(self_imitation_raw.get("selection_metric") or "final_score").strip() or "final_score",
             stage_min=str(self_imitation_raw.get("stage_min") or "").strip(),
             bucket_allowlist=_as_string_list(self_imitation_raw.get("bucket_allowlist")),
+            slice_allowlist=_as_string_list(self_imitation_raw.get("slice_allowlist")),
+            phase_allowlist=_as_string_list(self_imitation_raw.get("phase_allowlist")),
+            action_type_allowlist=_as_string_list(self_imitation_raw.get("action_type_allowlist")),
             quality_threshold=_safe_float(self_imitation_raw.get("quality_threshold"), 0.0),
         )
         train_cfg = PPOTrainConfig(

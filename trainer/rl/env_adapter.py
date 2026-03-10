@@ -171,6 +171,7 @@ class RLEnvAdapter:
             "round": _safe_int(next_obs.get("round_num"), 0),
             "ante": _safe_int(next_obs.get("ante_num"), 0),
             "phase": phase_after,
+            "action_type": str((env_info.get("action_payload") or {}).get("action_type") or ""),
             "invalid_action": bool(invalid_action),
             "invalid_action_env": bool(invalid_action_env),
             "invalid_action_requested": bool(requested_invalid),

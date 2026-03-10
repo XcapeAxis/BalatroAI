@@ -14,6 +14,7 @@ import multiprocessing as mp
 import random
 import statistics
 import time
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -302,6 +303,8 @@ def _worker_run(spec: dict[str, Any]) -> None:
             episode_invalid = 0
             episode_steps = 0
             final_score = 0.0
+            phase_counts: Counter[str] = Counter()
+            action_type_counts: Counter[str] = Counter()
             for step_id in range(max_steps_per_episode):
                 if worker_step_cap > 0 and step_count >= worker_step_cap:
                     break
@@ -336,6 +339,7 @@ def _worker_run(spec: dict[str, Any]) -> None:
                     info_summary={
                         "worker_id": int(worker_id),
                         "action_applied": step_info.get("action_applied"),
+                        "action_type": str(step_info.get("action_type") or ""),
                         "action_resolution": step_info.get("action_resolution"),
                         "mask_density": step_info.get("mask_density"),
                         "policy_meta": policy_meta if isinstance(policy_meta, dict) else {},
@@ -346,6 +350,8 @@ def _worker_run(spec: dict[str, Any]) -> None:
                 step_count += 1
                 episode_steps += 1
                 episode_reward += float(reward)
+                phase_counts[str(step_info.get("phase") or "unknown")] += 1
+                action_type_counts[str(step_info.get("action_type") or "unknown")] += 1
                 if bool(step_record.get("invalid_action")):
                     invalid_steps += 1
                     episode_invalid += 1
@@ -365,6 +371,30 @@ def _worker_run(spec: dict[str, Any]) -> None:
                     "episode_length": int(episode_steps),
                     "final_score": float(final_score),
                     "invalid_action_rate": float(episode_invalid) / float(max(1, episode_steps)),
+                    "phase_counts": dict(sorted(phase_counts.items())),
+                    "action_type_counts": dict(sorted(action_type_counts.items())),
+                    "dominant_phase": (
+                        sorted(phase_counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
+                        if phase_counts
+                        else ""
+                    ),
+                    "dominant_action_type": (
+                        sorted(action_type_counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
+                        if action_type_counts
+                        else ""
+                    ),
+                    "slice_tags": sorted(
+                        {
+                            f"phase:{tag}"
+                            for tag in phase_counts.keys()
+                            if str(tag).strip()
+                        }
+                        | {
+                            f"action_type:{tag}"
+                            for tag in action_type_counts.keys()
+                            if str(tag).strip()
+                        }
+                    ),
                 }
             )
     finally:

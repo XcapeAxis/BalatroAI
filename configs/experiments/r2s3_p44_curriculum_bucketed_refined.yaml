@@ -1,0 +1,143 @@
+schema: p44_curriculum_config_v1
+
+schedule:
+  - stage: stabilize
+    start_iteration: 1
+    until_iteration: 1
+  - stage: pressure
+    start_iteration: 2
+    until_iteration: 2
+  - stage: balance_or_exploit
+    start_iteration: 3
+    until_iteration: 0
+
+stages:
+  stabilize:
+    source_sampling_weights:
+      self_play: 0.40
+      arena_failures: 0.60
+    reward:
+      survival_bonus: 0.08
+      score_delta_weight: 0.78
+      invalid_action_penalty: 0.12
+    hard_case_sampling:
+      seed_replay_factor: 3
+      max_failures_per_type: 4
+      max_failures_per_seed: 2
+      bucket_sampling_weights:
+        discard_mismanagement: 1.24
+        resource_pressure_misplay: 1.18
+        risk_undercommit: 1.12
+        early_collapse: 0.82
+      slice_sampling_weights:
+        slice_stage:early: 1.22
+        slice_action_type:discard: 1.22
+        slice_resource_pressure:medium: 1.14
+      bucket_quota_caps:
+        discard_mismanagement: 16
+        resource_pressure_misplay: 12
+        early_collapse: 8
+      slice_quota_caps:
+        slice_stage:early: 24
+        slice_action_type:discard: 20
+    self_imitation:
+      enabled: false
+      replay_ratio: 0.0
+    rollout:
+      max_steps: 120
+    difficulty:
+      max_ante: 0
+      stake: WHITE
+
+  pressure:
+    source_sampling_weights:
+      self_play: 0.24
+      arena_failures: 0.76
+    reward:
+      survival_bonus: 0.05
+      score_delta_weight: 1.05
+      invalid_action_penalty: 0.15
+    hard_case_sampling:
+      seed_replay_factor: 4
+      max_failures_per_type: 4
+      max_failures_per_seed: 2
+      bucket_sampling_weights:
+        discard_mismanagement: 1.32
+        resource_pressure_misplay: 1.28
+        shop_or_economy_misallocation: 1.16
+        position_sensitive_misplay: 1.14
+        stateful_joker_misplay: 1.10
+        risk_overcommit: 1.18
+        risk_undercommit: 1.15
+        early_collapse: 0.78
+      slice_sampling_weights:
+        slice_action_type:discard: 1.36
+        slice_stage:early: 1.18
+        slice_resource_pressure:medium: 1.20
+        slice_resource_pressure:high: 1.24
+      risk_tag_sampling_weights:
+        resource_tight: 1.24
+        resource_balanced: 1.12
+        early_collapse: 0.78
+      bucket_quota_caps:
+        discard_mismanagement: 18
+        resource_pressure_misplay: 16
+        shop_or_economy_misallocation: 10
+        risk_overcommit: 10
+        risk_undercommit: 10
+      slice_quota_caps:
+        slice_action_type:discard: 24
+        slice_stage:early: 24
+        slice_resource_pressure:high: 12
+      risk_tag_quota_caps:
+        resource_tight: 16
+    self_imitation:
+      enabled: false
+      replay_ratio: 0.0
+    rollout:
+      max_steps: 140
+    difficulty:
+      max_ante: 1
+      stake: WHITE
+
+  balance_or_exploit:
+    source_sampling_weights:
+      self_play: 0.28
+      arena_failures: 0.62
+      replay_mix: 0.10
+    reward:
+      survival_bonus: 0.03
+      score_delta_weight: 1.16
+      invalid_action_penalty: 0.16
+    hard_case_sampling:
+      seed_replay_factor: 3
+      max_failures_per_type: 4
+      max_failures_per_seed: 2
+      bucket_sampling_weights:
+        discard_mismanagement: 1.18
+        resource_pressure_misplay: 1.14
+        shop_or_economy_misallocation: 1.20
+        position_sensitive_misplay: 1.12
+        stateful_joker_misplay: 1.10
+        risk_overcommit: 1.10
+        risk_undercommit: 1.10
+        early_collapse: 0.72
+      slice_sampling_weights:
+        slice_action_type:discard: 1.16
+        slice_stage:early: 1.02
+        slice_resource_pressure:medium: 1.14
+      bucket_quota_caps:
+        discard_mismanagement: 14
+        resource_pressure_misplay: 12
+        shop_or_economy_misallocation: 10
+        low_score_survival: 6
+      slice_quota_caps:
+        slice_action_type:discard: 18
+    self_imitation:
+      enabled: false
+      replay_ratio: 0.0
+    rollout:
+      max_steps: 155
+    difficulty:
+      max_ante: 2
+      stake: WHITE

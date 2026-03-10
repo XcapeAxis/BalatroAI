@@ -1,0 +1,21 @@
+schema: p41_failure_mining_config_v1
+
+output:
+  artifacts_root: docs/artifacts/research/r2s3_failure_buckets
+
+input:
+  p39_root: docs/artifacts/research/r2s3_closed_loop/r2s3-b2-bucket-replay/arena_eval/champion_eval
+  arena_run_dir: docs/artifacts/research/r2s3_closed_loop/r2s3-b2-bucket-replay/arena_eval/arena_runs/r2s3-b2-bucket-replay-arena
+
+criteria:
+  candidate_policy: model_policy
+  champion_policy: heuristic_baseline
+  bottom_quantile: 0.60
+  champion_score_regression_ratio: 0.03
+  high_risk_round_threshold: 2
+  max_failures: 104
+  max_failures_per_type: 20
+  max_failures_per_seed: 4
+
+quick:
+  max_episode_scan: 360
