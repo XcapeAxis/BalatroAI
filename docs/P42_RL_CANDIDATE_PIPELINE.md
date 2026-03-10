@@ -424,6 +424,72 @@ R2-S3 结论：
   - slice-targeted replay
   - richer bucket mix 下的 curriculum certification
 
+## R2-S4 长时 Pure RL 冲刺更新（2026-03-11）
+
+R2-S4 继续坚持 pure RL 主线，没有切回 `teacher / warm-start`。  
+这轮的重点不是再做一轮泛化 reward 微调，而是回答两个更具体的问题：
+
+1. richer failure source 能不能真正扩开当前训练压力面
+2. bucket-aware replay / slice-targeted replay 在认证级协议下能否把 strongest certified pure-RL recipe 再往前推
+
+本轮关键结果：
+
+- Batch 1（multi-source failure mining）：
+  - 合并 `r2s2` + `r2s3` artifacts 后，source 扩了
+  - 但 `by_bucket` 仍塌在 `discard_mismanagement=12`
+- Batch 2（slice-aware refine）：
+  - bucket truthfulness 提升，但主导 bucket 变成 `risk_undercommit=12`
+  - 仍然过窄
+- Batch 3（source-expanded PPO smoke）：
+  - candidate `121.5`
+  - 说明 richer source 对 fast-pass 有帮助
+- Batch 4（旧 slice-targeted curriculum smoke）：
+  - candidate `82.0`
+  - 负收益，说明在 failure source 仍窄时直接加大 curriculum 压力会退化
+- Certification C1（source-expanded recipe）：
+  - candidate `59.5` vs heuristic `303.0`
+  - 没有站住认证
+- Batch 5（champion degraded-slice gap seeds）：
+  - 首次把 `low_score_survival=2`、`resource_pressure_misplay=2` 真正打进 failure pack
+  - `arena_slice_gap_seed` 成为有效 pure-RL replay seed source
+- Batch 6（gapmix PPO smoke）：
+  - candidate `126.5`
+  - 但 PPO 选样仍塌在 `risk_undercommit`
+- Batch 7（顶层 bucket minimum）：
+  - 证明问题不在 minimum 机制本身，而在 curriculum phase 覆盖了顶层 hard-case 配方
+- Batch 8（stage-aware bucket minimum）：
+  - candidate `126.5`
+  - `failure_bucket_coverage=2`
+  - `low_score_survival=2`
+  - `slice_resource_pressure:high=2`
+  - 这是本轮 strongest fast-pass recipe
+- Certification C2（stage-aware bucket minimum recipe）：
+  - candidate `67.5` vs heuristic `303.0`
+  - 相比 `r2s3-c4-certification` 仍然退化
+
+R2-S4 结论：
+
+- strongest certified pure-RL recipe 目前**没有**从 R2-S3 更新，仍然维持：
+  - `rl_policy:p42_rl_candidate:r2s3-c4-certification-candidate-rl:aaaaaaa,bbbbbbb,ccccccc,ddddddd:e3acd6cbae`
+- strongest R2-S4 fast-pass recipe 已经出现：
+  - stage-aware bucket minimum + richer gap-seed source
+  - 但它还没有在认证级协议下站住
+- 这轮最重要的正面结果是：
+  - richer failure source ingestion 已经开始有效
+  - `bucket_minimum_counts` 机制本身有效
+  - 训练里已经能看到第二个 bucket 和高 `resource_pressure` slice
+- 这轮最重要的限制是：
+  - current richer source 仍高度依赖同一组 `arena_slice_gap_seed`
+  - `resource_pressure_misplay` 还没有稳定进入 selected replay rows
+  - `shop_or_economy_misallocation` / `position_sensitive_misplay` / `stateful_joker_misplay` 依然 scarce
+
+R2-S4 之后的默认下一步仍然是 pure RL：
+
+- 继续扩展非重叠 failure source
+- 优先打通 `resource_pressure_misplay` / `shop_or_economy_misallocation`
+- 处理 gap seed 的跨 bucket 冲突与去重
+- 在 richer source 上重跑 stage-aware bucket-aware certification
+
 ## Known Gaps
 
 - PPO-lite intentionally omits advanced PPO/distributed features (opponent pools, large-batch parallel rollouts).
