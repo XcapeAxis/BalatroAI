@@ -1,0 +1,22 @@
+{
+  "schema": "p42_candidate_train_config_v1",
+  "candidate_modes": [
+    "rl_ppo_lite"
+  ],
+  "allow_legacy_fallback": false,
+  "legacy_fallback_modes": [
+    "bc_finetune"
+  ],
+  "output": {
+    "artifacts_root": "docs/artifacts/research/r2s1_candidate_train"
+  },
+  "seeds": [
+    "AAAAAAA",
+    "BBBBBBB"
+  ],
+  "rl_config": "configs/experiments/r2s1_p42_rl_balanced_hardcase_smoke.yaml",
+  "training": {
+    "timeout_sec": 5400
+  },
+  "__yaml_source_sha256__": "9b6ad9ba7ddbed772eeb8bdfcd876d9146be89d0203c990569306bd7cc33f28c"
+}

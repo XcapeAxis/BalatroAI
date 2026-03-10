@@ -1,0 +1,87 @@
+schema: p44_curriculum_config_v1
+
+schedule:
+  - stage: stage1_survival_stabilize
+    start_iteration: 1
+    until_iteration: 1
+  - stage: stage2_diversify_failures
+    start_iteration: 2
+    until_iteration: 2
+  - stage: stage3_balance_exploit
+    start_iteration: 3
+    until_iteration: 0
+
+stages:
+  stage1_survival_stabilize:
+    source_sampling_weights:
+      self_play: 0.50
+      arena_failures: 0.50
+    reward:
+      survival_bonus: 0.06
+      score_delta_weight: 0.80
+      invalid_action_penalty: 0.12
+    hard_case_sampling:
+      seed_replay_factor: 3
+      max_failures_per_type: 3
+      max_failures_per_seed: 2
+    self_imitation:
+      enabled: false
+      replay_ratio: 0.0
+    rollout:
+      max_steps: 100
+    difficulty:
+      max_ante: 0
+      stake: WHITE
+
+  stage2_diversify_failures:
+    source_sampling_weights:
+      self_play: 0.35
+      arena_failures: 0.65
+    reward:
+      survival_bonus: 0.04
+      score_delta_weight: 1.00
+      invalid_action_penalty: 0.14
+    hard_case_sampling:
+      seed_replay_factor: 4
+      max_failures_per_type: 3
+      max_failures_per_seed: 2
+    self_imitation:
+      enabled: true
+      replay_ratio: 0.06
+      top_k_episodes: 2
+      max_replay_steps: 48
+      min_episode_score: 40.0
+      min_episode_reward: 1.0
+      max_invalid_action_rate: 0.01
+    rollout:
+      max_steps: 120
+    difficulty:
+      max_ante: 1
+      stake: WHITE
+
+  stage3_balance_exploit:
+    source_sampling_weights:
+      self_play: 0.30
+      arena_failures: 0.55
+      replay_mix: 0.15
+    reward:
+      survival_bonus: 0.03
+      score_delta_weight: 1.15
+      invalid_action_penalty: 0.16
+    hard_case_sampling:
+      seed_replay_factor: 3
+      max_failures_per_type: 3
+      max_failures_per_seed: 2
+    self_imitation:
+      enabled: true
+      replay_ratio: 0.08
+      top_k_episodes: 2
+      max_replay_steps: 64
+      min_episode_score: 55.0
+      min_episode_reward: 2.0
+      max_invalid_action_rate: 0.01
+    rollout:
+      max_steps: 140
+    difficulty:
+      max_ante: 2
+      stake: WHITE

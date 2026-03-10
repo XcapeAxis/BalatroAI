@@ -117,6 +117,87 @@ def _load_summary_rows(path: Path) -> list[dict[str, Any]]:
     return [row for row in payload if isinstance(row, dict)]
 
 
+def _top_bucket_labels(raw: Any) -> list[str]:
+    if not isinstance(raw, dict):
+        return []
+    pairs = [
+        (str(label).strip(), _safe_int(count))
+        for label, count in raw.items()
+        if str(label).strip() and _safe_int(count) > 0
+    ]
+    pairs.sort(key=lambda item: (-item[1], item[0]))
+    return [label for label, _count in pairs]
+
+
+def _infer_slice_tags(row: dict[str, Any]) -> list[str]:
+    tags: set[str] = set()
+    bucket_counts = row.get("bucket_counts")
+    if isinstance(bucket_counts, dict):
+        for category, payload in bucket_counts.items():
+            category_token = str(category).strip()
+            if not category_token or not isinstance(payload, dict):
+                continue
+            for label in _top_bucket_labels(payload)[:3]:
+                tags.add(f"{category_token}:{label}")
+    for key in ("phase", "action_type", "resource_pressure", "stake", "deck"):
+        token = str(row.get(key) or "").strip()
+        if token:
+            tags.add(f"{key}:{token}")
+    return sorted(tags)
+
+
+def _infer_risk_tags(row: dict[str, Any], *, high_risk_round_threshold: int, low_threshold: float) -> list[str]:
+    tags: set[str] = set()
+    bucket_counts = row.get("bucket_counts")
+    if isinstance(bucket_counts, dict):
+        risk_payload = bucket_counts.get("risk")
+        if isinstance(risk_payload, dict):
+            for label in _top_bucket_labels(risk_payload):
+                tags.add(str(label))
+    rounds_survived = _safe_int(row.get("rounds_survived"), 0)
+    score = _safe_float(row.get("total_score"), 0.0)
+    if rounds_survived <= high_risk_round_threshold:
+        tags.add("early_collapse")
+    if score <= low_threshold:
+        tags.add("low_score_tail")
+    return sorted(tags)
+
+
+def _failure_bucket_for(*, failure_types: set[str], slice_tags: list[str], risk_tags: list[str]) -> str:
+    if {"invalid_action", "timeout", "execution_error", "episode_failure_status"} & failure_types:
+        return "invalid_like_or_execution"
+    if any(tag.startswith("action_type:shop") or tag.startswith("resource_pressure:") for tag in slice_tags):
+        return "poor_shop_or_resource_decision"
+    if "champion_regression_segment" in failure_types:
+        return "policy_search_disagreement_failure"
+    if "high_risk_bucket_failure" in failure_types or {"early_collapse", "resource_tight"} & set(risk_tags):
+        return "high_risk_collapse"
+    return "low_score_survival"
+
+
+def _replay_weight_for(*, failure_types: set[str], score: float, low_threshold: float, risk_tags: list[str]) -> float:
+    weight = 1.0
+    if "champion_regression_segment" in failure_types:
+        weight += 1.0
+    if "high_risk_bucket_failure" in failure_types:
+        weight += 0.75
+    if {"invalid_action", "timeout", "execution_error"} & failure_types:
+        weight += 0.5
+    if "low_score_quantile" in failure_types:
+        denom = max(1.0, abs(low_threshold) if low_threshold != 0.0 else 1.0)
+        weight += min(1.0, max(0.0, (low_threshold - score) / denom))
+    weight += 0.1 * float(len(risk_tags))
+    return round(weight, 4)
+
+
+def _selection_reason(*, failure_types: set[str], failure_bucket: str, risk_tags: list[str]) -> str:
+    parts = [failure_bucket]
+    parts.extend(sorted(failure_types))
+    if risk_tags:
+        parts.extend(f"risk:{tag}" for tag in risk_tags[:3])
+    return ",".join(parts[:8])
+
+
 def _build_markdown(
     *,
     run_id: str,
@@ -124,8 +205,12 @@ def _build_markdown(
     arena_run_dir: Path | None,
     selected_total: int,
     counters_by_type: dict[str, int],
+    counters_by_bucket: dict[str, int],
+    counters_by_slice: dict[str, int],
+    counters_by_risk: dict[str, int],
     counters_by_policy: dict[str, int],
     counters_by_seed: dict[str, int],
+    replay_weight_summary: dict[str, float],
     warnings: list[str],
 ) -> list[str]:
     lines = [
@@ -141,6 +226,21 @@ def _build_markdown(
         lines.extend([f"- {k}: {v}" for k, v in sorted(counters_by_type.items(), key=lambda kv: (-kv[1], kv[0]))])
     else:
         lines.append("- none")
+    lines.extend(["", "## Failure Bucket Distribution"])
+    if counters_by_bucket:
+        lines.extend([f"- {k}: {v}" for k, v in sorted(counters_by_bucket.items(), key=lambda kv: (-kv[1], kv[0]))])
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Slice Tag Coverage"])
+    if counters_by_slice:
+        lines.extend([f"- {k}: {v}" for k, v in sorted(counters_by_slice.items(), key=lambda kv: (-kv[1], kv[0]))[:16]])
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Risk Tag Coverage"])
+    if counters_by_risk:
+        lines.extend([f"- {k}: {v}" for k, v in sorted(counters_by_risk.items(), key=lambda kv: (-kv[1], kv[0]))[:16]])
+    else:
+        lines.append("- none")
     lines.extend(["", "## Policy Distribution"])
     if counters_by_policy:
         lines.extend([f"- {k}: {v}" for k, v in sorted(counters_by_policy.items(), key=lambda kv: (-kv[1], kv[0]))])
@@ -149,6 +249,11 @@ def _build_markdown(
     lines.extend(["", "## Seed Distribution"])
     if counters_by_seed:
         lines.extend([f"- {k}: {v}" for k, v in sorted(counters_by_seed.items(), key=lambda kv: (-kv[1], kv[0]))])
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Replay Weight Summary"])
+    if replay_weight_summary:
+        lines.extend([f"- {k}: {v}" for k, v in replay_weight_summary.items()])
     else:
         lines.append("- none")
     if warnings:
@@ -211,6 +316,8 @@ def run_failure_mining(
     score_reg_threshold = float(criteria_cfg.get("champion_score_regression_ratio") or 0.05)
     high_risk_round_threshold = int(criteria_cfg.get("high_risk_round_threshold") or 2)
     max_failures = int(criteria_cfg.get("max_failures") or 1200)
+    max_failures_per_type = int(criteria_cfg.get("max_failures_per_type") or 0)
+    max_failures_per_seed = int(criteria_cfg.get("max_failures_per_seed") or 0)
 
     quick_cfg = cfg.get("quick") if isinstance(cfg.get("quick"), dict) else {}
     max_episode_scan = int(quick_cfg.get("max_episode_scan") or 240) if quick else 0
@@ -249,8 +356,12 @@ def run_failure_mining(
                 arena_run_dir=arena_run_dir,
                 selected_total=0,
                 counters_by_type={},
+                counters_by_bucket={},
+                counters_by_slice={},
+                counters_by_risk={},
                 counters_by_policy={},
                 counters_by_seed={},
+                replay_weight_summary={},
                 warnings=warnings,
             ),
         )
@@ -322,9 +433,15 @@ def run_failure_mining(
 
     selected: list[dict[str, Any]] = []
     by_type: Counter[str] = Counter()
+    by_bucket: Counter[str] = Counter()
+    by_slice: Counter[str] = Counter()
+    by_risk: Counter[str] = Counter()
     by_policy: Counter[str] = Counter()
     by_seed: Counter[str] = Counter()
     bucket_fail_counter: Counter[str] = Counter()
+    selection_by_type: Counter[str] = Counter()
+    selection_by_seed: Counter[str] = Counter()
+    candidate_rows_for_selection: list[dict[str, Any]] = []
 
     for row in working_rows:
         failure_types: set[str] = set()
@@ -361,6 +478,24 @@ def run_failure_mining(
         if not failure_types:
             continue
 
+        slice_tags = _infer_slice_tags(row)
+        risk_tags = _infer_risk_tags(
+            row,
+            high_risk_round_threshold=high_risk_round_threshold,
+            low_threshold=low_threshold,
+        )
+        failure_bucket = _failure_bucket_for(
+            failure_types=failure_types,
+            slice_tags=slice_tags,
+            risk_tags=risk_tags,
+        )
+        replay_weight = _replay_weight_for(
+            failure_types=failure_types,
+            score=score,
+            low_threshold=low_threshold,
+            risk_tags=risk_tags,
+        )
+
         episode_id = "{policy}|{seed}|{ep}".format(
             policy=str(row.get("policy_id") or ""),
             seed=str(row.get("seed") or ""),
@@ -378,18 +513,57 @@ def run_failure_mining(
             "invalid_action_rate": invalid_rate,
             "timeout_rate": timeout_rate,
             "failure_types": sorted(failure_types),
+            "failure_bucket": failure_bucket,
+            "slice_tags": slice_tags,
+            "risk_tags": risk_tags,
+            "source_type": "arena_failure_mining",
+            "selection_reason": _selection_reason(
+                failure_types=failure_types,
+                failure_bucket=failure_bucket,
+                risk_tags=risk_tags,
+            ),
+            "replay_weight": replay_weight,
             "source": {
                 "episode_records": str(episode_records_path),
                 "line": _safe_int(row.get("_source_line"), 0),
             },
+            "source_run_id": str(arena_run_dir.name),
+            "source_campaign_id": str(cfg.get("campaign_id") or ""),
+            "source_checkpoint_refs": {
+                "candidate_policy": candidate_policy,
+                "champion_policy": champion_policy,
+            },
             "raw_episode": row,
         }
+        candidate_rows_for_selection.append(payload)
+
+    candidate_rows_for_selection.sort(
+        key=lambda item: (
+            -_safe_float(item.get("replay_weight"), 0.0),
+            _safe_float(item.get("total_score"), 0.0),
+            str(item.get("episode_id") or ""),
+        )
+    )
+    for payload in candidate_rows_for_selection:
+        if max_failures_per_seed > 0 and selection_by_seed[payload["seed"]] >= max_failures_per_seed:
+            continue
+        if max_failures_per_type > 0 and any(selection_by_type[token] >= max_failures_per_type for token in payload["failure_types"]):
+            continue
         selected.append(payload)
+        selection_by_seed[payload["seed"]] += 1
         for token in payload["failure_types"]:
             by_type[token] += 1
+            selection_by_type[token] += 1
+        by_bucket[str(payload.get("failure_bucket") or "unknown")] += 1
+        for tag in payload.get("slice_tags") if isinstance(payload.get("slice_tags"), list) else []:
+            by_slice[str(tag)] += 1
+        for tag in payload.get("risk_tags") if isinstance(payload.get("risk_tags"), list) else []:
+            by_risk[str(tag)] += 1
         by_policy[payload["policy_id"]] += 1
         by_seed[payload["seed"]] += 1
-
+        if payload["failure_bucket"] == "high_risk_collapse":
+            for tag in payload.get("risk_tags") if isinstance(payload.get("risk_tags"), list) else []:
+                bucket_fail_counter[str(tag)] += 1
         if len(selected) >= max(1, max_failures):
             warnings.append(f"failure cap reached: {max_failures}")
             break
@@ -406,6 +580,12 @@ def run_failure_mining(
                     "seed": item["seed"],
                     "episode_index": item["episode_index"],
                     "failure_types": item["failure_types"],
+                    "failure_bucket": item["failure_bucket"],
+                    "slice_tags": item["slice_tags"],
+                    "risk_tags": item["risk_tags"],
+                    "source_type": item["source_type"],
+                    "selection_reason": item["selection_reason"],
+                    "replay_weight": item["replay_weight"],
                     "status": item["status"],
                     "error": item["error"],
                     "total_score": item["total_score"],
@@ -430,6 +610,8 @@ def run_failure_mining(
             "champion_score_regression_ratio": score_reg_threshold,
             "high_risk_round_threshold": high_risk_round_threshold,
             "max_failures": max_failures,
+            "max_failures_per_type": max_failures_per_type,
+            "max_failures_per_seed": max_failures_per_seed,
         },
         "inputs": {
             "episode_records": str(episode_records_path),
@@ -451,10 +633,19 @@ def run_failure_mining(
                 "seed": item["seed"],
                 "episode_index": item["episode_index"],
                 "failure_types": item["failure_types"],
+                "failure_bucket": item["failure_bucket"],
+                "slice_tags": item["slice_tags"],
+                "risk_tags": item["risk_tags"],
+                "source_type": item["source_type"],
+                "selection_reason": item["selection_reason"],
+                "replay_weight": item["replay_weight"],
                 "total_score": item["total_score"],
                 "status": item["status"],
                 "error": item["error"],
                 "source": item["source"],
+                "source_run_id": item["source_run_id"],
+                "source_campaign_id": item["source_campaign_id"],
+                "source_checkpoint_refs": item["source_checkpoint_refs"],
             }
             for item in selected
         ],
@@ -468,9 +659,17 @@ def run_failure_mining(
         "status": status,
         "selected_failures": len(selected),
         "by_type": dict(sorted(by_type.items())),
+        "by_bucket": dict(sorted(by_bucket.items())),
+        "by_slice_tag": dict(sorted(by_slice.items())),
+        "by_risk_tag": dict(sorted(by_risk.items())),
         "by_policy": dict(sorted(by_policy.items())),
         "by_seed": dict(sorted(by_seed.items())),
         "risk_bucket_failures": dict(sorted(bucket_fail_counter.items())),
+        "replay_weight": {
+            "mean": round(sum(_safe_float(item.get("replay_weight"), 0.0) for item in selected) / max(1, len(selected)), 4),
+            "max": round(max((_safe_float(item.get("replay_weight"), 0.0) for item in selected), default=0.0), 4),
+            "min": round(min((_safe_float(item.get("replay_weight"), 0.0) for item in selected), default=0.0), 4),
+        },
         "scan_rows": len(rows),
         "working_rows": len(working_rows),
         "candidate_policy": candidate_policy,
@@ -482,8 +681,12 @@ def run_failure_mining(
         arena_run_dir=arena_run_dir,
         selected_total=len(selected),
         counters_by_type=dict(by_type),
+        counters_by_bucket=dict(by_bucket),
+        counters_by_slice=dict(by_slice),
+        counters_by_risk=dict(by_risk),
         counters_by_policy=dict(by_policy),
         counters_by_seed=dict(by_seed),
+        replay_weight_summary=stats.get("replay_weight") if isinstance(stats.get("replay_weight"), dict) else {},
         warnings=warnings,
     )
 

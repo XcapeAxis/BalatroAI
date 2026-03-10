@@ -278,8 +278,52 @@ Useful evidence from Phase 2:
 Phase-2 interpretation:
 
 - real hard-case ingestion is now infrastructure, not a hypothesis
-- pure RL + hard-case pressure is still not the next winning deployment path
-- the next phase should keep hard-case PPO finetuning, but shift the primary lever to a real supervised / BC warm-start
+- hard-case-only PPO was not enough on its own
+- the next question became whether pure RL could recover by improving replay balance, self-imitation gating, and stage-aware curriculum rather than by immediately pivoting to teacher-led warm-start
+
+## R2-S1 Pure RL Scaling Update (2026-03-10)
+
+R2-S1 took the post-legality RL line and formalized it into a stronger pure-RL training recipe:
+
+1. hard-case replay is now a first-class PPO input with structured source refs, failure buckets, slice/risk tags, and replay weights
+2. failure mining is explicit enough to audit whether PPO is actually being pressured by catastrophic tails, low-score tails, and champion-regression slices
+3. self-imitation can no longer be treated as a flat-on switch:
+   - flat self-imitation was harmful
+   - staged, late-phase, low-ratio self-imitation was usable
+4. curriculum and reward scheduling now change replay pressure over training instead of just recording labels
+
+Useful evidence from R2-S1:
+
+- Batch A balanced hard-case replay smoke:
+  - candidate `111.5` vs heuristic `400.0`
+  - hard-case seeds `3`
+  - failure-type coverage `2`
+- Batch B flat self-imitation smoke:
+  - candidate `60.0`
+  - this was worse than the Batch-A hard-case control
+- Batch C staged curriculum smoke:
+  - candidate `106.0`
+  - common 4-seed compare ranked curriculum first among the tested RL recipes
+- certification nightly on hard-case-only control:
+  - candidate `71.0` vs heuristic `303.0`
+  - score-delta improvement vs the old certified survival baseline: `+3.25`
+- certification nightly on the curriculum recipe:
+  - candidate `107.75` vs heuristic `303.0`
+  - score-delta improvement vs the old certified survival baseline: `+40.0`
+  - recommendation remained `observe`
+
+R2-S1 interpretation:
+
+- the strongest certified pure-RL recipe is now:
+  - balanced hard-case replay
+  - stage-aware curriculum / reward schedule
+  - late-stage, low-ratio self-imitation
+- the pure-RL mainline remains worth continuing
+- the next lever is not teacher-first warm-start; it is:
+  - broader failure-bucket coverage
+  - better replay pressure on early / position-sensitive / stateful-joker degradation slices
+  - tighter late-stage self-imitation gating
+- no RL recipe is promotion-ready yet, but pure RL is no longer stalled at the old survival baseline
 
 ## Known Gaps
 

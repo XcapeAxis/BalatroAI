@@ -31,6 +31,18 @@ def _as_string_list(raw: Any) -> list[str]:
     return [str(x).strip() for x in raw if str(x).strip()]
 
 
+def _as_float_mapping(raw: Any) -> dict[str, float]:
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, float] = {}
+    for key, value in raw.items():
+        token = str(key).strip()
+        if not token:
+            continue
+        out[token] = _safe_float(value, 0.0)
+    return out
+
+
 @dataclass
 class PPOTrainConfig:
     ppo_epochs: int = 2
@@ -110,6 +122,23 @@ class PPOHardCaseSamplingConfig:
     include_base_seed: bool = True
     preserve_seed_identity: bool = False
     prioritize_failure_types: list[str] = field(default_factory=list)
+    balance_across_failure_types: bool = False
+    max_failures_per_type: int = 0
+    max_failures_per_seed: int = 0
+    replay_weight_scale: float = 1.0
+
+
+@dataclass
+class PPOSelfImitationConfig:
+    enabled: bool = False
+    top_k_episodes: int = 4
+    top_episode_fraction: float = 0.25
+    replay_ratio: float = 0.0
+    max_replay_steps: int = 256
+    min_episode_score: float = 0.0
+    min_episode_reward: float = 0.0
+    max_invalid_action_rate: float = 0.05
+    selection_metric: str = "final_score"
 
 
 @dataclass
@@ -126,6 +155,7 @@ class PPOConfig:
     diagnostics: PPODiagnosticsConfig = field(default_factory=PPODiagnosticsConfig)
     world_model_aux: PPOWorldModelAuxConfig = field(default_factory=PPOWorldModelAuxConfig)
     hard_case_sampling: PPOHardCaseSamplingConfig = field(default_factory=PPOHardCaseSamplingConfig)
+    self_imitation: PPOSelfImitationConfig = field(default_factory=PPOSelfImitationConfig)
     train: PPOTrainConfig = field(default_factory=PPOTrainConfig)
 
     @classmethod
@@ -138,6 +168,7 @@ class PPOConfig:
         diagnostics_raw = payload.get("diagnostics") if isinstance(payload.get("diagnostics"), dict) else {}
         world_model_aux_raw = payload.get("world_model_aux") if isinstance(payload.get("world_model_aux"), dict) else {}
         hard_case_raw = payload.get("hard_case_sampling") if isinstance(payload.get("hard_case_sampling"), dict) else {}
+        self_imitation_raw = payload.get("self_imitation") if isinstance(payload.get("self_imitation"), dict) else {}
         train_raw = payload.get("train") if isinstance(payload.get("train"), dict) else {}
 
         env_cfg = PPOEnvConfig(
@@ -203,6 +234,24 @@ class PPOConfig:
             include_base_seed=bool(hard_case_raw.get("include_base_seed", True)),
             preserve_seed_identity=bool(hard_case_raw.get("preserve_seed_identity", False)),
             prioritize_failure_types=_as_string_list(hard_case_raw.get("prioritize_failure_types")),
+            balance_across_failure_types=bool(hard_case_raw.get("balance_across_failure_types", False)),
+            max_failures_per_type=max(0, _safe_int(hard_case_raw.get("max_failures_per_type"), 0)),
+            max_failures_per_seed=max(0, _safe_int(hard_case_raw.get("max_failures_per_seed"), 0)),
+            replay_weight_scale=max(0.0, _safe_float(hard_case_raw.get("replay_weight_scale"), 1.0)),
+        )
+        self_imitation_cfg = PPOSelfImitationConfig(
+            enabled=bool(self_imitation_raw.get("enabled", False)),
+            top_k_episodes=max(1, _safe_int(self_imitation_raw.get("top_k_episodes"), 4)),
+            top_episode_fraction=min(1.0, max(0.0, _safe_float(self_imitation_raw.get("top_episode_fraction"), 0.25))),
+            replay_ratio=min(1.0, max(0.0, _safe_float(self_imitation_raw.get("replay_ratio"), 0.0))),
+            max_replay_steps=max(0, _safe_int(self_imitation_raw.get("max_replay_steps"), 256)),
+            min_episode_score=_safe_float(self_imitation_raw.get("min_episode_score"), 0.0),
+            min_episode_reward=_safe_float(self_imitation_raw.get("min_episode_reward"), 0.0),
+            max_invalid_action_rate=min(
+                1.0,
+                max(0.0, _safe_float(self_imitation_raw.get("max_invalid_action_rate"), 0.05)),
+            ),
+            selection_metric=str(self_imitation_raw.get("selection_metric") or "final_score").strip() or "final_score",
         )
         train_cfg = PPOTrainConfig(
             ppo_epochs=max(1, _safe_int(train_raw.get("ppo_epochs"), 2)),
@@ -240,6 +289,7 @@ class PPOConfig:
             diagnostics=diagnostics_cfg,
             world_model_aux=world_model_aux_cfg,
             hard_case_sampling=hard_case_cfg,
+            self_imitation=self_imitation_cfg,
             train=train_cfg,
         )
 

@@ -618,6 +618,12 @@ def run_candidate_training(
             "checkpoint_id": str(rl_summary.get("checkpoint_id") or ""),
             "hard_case_sampling_status": str((metrics_payload.get("hard_case_sampling_status") or "")),
             "hard_case_sampling_json": str(rl_summary.get("hard_case_sampling_json") or ""),
+            "hardcase_manifest_json": str(rl_summary.get("hardcase_manifest_json") or ""),
+            "hardcase_stats_json": str(rl_summary.get("hardcase_stats_json") or ""),
+            "best_trajectory_manifest_json": str(rl_summary.get("best_trajectory_manifest_json") or ""),
+            "best_trajectory_stats_json": str(rl_summary.get("best_trajectory_stats_json") or ""),
+            "reward_schedule_json": str(rl_summary.get("reward_schedule_json") or ""),
+            "summary_md": str(rl_summary.get("summary_md") or ""),
         }
         metrics_payload["checkpoint_id"] = str(rl_summary.get("checkpoint_id") or "")
         write_json(run_dir / "candidate_train_manifest.json", manifest)
@@ -644,6 +650,12 @@ def run_candidate_training(
             "diagnostics_report_md": str(rl_summary.get("diagnostics_report_md") or ""),
             "checkpoint_id": str(rl_summary.get("checkpoint_id") or ""),
             "hard_case_sampling_json": str(rl_summary.get("hard_case_sampling_json") or ""),
+            "hardcase_manifest_json": str(rl_summary.get("hardcase_manifest_json") or ""),
+            "hardcase_stats_json": str(rl_summary.get("hardcase_stats_json") or ""),
+            "best_trajectory_manifest_json": str(rl_summary.get("best_trajectory_manifest_json") or ""),
+            "best_trajectory_stats_json": str(rl_summary.get("best_trajectory_stats_json") or ""),
+            "reward_schedule_json": str(rl_summary.get("reward_schedule_json") or ""),
+            "summary_md": str(rl_summary.get("summary_md") or ""),
         }
 
     if mode == "selfsup_warm_bc":

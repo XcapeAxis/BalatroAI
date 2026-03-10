@@ -128,6 +128,8 @@ class CurriculumStage:
     reward: dict[str, Any]
     rollout: dict[str, Any]
     difficulty: dict[str, Any]
+    hard_case_sampling: dict[str, Any]
+    self_imitation: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -139,6 +141,8 @@ class CurriculumStage:
             "reward": dict(self.reward),
             "rollout": dict(self.rollout),
             "difficulty": dict(self.difficulty),
+            "hard_case_sampling": dict(self.hard_case_sampling),
+            "self_imitation": dict(self.self_imitation),
         }
 
 
@@ -173,6 +177,12 @@ class CurriculumScheduler:
                     reward=dict(stage_cfg.get("reward") or {}) if isinstance(stage_cfg.get("reward"), dict) else {},
                     rollout=dict(stage_cfg.get("rollout") or {}) if isinstance(stage_cfg.get("rollout"), dict) else {},
                     difficulty=dict(stage_cfg.get("difficulty") or {}) if isinstance(stage_cfg.get("difficulty"), dict) else {},
+                    hard_case_sampling=dict(stage_cfg.get("hard_case_sampling") or {})
+                    if isinstance(stage_cfg.get("hard_case_sampling"), dict)
+                    else {},
+                    self_imitation=dict(stage_cfg.get("self_imitation") or {})
+                    if isinstance(stage_cfg.get("self_imitation"), dict)
+                    else {},
                 )
             )
         return cls(
@@ -234,6 +244,12 @@ class CurriculumScheduler:
             for key in ("stake", "timeout_sec", "max_auto_steps", "auto_advance"):
                 if stage.difficulty.get(key) is not None:
                     patch["env"][key] = stage.difficulty.get(key)
+        if stage.hard_case_sampling:
+            patch.setdefault("hard_case_sampling", {})
+            patch["hard_case_sampling"] = _deep_merge(patch["hard_case_sampling"], stage.hard_case_sampling)
+        if stage.self_imitation:
+            patch.setdefault("self_imitation", {})
+            patch["self_imitation"] = _deep_merge(patch["self_imitation"], stage.self_imitation)
         merged = _deep_merge(base_cfg, patch)
         return merged, {
             "enabled": True,
@@ -246,6 +262,8 @@ class CurriculumScheduler:
             "reward": dict(stage.reward),
             "rollout": dict(stage.rollout),
             "difficulty": dict(stage.difficulty),
+            "hard_case_sampling": dict(stage.hard_case_sampling),
+            "self_imitation": dict(stage.self_imitation),
             "config_path": self.config_path,
         }
 

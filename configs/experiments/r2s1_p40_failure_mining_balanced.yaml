@@ -1,0 +1,22 @@
+schema: p41_failure_mining_config_v1
+
+output:
+  artifacts_root: docs/artifacts/research/r2s1_failure_mining
+
+input:
+  p39_root: docs/artifacts/p39
+  arena_run_dir: docs/artifacts/research/r1_certification/certify_reward_survival_20260310-023058/arena_eval/arena_runs/r1-certify-survival-20260310-023058-arena
+  candidate_decision_json: docs/artifacts/research/r1_certification/certify_reward_survival_20260310-023058/arena_eval/champion_eval/champion_eval_20260310-024243/candidate_decision.json
+
+criteria:
+  candidate_policy: model_policy
+  champion_policy: heuristic_baseline
+  bottom_quantile: 0.55
+  champion_score_regression_ratio: 0.03
+  high_risk_round_threshold: 2
+  max_failures: 64
+  max_failures_per_type: 16
+  max_failures_per_seed: 4
+
+quick:
+  max_episode_scan: 280
