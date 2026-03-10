@@ -43,6 +43,18 @@ def _as_float_mapping(raw: Any) -> dict[str, float]:
     return out
 
 
+def _as_int_mapping(raw: Any) -> dict[str, int]:
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, int] = {}
+    for key, value in raw.items():
+        token = str(key).strip()
+        if not token:
+            continue
+        out[token] = _safe_int(value, 0)
+    return out
+
+
 @dataclass
 class PPOTrainConfig:
     ppo_epochs: int = 2
@@ -126,6 +138,10 @@ class PPOHardCaseSamplingConfig:
     max_failures_per_type: int = 0
     max_failures_per_seed: int = 0
     replay_weight_scale: float = 1.0
+    bucket_allowlist: list[str] = field(default_factory=list)
+    bucket_sampling_weights: dict[str, float] = field(default_factory=dict)
+    bucket_quota_caps: dict[str, int] = field(default_factory=dict)
+    bucket_seed_caps: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -139,6 +155,9 @@ class PPOSelfImitationConfig:
     min_episode_reward: float = 0.0
     max_invalid_action_rate: float = 0.05
     selection_metric: str = "final_score"
+    stage_min: str = ""
+    bucket_allowlist: list[str] = field(default_factory=list)
+    quality_threshold: float = 0.0
 
 
 @dataclass
@@ -238,6 +257,10 @@ class PPOConfig:
             max_failures_per_type=max(0, _safe_int(hard_case_raw.get("max_failures_per_type"), 0)),
             max_failures_per_seed=max(0, _safe_int(hard_case_raw.get("max_failures_per_seed"), 0)),
             replay_weight_scale=max(0.0, _safe_float(hard_case_raw.get("replay_weight_scale"), 1.0)),
+            bucket_allowlist=_as_string_list(hard_case_raw.get("bucket_allowlist")),
+            bucket_sampling_weights=_as_float_mapping(hard_case_raw.get("bucket_sampling_weights")),
+            bucket_quota_caps=_as_int_mapping(hard_case_raw.get("bucket_quota_caps")),
+            bucket_seed_caps=_as_int_mapping(hard_case_raw.get("bucket_seed_caps")),
         )
         self_imitation_cfg = PPOSelfImitationConfig(
             enabled=bool(self_imitation_raw.get("enabled", False)),
@@ -252,6 +275,9 @@ class PPOConfig:
                 max(0.0, _safe_float(self_imitation_raw.get("max_invalid_action_rate"), 0.05)),
             ),
             selection_metric=str(self_imitation_raw.get("selection_metric") or "final_score").strip() or "final_score",
+            stage_min=str(self_imitation_raw.get("stage_min") or "").strip(),
+            bucket_allowlist=_as_string_list(self_imitation_raw.get("bucket_allowlist")),
+            quality_threshold=_safe_float(self_imitation_raw.get("quality_threshold"), 0.0),
         )
         train_cfg = PPOTrainConfig(
             ppo_epochs=max(1, _safe_int(train_raw.get("ppo_epochs"), 2)),

@@ -1,0 +1,25 @@
+{
+  "schema": "p41_failure_mining_config_v1",
+  "output": {
+    "artifacts_root": "docs/artifacts/research/r2s2_failure_buckets"
+  },
+  "input": {
+    "p39_root": "docs/artifacts/p39",
+    "arena_run_dir": "docs/artifacts/research/r2s1_certification/r2s1-cert-f-20260310-120906/arena_eval/arena_runs/r2s1-cert-f-20260310-120906-arena",
+    "candidate_decision_json": "docs/artifacts/research/r2s1_certification/r2s1-cert-f-20260310-120906/champion_eval/champion_eval_20260310-120959/candidate_decision.json"
+  },
+  "criteria": {
+    "candidate_policy": "model_policy",
+    "champion_policy": "heuristic_baseline",
+    "bottom_quantile": 0.6,
+    "champion_score_regression_ratio": 0.03,
+    "high_risk_round_threshold": 2,
+    "max_failures": 72,
+    "max_failures_per_type": 18,
+    "max_failures_per_seed": 4
+  },
+  "quick": {
+    "max_episode_scan": 320
+  },
+  "__yaml_source_sha256__": "0c7c41a4e6092850dbbbdefa04e7c46dd329e758f3dee3aee3ecdaa1419832e0"
+}

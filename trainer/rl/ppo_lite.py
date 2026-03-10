@@ -25,6 +25,7 @@ except Exception:  # pragma: no cover
     yaml = None
 
 from trainer.closed_loop.replay_manifest import build_seeds_payload
+from trainer.closed_loop.failure_buckets import KNOWN_FAILURE_BUCKETS, scarce_failure_buckets
 from trainer.monitoring.progress_schema import append_progress_event as append_unified_progress_event
 from trainer.monitoring.progress_schema import build_progress_event, get_gpu_mem_mb
 from trainer.registry.checkpoint_registry import register_checkpoint
@@ -270,6 +271,18 @@ def _safe_ratio(numerator: float, denominator: float) -> float:
     return float(numerator) / float(denominator)
 
 
+def _normalized_token(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _counter_ratios(counter_like: dict[str, Any]) -> dict[str, float]:
+    counts = {str(key): _safe_int(value, 0) for key, value in dict(counter_like).items() if str(key).strip()}
+    total = sum(counts.values())
+    if total <= 0:
+        return {}
+    return {key: round(float(value) / float(total), 6) for key, value in sorted(counts.items())}
+
+
 def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any]:
     hard_cfg = cfg.hard_case_sampling
     if not bool(hard_cfg.enabled):
@@ -307,6 +320,22 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
     payload = _read_yaml_or_json(manifest_path)
     raw_failures = payload.get("failures") if isinstance(payload.get("failures"), list) else []
     allowed_types = {str(token).strip() for token in hard_cfg.prioritize_failure_types if str(token).strip()}
+    allowed_buckets = {str(token).strip() for token in hard_cfg.bucket_allowlist if str(token).strip()}
+    bucket_sampling_weights = {
+        str(bucket).strip(): max(0.0, _safe_float(weight, 0.0))
+        for bucket, weight in (hard_cfg.bucket_sampling_weights or {}).items()
+        if str(bucket).strip()
+    }
+    bucket_quota_caps = {
+        str(bucket).strip(): max(0, _safe_int(cap, 0))
+        for bucket, cap in (hard_cfg.bucket_quota_caps or {}).items()
+        if str(bucket).strip()
+    }
+    bucket_seed_caps = {
+        str(bucket).strip(): max(0, _safe_int(cap, 0))
+        for bucket, cap in (hard_cfg.bucket_seed_caps or {}).items()
+        if str(bucket).strip()
+    }
 
     failure_seed_counts: Counter[str] = Counter()
     failure_type_counts: Counter[str] = Counter()
@@ -323,10 +352,14 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
         failure_types = [str(token).strip() for token in (row.get("failure_types") or []) if str(token).strip()]
         if allowed_types and failure_types and not any(token in allowed_types for token in failure_types):
             continue
+        failure_bucket = str(row.get("failure_bucket") or "unknown").strip() or "unknown"
+        if allowed_buckets and failure_bucket not in allowed_buckets:
+            continue
+        bucket_weight = max(0.01, bucket_sampling_weights.get(failure_bucket, 1.0))
         payload = {
             "seed": row_seed,
             "failure_types": failure_types,
-            "failure_bucket": str(row.get("failure_bucket") or "unknown").strip() or "unknown",
+            "failure_bucket": failure_bucket,
             "slice_tags": [str(token).strip() for token in (row.get("slice_tags") or []) if str(token).strip()],
             "risk_tags": [str(token).strip() for token in (row.get("risk_tags") or []) if str(token).strip()],
             "episode_id": str(row.get("episode_id") or ""),
@@ -334,6 +367,11 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
             "replay_weight": max(
                 0.01,
                 _safe_float(row.get("replay_weight"), 1.0) * max(0.0, float(hard_cfg.replay_weight_scale)),
+            ),
+            "bucket_sampling_weight": bucket_weight,
+            "weighted_replay_priority": max(
+                0.01,
+                _safe_float(row.get("replay_weight"), 1.0) * max(0.0, float(hard_cfg.replay_weight_scale)) * bucket_weight,
             ),
             "selection_reason": str(row.get("selection_reason") or ""),
             "source_type": str(row.get("source_type") or ""),
@@ -343,6 +381,8 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
 
     candidate_rows.sort(
         key=lambda item: (
+            -_safe_float(item.get("weighted_replay_priority"), 0.0),
+            -_safe_float(item.get("bucket_sampling_weight"), 0.0),
             -_safe_float(item.get("replay_weight"), 0.0),
             _safe_float(item.get("total_score"), 0.0),
             str(item.get("episode_id") or ""),
@@ -351,6 +391,8 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
     selected_rows: list[dict[str, Any]] = []
     selected_by_type: Counter[str] = Counter()
     selected_by_seed: Counter[str] = Counter()
+    selected_by_bucket: Counter[str] = Counter()
+    selected_by_bucket_seed: defaultdict[str, Counter[str]] = defaultdict(Counter)
     per_type_cap = max(0, int(hard_cfg.max_failures_per_type or 0))
     per_seed_cap = max(0, int(hard_cfg.max_failures_per_seed or 0))
     max_failure_cases = max(1, int(hard_cfg.max_failure_cases or 0))
@@ -369,18 +411,29 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
     for row in list(primary_rows) + list(secondary_rows):
         if per_seed_cap > 0 and selected_by_seed[str(row.get("seed") or "")] >= per_seed_cap:
             continue
+        bucket_token = str(row.get("failure_bucket") or "unknown")
+        bucket_cap = max(0, bucket_quota_caps.get(bucket_token, 0))
+        if bucket_cap > 0 and selected_by_bucket[bucket_token] >= bucket_cap:
+            continue
+        bucket_seed_cap = max(0, bucket_seed_caps.get(bucket_token, 0))
+        if bucket_seed_cap > 0 and selected_by_bucket_seed[bucket_token][str(row.get("seed") or "")] >= bucket_seed_cap:
+            continue
         if bool(hard_cfg.balance_across_failure_types) and per_type_cap > 0:
             failure_tokens = row.get("failure_types") if isinstance(row.get("failure_types"), list) else []
             if any(selected_by_type[str(token)] >= per_type_cap for token in failure_tokens):
                 continue
-        selected_rows.append(row)
+        selected_row = dict(row)
+        selected_row["selected_for_training"] = True
+        selected_rows.append(selected_row)
         seed_token = str(row.get("seed") or "")
         selected_by_seed[seed_token] += 1
+        selected_by_bucket[bucket_token] += 1
+        selected_by_bucket_seed[bucket_token][seed_token] += 1
         failure_seed_counts[seed_token] += 1
         for token in row.get("failure_types") if isinstance(row.get("failure_types"), list) else []:
             failure_type_counts[str(token)] += 1
             selected_by_type[str(token)] += 1
-        failure_bucket_counts[str(row.get("failure_bucket") or "unknown")] += 1
+        failure_bucket_counts[bucket_token] += 1
         for tag in row.get("slice_tags") if isinstance(row.get("slice_tags"), list) else []:
             slice_tag_counts[str(tag)] += 1
         for tag in row.get("risk_tags") if isinstance(row.get("risk_tags"), list) else []:
@@ -425,19 +478,32 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
         "failure_seed_counts": dict(sorted(failure_seed_counts.items())),
         "failure_type_counts": dict(sorted(failure_type_counts.items())),
         "failure_bucket_counts": dict(sorted(failure_bucket_counts.items())),
+        "bucket_sampling_weights": dict(sorted(bucket_sampling_weights.items())),
+        "bucket_quota_caps": dict(sorted(bucket_quota_caps.items())),
+        "bucket_seed_caps": dict(sorted(bucket_seed_caps.items())),
+        "bucket_selected_counts": dict(sorted(selected_by_bucket.items())),
+        "bucket_selected_ratios": _counter_ratios(selected_by_bucket),
+        "scarce_failure_buckets": scarce_failure_buckets(failure_bucket_counts),
         "slice_tag_counts": dict(sorted(slice_tag_counts.items())),
         "risk_tag_counts": dict(sorted(risk_tag_counts.items())),
         "selected_failures_preview": selected_rows[:16],
         "mean_replay_weight": float(statistics.mean([_safe_float(row.get('replay_weight'), 0.0) for row in selected_rows]))
         if selected_rows
         else 0.0,
+        "mean_weighted_replay_priority": float(
+            statistics.mean([_safe_float(row.get("weighted_replay_priority"), 0.0) for row in selected_rows])
+        )
+        if selected_rows
+        else 0.0,
         "failure_type_coverage": int(len(failure_type_counts)),
+        "failure_bucket_coverage": int(len(failure_bucket_counts)),
         "seed_replay_factor": int(hard_cfg.seed_replay_factor),
         "include_base_seed": bool(hard_cfg.include_base_seed),
         "preserve_seed_identity": bool(hard_cfg.preserve_seed_identity),
         "balance_across_failure_types": bool(hard_cfg.balance_across_failure_types),
         "max_failures_per_type": int(hard_cfg.max_failures_per_type),
         "max_failures_per_seed": int(hard_cfg.max_failures_per_seed),
+        "known_failure_buckets": list(KNOWN_FAILURE_BUCKETS),
     }
 
 
@@ -473,6 +539,7 @@ def _select_self_imitation_payload(
     steps: list[dict[str, Any]],
     worker_stats_path: Path | None,
     cfg: PPOConfig,
+    stage_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     self_cfg = cfg.self_imitation
     base_step_count = len(steps)
@@ -487,6 +554,15 @@ def _select_self_imitation_payload(
     }
     if not bool(self_cfg.enabled):
         return disabled_payload
+    stage_name = _normalized_token((stage_payload or {}).get("stage"))
+    stage_min = _normalized_token(self_cfg.stage_min)
+    if stage_min and stage_name and stage_name != stage_min:
+        phase_index = _safe_int((stage_payload or {}).get("phase_index"), 0)
+        if not (stage_min.isdigit() and phase_index >= _safe_int(stage_min, 0)):
+            disabled_payload["status"] = "disabled"
+            disabled_payload["reason"] = f"stage_min_requires:{self_cfg.stage_min}"
+            disabled_payload["stage"] = str((stage_payload or {}).get("stage") or "")
+            return disabled_payload
     if worker_stats_path is None or not worker_stats_path.exists():
         disabled_payload["status"] = "stub"
         disabled_payload["reason"] = "worker_stats_missing"
@@ -512,6 +588,8 @@ def _select_self_imitation_payload(
                 continue
             metric_name = str(self_cfg.selection_metric or "final_score").strip().lower()
             metric_value = reward if metric_name == "reward" else score
+            if metric_value < float(self_cfg.quality_threshold):
+                continue
             episodes.append(
                 {
                     "episode_id": str(episode.get("episode_id") or ""),
@@ -555,6 +633,8 @@ def _select_self_imitation_payload(
             cloned = dict(row)
             info_summary = dict(cloned.get("info_summary") or {}) if isinstance(cloned.get("info_summary"), dict) else {}
             info_summary["replay_source"] = "self_imitation"
+            if str((stage_payload or {}).get("stage") or "").strip():
+                info_summary["self_imitation_stage"] = str((stage_payload or {}).get("stage") or "")
             cloned["info_summary"] = info_summary
             cloned["replay_source"] = "self_imitation"
             steps_by_episode[episode_id].append(cloned)
@@ -571,6 +651,11 @@ def _select_self_imitation_payload(
         "selected_episode_count": len(selected_episodes),
         "selected_step_count": len(selected_steps),
         "replay_ratio": replay_ratio,
+        "stage": str((stage_payload or {}).get("stage") or ""),
+        "stage_min": str(self_cfg.stage_min or ""),
+        "quality_threshold": float(self_cfg.quality_threshold),
+        "bucket_allowlist": list(self_cfg.bucket_allowlist or []),
+        "bucket_filter_applied": False,
         "selected_episodes": selected_episodes,
         "steps": selected_steps,
     }
@@ -836,6 +921,7 @@ def _train_one_seed(
             steps=steps,
             worker_stats_path=Path(str(rollout_summary.get("worker_stats_json") or "")) if str(rollout_summary.get("worker_stats_json") or "").strip() else None,
             cfg=applied_cfg,
+            stage_payload=stage_payload,
         )
         replay_steps = self_imitation_payload.get("steps") if isinstance(self_imitation_payload.get("steps"), list) else []
         train_steps = list(steps) + list(replay_steps)
@@ -845,6 +931,10 @@ def _train_one_seed(
             "selected_episode_count": int(self_imitation_payload.get("selected_episode_count") or 0),
             "selected_step_count": int(self_imitation_payload.get("selected_step_count") or 0),
             "replay_ratio": _safe_float(self_imitation_payload.get("replay_ratio"), 0.0),
+            "stage": str(self_imitation_payload.get("stage") or ""),
+            "stage_min": str(self_imitation_payload.get("stage_min") or ""),
+            "quality_threshold": _safe_float(self_imitation_payload.get("quality_threshold"), 0.0),
+            "bucket_allowlist": list(self_imitation_payload.get("bucket_allowlist") or []),
             "selected_episodes": list(self_imitation_payload.get("selected_episodes") or [])[:8],
         }
         self_imitation_updates.append(self_imitation_update_payload)
@@ -1096,7 +1186,11 @@ def _train_one_seed(
             "schema": "p44_self_imitation_stats_v1",
             "generated_at": _now_iso(),
             "seed": str(seed),
-            "enabled": bool(cfg.self_imitation.enabled),
+            "enabled": any(str(row.get("status") or "") == "ok" for row in self_imitation_updates),
+            "configured_enabled": bool(cfg.self_imitation.enabled),
+            "stage_min": str(cfg.self_imitation.stage_min or ""),
+            "bucket_allowlist": list(cfg.self_imitation.bucket_allowlist or []),
+            "quality_threshold": float(cfg.self_imitation.quality_threshold),
             "updates": self_imitation_updates,
             "selected_episode_total": int(sum(self_imitation_episode_hist)),
             "mean_replay_ratio": float(statistics.mean(self_imitation_ratio_hist)) if self_imitation_ratio_hist else 0.0,
@@ -1389,6 +1483,9 @@ def run_ppo_lite_training(
     hard_case_manifest_json = run_dir / "hardcase_manifest.json"
     hard_case_stats_json = run_dir / "hardcase_stats.json"
     hard_case_stats_md = run_dir / "hardcase_stats.md"
+    bucket_replay_manifest_json = run_dir / "bucket_replay_manifest.json"
+    bucket_replay_stats_json = run_dir / "bucket_replay_stats.json"
+    bucket_replay_stats_md = run_dir / "bucket_replay_stats.md"
     hard_case_stats_payload = {
         "schema": "p44_hardcase_stats_v1",
         "generated_at": _now_iso(),
@@ -1399,10 +1496,15 @@ def run_ppo_lite_training(
         "seed_replay_counts": dict(hard_case_plan.get("seed_replay_counts") or {}),
         "failure_type_counts": dict(hard_case_plan.get("failure_type_counts") or {}),
         "failure_bucket_counts": dict(hard_case_plan.get("failure_bucket_counts") or {}),
+        "failure_bucket_ratios": dict(hard_case_plan.get("bucket_selected_ratios") or {}),
+        "bucket_sampling_weights": dict(hard_case_plan.get("bucket_sampling_weights") or {}),
+        "bucket_quota_caps": dict(hard_case_plan.get("bucket_quota_caps") or {}),
         "slice_tag_counts": dict(hard_case_plan.get("slice_tag_counts") or {}),
         "risk_tag_counts": dict(hard_case_plan.get("risk_tag_counts") or {}),
         "mean_replay_weight": _safe_float(hard_case_plan.get("mean_replay_weight"), 0.0),
         "failure_type_coverage": int(hard_case_plan.get("failure_type_coverage") or 0),
+        "failure_bucket_coverage": int(hard_case_plan.get("failure_bucket_coverage") or 0),
+        "scarce_failure_buckets": list(hard_case_plan.get("scarce_failure_buckets") or []),
     }
     _write_json(
         hard_case_manifest_json,
@@ -1416,6 +1518,17 @@ def run_ppo_lite_training(
         },
     )
     _write_json(hard_case_stats_json, hard_case_stats_payload)
+    _write_json(
+        bucket_replay_manifest_json,
+        {
+            "schema": "p44_bucket_replay_manifest_v1",
+            "generated_at": _now_iso(),
+            "run_id": run_token,
+            "selected_failures_preview": list(hard_case_plan.get("selected_failures_preview") or []),
+            "hard_case_plan": hard_case_plan,
+        },
+    )
+    _write_json(bucket_replay_stats_json, hard_case_stats_payload)
     _write_markdown(
         hard_case_stats_md,
         [
@@ -1429,6 +1542,27 @@ def run_ppo_lite_training(
             "## Failure Buckets",
             *(
                 [f"- {k}: {v}" for k, v in sorted(hard_case_stats_payload["failure_bucket_counts"].items(), key=lambda item: (-item[1], item[0]))]
+                if hard_case_stats_payload["failure_bucket_counts"]
+                else ["- none"]
+            ),
+        ],
+    )
+    _write_markdown(
+        bucket_replay_stats_md,
+        [
+            f"# Bucket-aware Replay Stats ({run_token})",
+            "",
+            f"- status: `{hard_case_stats_payload['status']}`",
+            f"- selected_failure_count: `{hard_case_stats_payload['selected_failure_count']}`",
+            f"- failure_bucket_coverage: `{hard_case_stats_payload['failure_bucket_coverage']}`",
+            f"- scarce_failure_buckets: `{', '.join(hard_case_stats_payload['scarce_failure_buckets'])}`",
+            "",
+            "## Bucket Ratios",
+            *(
+                [
+                    f"- {k}: count=`{hard_case_stats_payload['failure_bucket_counts'].get(k)}` ratio=`{hard_case_stats_payload['failure_bucket_ratios'].get(k)}` weight=`{hard_case_stats_payload['bucket_sampling_weights'].get(k, 1.0)}`"
+                    for k in sorted(hard_case_stats_payload["failure_bucket_counts"])
+                ]
                 if hard_case_stats_payload["failure_bucket_counts"]
                 else ["- none"]
             ),
@@ -1448,7 +1582,8 @@ def run_ppo_lite_training(
         "schema": "p44_best_trajectory_stats_v1",
         "generated_at": _now_iso(),
         "run_id": run_token,
-        "enabled": bool(cfg.self_imitation.enabled),
+        "enabled": any(bool(row.get("enabled")) for row in self_imitation_seed_stats),
+        "configured_enabled": bool(cfg.self_imitation.enabled),
         "selected_episode_total": int(sum(int(row.get("selected_episode_count") or 0) for row in best_episode_rows)),
         "selected_step_total": int(sum(int(row.get("selected_step_count") or 0) for row in best_episode_rows)),
         "mean_replay_ratio": (
@@ -1456,6 +1591,9 @@ def run_ppo_lite_training(
             if best_episode_rows
             else 0.0
         ),
+        "stage_min": next((str(row.get("stage_min") or "") for row in self_imitation_seed_stats if str(row.get("stage_min") or "").strip()), str(cfg.self_imitation.stage_min or "")),
+        "bucket_allowlist": next((list(row.get("bucket_allowlist") or []) for row in self_imitation_seed_stats if isinstance(row.get("bucket_allowlist"), list) and row.get("bucket_allowlist")), list(cfg.self_imitation.bucket_allowlist or [])),
+        "quality_threshold": next((_safe_float(row.get("quality_threshold"), 0.0) for row in self_imitation_seed_stats if _safe_float(row.get("quality_threshold"), 0.0) > 0.0), float(cfg.self_imitation.quality_threshold)),
     }
     _write_json(
         best_trajectory_manifest_json,
@@ -1594,8 +1732,60 @@ def run_ppo_lite_training(
         "hard_case_mean_replay_weight": _safe_float(hard_case_plan.get("mean_replay_weight"), 0.0),
         "self_imitation_selected_episodes": int(best_trajectory_stats_payload.get("selected_episode_total") or 0),
         "self_imitation_replay_ratio": _safe_float(best_trajectory_stats_payload.get("mean_replay_ratio"), 0.0),
+        "self_imitation_stage_min": str(best_trajectory_stats_payload.get("stage_min") or ""),
+        "self_imitation_quality_threshold": _safe_float(best_trajectory_stats_payload.get("quality_threshold"), 0.0),
         "certification_status": "fast_pass",
     }
+    bucket_target_weights = {
+        str(bucket): max(0.0, _safe_float(weight, 0.0))
+        for bucket, weight in (hard_case_plan.get("bucket_sampling_weights") or {}).items()
+        if str(bucket).strip()
+    }
+    bucket_mix_delta_vs_target: dict[str, float] = {}
+    bucket_ratios = dict(hard_case_plan.get("bucket_selected_ratios") or {})
+    if bucket_target_weights:
+        weight_sum = sum(bucket_target_weights.values())
+        normalized_targets = {
+            bucket: round(_safe_ratio(weight, weight_sum), 6) for bucket, weight in bucket_target_weights.items()
+        } if weight_sum > 0.0 else {}
+        for bucket in sorted(set(bucket_ratios) | set(normalized_targets)):
+            bucket_mix_delta_vs_target[bucket] = round(
+                _safe_float(bucket_ratios.get(bucket), 0.0) - _safe_float(normalized_targets.get(bucket), 0.0),
+                6,
+            )
+    bucket_metrics_json = run_dir / "bucket_metrics.json"
+    slice_metrics_json = run_dir / "slice_metrics.json"
+    training_summary_md = run_dir / "training_summary.md"
+    bucket_metrics_payload = {
+        "schema": "p44_bucket_metrics_v1",
+        "generated_at": _now_iso(),
+        "run_id": run_token,
+        "status": status,
+        "failure_bucket_counts": dict(hard_case_plan.get("failure_bucket_counts") or {}),
+        "failure_bucket_ratios": bucket_ratios,
+        "bucket_sampling_weights": bucket_target_weights,
+        "bucket_quota_caps": dict(hard_case_plan.get("bucket_quota_caps") or {}),
+        "bucket_mix_delta_vs_target": bucket_mix_delta_vs_target,
+        "scarce_failure_buckets": list(hard_case_plan.get("scarce_failure_buckets") or []),
+        "failure_bucket_coverage": int(hard_case_plan.get("failure_bucket_coverage") or 0),
+        "known_failure_buckets": list(hard_case_plan.get("known_failure_buckets") or KNOWN_FAILURE_BUCKETS),
+        "self_imitation_stage_min": str(cfg.self_imitation.stage_min or ""),
+        "certification_status": "fast_pass",
+    }
+    slice_metrics_payload = {
+        "schema": "p44_slice_metrics_v1",
+        "generated_at": _now_iso(),
+        "run_id": run_token,
+        "status": status,
+        "slice_tag_counts": dict(hard_case_plan.get("slice_tag_counts") or {}),
+        "slice_tag_ratios": _counter_ratios(hard_case_plan.get("slice_tag_counts") or {}),
+        "risk_tag_counts": dict(hard_case_plan.get("risk_tag_counts") or {}),
+        "risk_tag_ratios": _counter_ratios(hard_case_plan.get("risk_tag_counts") or {}),
+        "curriculum_phase_count": int(curriculum_plan.get("phase_count") or 0),
+        "certification_status": "fast_pass",
+    }
+    _write_json(bucket_metrics_json, bucket_metrics_payload)
+    _write_json(slice_metrics_json, slice_metrics_payload)
     manifest = {
         "schema": "p44_rl_train_manifest_v1",
         "generated_at": _now_iso(),
@@ -1614,11 +1804,16 @@ def run_ppo_lite_training(
             "hard_case_sampling_json": str(hard_case_sampling_json),
             "hardcase_manifest_json": str(hard_case_manifest_json),
             "hardcase_stats_json": str(hard_case_stats_json),
+            "bucket_replay_manifest_json": str(bucket_replay_manifest_json),
+            "bucket_replay_stats_json": str(bucket_replay_stats_json),
             "best_trajectory_manifest_json": str(best_trajectory_manifest_json),
             "best_trajectory_stats_json": str(best_trajectory_stats_json),
             "curriculum_plan": str(curriculum_plan_path),
             "curriculum_applied": str(curriculum_applied_path),
             "reward_schedule_json": str(reward_schedule_json),
+            "bucket_metrics_json": str(bucket_metrics_json),
+            "slice_metrics_json": str(slice_metrics_json),
+            "training_summary_md": str(training_summary_md),
             "multi_seed_eval": str(eval_summary.get("seed_results_json") or ""),
             "diagnostics_json": str(diagnostics_summary.get("diagnostics_json") or ""),
             "diagnostics_report_md": str(diagnostics_summary.get("diagnostics_report_md") or ""),
@@ -1652,6 +1847,8 @@ def run_ppo_lite_training(
                     "diagnostics_json": str(diagnostics_summary.get("diagnostics_json") or ""),
                     "progress_unified_jsonl": str(unified_progress_path.resolve()),
                     "hardcase_stats_json": str(hard_case_stats_json.resolve()),
+                    "bucket_metrics_json": str(bucket_metrics_json.resolve()),
+                    "slice_metrics_json": str(slice_metrics_json.resolve()),
                     "best_trajectory_stats_json": str(best_trajectory_stats_json.resolve()),
                     "reward_schedule_json": str(reward_schedule_json.resolve()),
                 },
@@ -1682,6 +1879,38 @@ def run_ppo_lite_training(
             f"- self_imitation_selected_episodes: `{metrics_payload.get('self_imitation_selected_episodes')}`",
             f"- self_imitation_replay_ratio: `{metrics_payload.get('self_imitation_replay_ratio')}`",
             f"- certification_status: `{metrics_payload.get('certification_status')}`",
+        ],
+    )
+    _write_markdown(
+        training_summary_md,
+        [
+            f"# R2-S2 Training Summary ({run_token})",
+            "",
+            f"- status: `{status}`",
+            f"- candidate_checkpoint: `{best_checkpoint}`",
+            f"- mean_score: `{metrics_payload.get('mean_score')}`",
+            f"- eval_mean_score: `{metrics_payload.get('eval_mean_score')}`",
+            f"- invalid_action_rate: `{metrics_payload.get('invalid_action_rate')}`",
+            f"- hard_case_selected_failures: `{metrics_payload.get('hard_case_selected_failures')}`",
+            f"- hard_case_failure_type_count: `{metrics_payload.get('hard_case_failure_type_count')}`",
+            f"- self_imitation_replay_ratio: `{metrics_payload.get('self_imitation_replay_ratio')}`",
+            "",
+            "## Bucket Replay Coverage",
+            *(
+                [
+                    f"- {bucket}: count=`{bucket_metrics_payload['failure_bucket_counts'].get(bucket)}` ratio=`{bucket_metrics_payload['failure_bucket_ratios'].get(bucket)}` delta_vs_target=`{bucket_metrics_payload['bucket_mix_delta_vs_target'].get(bucket, 0.0)}`"
+                    for bucket in sorted(bucket_metrics_payload["failure_bucket_counts"])
+                ]
+                if bucket_metrics_payload["failure_bucket_counts"]
+                else ["- none"]
+            ),
+            "",
+            "## Slice Coverage",
+            *(
+                [f"- {tag}: `{count}`" for tag, count in sorted(slice_metrics_payload["slice_tag_counts"].items(), key=lambda item: (-item[1], item[0]))[:12]]
+                if slice_metrics_payload["slice_tag_counts"]
+                else ["- none"]
+            ),
         ],
     )
     (run_dir / "best_checkpoint.txt").write_text(str(best_checkpoint).strip() + "\n", encoding="utf-8")
@@ -1723,13 +1952,18 @@ def run_ppo_lite_training(
         "hard_case_sampling_json": str(hard_case_sampling_json),
         "hardcase_manifest_json": str(hard_case_manifest_json),
         "hardcase_stats_json": str(hard_case_stats_json),
+        "bucket_replay_manifest_json": str(bucket_replay_manifest_json),
+        "bucket_replay_stats_json": str(bucket_replay_stats_json),
         "warnings_log": str(warnings_log_path),
         "curriculum_plan": str(curriculum_plan_path),
         "curriculum_applied": str(curriculum_applied_path),
         "reward_schedule_json": str(reward_schedule_json),
+        "bucket_metrics_json": str(bucket_metrics_json),
+        "slice_metrics_json": str(slice_metrics_json),
         "best_trajectory_manifest_json": str(best_trajectory_manifest_json),
         "best_trajectory_stats_json": str(best_trajectory_stats_json),
         "summary_md": str(run_dir / "summary.md"),
+        "training_summary_md": str(training_summary_md),
         "eval_seed_results": str(eval_summary.get("seed_results_json") or ""),
         "diagnostics_json": str(diagnostics_summary.get("diagnostics_json") or ""),
         "diagnostics_report_md": str(diagnostics_summary.get("diagnostics_report_md") or ""),

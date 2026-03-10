@@ -17,6 +17,7 @@ try:  # pragma: no cover - optional dependency
 except Exception:  # pragma: no cover
     yaml = None
 
+from trainer.closed_loop.failure_buckets import KNOWN_FAILURE_BUCKETS, classify_failure_bucket, scarce_failure_buckets
 from trainer.closed_loop.replay_manifest import now_iso, now_stamp, read_json, write_json, write_markdown
 
 
@@ -163,18 +164,6 @@ def _infer_risk_tags(row: dict[str, Any], *, high_risk_round_threshold: int, low
     return sorted(tags)
 
 
-def _failure_bucket_for(*, failure_types: set[str], slice_tags: list[str], risk_tags: list[str]) -> str:
-    if {"invalid_action", "timeout", "execution_error", "episode_failure_status"} & failure_types:
-        return "invalid_like_or_execution"
-    if any(tag.startswith("action_type:shop") or tag.startswith("resource_pressure:") for tag in slice_tags):
-        return "poor_shop_or_resource_decision"
-    if "champion_regression_segment" in failure_types:
-        return "policy_search_disagreement_failure"
-    if "high_risk_bucket_failure" in failure_types or {"early_collapse", "resource_tight"} & set(risk_tags):
-        return "high_risk_collapse"
-    return "low_score_survival"
-
-
 def _replay_weight_for(*, failure_types: set[str], score: float, low_threshold: float, risk_tags: list[str]) -> float:
     weight = 1.0
     if "champion_regression_segment" in failure_types:
@@ -211,6 +200,7 @@ def _build_markdown(
     counters_by_policy: dict[str, int],
     counters_by_seed: dict[str, int],
     replay_weight_summary: dict[str, float],
+    scarce_buckets: list[str],
     warnings: list[str],
 ) -> list[str]:
     lines = [
@@ -229,6 +219,11 @@ def _build_markdown(
     lines.extend(["", "## Failure Bucket Distribution"])
     if counters_by_bucket:
         lines.extend([f"- {k}: {v}" for k, v in sorted(counters_by_bucket.items(), key=lambda kv: (-kv[1], kv[0]))])
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Scarce Buckets"])
+    if scarce_buckets:
+        lines.extend([f"- {bucket}" for bucket in scarce_buckets])
     else:
         lines.append("- none")
     lines.extend(["", "## Slice Tag Coverage"])
@@ -362,6 +357,7 @@ def run_failure_mining(
                 counters_by_policy={},
                 counters_by_seed={},
                 replay_weight_summary={},
+                scarce_buckets=list(KNOWN_FAILURE_BUCKETS),
                 warnings=warnings,
             ),
         )
@@ -484,11 +480,13 @@ def run_failure_mining(
             high_risk_round_threshold=high_risk_round_threshold,
             low_threshold=low_threshold,
         )
-        failure_bucket = _failure_bucket_for(
+        bucket_payload = classify_failure_bucket(
+            row=row,
             failure_types=failure_types,
-            slice_tags=slice_tags,
-            risk_tags=risk_tags,
+            high_risk_round_threshold=high_risk_round_threshold,
+            low_score_threshold=low_threshold,
         )
+        failure_bucket = str(bucket_payload.get("failure_bucket") or "low_score_survival")
         replay_weight = _replay_weight_for(
             failure_types=failure_types,
             score=score,
@@ -514,6 +512,7 @@ def run_failure_mining(
             "timeout_rate": timeout_rate,
             "failure_types": sorted(failure_types),
             "failure_bucket": failure_bucket,
+            "bucket_reason": str(bucket_payload.get("bucket_reason") or ""),
             "slice_tags": slice_tags,
             "risk_tags": risk_tags,
             "source_type": "arena_failure_mining",
@@ -581,6 +580,7 @@ def run_failure_mining(
                     "episode_index": item["episode_index"],
                     "failure_types": item["failure_types"],
                     "failure_bucket": item["failure_bucket"],
+                    "bucket_reason": item["bucket_reason"],
                     "slice_tags": item["slice_tags"],
                     "risk_tags": item["risk_tags"],
                     "source_type": item["source_type"],
@@ -634,6 +634,7 @@ def run_failure_mining(
                 "episode_index": item["episode_index"],
                 "failure_types": item["failure_types"],
                 "failure_bucket": item["failure_bucket"],
+                "bucket_reason": item["bucket_reason"],
                 "slice_tags": item["slice_tags"],
                 "risk_tags": item["risk_tags"],
                 "source_type": item["source_type"],
@@ -660,6 +661,8 @@ def run_failure_mining(
         "selected_failures": len(selected),
         "by_type": dict(sorted(by_type.items())),
         "by_bucket": dict(sorted(by_bucket.items())),
+        "known_failure_buckets": list(KNOWN_FAILURE_BUCKETS),
+        "scarce_buckets": scarce_failure_buckets(by_bucket),
         "by_slice_tag": dict(sorted(by_slice.items())),
         "by_risk_tag": dict(sorted(by_risk.items())),
         "by_policy": dict(sorted(by_policy.items())),
@@ -687,12 +690,15 @@ def run_failure_mining(
         counters_by_policy=dict(by_policy),
         counters_by_seed=dict(by_seed),
         replay_weight_summary=stats.get("replay_weight") if isinstance(stats.get("replay_weight"), dict) else {},
+        scarce_buckets=list(stats.get("scarce_buckets") or []),
         warnings=warnings,
     )
 
     write_json(run_dir / "failure_pack_manifest.json", manifest)
     write_json(run_dir / "failure_pack_stats.json", stats)
+    write_json(run_dir / "failure_bucket_stats.json", stats)
     write_markdown(run_dir / "failure_pack_stats.md", md_lines)
+    write_markdown(run_dir / "failure_bucket_stats.md", md_lines)
 
     return {
         "status": status,
@@ -700,6 +706,7 @@ def run_failure_mining(
         "run_dir": str(run_dir),
         "failure_pack_manifest": str(run_dir / "failure_pack_manifest.json"),
         "failure_pack_stats": str(run_dir / "failure_pack_stats.json"),
+        "failure_bucket_stats": str(run_dir / "failure_bucket_stats.json"),
         "replay_jsonl_path": str(replay_jsonl_path),
         "selected_failures": len(selected),
     }

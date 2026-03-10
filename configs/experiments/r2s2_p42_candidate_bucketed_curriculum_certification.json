@@ -1,0 +1,24 @@
+{
+  "schema": "p42_candidate_train_config_v1",
+  "candidate_modes": [
+    "rl_ppo_lite"
+  ],
+  "allow_legacy_fallback": false,
+  "legacy_fallback_modes": [
+    "bc_finetune"
+  ],
+  "output": {
+    "artifacts_root": "docs/artifacts/research/r2s2_candidate_train"
+  },
+  "seeds": [
+    "AAAAAAA",
+    "BBBBBBB",
+    "CCCCCCC",
+    "DDDDDDD"
+  ],
+  "rl_config": "configs/experiments/r2s2_p42_rl_bucketed_curriculum_certification.yaml",
+  "training": {
+    "timeout_sec": 7200
+  },
+  "__yaml_source_sha256__": "588bcaf6a1671a015a95efaf1fd103d21582a950d6c16ca01738aec50fae3db3"
+}
