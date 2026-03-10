@@ -325,6 +325,47 @@ R2-S1 interpretation:
   - tighter late-stage self-imitation gating
 - no RL recipe is promotion-ready yet, but pure RL is no longer stalled at the old survival baseline
 
+## R2-S2 纯 RL 失败覆盖与切片定向更新（2026-03-10）
+
+R2-S2 没有切换总架构，而是在 R2-S1 strongest certified pure-RL recipe 的基础上继续强化纯 RL 数据引擎，重点放在：
+
+1. 把 hard-case 从黑盒扩展为显式 `failure buckets`
+2. 让 replay 真正按 bucket 权重和 caps 进入 PPO，而不是只写 manifest
+3. 把 self-imitation 限制在后期、低比例、受控使用
+4. 让 curriculum / reward schedule 与 replay bucket 配比联动
+5. 输出更清晰的 per-bucket / per-slice 训练诊断
+
+本轮关键证据：
+
+- Batch D（bucket-aware replay smoke）：
+  - candidate `61.0` vs heuristic `400.0`
+  - bucket-aware replay 已真实进入训练
+  - 但当前 failure source 几乎全部集中在 `early_collapse`
+- Batch E（受控 self-imitation + curriculum/reward 联动 smoke）：
+  - candidate `60.5` vs heuristic `400.0`
+  - 后期低比例 self-imitation 已能受控生效
+  - 但在当前 failure coverage 仍窄的前提下，没有形成增益
+- Certification C3（bucket-aware curriculum nightly）：
+  - candidate `74.0` vs heuristic `303.0`
+  - recommendation 仍为 `observe`
+- 统一 compare 协议：
+  - `r2s2_bucket_curriculum_cert = 96.5`
+  - `reward_survival_baseline = 94.75`
+  - `r2s1_curriculum_cert = 89.25`
+  - `heuristic_baseline = 303.0`
+
+R2-S2 结论：
+
+- 当前 strongest bucket-aware certified pure-RL checkpoint 已经出现，但仍远弱于 heuristic champion
+- 这轮最重要的负面发现不是“bucket-aware replay 无效”，而是：
+  - 当前可用 failure source 覆盖仍过窄
+  - 训练看到的主要还是 `early_collapse`
+  - 因此 replay mixer 的结构已经具备，但输入分布还不够好
+- 下一阶段最值得继续的纯 RL 子路线不是回到 warm-start，而是：
+  - 扩大 `resource_pressure_misplay` / `discard_mismanagement` / `shop_or_economy_misallocation` / position-sensitive 相关 failure source
+  - 继续保持 late-stage low-ratio self-imitation，只把它当受控辅助
+  - 在 richer failure coverage 上重新做 bucket-aware curriculum 认证
+
 ## Known Gaps
 
 - PPO-lite intentionally omits advanced PPO/distributed features (opponent pools, large-batch parallel rollouts).
