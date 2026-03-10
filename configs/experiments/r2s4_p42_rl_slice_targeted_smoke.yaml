@@ -1,0 +1,120 @@
+schema: p42_ppo_lite_config_v1
+
+output_artifacts_root: docs/artifacts/research/r2s4_training
+curriculum_config: configs/experiments/r2s4_p44_curriculum_slice_targeted.yaml
+
+seeds:
+  - AAAAAAA
+  - BBBBBBB
+  - CCCCCCC
+  - DDDDDDD
+
+env:
+  backend: sim
+  timeout_sec: 8.0
+  max_steps_per_episode: 240
+  max_auto_steps: 8
+  max_ante: 0
+  auto_advance: true
+  reward:
+    score_delta_weight: 0.95
+    survival_bonus: 0.05
+    terminal_win_bonus: 0.80
+    terminal_loss_penalty: 0.80
+    invalid_action_penalty: 0.12
+    clip_abs: 2.5
+    penalize_requested_invalid: true
+    invalid_action_mode: fallback_first_legal
+
+rollout:
+  episodes_per_seed: 6
+  max_steps_per_episode: 155
+  total_steps_cap: 2200
+  early_stop_invalid_rate: 0.35
+  min_steps_before_early_stop: 64
+
+evaluation:
+  seeds:
+    - AAAAAAA
+    - BBBBBBB
+    - CCCCCCC
+    - DDDDDDD
+  episodes_per_seed: 2
+  max_steps_per_episode: 180
+  greedy: true
+  out_root: docs/artifacts/research/r2s4_eval
+
+diagnostics:
+  out_root: docs/artifacts/research/r2s4_diagnostics
+  action_topk: 16
+
+hard_case_sampling:
+  enabled: true
+  failure_pack_manifest: ""
+  max_failure_cases: 112
+  max_failure_seeds: 10
+  seed_replay_factor: 4
+  include_base_seed: true
+  preserve_seed_identity: true
+  prioritize_failure_types:
+    - triage_degraded_slice
+    - champion_regression_segment
+    - low_score_quantile
+  balance_across_failure_types: true
+  max_failures_per_type: 8
+  max_failures_per_seed: 4
+  replay_weight_scale: 1.30
+  bucket_sampling_weights:
+    risk_undercommit: 1.55
+    resource_pressure_misplay: 1.30
+    shop_or_economy_misallocation: 1.22
+    position_sensitive_misplay: 1.18
+    stateful_joker_misplay: 1.16
+    discard_mismanagement: 0.82
+    early_collapse: 0.72
+  bucket_quota_caps:
+    risk_undercommit: 28
+    resource_pressure_misplay: 18
+    shop_or_economy_misallocation: 10
+    position_sensitive_misplay: 8
+    stateful_joker_misplay: 8
+    discard_mismanagement: 8
+    early_collapse: 6
+  slice_sampling_weights:
+    slice_action_type:play: 1.38
+    slice_action_type:discard: 0.88
+    slice_resource_pressure:low: 1.28
+    slice_resource_pressure:medium: 1.18
+    slice_stage:early: 1.12
+  slice_quota_caps:
+    slice_action_type:play: 28
+    slice_resource_pressure:low: 18
+    slice_resource_pressure:medium: 16
+  risk_tag_sampling_weights:
+    resource_relaxed: 1.18
+    resource_balanced: 1.12
+    early_collapse: 0.72
+  risk_tag_quota_caps:
+    early_collapse: 8
+    resource_relaxed: 18
+    resource_balanced: 16
+
+self_imitation:
+  enabled: false
+  replay_ratio: 0.0
+
+train:
+  ppo_epochs: 2
+  minibatch_size: 64
+  clip_range: 0.2
+  gamma: 0.99
+  gae_lambda: 0.95
+  entropy_coef: 0.01
+  value_coef: 0.5
+  lr: 0.00025
+  grad_clip_norm: 0.5
+  normalize_advantage: true
+  max_updates: 3
+  invalid_action_warn_threshold: 0.12
+  max_kl_warn: 0.20
+  nan_fail_fast: true

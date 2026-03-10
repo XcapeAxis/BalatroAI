@@ -141,6 +141,7 @@ class PPOHardCaseSamplingConfig:
     bucket_allowlist: list[str] = field(default_factory=list)
     bucket_sampling_weights: dict[str, float] = field(default_factory=dict)
     bucket_quota_caps: dict[str, int] = field(default_factory=dict)
+    bucket_minimum_counts: dict[str, int] = field(default_factory=dict)
     bucket_seed_caps: dict[str, int] = field(default_factory=dict)
     slice_allowlist: list[str] = field(default_factory=list)
     slice_sampling_weights: dict[str, float] = field(default_factory=dict)
@@ -269,6 +270,7 @@ class PPOConfig:
             bucket_allowlist=_as_string_list(hard_case_raw.get("bucket_allowlist")),
             bucket_sampling_weights=_as_float_mapping(hard_case_raw.get("bucket_sampling_weights")),
             bucket_quota_caps=_as_int_mapping(hard_case_raw.get("bucket_quota_caps")),
+            bucket_minimum_counts=_as_int_mapping(hard_case_raw.get("bucket_minimum_counts")),
             bucket_seed_caps=_as_int_mapping(hard_case_raw.get("bucket_seed_caps")),
             slice_allowlist=_as_string_list(hard_case_raw.get("slice_allowlist")),
             slice_sampling_weights=_as_float_mapping(hard_case_raw.get("slice_sampling_weights")),

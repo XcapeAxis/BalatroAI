@@ -1,0 +1,70 @@
+{
+  "schema": "p41_failure_mining_config_v1",
+  "output": {
+    "artifacts_root": "docs/artifacts/research/r2s4_failure_buckets"
+  },
+  "input": {
+    "p39_root": "docs/artifacts/research/r2s3_certification/r2s3-c4-certification/arena_eval/champion_eval",
+    "arena_run_dirs": [
+      "docs/artifacts/research/r2s2_certification/r2s2-cert-c3-20260310-2338/arena_eval/arena_runs/r2s2-cert-c3-20260310-2338-arena",
+      "docs/artifacts/research/r2s3_certification/r2s3-c4-certification/arena_eval/arena_runs/r2s3-c4-certification-arena"
+    ],
+    "triage_report_jsons": [
+      "docs/artifacts/research/r2s2_certification/r2s2-cert-c3-20260310-2338/triage_report.json",
+      "docs/artifacts/research/r2s3_certification/r2s3-c4-certification/triage_report.json"
+    ],
+    "promotion_decision_jsons": [
+      "docs/artifacts/research/r2s2_certification/r2s2-cert-c3-20260310-2338/promotion_decision.json",
+      "docs/artifacts/research/r2s3_certification/r2s3-c4-certification/promotion_decision.json"
+    ]
+  },
+  "criteria": {
+    "candidate_policy": "model_policy",
+    "champion_policy": "heuristic_baseline",
+    "bottom_quantile": 0.65,
+    "champion_score_regression_ratio": 0.03,
+    "high_risk_round_threshold": 2,
+    "max_failures": 128,
+    "max_failures_per_type": 24,
+    "max_failures_per_seed": 4,
+    "max_slice_gap_failures_per_source": 4,
+    "slice_gap_priority_weight": 1.35,
+    "max_failures_per_bucket": {
+      "discard_mismanagement": 24,
+      "resource_pressure_misplay": 18,
+      "shop_or_economy_misallocation": 12,
+      "position_sensitive_misplay": 10,
+      "stateful_joker_misplay": 10,
+      "low_score_survival": 14,
+      "early_collapse": 14
+    },
+    "min_failures_per_bucket": {
+      "resource_pressure_misplay": 6,
+      "shop_or_economy_misallocation": 4,
+      "position_sensitive_misplay": 4,
+      "stateful_joker_misplay": 4,
+      "low_score_survival": 4
+    },
+    "max_failures_per_source": {
+      "r2s2-cert-c3-20260310-2338-arena": 64,
+      "r2s3-c4-certification-arena": 72
+    },
+    "bucket_priority_weights": {
+      "resource_pressure_misplay": 1.35,
+      "shop_or_economy_misallocation": 1.25,
+      "position_sensitive_misplay": 1.25,
+      "stateful_joker_misplay": 1.25,
+      "low_score_survival": 1.1,
+      "discard_mismanagement": 1.0,
+      "early_collapse": 0.8
+    },
+    "source_priority_weights": {
+      "r2s2-cert-c3-20260310-2338-arena": 1.0,
+      "r2s3-c4-certification-arena": 1.12
+    }
+  },
+  "quick": {
+    "max_episode_scan": 480
+  },
+  "__yaml_source_sha256__": "4a954784470669f91cedb3ae2065c164e7e9681c997bd0361ab9fc166f78b72c"
+}

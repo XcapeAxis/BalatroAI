@@ -56,6 +56,37 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return int(default)
 
 
+def _normalized_float_mapping(raw: Any) -> dict[str, float]:
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, float] = {}
+    for key, value in raw.items():
+        token = str(key).strip()
+        if not token:
+            continue
+        out[token] = _safe_float(value, 0.0)
+    return out
+
+
+def _normalized_int_mapping(raw: Any) -> dict[str, int]:
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, int] = {}
+    for key, value in raw.items():
+        token = str(key).strip()
+        if not token:
+            continue
+        out[token] = _safe_int(value, 0)
+    return out
+
+
+def _normalized_string_list(raw: Any) -> list[str]:
+    if isinstance(raw, list):
+        return [str(item).strip() for item in raw if str(item).strip()]
+    token = str(raw or "").strip()
+    return [token] if token else []
+
+
 def _quantile(values: list[float], q: float) -> float:
     if not values:
         return 0.0
@@ -99,6 +130,173 @@ def _latest_dir(path: Path) -> Path | None:
     if not dirs:
         return None
     return dirs[-1]
+
+
+def _resolve_indexed_path_list(
+    raw_paths: list[str],
+    *,
+    repo_root: Path,
+) -> list[Path]:
+    resolved: list[Path] = []
+    for raw in raw_paths:
+        path = Path(raw)
+        if not path.is_absolute():
+            path = (repo_root / path).resolve()
+        resolved.append(path)
+    return resolved
+
+
+def _resolve_candidate_decision_path(
+    *,
+    repo_root: Path,
+    explicit_path: str,
+    promotion_decision_path: Path | None,
+    p39_root: Path,
+) -> Path | None:
+    if explicit_path:
+        path = Path(explicit_path)
+        if not path.is_absolute():
+            path = (repo_root / path).resolve()
+        return path
+    if promotion_decision_path is not None and promotion_decision_path.exists():
+        payload = read_json(promotion_decision_path)
+        if isinstance(payload, dict):
+            inner = payload.get("champion_rules_payload")
+            if isinstance(inner, dict):
+                path_text = str(inner.get("candidate_decision_json") or "").strip()
+                if path_text:
+                    path = Path(path_text)
+                    if not path.is_absolute():
+                        path = (repo_root / path).resolve()
+                    return path
+    latest_eval = _latest_dir(p39_root)
+    if latest_eval and latest_eval.name.startswith("champion_eval_"):
+        path = latest_eval / "candidate_decision.json"
+        if path.exists():
+            return path
+    return None
+
+
+def _resolve_slice_breakdown_path(
+    *,
+    repo_root: Path,
+    explicit_path: str,
+    promotion_decision_path: Path | None,
+) -> Path | None:
+    if explicit_path:
+        path = Path(explicit_path)
+        if not path.is_absolute():
+            path = (repo_root / path).resolve()
+        return path
+    if promotion_decision_path is not None and promotion_decision_path.exists():
+        payload = read_json(promotion_decision_path)
+        if isinstance(payload, dict):
+            path_text = str(payload.get("slice_decision_breakdown_json") or "").strip()
+            if not path_text:
+                inner = payload.get("champion_rules_payload")
+                if isinstance(inner, dict):
+                    path_text = str(inner.get("slice_decision_breakdown_json") or "").strip()
+            if path_text:
+                path = Path(path_text)
+                if not path.is_absolute():
+                    path = (repo_root / path).resolve()
+                return path
+    return None
+
+
+def _resolve_failure_sources(
+    *,
+    repo_root: Path,
+    p39_root: Path,
+    input_cfg: dict[str, Any],
+    arena_run_dir_override: str | Path | None,
+) -> list[dict[str, Any]]:
+    if arena_run_dir_override:
+        arena_run_dirs = [str(arena_run_dir_override)]
+    else:
+        arena_run_dirs = _normalized_string_list(input_cfg.get("arena_run_dirs"))
+        if not arena_run_dirs:
+            arena_run_dir = str(input_cfg.get("arena_run_dir") or "").strip()
+            if arena_run_dir:
+                arena_run_dirs = [arena_run_dir]
+            else:
+                latest = _latest_dir(p39_root / "arena_runs")
+                if latest is not None:
+                    arena_run_dirs = [str(latest)]
+
+    candidate_decision_paths = _normalized_string_list(input_cfg.get("candidate_decision_jsons"))
+    if not candidate_decision_paths:
+        single_decision = str(input_cfg.get("candidate_decision_json") or "").strip()
+        if single_decision:
+            candidate_decision_paths = [single_decision]
+
+    triage_report_paths = _normalized_string_list(input_cfg.get("triage_report_jsons"))
+    if not triage_report_paths:
+        single_triage = str(input_cfg.get("triage_report_json") or "").strip()
+        if single_triage:
+            triage_report_paths = [single_triage]
+
+    slice_breakdown_paths = _normalized_string_list(input_cfg.get("slice_breakdown_jsons"))
+    if not slice_breakdown_paths:
+        single_slice = str(input_cfg.get("slice_breakdown_json") or "").strip()
+        if single_slice:
+            slice_breakdown_paths = [single_slice]
+
+    promotion_decision_paths = _normalized_string_list(input_cfg.get("promotion_decision_jsons"))
+    if not promotion_decision_paths:
+        single_promotion = str(input_cfg.get("promotion_decision_json") or "").strip()
+        if single_promotion:
+            promotion_decision_paths = [single_promotion]
+
+    resolved_arena = _resolve_indexed_path_list(arena_run_dirs, repo_root=repo_root)
+    resolved_candidate = _resolve_indexed_path_list(candidate_decision_paths, repo_root=repo_root)
+    resolved_triage = _resolve_indexed_path_list(triage_report_paths, repo_root=repo_root)
+    resolved_slice = _resolve_indexed_path_list(slice_breakdown_paths, repo_root=repo_root)
+    resolved_promotion = _resolve_indexed_path_list(promotion_decision_paths, repo_root=repo_root)
+
+    sources: list[dict[str, Any]] = []
+    for idx, arena_run_dir in enumerate(resolved_arena):
+        promotion_path = (
+            resolved_promotion[idx]
+            if idx < len(resolved_promotion)
+            else (resolved_promotion[0] if len(resolved_promotion) == 1 else None)
+        )
+        candidate_decision_path = _resolve_candidate_decision_path(
+            repo_root=repo_root,
+            explicit_path=str(resolved_candidate[idx]) if idx < len(resolved_candidate) else (
+                str(resolved_candidate[0]) if len(resolved_candidate) == 1 else ""
+            ),
+            promotion_decision_path=promotion_path,
+            p39_root=p39_root,
+        )
+        triage_report_path = (
+            resolved_triage[idx]
+            if idx < len(resolved_triage)
+            else (resolved_triage[0] if len(resolved_triage) == 1 else None)
+        )
+        slice_breakdown_path = _resolve_slice_breakdown_path(
+            repo_root=repo_root,
+            explicit_path=str(resolved_slice[idx]) if idx < len(resolved_slice) else (
+                str(resolved_slice[0]) if len(resolved_slice) == 1 else ""
+            ),
+            promotion_decision_path=promotion_path,
+        )
+        sources.append(
+            {
+                "source_index": idx,
+                "source_run_id": str(arena_run_dir.name),
+                "source_type": "arena_failure_mining",
+                "arena_run_dir": arena_run_dir,
+                "episode_records_path": arena_run_dir / "episode_records.jsonl",
+                "summary_path": arena_run_dir / "summary_table.json",
+                "bucket_path": arena_run_dir / "bucket_metrics.json",
+                "candidate_decision_path": candidate_decision_path,
+                "triage_report_path": triage_report_path,
+                "slice_breakdown_path": slice_breakdown_path,
+                "promotion_decision_path": promotion_path,
+            }
+        )
+    return sources
 
 
 def _pick_policy_row(summary_rows: list[dict[str, Any]], policy_id: str | None) -> dict[str, Any] | None:
@@ -164,6 +362,137 @@ def _infer_risk_tags(row: dict[str, Any], *, high_risk_round_threshold: int, low
     return sorted(tags)
 
 
+def _load_slice_rows(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, dict):
+        return []
+    payload = raw.get("degraded_slices_topk")
+    if isinstance(payload, list):
+        return [row for row in payload if isinstance(row, dict)]
+    payload = raw.get("rows")
+    if isinstance(payload, list):
+        return [row for row in payload if isinstance(row, dict)]
+    return []
+
+
+def _slice_tag_from_row(row: dict[str, Any]) -> str:
+    slice_key = str(row.get("slice_key") or "").strip()
+    slice_label = str(row.get("slice_label") or "").strip()
+    if not slice_key or not slice_label:
+        return ""
+    return f"{slice_key}:{slice_label}"
+
+
+def _build_slice_priority_weights(*slice_payloads: Any) -> dict[str, float]:
+    weights: dict[str, float] = {}
+    for payload in slice_payloads:
+        for row in _load_slice_rows(payload):
+            tag = _slice_tag_from_row(row)
+            if not tag:
+                continue
+            metrics = row.get("metrics") if isinstance(row.get("metrics"), dict) else {}
+            signals = row.get("signals") if isinstance(row.get("signals"), dict) else {}
+            champion_count = _safe_int(row.get("champion_count"), 0)
+            candidate_count = _safe_int(row.get("candidate_count"), 0)
+            score_delta = _safe_float(metrics.get("mean_total_score_delta"), 0.0)
+            weight = 1.0
+            if bool(signals.get("degraded_significant")):
+                weight += 0.5
+            if champion_count > candidate_count:
+                weight += min(0.75, 0.1 * float(champion_count - candidate_count))
+            if candidate_count == 0 and champion_count > 0:
+                weight += 0.5
+            if score_delta < 0.0:
+                weight += min(1.25, abs(score_delta) / 200.0)
+            weights[tag] = max(weights.get(tag, 0.0), round(weight, 4))
+    return weights
+
+
+def _row_selection_matches_policy(
+    *,
+    payload: dict[str, Any],
+    selection_by_type: Counter[str],
+    selection_by_seed: Counter[str],
+    selection_by_bucket: Counter[str],
+    selection_by_source: Counter[str],
+    max_failures_per_type: int,
+    max_failures_per_seed: int,
+    max_failures_per_bucket: dict[str, int],
+    max_failures_per_source: dict[str, int],
+) -> bool:
+    seed = str(payload.get("seed") or "")
+    bucket = str(payload.get("failure_bucket") or "")
+    source_run_id = str(payload.get("source_run_id") or "")
+    failure_types = payload.get("failure_types") if isinstance(payload.get("failure_types"), list) else []
+    if max_failures_per_seed > 0 and selection_by_seed[seed] >= max_failures_per_seed:
+        return False
+    if max_failures_per_type > 0 and any(selection_by_type[str(token)] >= max_failures_per_type for token in failure_types):
+        return False
+    bucket_cap = _safe_int(max_failures_per_bucket.get(bucket), 0)
+    if bucket_cap > 0 and selection_by_bucket[bucket] >= bucket_cap:
+        return False
+    source_cap = _safe_int(max_failures_per_source.get(source_run_id), 0)
+    if source_cap > 0 and selection_by_source[source_run_id] >= source_cap:
+        return False
+    return True
+
+
+def _bucket_label_count(row: dict[str, Any], category: str, label: str) -> int:
+    counts = row.get("bucket_counts") if isinstance(row.get("bucket_counts"), dict) else {}
+    payload = counts.get(category) if isinstance(counts.get(category), dict) else {}
+    return _safe_int(payload.get(label), 0)
+
+
+def _refine_failure_bucket_for_slice_pressure(
+    *,
+    row: dict[str, Any],
+    failure_types: set[str],
+    failure_bucket: str,
+    bucket_reason: str,
+    failure_bucket_candidates: list[str],
+    failure_bucket_signals: list[str],
+) -> tuple[str, str, list[str], list[str]]:
+    if failure_bucket != "discard_mismanagement" or "triage_degraded_slice" not in failure_types:
+        return failure_bucket, bucket_reason, failure_bucket_candidates, failure_bucket_signals
+
+    play_count = _bucket_label_count(row, "slice_action_type", "play")
+    discard_count = _bucket_label_count(row, "slice_action_type", "discard")
+    shop_count = _bucket_label_count(row, "slice_action_type", "shop")
+    low_pressure = _bucket_label_count(row, "slice_resource_pressure", "low")
+    medium_pressure = _bucket_label_count(row, "slice_resource_pressure", "medium")
+    high_pressure = _bucket_label_count(row, "slice_resource_pressure", "high")
+
+    if shop_count > 0 and shop_count >= max(1, discard_count):
+        new_bucket = "shop_or_economy_misallocation"
+        new_reason = "triage_slice_shop_or_economy_gap"
+    elif play_count > 0 and play_count >= discard_count and high_pressure > 0:
+        new_bucket = "risk_overcommit"
+        new_reason = "triage_slice_play_under_resource_tight"
+    elif play_count > 0 and play_count >= discard_count and (low_pressure > 0 or medium_pressure > 0):
+        new_bucket = "risk_undercommit"
+        new_reason = "triage_slice_play_under_resource_slack"
+    else:
+        return failure_bucket, bucket_reason, failure_bucket_candidates, failure_bucket_signals
+
+    refined_candidates = [new_bucket] + [token for token in failure_bucket_candidates if token != new_bucket]
+    refined_signals = [new_reason] + [token for token in failure_bucket_signals if token != new_reason]
+    return new_bucket, new_reason, refined_candidates, refined_signals
+
+
+def _bucket_from_slice_tag(tag: str) -> str:
+    token = str(tag or "").strip().lower()
+    if token.startswith("slice_action_type:shop"):
+        return "shop_or_economy_misallocation"
+    if token.startswith("slice_action_type:play"):
+        return "risk_undercommit"
+    if token.startswith("slice_resource_pressure:high"):
+        return "resource_pressure_misplay"
+    if token.startswith("slice_position_sensitive:true") or token.startswith("slice_position_sensitive:yes"):
+        return "position_sensitive_misplay"
+    if token.startswith("slice_stateful_joker_present:true") or token.startswith("slice_stateful_joker_present:yes"):
+        return "stateful_joker_misplay"
+    return "low_score_survival"
+
+
 def _replay_weight_for(*, failure_types: set[str], score: float, low_threshold: float, risk_tags: list[str]) -> float:
     weight = 1.0
     if "champion_regression_segment" in failure_types:
@@ -195,6 +524,7 @@ def _build_markdown(
     selected_total: int,
     counters_by_type: dict[str, int],
     counters_by_bucket: dict[str, int],
+    counters_by_source: dict[str, int],
     counters_by_slice: dict[str, int],
     counters_by_risk: dict[str, int],
     counters_by_policy: dict[str, int],
@@ -219,6 +549,11 @@ def _build_markdown(
     lines.extend(["", "## Failure Bucket Distribution"])
     if counters_by_bucket:
         lines.extend([f"- {k}: {v}" for k, v in sorted(counters_by_bucket.items(), key=lambda kv: (-kv[1], kv[0]))])
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Source Distribution"])
+    if counters_by_source:
+        lines.extend([f"- {k}: {v}" for k, v in sorted(counters_by_source.items(), key=lambda kv: (-kv[1], kv[0]))])
     else:
         lines.append("- none")
     lines.extend(["", "## Scarce Buckets"])
@@ -292,19 +627,12 @@ def run_failure_mining(
     if not p39_root.is_absolute():
         p39_root = (repo_root / p39_root).resolve()
 
-    arena_run_dir: Path | None = None
-    if arena_run_dir_override:
-        arena_run_dir = Path(arena_run_dir_override)
-        if not arena_run_dir.is_absolute():
-            arena_run_dir = (repo_root / arena_run_dir).resolve()
-    else:
-        arena_cfg = str(input_cfg.get("arena_run_dir") or "").strip()
-        if arena_cfg:
-            arena_run_dir = Path(arena_cfg)
-            if not arena_run_dir.is_absolute():
-                arena_run_dir = (repo_root / arena_run_dir).resolve()
-        else:
-            arena_run_dir = _latest_dir(p39_root / "arena_runs")
+    source_specs = _resolve_failure_sources(
+        repo_root=repo_root,
+        p39_root=p39_root,
+        input_cfg=input_cfg,
+        arena_run_dir_override=arena_run_dir_override,
+    )
 
     criteria_cfg = cfg.get("criteria") if isinstance(cfg.get("criteria"), dict) else {}
     bottom_q = float(criteria_cfg.get("bottom_quantile") or 0.2)
@@ -313,19 +641,27 @@ def run_failure_mining(
     max_failures = int(criteria_cfg.get("max_failures") or 1200)
     max_failures_per_type = int(criteria_cfg.get("max_failures_per_type") or 0)
     max_failures_per_seed = int(criteria_cfg.get("max_failures_per_seed") or 0)
+    max_failures_per_bucket = _normalized_int_mapping(criteria_cfg.get("max_failures_per_bucket"))
+    min_failures_per_bucket = _normalized_int_mapping(criteria_cfg.get("min_failures_per_bucket"))
+    max_failures_per_source = _normalized_int_mapping(criteria_cfg.get("max_failures_per_source"))
+    bucket_priority_weights = _normalized_float_mapping(criteria_cfg.get("bucket_priority_weights"))
+    source_priority_weights = _normalized_float_mapping(criteria_cfg.get("source_priority_weights"))
+    policy_priority_weights = _normalized_float_mapping(criteria_cfg.get("policy_priority_weights"))
+    max_slice_gap_failures_per_source = int(criteria_cfg.get("max_slice_gap_failures_per_source") or 0)
+    slice_gap_priority_weight = float(criteria_cfg.get("slice_gap_priority_weight") or 1.25)
 
     quick_cfg = cfg.get("quick") if isinstance(cfg.get("quick"), dict) else {}
     max_episode_scan = int(quick_cfg.get("max_episode_scan") or 240) if quick else 0
 
     warnings: list[str] = []
 
-    if arena_run_dir is None or not arena_run_dir.exists():
+    if not source_specs:
         manifest = {
             "schema": "p40_failure_pack_manifest_v1",
             "generated_at": now_iso(),
             "run_id": chosen_run_id,
             "status": "stub",
-            "reason": "p39 arena run directory unavailable",
+            "reason": "failure mining sources unavailable",
             "paths": {},
             "failures": [],
             "warnings": warnings,
@@ -348,10 +684,11 @@ def run_failure_mining(
             _build_markdown(
                 run_id=chosen_run_id,
                 status="stub",
-                arena_run_dir=arena_run_dir,
+                arena_run_dir=None,
                 selected_total=0,
                 counters_by_type={},
                 counters_by_bucket={},
+                counters_by_source={},
                 counters_by_slice={},
                 counters_by_risk={},
                 counters_by_policy={},
@@ -370,66 +707,21 @@ def run_failure_mining(
             "selected_failures": 0,
         }
 
-    episode_records_path = arena_run_dir / "episode_records.jsonl"
-    summary_path = arena_run_dir / "summary_table.json"
-    bucket_path = arena_run_dir / "bucket_metrics.json"
-    candidate_decision_path = None
-    explicit_decision_path = str(input_cfg.get("candidate_decision_json") or "").strip()
-    if explicit_decision_path:
-        candidate_decision_path = Path(explicit_decision_path)
-        if not candidate_decision_path.is_absolute():
-            candidate_decision_path = (repo_root / candidate_decision_path).resolve()
-    else:
-        latest_eval = _latest_dir(p39_root)
-        if latest_eval and latest_eval.name.startswith("champion_eval_"):
-            path = latest_eval / "candidate_decision.json"
-            if path.exists():
-                candidate_decision_path = path
-
-    rows = _read_jsonl_with_lineno(episode_records_path, max_rows=max_episode_scan)
-    summary_rows = _load_summary_rows(summary_path)
-    bucket_metrics = read_json(bucket_path) if bucket_path.exists() else None
-    candidate_decision = (
-        read_json(candidate_decision_path)
-        if candidate_decision_path is not None and candidate_decision_path.exists()
-        else None
-    )
-
-    if not rows:
-        warnings.append(f"episode records missing or empty: {episode_records_path}")
-
+    primary_arena_run_dir = Path(source_specs[0]["arena_run_dir"]) if source_specs else None
     candidate_policy = str(criteria_cfg.get("candidate_policy") or "").strip()
     champion_policy = str(criteria_cfg.get("champion_policy") or "").strip()
-    if not candidate_policy and isinstance(candidate_decision, dict):
-        candidate_policy = str(candidate_decision.get("candidate_policy_id") or "").strip()
-    if not champion_policy and isinstance(candidate_decision, dict):
-        champion_policy = str(candidate_decision.get("champion_policy_id") or "").strip()
-    if not candidate_policy and summary_rows:
-        candidate_policy = str(summary_rows[0].get("policy_id") or "").strip()
-
-    candidate_row = _pick_policy_row(summary_rows, candidate_policy) if candidate_policy else None
-    champion_row = _pick_policy_row(summary_rows, champion_policy) if champion_policy else None
-
-    candidate_rows = [r for r in rows if str(r.get("policy_id") or "") == candidate_policy] if candidate_policy else list(rows)
-    working_rows = candidate_rows if candidate_rows else list(rows)
-    if candidate_policy and not candidate_rows:
-        warnings.append(f"candidate policy not present in episode records: {candidate_policy}")
-
-    scores = [_safe_float(r.get("total_score")) for r in working_rows]
-    low_threshold = _quantile(scores, bottom_q) if scores else 0.0
-    candidate_mean = _safe_float((candidate_row or {}).get("mean_total_score"), 0.0)
-    champion_mean = _safe_float((champion_row or {}).get("mean_total_score"), 0.0)
-    champion_regression = False
-    if candidate_row is not None and champion_row is not None and champion_mean > 0.0:
-        champion_regression = candidate_mean < champion_mean * (1.0 - score_reg_threshold)
-    elif isinstance(candidate_decision, dict):
-        decision_token = str(candidate_decision.get("decision") or "").lower()
-        if decision_token in {"hold", "reject"}:
-            champion_regression = True
+    candidate_mean_values: list[float] = []
+    champion_mean_values: list[float] = []
+    champion_regression_detected = False
+    aggregate_scan_rows = 0
+    aggregate_working_rows = 0
+    source_summaries: list[dict[str, Any]] = []
 
     selected: list[dict[str, Any]] = []
     by_type: Counter[str] = Counter()
     by_bucket: Counter[str] = Counter()
+    by_source: Counter[str] = Counter()
+    by_source_type: Counter[str] = Counter()
     by_slice: Counter[str] = Counter()
     by_risk: Counter[str] = Counter()
     by_policy: Counter[str] = Counter()
@@ -438,138 +730,447 @@ def run_failure_mining(
     bucket_fail_counter: Counter[str] = Counter()
     selection_by_type: Counter[str] = Counter()
     selection_by_seed: Counter[str] = Counter()
+    selection_by_bucket: Counter[str] = Counter()
+    selection_by_source: Counter[str] = Counter()
     candidate_rows_for_selection: list[dict[str, Any]] = []
 
-    for row in working_rows:
-        failure_types: set[str] = set()
-        status = str(row.get("status") or "unknown").lower()
-        error = str(row.get("error") or "").strip().lower()
-        score = _safe_float(row.get("total_score"), 0.0)
-        rounds_survived = _safe_int(row.get("rounds_survived"), 0)
-        invalid_rate = _safe_float(row.get("invalid_action_rate"), 0.0)
-        timeout_rate = _safe_float(row.get("timeout_rate"), 0.0)
+    for spec in source_specs:
+        arena_run_dir = Path(spec["arena_run_dir"])
+        if not arena_run_dir.exists():
+            warnings.append(f"arena run directory unavailable: {arena_run_dir}")
+            continue
+        episode_records_path = Path(spec["episode_records_path"])
+        summary_path = Path(spec["summary_path"])
+        bucket_path = Path(spec["bucket_path"])
+        candidate_decision_path = spec.get("candidate_decision_path")
+        triage_report_path = spec.get("triage_report_path")
+        slice_breakdown_path = spec.get("slice_breakdown_path")
+        promotion_decision_path = spec.get("promotion_decision_path")
 
-        if status != "ok":
-            failure_types.add("episode_failure_status")
-        if invalid_rate > 0.0:
-            failure_types.add("invalid_action")
-        if timeout_rate > 0.0:
-            failure_types.add("timeout")
-        if "exception" in error or "failed" in error or "timeout" in error:
-            failure_types.add("execution_error")
-        if score <= low_threshold:
-            failure_types.add("low_score_quantile")
+        rows = _read_jsonl_with_lineno(episode_records_path, max_rows=max_episode_scan)
+        summary_rows = _load_summary_rows(summary_path)
+        candidate_decision = (
+            read_json(candidate_decision_path)
+            if isinstance(candidate_decision_path, Path) and candidate_decision_path.exists()
+            else None
+        )
+        promotion_decision = (
+            read_json(promotion_decision_path)
+            if isinstance(promotion_decision_path, Path) and promotion_decision_path.exists()
+            else None
+        )
+        triage_report = (
+            read_json(triage_report_path)
+            if isinstance(triage_report_path, Path) and triage_report_path.exists()
+            else None
+        )
+        slice_breakdown = (
+            read_json(slice_breakdown_path)
+            if isinstance(slice_breakdown_path, Path) and slice_breakdown_path.exists()
+            else None
+        )
 
-        risk_counts = {}
-        if isinstance(row.get("bucket_counts"), dict):
-            raw_risk = (row.get("bucket_counts") or {}).get("risk")
-            if isinstance(raw_risk, dict):
-                risk_counts = {str(k): _safe_int(v) for k, v in raw_risk.items()}
-        if risk_counts.get("resource_tight", 0) > 0 and (rounds_survived <= high_risk_round_threshold or score <= low_threshold):
-            failure_types.add("high_risk_bucket_failure")
-            bucket_fail_counter["resource_tight"] += 1
-
-        if champion_regression and score <= candidate_mean:
-            failure_types.add("champion_regression_segment")
-
-        if not failure_types:
+        if not rows:
+            warnings.append(f"episode records missing or empty: {episode_records_path}")
             continue
 
-        slice_tags = _infer_slice_tags(row)
-        risk_tags = _infer_risk_tags(
-            row,
-            high_risk_round_threshold=high_risk_round_threshold,
-            low_threshold=low_threshold,
+        source_candidate_policy = candidate_policy
+        source_champion_policy = champion_policy
+        if not source_candidate_policy and isinstance(candidate_decision, dict):
+            source_candidate_policy = str(candidate_decision.get("candidate_policy_id") or "").strip()
+        if not source_candidate_policy and isinstance(promotion_decision, dict):
+            source_candidate_policy = str(promotion_decision.get("candidate_policy") or "").strip()
+        if not source_champion_policy and isinstance(candidate_decision, dict):
+            source_champion_policy = str(candidate_decision.get("champion_policy_id") or "").strip()
+        if not source_champion_policy and isinstance(promotion_decision, dict):
+            source_champion_policy = str(promotion_decision.get("champion_policy") or "").strip()
+        if not source_candidate_policy and summary_rows:
+            source_candidate_policy = str(summary_rows[0].get("policy_id") or "").strip()
+
+        candidate_policy = candidate_policy or source_candidate_policy
+        champion_policy = champion_policy or source_champion_policy
+
+        candidate_row = _pick_policy_row(summary_rows, source_candidate_policy) if source_candidate_policy else None
+        champion_row = _pick_policy_row(summary_rows, source_champion_policy) if source_champion_policy else None
+        candidate_rows = (
+            [r for r in rows if str(r.get("policy_id") or "").strip() == source_candidate_policy]
+            if source_candidate_policy
+            else list(rows)
         )
-        bucket_payload = classify_failure_bucket(
-            row=row,
-            failure_types=failure_types,
-            high_risk_round_threshold=high_risk_round_threshold,
-            low_score_threshold=low_threshold,
-        )
-        failure_bucket = str(bucket_payload.get("failure_bucket") or "low_score_survival")
-        replay_weight = _replay_weight_for(
-            failure_types=failure_types,
-            score=score,
-            low_threshold=low_threshold,
-            risk_tags=risk_tags,
+        working_rows = candidate_rows if candidate_rows else list(rows)
+        if source_candidate_policy and not candidate_rows:
+            warnings.append(f"candidate policy not present in episode records: {source_candidate_policy} @ {arena_run_dir}")
+
+        scores = [_safe_float(r.get("total_score")) for r in working_rows]
+        low_threshold = _quantile(scores, bottom_q) if scores else 0.0
+        source_candidate_mean = _safe_float((candidate_row or {}).get("mean_total_score"), 0.0)
+        source_champion_mean = _safe_float((champion_row or {}).get("mean_total_score"), 0.0)
+        if candidate_row is not None:
+            candidate_mean_values.append(source_candidate_mean)
+        if champion_row is not None:
+            champion_mean_values.append(source_champion_mean)
+        source_regression = False
+        if candidate_row is not None and champion_row is not None and source_champion_mean > 0.0:
+            source_regression = source_candidate_mean < source_champion_mean * (1.0 - score_reg_threshold)
+        elif isinstance(candidate_decision, dict):
+            decision_token = str(candidate_decision.get("decision") or "").lower()
+            if decision_token in {"hold", "reject"}:
+                source_regression = True
+        elif isinstance(promotion_decision, dict):
+            decision_token = str(promotion_decision.get("recommendation") or "").lower()
+            if decision_token in {"hold", "reject", "observe"}:
+                source_regression = True
+        champion_regression_detected = champion_regression_detected or source_regression
+        slice_priority_weights = _build_slice_priority_weights(triage_report, slice_breakdown)
+        aggregate_scan_rows += len(rows)
+        aggregate_working_rows += len(working_rows)
+        source_run_id = str(spec.get("source_run_id") or arena_run_dir.name)
+        source_priority = source_priority_weights.get(source_run_id, source_priority_weights.get(str(spec.get("source_type") or ""), 1.0))
+        source_summaries.append(
+            {
+                "source_run_id": source_run_id,
+                "arena_run_dir": str(arena_run_dir),
+                "episode_records": str(episode_records_path),
+                "summary_table": str(summary_path),
+                "candidate_decision_json": str(candidate_decision_path) if isinstance(candidate_decision_path, Path) else "",
+                "triage_report_json": str(triage_report_path) if isinstance(triage_report_path, Path) else "",
+                "slice_breakdown_json": str(slice_breakdown_path) if isinstance(slice_breakdown_path, Path) else "",
+                "promotion_decision_json": str(promotion_decision_path) if isinstance(promotion_decision_path, Path) else "",
+                "candidate_policy": source_candidate_policy,
+                "champion_policy": source_champion_policy,
+                "candidate_mean_total_score": source_candidate_mean,
+                "champion_mean_total_score": source_champion_mean,
+                "selected_scan_rows": len(rows),
+                "working_rows": len(working_rows),
+                "low_score_threshold": low_threshold,
+                "champion_regression_detected": source_regression,
+                "slice_priority_weights": slice_priority_weights,
+            }
         )
 
-        episode_id = "{policy}|{seed}|{ep}".format(
-            policy=str(row.get("policy_id") or ""),
-            seed=str(row.get("seed") or ""),
-            ep=_safe_int(row.get("episode_index"), 0),
-        )
-        payload = {
-            "episode_id": episode_id,
-            "policy_id": str(row.get("policy_id") or ""),
-            "seed": str(row.get("seed") or ""),
-            "episode_index": _safe_int(row.get("episode_index"), 0),
-            "status": str(row.get("status") or ""),
-            "error": str(row.get("error") or ""),
-            "total_score": score,
-            "rounds_survived": rounds_survived,
-            "invalid_action_rate": invalid_rate,
-            "timeout_rate": timeout_rate,
-            "failure_types": sorted(failure_types),
-            "failure_bucket": failure_bucket,
-            "bucket_reason": str(bucket_payload.get("bucket_reason") or ""),
-            "failure_bucket_candidates": list(bucket_payload.get("failure_bucket_candidates") or []),
-            "failure_bucket_signals": list(bucket_payload.get("failure_bucket_signals") or []),
-            "slice_tags": slice_tags,
-            "risk_tags": risk_tags,
-            "source_type": "arena_failure_mining",
-            "selection_reason": _selection_reason(
+        for row in working_rows:
+            failure_types: set[str] = set()
+            status = str(row.get("status") or "unknown").lower()
+            error = str(row.get("error") or "").strip().lower()
+            score = _safe_float(row.get("total_score"), 0.0)
+            rounds_survived = _safe_int(row.get("rounds_survived"), 0)
+            invalid_rate = _safe_float(row.get("invalid_action_rate"), 0.0)
+            timeout_rate = _safe_float(row.get("timeout_rate"), 0.0)
+
+            if status != "ok":
+                failure_types.add("episode_failure_status")
+            if invalid_rate > 0.0:
+                failure_types.add("invalid_action")
+            if timeout_rate > 0.0:
+                failure_types.add("timeout")
+            if "exception" in error or "failed" in error or "timeout" in error:
+                failure_types.add("execution_error")
+            if score <= low_threshold:
+                failure_types.add("low_score_quantile")
+
+            risk_counts: dict[str, int] = {}
+            if isinstance(row.get("bucket_counts"), dict):
+                raw_risk = (row.get("bucket_counts") or {}).get("risk")
+                if isinstance(raw_risk, dict):
+                    risk_counts = {str(k): _safe_int(v) for k, v in raw_risk.items()}
+            if risk_counts.get("resource_tight", 0) > 0 and (rounds_survived <= high_risk_round_threshold or score <= low_threshold):
+                failure_types.add("high_risk_bucket_failure")
+
+            if source_regression and score <= source_candidate_mean:
+                failure_types.add("champion_regression_segment")
+
+            if not failure_types:
+                continue
+
+            slice_tags = _infer_slice_tags(row)
+            triage_slice_hits = [tag for tag in slice_tags if tag in slice_priority_weights]
+            if triage_slice_hits:
+                failure_types.add("triage_degraded_slice")
+            risk_tags = _infer_risk_tags(
+                row,
+                high_risk_round_threshold=high_risk_round_threshold,
+                low_threshold=low_threshold,
+            )
+            bucket_payload = classify_failure_bucket(
+                row=row,
+                failure_types=failure_types,
+                high_risk_round_threshold=high_risk_round_threshold,
+                low_score_threshold=low_threshold,
+            )
+            failure_bucket = str(bucket_payload.get("failure_bucket") or "low_score_survival")
+            bucket_reason = str(bucket_payload.get("bucket_reason") or "")
+            failure_bucket_candidates = list(bucket_payload.get("failure_bucket_candidates") or [])
+            failure_bucket_signals = list(bucket_payload.get("failure_bucket_signals") or [])
+            failure_bucket, bucket_reason, failure_bucket_candidates, failure_bucket_signals = _refine_failure_bucket_for_slice_pressure(
+                row=row,
                 failure_types=failure_types,
                 failure_bucket=failure_bucket,
+                bucket_reason=bucket_reason,
+                failure_bucket_candidates=failure_bucket_candidates,
+                failure_bucket_signals=failure_bucket_signals,
+            )
+            bucket_priority = bucket_priority_weights.get(failure_bucket, 1.0)
+            policy_priority = policy_priority_weights.get(source_candidate_policy, 1.0)
+            triage_priority = max((slice_priority_weights.get(tag, 1.0) for tag in triage_slice_hits), default=1.0)
+            replay_weight = _replay_weight_for(
+                failure_types=failure_types,
+                score=score,
+                low_threshold=low_threshold,
                 risk_tags=risk_tags,
-            ),
-            "replay_weight": replay_weight,
-            "source": {
-                "episode_records": str(episode_records_path),
-                "line": _safe_int(row.get("_source_line"), 0),
-            },
-            "source_run_id": str(arena_run_dir.name),
-            "source_campaign_id": str(cfg.get("campaign_id") or ""),
-            "source_checkpoint_refs": {
-                "candidate_policy": candidate_policy,
-                "champion_policy": champion_policy,
-            },
-            "raw_episode": row,
-        }
-        candidate_rows_for_selection.append(payload)
+            )
+            replay_weight = round(replay_weight * max(0.1, source_priority) * max(0.1, bucket_priority) * max(0.1, policy_priority) * max(0.1, triage_priority), 4)
+
+            if failure_bucket == "high_risk_collapse":
+                for tag in risk_tags:
+                    bucket_fail_counter[str(tag)] += 1
+
+            episode_id = "{run}|{policy}|{seed}|{ep}".format(
+                run=source_run_id,
+                policy=str(row.get("policy_id") or ""),
+                seed=str(row.get("seed") or ""),
+                ep=_safe_int(row.get("episode_index"), 0),
+            )
+            payload = {
+                "episode_id": episode_id,
+                "policy_id": str(row.get("policy_id") or ""),
+                "seed": str(row.get("seed") or ""),
+                "episode_index": _safe_int(row.get("episode_index"), 0),
+                "status": str(row.get("status") or ""),
+                "error": str(row.get("error") or ""),
+                "total_score": score,
+                "rounds_survived": rounds_survived,
+                "invalid_action_rate": invalid_rate,
+                "timeout_rate": timeout_rate,
+                "failure_types": sorted(failure_types),
+                "failure_bucket": failure_bucket,
+                "bucket_reason": bucket_reason,
+                "failure_bucket_candidates": failure_bucket_candidates,
+                "failure_bucket_signals": failure_bucket_signals,
+                "slice_tags": slice_tags,
+                "risk_tags": risk_tags,
+                "source_type": str(spec.get("source_type") or "arena_failure_mining"),
+                "selection_reason": _selection_reason(
+                    failure_types=failure_types,
+                    failure_bucket=failure_bucket,
+                    risk_tags=risk_tags,
+                ),
+                "replay_weight": replay_weight,
+                "source": {
+                    "arena_run_dir": str(arena_run_dir),
+                    "episode_records": str(episode_records_path),
+                    "summary_table": str(summary_path),
+                    "bucket_metrics": str(bucket_path),
+                    "triage_report": str(triage_report_path) if isinstance(triage_report_path, Path) else "",
+                    "slice_breakdown": str(slice_breakdown_path) if isinstance(slice_breakdown_path, Path) else "",
+                    "candidate_decision": str(candidate_decision_path) if isinstance(candidate_decision_path, Path) else "",
+                    "promotion_decision": str(promotion_decision_path) if isinstance(promotion_decision_path, Path) else "",
+                    "line": _safe_int(row.get("_source_line"), 0),
+                },
+                "source_run_id": source_run_id,
+                "source_campaign_id": str(cfg.get("campaign_id") or ""),
+                "source_checkpoint_refs": {
+                    "candidate_policy": source_candidate_policy,
+                    "champion_policy": source_champion_policy,
+                },
+                "source_priority": source_priority,
+                "bucket_priority": bucket_priority,
+                "triage_slice_hits": triage_slice_hits,
+                "triage_priority": triage_priority,
+                "raw_episode": row,
+            }
+            candidate_rows_for_selection.append(payload)
+
+        if max_slice_gap_failures_per_source > 0 and source_champion_policy:
+            gap_rows = sorted(
+                [
+                    row
+                    for row in _load_slice_rows(triage_report) + _load_slice_rows(slice_breakdown)
+                    if _safe_int(row.get("champion_count"), 0) > _safe_int(row.get("candidate_count"), 0)
+                    and _safe_int(row.get("champion_count"), 0) > 0
+                ],
+                key=lambda item: (
+                    -(_safe_int(item.get("champion_count"), 0) - _safe_int(item.get("candidate_count"), 0)),
+                    _safe_float(((item.get("metrics") or {}) if isinstance(item.get("metrics"), dict) else {}).get("mean_total_score_delta"), 0.0),
+                    str(item.get("slice_key") or ""),
+                    str(item.get("slice_label") or ""),
+                ),
+            )
+            added_gap_rows = 0
+            seen_gap_tags: set[str] = set()
+            for gap_row in gap_rows:
+                if added_gap_rows >= max_slice_gap_failures_per_source:
+                    break
+                slice_tag = _slice_tag_from_row(gap_row)
+                if not slice_tag or slice_tag in seen_gap_tags:
+                    continue
+                bucket = _bucket_from_slice_tag(slice_tag)
+                bucket_priority = bucket_priority_weights.get(bucket, 1.0)
+                champion_gap = max(
+                    1,
+                    _safe_int(gap_row.get("champion_count"), 0) - _safe_int(gap_row.get("candidate_count"), 0),
+                )
+                score_delta = _safe_float(
+                    ((gap_row.get("metrics") or {}) if isinstance(gap_row.get("metrics"), dict) else {}).get("mean_total_score_delta"),
+                    0.0,
+                )
+                matching_rows = [
+                    row
+                    for row in rows
+                    if str(row.get("policy_id") or "").strip() == source_champion_policy
+                    and slice_tag in _infer_slice_tags(row)
+                ]
+                if not matching_rows:
+                    continue
+                matching_rows.sort(
+                    key=lambda row: (
+                        -_safe_float(row.get("total_score"), 0.0),
+                        -_safe_int(row.get("rounds_survived"), 0),
+                        str(row.get("seed") or ""),
+                    )
+                )
+                picked = matching_rows[0]
+                slice_tags = _infer_slice_tags(picked)
+                risk_tags = _infer_risk_tags(
+                    picked,
+                    high_risk_round_threshold=high_risk_round_threshold,
+                    low_threshold=low_threshold,
+                )
+                replay_weight = round(
+                    (1.5 + min(1.5, 0.2 * float(champion_gap)) + min(1.0, abs(score_delta) / 200.0))
+                    * max(0.1, source_priority)
+                    * max(0.1, bucket_priority)
+                    * max(0.1, slice_gap_priority_weight),
+                    4,
+                )
+                episode_id = "{run}|gap|{policy}|{seed}|{ep}".format(
+                    run=source_run_id,
+                    policy=str(picked.get("policy_id") or ""),
+                    seed=str(picked.get("seed") or ""),
+                    ep=_safe_int(picked.get("episode_index"), 0),
+                )
+                candidate_rows_for_selection.append(
+                    {
+                        "episode_id": episode_id,
+                        "policy_id": str(picked.get("policy_id") or ""),
+                        "seed": str(picked.get("seed") or ""),
+                        "episode_index": _safe_int(picked.get("episode_index"), 0),
+                        "status": str(picked.get("status") or ""),
+                        "error": str(picked.get("error") or ""),
+                        "total_score": _safe_float(picked.get("total_score"), 0.0),
+                        "rounds_survived": _safe_int(picked.get("rounds_survived"), 0),
+                        "invalid_action_rate": _safe_float(picked.get("invalid_action_rate"), 0.0),
+                        "timeout_rate": _safe_float(picked.get("timeout_rate"), 0.0),
+                        "failure_types": ["slice_coverage_gap_seed", "triage_degraded_slice"],
+                        "failure_bucket": bucket,
+                        "bucket_reason": "slice_coverage_gap_seed",
+                        "failure_bucket_candidates": [bucket],
+                        "failure_bucket_signals": [f"slice_gap:{slice_tag}"],
+                        "slice_tags": slice_tags,
+                        "risk_tags": risk_tags,
+                        "source_type": "arena_slice_gap_seed",
+                        "selection_reason": f"{bucket},slice_coverage_gap_seed,{slice_tag}",
+                        "replay_weight": replay_weight,
+                        "source": {
+                            "arena_run_dir": str(arena_run_dir),
+                            "episode_records": str(episode_records_path),
+                            "summary_table": str(summary_path),
+                            "triage_report": str(triage_report_path) if isinstance(triage_report_path, Path) else "",
+                            "slice_breakdown": str(slice_breakdown_path) if isinstance(slice_breakdown_path, Path) else "",
+                            "line": _safe_int(picked.get("_source_line"), 0),
+                        },
+                        "source_run_id": source_run_id,
+                        "source_campaign_id": str(cfg.get("campaign_id") or ""),
+                        "source_checkpoint_refs": {
+                            "candidate_policy": source_candidate_policy,
+                            "champion_policy": source_champion_policy,
+                        },
+                        "source_priority": source_priority,
+                        "bucket_priority": bucket_priority,
+                        "triage_slice_hits": [slice_tag],
+                        "triage_priority": slice_gap_priority_weight,
+                        "raw_episode": picked,
+                    }
+                )
+                seen_gap_tags.add(slice_tag)
+                added_gap_rows += 1
 
     candidate_rows_for_selection.sort(
         key=lambda item: (
             -_safe_float(item.get("replay_weight"), 0.0),
             _safe_float(item.get("total_score"), 0.0),
+            str(item.get("source_run_id") or ""),
             str(item.get("episode_id") or ""),
         )
     )
-    for payload in candidate_rows_for_selection:
-        if max_failures_per_seed > 0 and selection_by_seed[payload["seed"]] >= max_failures_per_seed:
-            continue
-        if max_failures_per_type > 0 and any(selection_by_type[token] >= max_failures_per_type for token in payload["failure_types"]):
-            continue
+
+    selected_ids: set[str] = set()
+
+    def _record_selected(payload: dict[str, Any]) -> None:
         selected.append(payload)
-        selection_by_seed[payload["seed"]] += 1
-        for token in payload["failure_types"]:
-            by_type[token] += 1
-            selection_by_type[token] += 1
+        selected_ids.add(str(payload.get("episode_id") or ""))
+        selection_by_seed[str(payload.get("seed") or "")] += 1
+        selection_by_bucket[str(payload.get("failure_bucket") or "")] += 1
+        selection_by_source[str(payload.get("source_run_id") or "")] += 1
+        for token in payload.get("failure_types") if isinstance(payload.get("failure_types"), list) else []:
+            by_type[str(token)] += 1
+            selection_by_type[str(token)] += 1
         by_bucket[str(payload.get("failure_bucket") or "unknown")] += 1
+        by_source[str(payload.get("source_run_id") or "unknown")] += 1
+        by_source_type[str(payload.get("source_type") or "unknown")] += 1
         by_bucket_reason[str(payload.get("bucket_reason") or "unknown")] += 1
         for tag in payload.get("slice_tags") if isinstance(payload.get("slice_tags"), list) else []:
             by_slice[str(tag)] += 1
         for tag in payload.get("risk_tags") if isinstance(payload.get("risk_tags"), list) else []:
             by_risk[str(tag)] += 1
-        by_policy[payload["policy_id"]] += 1
-        by_seed[payload["seed"]] += 1
-        if payload["failure_bucket"] == "high_risk_collapse":
-            for tag in payload.get("risk_tags") if isinstance(payload.get("risk_tags"), list) else []:
-                bucket_fail_counter[str(tag)] += 1
+        by_policy[str(payload.get("policy_id") or "")] += 1
+        by_seed[str(payload.get("seed") or "")] += 1
+
+    if min_failures_per_bucket:
+        for payload in candidate_rows_for_selection:
+            bucket = str(payload.get("failure_bucket") or "")
+            target = _safe_int(min_failures_per_bucket.get(bucket), 0)
+            if target <= 0 or selection_by_bucket[bucket] >= target:
+                continue
+            if not _row_selection_matches_policy(
+                payload=payload,
+                selection_by_type=selection_by_type,
+                selection_by_seed=selection_by_seed,
+                selection_by_bucket=selection_by_bucket,
+                selection_by_source=selection_by_source,
+                max_failures_per_type=max_failures_per_type,
+                max_failures_per_seed=max_failures_per_seed,
+                max_failures_per_bucket=max_failures_per_bucket,
+                max_failures_per_source=max_failures_per_source,
+            ):
+                continue
+            _record_selected(payload)
+            if len(selected) >= max(1, max_failures):
+                warnings.append(f"failure cap reached while satisfying bucket minimums: {max_failures}")
+                break
+
+    for payload in candidate_rows_for_selection:
+        if str(payload.get("episode_id") or "") in selected_ids:
+            continue
+        if not _row_selection_matches_policy(
+            payload=payload,
+            selection_by_type=selection_by_type,
+            selection_by_seed=selection_by_seed,
+            selection_by_bucket=selection_by_bucket,
+            selection_by_source=selection_by_source,
+            max_failures_per_type=max_failures_per_type,
+            max_failures_per_seed=max_failures_per_seed,
+            max_failures_per_bucket=max_failures_per_bucket,
+            max_failures_per_source=max_failures_per_source,
+        ):
+            continue
+        _record_selected(payload)
         if len(selected) >= max(1, max_failures):
             warnings.append(f"failure cap reached: {max_failures}")
             break
+
+    candidate_mean = round(sum(candidate_mean_values) / max(1, len(candidate_mean_values)), 4) if candidate_mean_values else 0.0
+    champion_mean = round(sum(champion_mean_values) / max(1, len(champion_mean_values)), 4) if champion_mean_values else 0.0
+    low_threshold = round(sum(_safe_float(item.get("low_score_threshold"), 0.0) for item in source_summaries) / max(1, len(source_summaries)), 4)
 
     replay_jsonl_path = run_dir / "hard_failure_replay.jsonl"
     if not dry_run:
@@ -592,6 +1193,7 @@ def run_failure_mining(
                     "source_type": item["source_type"],
                     "selection_reason": item["selection_reason"],
                     "replay_weight": item["replay_weight"],
+                    "selected_for_training": True,
                     "status": item["status"],
                     "error": item["error"],
                     "total_score": item["total_score"],
@@ -610,7 +1212,9 @@ def run_failure_mining(
         "run_id": chosen_run_id,
         "status": status,
         "config_path": str(cfg_path) if cfg_path else "",
-        "arena_run_dir": str(arena_run_dir),
+        "arena_run_dir": str(primary_arena_run_dir) if primary_arena_run_dir else "",
+        "source_count": len(source_summaries),
+        "sources": source_summaries,
         "criteria": {
             "bottom_quantile": bottom_q,
             "champion_score_regression_ratio": score_reg_threshold,
@@ -618,18 +1222,27 @@ def run_failure_mining(
             "max_failures": max_failures,
             "max_failures_per_type": max_failures_per_type,
             "max_failures_per_seed": max_failures_per_seed,
+            "max_failures_per_bucket": max_failures_per_bucket,
+            "min_failures_per_bucket": min_failures_per_bucket,
+            "max_failures_per_source": max_failures_per_source,
+            "bucket_priority_weights": bucket_priority_weights,
+            "source_priority_weights": source_priority_weights,
+            "policy_priority_weights": policy_priority_weights,
         },
         "inputs": {
-            "episode_records": str(episode_records_path),
-            "summary_table": str(summary_path),
-            "bucket_metrics": str(bucket_path),
-            "candidate_decision": str(candidate_decision_path) if candidate_decision_path else "",
+            "p39_root": str(p39_root),
+            "source_run_ids": [str(item.get("source_run_id") or "") for item in source_summaries],
+            "episode_records": [str(item.get("episode_records") or "") for item in source_summaries],
+            "summary_table": [str(item.get("summary_table") or "") for item in source_summaries],
+            "candidate_decision": [str(item.get("candidate_decision_json") or "") for item in source_summaries],
+            "triage_report_json": [str(item.get("triage_report_json") or "") for item in source_summaries],
+            "slice_breakdown_json": [str(item.get("slice_breakdown_json") or "") for item in source_summaries],
         },
         "candidate_policy": candidate_policy,
         "champion_policy": champion_policy,
         "candidate_mean_total_score": candidate_mean,
         "champion_mean_total_score": champion_mean,
-        "champion_regression_detected": champion_regression,
+        "champion_regression_detected": champion_regression_detected,
         "low_score_threshold": low_threshold,
         "selected_count": len(selected),
         "failures": [
@@ -655,6 +1268,10 @@ def run_failure_mining(
                 "source_run_id": item["source_run_id"],
                 "source_campaign_id": item["source_campaign_id"],
                 "source_checkpoint_refs": item["source_checkpoint_refs"],
+                "source_priority": item["source_priority"],
+                "bucket_priority": item["bucket_priority"],
+                "triage_slice_hits": list(item.get("triage_slice_hits") or []),
+                "triage_priority": item["triage_priority"],
             }
             for item in selected
         ],
@@ -669,6 +1286,8 @@ def run_failure_mining(
         "selected_failures": len(selected),
         "by_type": dict(sorted(by_type.items())),
         "by_bucket": dict(sorted(by_bucket.items())),
+        "by_source": dict(sorted(by_source.items())),
+        "by_source_type": dict(sorted(by_source_type.items())),
         "known_failure_buckets": list(KNOWN_FAILURE_BUCKETS),
         "scarce_buckets": scarce_failure_buckets(by_bucket),
         "by_slice_tag": dict(sorted(by_slice.items())),
@@ -682,18 +1301,19 @@ def run_failure_mining(
             "max": round(max((_safe_float(item.get("replay_weight"), 0.0) for item in selected), default=0.0), 4),
             "min": round(min((_safe_float(item.get("replay_weight"), 0.0) for item in selected), default=0.0), 4),
         },
-        "scan_rows": len(rows),
-        "working_rows": len(working_rows),
+        "scan_rows": aggregate_scan_rows,
+        "working_rows": aggregate_working_rows,
         "candidate_policy": candidate_policy,
         "champion_policy": champion_policy,
     }
     md_lines = _build_markdown(
         run_id=chosen_run_id,
         status=status,
-        arena_run_dir=arena_run_dir,
+        arena_run_dir=primary_arena_run_dir,
         selected_total=len(selected),
         counters_by_type=dict(by_type),
         counters_by_bucket=dict(by_bucket),
+        counters_by_source=dict(by_source),
         counters_by_slice=dict(by_slice),
         counters_by_risk=dict(by_risk),
         counters_by_policy=dict(by_policy),

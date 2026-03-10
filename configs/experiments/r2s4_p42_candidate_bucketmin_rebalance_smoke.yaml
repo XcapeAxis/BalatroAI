@@ -1,0 +1,70 @@
+schema: p42_candidate_train_config_v1
+candidate_modes:
+  - rl_ppo_lite
+allow_legacy_fallback: false
+
+output:
+  artifacts_root: docs/artifacts/research/r2s4_candidate_train
+
+seeds:
+  - AAAAAAA
+  - BBBBBBB
+  - CCCCCCC
+  - DDDDDDD
+
+rl_config: configs/experiments/r2s3_p42_rl_bucketed_curriculum_certification.yaml
+
+hard_case_sampling:
+  enabled: true
+  failure_pack_manifest: docs/artifacts/research/r2s4_failure_buckets/r2s4-b5-gap-seeds-20260311-0218/failure_pack_manifest.json
+  max_failure_cases: 10
+  max_failure_seeds: 10
+  seed_replay_factor: 4
+  max_failures_per_type: 8
+  max_failures_per_seed: 4
+  replay_weight_scale: 1.26
+  balance_across_failure_types: true
+  bucket_sampling_weights:
+    resource_pressure_misplay: 1.48
+    low_score_survival: 1.36
+    shop_or_economy_misallocation: 1.24
+    risk_undercommit: 0.92
+    discard_mismanagement: 0.78
+    early_collapse: 0.70
+  bucket_quota_caps:
+    resource_pressure_misplay: 4
+    low_score_survival: 4
+    shop_or_economy_misallocation: 6
+    risk_undercommit: 6
+    discard_mismanagement: 4
+    early_collapse: 4
+  bucket_minimum_counts:
+    resource_pressure_misplay: 2
+    low_score_survival: 2
+  bucket_seed_caps:
+    risk_undercommit: 2
+    resource_pressure_misplay: 2
+    low_score_survival: 2
+  slice_sampling_weights:
+    slice_action_type:play: 1.18
+    slice_action_type:shop: 1.34
+    slice_resource_pressure:high: 1.40
+    slice_resource_pressure:medium: 1.10
+    slice_resource_pressure:low: 0.96
+    slice_stage:early: 1.08
+  slice_quota_caps:
+    slice_action_type:play: 10
+    slice_action_type:shop: 4
+    slice_resource_pressure:high: 6
+  risk_tag_sampling_weights:
+    resource_tight: 1.30
+    resource_balanced: 1.00
+    resource_relaxed: 0.92
+    early_collapse: 0.72
+  risk_tag_quota_caps:
+    resource_tight: 6
+    resource_balanced: 6
+    resource_relaxed: 4
+
+training:
+  timeout_sec: 5400

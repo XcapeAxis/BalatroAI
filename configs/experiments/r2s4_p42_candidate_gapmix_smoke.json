@@ -1,0 +1,71 @@
+{
+  "schema": "p42_candidate_train_config_v1",
+  "candidate_modes": [
+    "rl_ppo_lite"
+  ],
+  "allow_legacy_fallback": false,
+  "output": {
+    "artifacts_root": "docs/artifacts/research/r2s4_candidate_train"
+  },
+  "seeds": [
+    "AAAAAAA",
+    "BBBBBBB",
+    "CCCCCCC",
+    "DDDDDDD"
+  ],
+  "rl_config": "configs/experiments/r2s3_p42_rl_bucketed_curriculum_certification.yaml",
+  "hard_case_sampling": {
+    "enabled": true,
+    "failure_pack_manifest": "docs/artifacts/research/r2s4_failure_buckets/r2s4-b5-gap-seeds-20260311-0218/failure_pack_manifest.json",
+    "max_failure_cases": 112,
+    "max_failure_seeds": 10,
+    "seed_replay_factor": 4,
+    "max_failures_per_type": 8,
+    "max_failures_per_seed": 4,
+    "replay_weight_scale": 1.28,
+    "bucket_sampling_weights": {
+      "risk_undercommit": 1.42,
+      "resource_pressure_misplay": 1.26,
+      "low_score_survival": 1.18,
+      "shop_or_economy_misallocation": 1.16,
+      "discard_mismanagement": 0.78,
+      "early_collapse": 0.72
+    },
+    "bucket_quota_caps": {
+      "risk_undercommit": 22,
+      "resource_pressure_misplay": 16,
+      "low_score_survival": 10,
+      "shop_or_economy_misallocation": 8,
+      "discard_mismanagement": 6,
+      "early_collapse": 6
+    },
+    "slice_sampling_weights": {
+      "slice_action_type:play": 1.34,
+      "slice_action_type:shop": 1.18,
+      "slice_resource_pressure:low": 1.22,
+      "slice_resource_pressure:medium": 1.16,
+      "slice_resource_pressure:high": 1.16,
+      "slice_stage:early": 1.08
+    },
+    "slice_quota_caps": {
+      "slice_action_type:play": 22,
+      "slice_action_type:shop": 8,
+      "slice_resource_pressure:high": 10
+    },
+    "risk_tag_sampling_weights": {
+      "resource_relaxed": 1.14,
+      "resource_balanced": 1.1,
+      "resource_tight": 1.16,
+      "early_collapse": 0.72
+    },
+    "risk_tag_quota_caps": {
+      "resource_relaxed": 16,
+      "resource_balanced": 14,
+      "resource_tight": 10
+    }
+  },
+  "training": {
+    "timeout_sec": 5400
+  },
+  "__yaml_source_sha256__": "8965960df8a5f57e57b24cdbe294242e5bd1561a74f68b7886d40fe01adc669d"
+}

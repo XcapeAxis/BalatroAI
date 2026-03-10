@@ -1,0 +1,53 @@
+schema: p42_closed_loop_rl_config_v1
+
+output:
+  artifacts_root: docs/artifacts/research/r2s4_certification
+
+seeds:
+  - AAAAAAA
+  - BBBBBBB
+  - CCCCCCC
+  - DDDDDDD
+
+replay_mixer:
+  config: configs/experiments/p41_replay_mix_nightly.yaml
+  quick: false
+
+failure_mining:
+  enabled: true
+  config: configs/experiments/r2s4_p40_failure_mining_multisource.yaml
+  quick: false
+
+candidate_train:
+  config: configs/experiments/r2s4_p42_candidate_bucketmin_rebalance_smoke.yaml
+  quick: false
+  training:
+    timeout_sec: 7200
+
+arena_eval:
+  enabled: true
+  backend: sim
+  mode: long_episode
+  policies:
+    - heuristic_baseline
+    - model_policy
+  candidate_policy: model_policy
+  champion_policy: heuristic_baseline
+  episodes_per_seed: 2
+  max_steps: 220
+
+champion_rules:
+  enabled: true
+  champion_json: docs/artifacts/p22/champion.json
+  min_seeds: 3
+  max_invalid_increase: 0.02
+  max_timeout_increase: 0.01
+  min_score_improvement: 0.02
+  max_score_regression: 0.03
+  min_win_improvement: 0.0
+  bootstrap_iterations: 350
+  slice_min_samples: 3
+
+regression_triage:
+  enabled: true
+  baseline_run_dir: docs/artifacts/research/r2s3_certification/r2s3-c4-certification
