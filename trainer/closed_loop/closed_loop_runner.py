@@ -20,7 +20,6 @@ try:  # pragma: no cover - optional dependency
 except Exception:  # pragma: no cover
     yaml = None
 
-from trainer.closed_loop.candidate_train import run_candidate_training
 from trainer.closed_loop.check_replay_lineage import run_lineage_check
 from trainer.closed_loop.failure_mining import run_failure_mining
 from trainer.closed_loop.regression_triage import run_regression_triage
@@ -28,6 +27,7 @@ from trainer.closed_loop.replay_manifest import now_iso, now_stamp, to_abs_path,
 from trainer.closed_loop.replay_mixer import run_replay_mixer
 from trainer.registry.checkpoint_registry import find_by_artifact_path, get_entry, update_checkpoint, update_checkpoint_status
 from trainer.registry.checkpoint_state_machine import can_transition
+from trainer.runtime.python_resolver import resolve_training_python
 
 
 def _read_yaml_or_json(path: Path) -> dict[str, Any]:
@@ -108,6 +108,32 @@ def _safe_transition_checkpoint(
     if not can_transition(current_status, to_status):
         return current
     return update_checkpoint_status(token, to_status=to_status, reason=reason, operator=operator, refs=refs)
+
+
+def _pick_training_python(repo_root: Path) -> str:
+    try:
+        payload = resolve_training_python(repo_root=repo_root)
+        selected = payload.get("selected") if isinstance(payload.get("selected"), dict) else {}
+        chosen = str(selected.get("python") or "").strip()
+        if chosen:
+            return chosen
+    except Exception:
+        pass
+    return str(sys.executable)
+
+
+def _extract_json_object(stdout: str) -> dict[str, Any]:
+    for line in reversed(str(stdout or "").splitlines()):
+        text = line.strip()
+        if not text:
+            continue
+        try:
+            payload = json.loads(text)
+        except Exception:
+            continue
+        if isinstance(payload, dict):
+            return payload
+    return {}
 
 
 def _normalize_seeds(cfg: dict[str, Any], *, quick: bool) -> list[str]:
@@ -359,17 +385,92 @@ def run_closed_loop(
     )
     candidate_cfg_payload = _read_yaml_or_json(candidate_config_path)
     candidate_cfg_payload["replay_mix_manifest"] = str(replay_summary.get("replay_mix_manifest") or "")
+    candidate_cfg_payload["failure_pack_manifest"] = str(failure_summary.get("failure_pack_manifest") or "")
     candidate_cfg_payload["seeds"] = list(seeds)
     generated_candidate_cfg = run_dir / "candidate_config.generated.json"
     write_json(generated_candidate_cfg, candidate_cfg_payload)
 
-    candidate_summary = run_candidate_training(
-        config_path=generated_candidate_cfg,
-        out_dir=run_dir / "candidate_train",
-        run_id=f"{chosen_run_id}-candidate",
-        quick=bool(quick or candidate_cfg.get("quick")),
-        dry_run=bool(dry_run),
-    )
+    training_python = _pick_training_python(repo_root)
+    candidate_train_dir = run_dir / "candidate_train"
+    candidate_timeout_sec = 3600
+    training_cfg = candidate_cfg.get("training") if isinstance(candidate_cfg.get("training"), dict) else {}
+    if isinstance(training_cfg, dict):
+        candidate_timeout_sec = int(training_cfg.get("timeout_sec") or candidate_timeout_sec)
+    candidate_cmd = [
+        training_python,
+        "-B",
+        "-m",
+        "trainer.closed_loop.candidate_train",
+        "--config",
+        str(generated_candidate_cfg),
+        "--out-dir",
+        str(candidate_train_dir),
+        "--run-id",
+        f"{chosen_run_id}-candidate",
+    ]
+    if bool(quick or candidate_cfg.get("quick")):
+        candidate_cmd.append("--quick")
+    if bool(dry_run):
+        candidate_cmd.append("--dry-run")
+    candidate_result = _run_process(candidate_cmd, cwd=repo_root, timeout_sec=candidate_timeout_sec)
+    candidate_summary = _extract_json_object(str(candidate_result.get("stdout") or ""))
+    if not candidate_summary:
+        fallback_manifest = candidate_train_dir / "candidate_train_manifest.json"
+        if fallback_manifest.exists():
+            fallback_payload = _read_yaml_or_json(fallback_manifest)
+            candidate_summary = {
+                "status": str(fallback_payload.get("status") or "failed"),
+                "run_id": str(fallback_payload.get("run_id") or f"{chosen_run_id}-candidate"),
+                "run_dir": str(candidate_train_dir),
+                "candidate_train_manifest": str(fallback_manifest),
+                "metrics": str(candidate_train_dir / "metrics.json"),
+                "best_checkpoint": str(fallback_payload.get("candidate_checkpoint") or ""),
+                "training_mode": str(fallback_payload.get("training_mode") or ""),
+                "training_mode_category": str(fallback_payload.get("training_mode_category") or ""),
+                "fallback_used": bool(fallback_payload.get("fallback_used")),
+                "fallback_reason": str(fallback_payload.get("fallback_reason") or ""),
+                "legacy_paths_used": fallback_payload.get("legacy_paths_used") or [],
+                "seeds_used": str(candidate_train_dir / "seeds_used.json"),
+                "curriculum_plan": str(candidate_train_dir / "curriculum_plan.json"),
+                "curriculum_applied": str(fallback_payload.get("curriculum_applied") or ""),
+                "reward_config": str(candidate_train_dir / "rl_train" / "reward_config.json"),
+                "warnings_log": str(candidate_train_dir / "rl_train" / "warnings.log"),
+                "multi_seed_eval": str(fallback_payload.get("multi_seed_eval") or ""),
+                "diagnostics_json": str(fallback_payload.get("diagnostics_json") or ""),
+                "diagnostics_report_md": str(fallback_payload.get("diagnostics_report_md") or ""),
+                "checkpoint_id": str(fallback_payload.get("checkpoint_id") or ""),
+                "hard_case_sampling_json": str(fallback_payload.get("hard_case_sampling_json") or ""),
+            }
+    if not candidate_summary:
+        candidate_summary = {
+            "status": "failed",
+            "run_id": f"{chosen_run_id}-candidate",
+            "run_dir": str(candidate_train_dir),
+            "candidate_train_manifest": str(candidate_train_dir / "candidate_train_manifest.json"),
+            "metrics": str(candidate_train_dir / "metrics.json"),
+            "best_checkpoint": "",
+            "training_mode": "",
+            "training_mode_category": "",
+            "fallback_used": False,
+            "fallback_reason": "candidate_train_process_failed",
+            "legacy_paths_used": [],
+            "seeds_used": str(candidate_train_dir / "seeds_used.json"),
+            "curriculum_plan": str(candidate_train_dir / "curriculum_plan.json"),
+            "curriculum_applied": "",
+            "reward_config": str(candidate_train_dir / "rl_train" / "reward_config.json"),
+            "warnings_log": str(candidate_train_dir / "rl_train" / "warnings.log"),
+            "multi_seed_eval": "",
+            "diagnostics_json": "",
+            "diagnostics_report_md": "",
+            "checkpoint_id": "",
+            "hard_case_sampling_json": "",
+        }
+    candidate_summary["training_python"] = training_python
+    candidate_summary["candidate_train_command"] = candidate_cmd
+    candidate_summary["candidate_train_returncode"] = int(candidate_result.get("returncode") or 0)
+    candidate_summary["candidate_train_elapsed_sec"] = float(candidate_result.get("elapsed_sec") or 0.0)
+    candidate_summary["candidate_train_stdout_tail"] = str(candidate_result.get("stdout") or "")[-1200:]
+    candidate_summary["candidate_train_stderr_tail"] = str(candidate_result.get("stderr") or "")[-1200:]
     training_mode = str(candidate_summary.get("training_mode") or "")
     training_mode_category = str(candidate_summary.get("training_mode_category") or "")
     fallback_used = bool(candidate_summary.get("fallback_used"))
@@ -442,7 +543,7 @@ def run_closed_loop(
         timeout_sec = int(arena_cfg.get("timeout_sec") or max(600, len(policies) * len(seeds) * max_steps * episodes_per_seed // 3))
 
         arena_cmd = [
-            str(sys.executable),
+            training_python,
             "-B",
             "-m",
             "trainer.policy_arena.arena_runner",
@@ -506,6 +607,7 @@ def run_closed_loop(
             "world_model_checkpoint": world_model_checkpoint,
             "world_model_checkpoint_id": str(((_checkpoint_entry_from_path(world_model_checkpoint) or {}).get("checkpoint_id")) or ""),
             "world_model_assist_mode": world_model_assist_mode if world_model_enabled else "",
+            "training_python": training_python,
             "arena_command": arena_cmd,
             "arena_returncode": int(arena_result.get("returncode") or 0),
             "arena_elapsed_sec": float(arena_result.get("elapsed_sec") or 0.0),
@@ -519,7 +621,7 @@ def run_closed_loop(
         if arena_status == "ok" and bool(champion_cfg.get("enabled", True)):
             champion_out = arena_out / "champion_eval"
             champion_cmd = [
-                str(sys.executable),
+                training_python,
                 "-B",
                 "-m",
                 "trainer.policy_arena.champion_rules",

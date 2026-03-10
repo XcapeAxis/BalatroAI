@@ -25,6 +25,12 @@ def _as_seed_list(raw: Any, default: list[str]) -> list[str]:
     return out if out else list(default)
 
 
+def _as_string_list(raw: Any) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    return [str(x).strip() for x in raw if str(x).strip()]
+
+
 @dataclass
 class PPOTrainConfig:
     ppo_epochs: int = 2
@@ -94,6 +100,19 @@ class PPOEnvConfig:
 
 
 @dataclass
+class PPOHardCaseSamplingConfig:
+    enabled: bool = False
+    failure_pack_manifest: str = ""
+    replay_mix_manifest: str = ""
+    max_failure_cases: int = 64
+    max_failure_seeds: int = 8
+    seed_replay_factor: int = 2
+    include_base_seed: bool = True
+    preserve_seed_identity: bool = False
+    prioritize_failure_types: list[str] = field(default_factory=list)
+
+
+@dataclass
 class PPOConfig:
     schema: str = "p44_ppo_lite_config_v1"
     run_id: str = ""
@@ -106,6 +125,7 @@ class PPOConfig:
     evaluation: PPOEvaluationConfig = field(default_factory=PPOEvaluationConfig)
     diagnostics: PPODiagnosticsConfig = field(default_factory=PPODiagnosticsConfig)
     world_model_aux: PPOWorldModelAuxConfig = field(default_factory=PPOWorldModelAuxConfig)
+    hard_case_sampling: PPOHardCaseSamplingConfig = field(default_factory=PPOHardCaseSamplingConfig)
     train: PPOTrainConfig = field(default_factory=PPOTrainConfig)
 
     @classmethod
@@ -117,6 +137,7 @@ class PPOConfig:
         evaluation_raw = payload.get("evaluation") if isinstance(payload.get("evaluation"), dict) else {}
         diagnostics_raw = payload.get("diagnostics") if isinstance(payload.get("diagnostics"), dict) else {}
         world_model_aux_raw = payload.get("world_model_aux") if isinstance(payload.get("world_model_aux"), dict) else {}
+        hard_case_raw = payload.get("hard_case_sampling") if isinstance(payload.get("hard_case_sampling"), dict) else {}
         train_raw = payload.get("train") if isinstance(payload.get("train"), dict) else {}
 
         env_cfg = PPOEnvConfig(
@@ -172,6 +193,17 @@ class PPOConfig:
             checkpoint=str(world_model_aux_raw.get("checkpoint") or ""),
             loss_weight=max(0.0, _safe_float(world_model_aux_raw.get("loss_weight"), 0.0)),
         )
+        hard_case_cfg = PPOHardCaseSamplingConfig(
+            enabled=bool(hard_case_raw.get("enabled", False)),
+            failure_pack_manifest=str(hard_case_raw.get("failure_pack_manifest") or ""),
+            replay_mix_manifest=str(hard_case_raw.get("replay_mix_manifest") or ""),
+            max_failure_cases=max(0, _safe_int(hard_case_raw.get("max_failure_cases"), 64)),
+            max_failure_seeds=max(0, _safe_int(hard_case_raw.get("max_failure_seeds"), 8)),
+            seed_replay_factor=max(1, _safe_int(hard_case_raw.get("seed_replay_factor"), 2)),
+            include_base_seed=bool(hard_case_raw.get("include_base_seed", True)),
+            preserve_seed_identity=bool(hard_case_raw.get("preserve_seed_identity", False)),
+            prioritize_failure_types=_as_string_list(hard_case_raw.get("prioritize_failure_types")),
+        )
         train_cfg = PPOTrainConfig(
             ppo_epochs=max(1, _safe_int(train_raw.get("ppo_epochs"), 2)),
             minibatch_size=max(8, _safe_int(train_raw.get("minibatch_size"), 128)),
@@ -207,6 +239,7 @@ class PPOConfig:
             evaluation=evaluation_cfg,
             diagnostics=diagnostics_cfg,
             world_model_aux=world_model_aux_cfg,
+            hard_case_sampling=hard_case_cfg,
             train=train_cfg,
         )
 

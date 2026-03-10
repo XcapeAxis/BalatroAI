@@ -511,6 +511,23 @@ def run_candidate_training(
             resolved_rl = to_abs_path(repo_root, rl_config_path)
             if resolved_rl.exists():
                 rl_config_payload = _read_yaml_or_json(resolved_rl)
+        if rl_config_payload is None:
+            rl_config_payload = {}
+        hard_case_override = cfg.get("hard_case_sampling") if isinstance(cfg.get("hard_case_sampling"), dict) else {}
+        if hard_case_override:
+            merged_hard_case = dict(rl_config_payload.get("hard_case_sampling") or {}) if isinstance(rl_config_payload.get("hard_case_sampling"), dict) else {}
+            merged_hard_case.update(hard_case_override)
+            rl_config_payload["hard_case_sampling"] = merged_hard_case
+        failure_pack_manifest = str(cfg.get("failure_pack_manifest") or "").strip()
+        replay_mix_manifest = str(cfg.get("replay_mix_manifest") or "").strip()
+        if failure_pack_manifest or replay_mix_manifest:
+            merged_hard_case = dict(rl_config_payload.get("hard_case_sampling") or {}) if isinstance(rl_config_payload.get("hard_case_sampling"), dict) else {}
+            if failure_pack_manifest:
+                merged_hard_case["failure_pack_manifest"] = failure_pack_manifest
+                merged_hard_case["enabled"] = True
+            if replay_mix_manifest:
+                merged_hard_case["replay_mix_manifest"] = replay_mix_manifest
+            rl_config_payload["hard_case_sampling"] = merged_hard_case
         training_cfg = cfg.get("training") if isinstance(cfg.get("training"), dict) else {}
         timeout_sec = int(training_cfg.get("timeout_sec") or 3600)
 
@@ -585,6 +602,7 @@ def run_candidate_training(
             "quick": bool(quick),
             "dry_run": bool(dry_run),
             "replay_mix_manifest": str(cfg.get("replay_mix_manifest") or ""),
+            "failure_pack_manifest": str(cfg.get("failure_pack_manifest") or ""),
             "replay_selected_entries": 0,
             "curriculum_plan": curriculum_plan,
             "curriculum_config_path": "",
@@ -598,6 +616,8 @@ def run_candidate_training(
             "diagnostics_json": str(rl_summary.get("diagnostics_json") or ""),
             "diagnostics_report_md": str(rl_summary.get("diagnostics_report_md") or ""),
             "checkpoint_id": str(rl_summary.get("checkpoint_id") or ""),
+            "hard_case_sampling_status": str((metrics_payload.get("hard_case_sampling_status") or "")),
+            "hard_case_sampling_json": str(rl_summary.get("hard_case_sampling_json") or ""),
         }
         metrics_payload["checkpoint_id"] = str(rl_summary.get("checkpoint_id") or "")
         write_json(run_dir / "candidate_train_manifest.json", manifest)
@@ -623,6 +643,7 @@ def run_candidate_training(
             "diagnostics_json": str(rl_summary.get("diagnostics_json") or ""),
             "diagnostics_report_md": str(rl_summary.get("diagnostics_report_md") or ""),
             "checkpoint_id": str(rl_summary.get("checkpoint_id") or ""),
+            "hard_case_sampling_json": str(rl_summary.get("hard_case_sampling_json") or ""),
         }
 
     if mode == "selfsup_warm_bc":

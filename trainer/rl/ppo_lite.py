@@ -9,10 +9,12 @@ if __package__ is None or __package__ == "":
 import argparse
 import hashlib
 import json
+import math
 import statistics
 import subprocess
 import sys
 import time
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -227,6 +229,136 @@ def _git_commit(repo_root: Path) -> str:
     return str(result.stdout or "").strip() if int(result.returncode) == 0 else ""
 
 
+def _read_jsonl_rows(path: Path, *, max_rows: int = 0) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8", errors="replace") as fp:
+        for line in fp:
+            text = line.strip()
+            if not text:
+                continue
+            try:
+                payload = json.loads(text)
+            except Exception:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            rows.append(payload)
+            if max_rows > 0 and len(rows) >= max_rows:
+                break
+    return rows
+
+
+def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any]:
+    hard_cfg = cfg.hard_case_sampling
+    if not bool(hard_cfg.enabled):
+        return {
+            "enabled": False,
+            "status": "disabled",
+            "reason": "hard_case_sampling_disabled",
+            "failure_pack_manifest": "",
+            "selected_failure_count": 0,
+            "selected_failure_seeds": [],
+            "failure_seed_counts": {},
+            "failure_type_counts": {},
+            "seed_replay_factor": int(hard_cfg.seed_replay_factor),
+            "include_base_seed": bool(hard_cfg.include_base_seed),
+            "preserve_seed_identity": bool(hard_cfg.preserve_seed_identity),
+        }
+
+    manifest_token = str(hard_cfg.failure_pack_manifest or "").strip()
+    manifest_path = _resolve_path(repo_root, manifest_token) if manifest_token else None
+    if manifest_path is None or not manifest_path.exists():
+        return {
+            "enabled": True,
+            "status": "stub",
+            "reason": "failure_pack_manifest_missing",
+            "failure_pack_manifest": str(manifest_path) if manifest_path else "",
+            "selected_failure_count": 0,
+            "selected_failure_seeds": [],
+            "failure_seed_counts": {},
+            "failure_type_counts": {},
+            "seed_replay_factor": int(hard_cfg.seed_replay_factor),
+            "include_base_seed": bool(hard_cfg.include_base_seed),
+            "preserve_seed_identity": bool(hard_cfg.preserve_seed_identity),
+        }
+
+    payload = _read_yaml_or_json(manifest_path)
+    raw_failures = payload.get("failures") if isinstance(payload.get("failures"), list) else []
+    allowed_types = {str(token).strip() for token in hard_cfg.prioritize_failure_types if str(token).strip()}
+
+    failure_seed_counts: Counter[str] = Counter()
+    failure_type_counts: Counter[str] = Counter()
+    selected_rows: list[dict[str, Any]] = []
+    for row in raw_failures:
+        if not isinstance(row, dict):
+            continue
+        row_seed = str(row.get("seed") or "").strip()
+        if not row_seed:
+            continue
+        failure_types = [str(token).strip() for token in (row.get("failure_types") or []) if str(token).strip()]
+        if allowed_types and failure_types and not any(token in allowed_types for token in failure_types):
+            continue
+        selected_rows.append(
+            {
+                "seed": row_seed,
+                "failure_types": failure_types,
+                "episode_id": str(row.get("episode_id") or ""),
+                "total_score": _safe_float(row.get("total_score"), 0.0),
+            }
+        )
+        failure_seed_counts[row_seed] += 1
+        for token in failure_types:
+            failure_type_counts[token] += 1
+        if len(selected_rows) >= max(1, int(hard_cfg.max_failure_cases or 0)):
+            break
+
+    selected_failure_seeds = [
+        seed
+        for seed, _count in sorted(
+            failure_seed_counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[: max(0, int(hard_cfg.max_failure_seeds or 0))]
+    ]
+    status = "ok" if selected_failure_seeds else "stub"
+    reason = "" if status == "ok" else "no_failure_rows_selected"
+    return {
+        "enabled": True,
+        "status": status,
+        "reason": reason,
+        "failure_pack_manifest": str(manifest_path),
+        "failure_pack_status": str(payload.get("status") or ""),
+        "selected_failure_count": len(selected_rows),
+        "selected_failure_seeds": selected_failure_seeds,
+        "failure_seed_counts": dict(sorted(failure_seed_counts.items())),
+        "failure_type_counts": dict(sorted(failure_type_counts.items())),
+        "selected_failures_preview": selected_rows[:16],
+        "seed_replay_factor": int(hard_cfg.seed_replay_factor),
+        "include_base_seed": bool(hard_cfg.include_base_seed),
+        "preserve_seed_identity": bool(hard_cfg.preserve_seed_identity),
+    }
+
+
+def _build_rollout_seed_schedule(
+    *,
+    base_seeds: list[str],
+    hard_case_plan: dict[str, Any],
+) -> list[str]:
+    schedule: list[str] = []
+    if bool(hard_case_plan.get("include_base_seed", True)):
+        schedule.extend([str(seed).strip() for seed in base_seeds if str(seed).strip()])
+    if str(hard_case_plan.get("status") or "") != "ok":
+        return schedule or [str(seed).strip() for seed in base_seeds if str(seed).strip()]
+    replay_factor = max(1, _safe_int(hard_case_plan.get("seed_replay_factor"), 2))
+    for seed in hard_case_plan.get("selected_failure_seeds") if isinstance(hard_case_plan.get("selected_failure_seeds"), list) else []:
+        token = str(seed).strip()
+        if not token:
+            continue
+        schedule.extend([token] * replay_factor)
+    return schedule or [str(seed).strip() for seed in base_seeds if str(seed).strip()]
+
+
 def _runtime_profile_name(runtime_profile: dict[str, Any]) -> str:
     if not isinstance(runtime_profile, dict):
         return ""
@@ -356,6 +488,7 @@ def _train_one_seed(
     warnings_log_path: Path,
     curriculum_applied_path: Path,
     runtime_profile: dict[str, Any],
+    hard_case_plan: dict[str, Any],
 ) -> dict[str, Any]:
     torch, _, _ = _require_torch()
     from trainer.rl.policy_value_model import PolicyValueModel
@@ -401,6 +534,7 @@ def _train_one_seed(
     weight_sync_count = 0
     oom_restart_count = 0
     component_name = _component_name_for_schema(cfg.schema)
+    hard_case_updates: list[dict[str, Any]] = []
 
     for update_idx in range(1, int(cfg.train.max_updates) + 1):
         applied_cfg_dict, stage_payload = scheduler.apply_to_config(cfg_raw, training_iteration=update_idx)
@@ -425,13 +559,33 @@ def _train_one_seed(
         )
 
         distributed_seeds = list(applied_cfg.distributed.seeds) if applied_cfg.distributed.seeds else [str(seed)]
+        rollout_seed_schedule = _build_rollout_seed_schedule(
+            base_seeds=distributed_seeds,
+            hard_case_plan=hard_case_plan,
+        )
+        rollout_episodes_per_worker = max(
+            int(applied_cfg.distributed.episodes_per_worker),
+            int(math.ceil(float(len(rollout_seed_schedule)) / float(max(1, int(applied_cfg.distributed.num_workers))))),
+        )
+        hard_case_update_payload = {
+            "update_index": int(update_idx),
+            "base_seeds": list(distributed_seeds),
+            "rollout_seed_schedule": list(rollout_seed_schedule),
+            "rollout_seed_count": len(rollout_seed_schedule),
+            "episodes_per_worker": int(rollout_episodes_per_worker),
+            "hard_case_status": str(hard_case_plan.get("status") or "disabled"),
+            "selected_failure_count": int(hard_case_plan.get("selected_failure_count") or 0),
+            "selected_failure_seeds": list(hard_case_plan.get("selected_failure_seeds") or []),
+            "preserve_seed_identity": bool(hard_case_plan.get("preserve_seed_identity", False)),
+        }
+        hard_case_updates.append(hard_case_update_payload)
         update_started = time.time()
         rollout_summary = run_distributed_rollout(
             policy_snapshot=_cpu_model_snapshot(model),
             policy_id="ppo_lite",
             num_workers=int(applied_cfg.distributed.num_workers),
-            seeds=distributed_seeds,
-            episodes_per_worker=int(applied_cfg.distributed.episodes_per_worker),
+            seeds=rollout_seed_schedule,
+            episodes_per_worker=int(rollout_episodes_per_worker),
             max_steps_per_episode=int(applied_cfg.distributed.max_steps_per_episode),
             total_steps_cap=int(applied_cfg.rollout.total_steps_cap),
             run_id=f"{seed}-u{update_idx:03d}",
@@ -449,6 +603,7 @@ def _train_one_seed(
             runtime_profile=runtime_profile,
             progress_path=unified_progress_path,
             include_steps_in_result=True,
+            preserve_seed_identity=bool(hard_case_plan.get("preserve_seed_identity", False)),
         )
         rollout_buffers.append(str(rollout_summary.get("rollout_buffer_jsonl") or ""))
         rollout_manifests.append(str(rollout_summary.get("rollout_manifest") or ""))
@@ -567,6 +722,7 @@ def _train_one_seed(
                 "oom_restart_count": oom_restart_count,
             },
             "runtime_profile": runtime_profile,
+            "hard_case_sampling": hard_case_update_payload,
         }
         save_torch_checkpoint(last_ckpt, checkpoint_payload)
         if mean_reward >= best_reward:
@@ -599,6 +755,8 @@ def _train_one_seed(
                 "buffer_backlog_steps": backlog_steps,
                 "weight_sync_count": weight_sync_count,
                 "oom_restart_count": oom_restart_count,
+                "hard_case_seed_count": int(len(rollout_seed_schedule)),
+                "hard_case_selected_failures": int(hard_case_plan.get("selected_failure_count") or 0),
                 "learner_device": learner_device,
                 "rollout_device": rollout_device,
                 "gpu_mem_mb": gpu_mem_mb,
@@ -628,6 +786,8 @@ def _train_one_seed(
                     "buffer_backlog_steps": backlog_steps,
                     "weight_sync_count": weight_sync_count,
                     "oom_restart_count": oom_restart_count,
+                    "hard_case_seed_count": int(len(rollout_seed_schedule)),
+                    "hard_case_selected_failures": int(hard_case_plan.get("selected_failure_count") or 0),
                 },
                 device_profile=runtime_profile,
                 learner_device=learner_device,
@@ -665,7 +825,21 @@ def _train_one_seed(
         "best_checkpoint": str(best_ckpt if best_ckpt.exists() else ""),
         "last_checkpoint": str(last_ckpt if last_ckpt.exists() else ""),
         "runtime_profile": runtime_profile,
+        "hard_case_sampling_status": str(hard_case_plan.get("status") or "disabled"),
+        "hard_case_selected_failures": int(hard_case_plan.get("selected_failure_count") or 0),
+        "hard_case_seed_count": int(len(hard_case_plan.get("selected_failure_seeds") or [])),
     }
+    hard_case_schedule_path = seed_dir / "hard_case_schedule.json"
+    _write_json(
+        hard_case_schedule_path,
+        {
+            "schema": "p44_hard_case_schedule_v1",
+            "generated_at": _now_iso(),
+            "seed": str(seed),
+            "hard_case_plan": hard_case_plan,
+            "updates": hard_case_updates,
+        },
+    )
     _write_json(seed_dir / "metrics.json", metrics)
     return {
         "seed": str(seed),
@@ -677,6 +851,7 @@ def _train_one_seed(
         "rollout_buffers": rollout_buffers,
         "rollout_manifests": rollout_manifests,
         "runtime_profile": runtime_profile,
+        "hard_case_schedule_json": str(hard_case_schedule_path),
     }
 
 
@@ -743,6 +918,9 @@ def run_ppo_lite_training(
     rollout_device = str((runtime_resolved or {}).get("rollout_device") or "cpu")
     runtime_profile_json = run_dir / "runtime_profile.json"
     _write_json(runtime_profile_json, runtime_profile_payload)
+    hard_case_plan = _resolve_hard_case_plan(cfg=cfg, repo_root=repo_root)
+    hard_case_sampling_json = run_dir / "hard_case_sampling.json"
+    _write_json(hard_case_sampling_json, hard_case_plan)
 
     seeds_payload = build_seeds_payload(seeds, seed_policy_version="p44.rl_ppo_lite")
     _write_json(run_dir / "seeds_used.json", seeds_payload)
@@ -771,6 +949,7 @@ def run_ppo_lite_training(
             "run_dir": str(run_dir),
             "config": cfg.to_dict(),
             "runtime_profile": runtime_profile_payload,
+            "hard_case_sampling": hard_case_plan,
             "curriculum_plan": curriculum_plan,
             "seed_results": [],
             "best_checkpoint": "",
@@ -787,6 +966,8 @@ def run_ppo_lite_training(
                 "ok_seed_count": 0,
                 "learner_device": learner_device,
                 "rollout_device": rollout_device,
+                "hard_case_sampling_status": str(hard_case_plan.get("status") or "disabled"),
+                "hard_case_selected_failures": int(hard_case_plan.get("selected_failure_count") or 0),
             },
         )
         (run_dir / "best_checkpoint.txt").write_text("\n", encoding="utf-8")
@@ -887,6 +1068,7 @@ def run_ppo_lite_training(
             "best_checkpoint": str(stub_checkpoint),
             "seeds_used": str(run_dir / "seeds_used.json"),
             "reward_config": str(run_dir / "reward_config.json"),
+            "hard_case_sampling_json": str(hard_case_sampling_json),
             "warnings_log": str(warnings_log_path),
             "curriculum_plan": str(curriculum_plan_path),
             "curriculum_applied": str(curriculum_applied_path),
@@ -909,6 +1091,7 @@ def run_ppo_lite_training(
             warnings_log_path=warnings_log_path,
             curriculum_applied_path=curriculum_applied_path,
             runtime_profile=runtime_profile_payload,
+            hard_case_plan=hard_case_plan,
         )
         seed_results.append(seed_result)
 
@@ -1019,6 +1202,9 @@ def run_ppo_lite_training(
         "eval_mean_score": _safe_float(selected_eval_row.get("mean_score"), 0.0),
         "eval_std_score": _safe_float(selected_eval_row.get("std_score"), 0.0),
         "candidate_checkpoint": best_checkpoint,
+        "hard_case_sampling_status": str(hard_case_plan.get("status") or "disabled"),
+        "hard_case_selected_failures": int(hard_case_plan.get("selected_failure_count") or 0),
+        "hard_case_seed_count": int(len(hard_case_plan.get("selected_failure_seeds") or [])),
     }
     manifest = {
         "schema": "p44_rl_train_manifest_v1",
@@ -1027,6 +1213,7 @@ def run_ppo_lite_training(
         "status": status,
         "run_dir": str(run_dir),
         "config": cfg.to_dict(),
+        "hard_case_sampling": hard_case_plan,
         "curriculum_plan": curriculum_plan,
         "paths": {
             "metrics": str(run_dir / "metrics.json"),
@@ -1034,6 +1221,7 @@ def run_ppo_lite_training(
             "warnings_log": str(warnings_log_path),
             "seeds_used": str(run_dir / "seeds_used.json"),
             "reward_config": str(run_dir / "reward_config.json"),
+            "hard_case_sampling_json": str(hard_case_sampling_json),
             "curriculum_plan": str(curriculum_plan_path),
             "curriculum_applied": str(curriculum_applied_path),
             "multi_seed_eval": str(eval_summary.get("seed_results_json") or ""),
@@ -1117,6 +1305,7 @@ def run_ppo_lite_training(
         "best_checkpoint": str(best_checkpoint),
         "seeds_used": str(run_dir / "seeds_used.json"),
         "reward_config": str(run_dir / "reward_config.json"),
+        "hard_case_sampling_json": str(hard_case_sampling_json),
         "warnings_log": str(warnings_log_path),
         "curriculum_plan": str(curriculum_plan_path),
         "curriculum_applied": str(curriculum_applied_path),

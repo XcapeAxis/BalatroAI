@@ -24,6 +24,14 @@ from trainer.runtime.bootstrap_env import (
 )
 
 
+def _candidate_repo_roots(root: Path) -> list[Path]:
+    roots: list[Path] = [root.resolve()]
+    fallback_root = resolve_repo_root().resolve()
+    if all(existing.resolve() != fallback_root for existing in roots):
+        roots.append(fallback_root)
+    return roots
+
+
 def _append_candidate(
     candidates: list[dict[str, Any]],
     seen: set[str],
@@ -61,30 +69,60 @@ def resolve_training_python(
     root = Path(repo_root).resolve() if repo_root else resolve_repo_root()
     explicit_python = str(explicit_python or os.environ.get("BALATRO_TRAIN_PYTHON") or "").strip()
     explicit_env = str(explicit_env or os.environ.get("BALATRO_TRAIN_ENV") or "").strip()
-    bootstrap_state = load_bootstrap_state(root)
-    bootstrap_envs = bootstrap_state.get("envs") if isinstance(bootstrap_state.get("envs"), dict) else {}
-    bootstrap_selected = str(bootstrap_state.get("selected_training_python") or "").strip()
-    bootstrap_mode = str(bootstrap_state.get("recommended_mode") or "").strip()
+    bootstrap_roots = _candidate_repo_roots(root)
+    bootstrap_sources: list[dict[str, Any]] = []
+    for source_root in bootstrap_roots:
+        state = load_bootstrap_state(source_root)
+        envs = state.get("envs") if isinstance(state.get("envs"), dict) else {}
+        selected_python = str(state.get("selected_training_python") or "").strip()
+        recommended_mode = str(state.get("recommended_mode") or "").strip()
+        bootstrap_sources.append(
+            {
+                "root": source_root,
+                "state": state if isinstance(state, dict) else {},
+                "envs": envs,
+                "selected_training_python": selected_python,
+                "recommended_mode": recommended_mode,
+            }
+        )
+    bootstrap_primary = next(
+        (
+            source
+            for source in bootstrap_sources
+            if source.get("selected_training_python") or source.get("envs")
+        ),
+        (bootstrap_sources[0] if bootstrap_sources else {"root": root, "state": {}, "envs": {}, "selected_training_python": "", "recommended_mode": ""}),
+    )
+    bootstrap_state = bootstrap_primary.get("state") if isinstance(bootstrap_primary.get("state"), dict) else {}
+    bootstrap_envs = bootstrap_primary.get("envs") if isinstance(bootstrap_primary.get("envs"), dict) else {}
+    bootstrap_selected = str(bootstrap_primary.get("selected_training_python") or "").strip()
+    bootstrap_mode = str(bootstrap_primary.get("recommended_mode") or "").strip()
+    bootstrap_source_root = Path(bootstrap_primary.get("root") or root).resolve()
 
     candidates: list[dict[str, Any]] = []
     seen: set[str] = set()
     _append_candidate(candidates, seen, label="explicit_python", priority="explicit_python", candidate=explicit_python)
     if explicit_env:
         _append_candidate(candidates, seen, label="explicit_env", priority="explicit_env", candidate=python_from_env_dir(explicit_env))
-    _append_candidate(candidates, seen, label="bootstrap_selected", priority="bootstrap_selected", candidate=bootstrap_selected)
+    for source in bootstrap_sources:
+        source_root = Path(source.get("root") or root).resolve()
+        source_key = "root" if source_root == root else source_root.name
+        source_envs = source.get("envs") if isinstance(source.get("envs"), dict) else {}
+        source_selected = str(source.get("selected_training_python") or "").strip()
+        cpu_bootstrap = (source_envs.get("cpu") or {}).get("python") if isinstance(source_envs.get("cpu"), dict) else ""
+        cuda_bootstrap = (source_envs.get("cuda") or {}).get("python") if isinstance(source_envs.get("cuda"), dict) else ""
 
-    cpu_bootstrap = (bootstrap_envs.get("cpu") or {}).get("python") if isinstance(bootstrap_envs.get("cpu"), dict) else ""
-    cuda_bootstrap = (bootstrap_envs.get("cuda") or {}).get("python") if isinstance(bootstrap_envs.get("cuda"), dict) else ""
-    if prefer_cuda:
-        _append_candidate(candidates, seen, label="bootstrap_cuda", priority="bootstrap_cuda", candidate=cuda_bootstrap)
-        _append_candidate(candidates, seen, label=".venv_trainer_cuda", priority="venv_cuda", candidate=root / ".venv_trainer_cuda" / "Scripts" / "python.exe")
-        _append_candidate(candidates, seen, label="bootstrap_cpu", priority="bootstrap_cpu", candidate=cpu_bootstrap)
-        _append_candidate(candidates, seen, label=".venv_trainer", priority="venv_cpu", candidate=root / ".venv_trainer" / "Scripts" / "python.exe")
-    else:
-        _append_candidate(candidates, seen, label="bootstrap_cpu", priority="bootstrap_cpu", candidate=cpu_bootstrap)
-        _append_candidate(candidates, seen, label=".venv_trainer", priority="venv_cpu", candidate=root / ".venv_trainer" / "Scripts" / "python.exe")
-        _append_candidate(candidates, seen, label="bootstrap_cuda", priority="bootstrap_cuda", candidate=cuda_bootstrap)
-        _append_candidate(candidates, seen, label=".venv_trainer_cuda", priority="venv_cuda", candidate=root / ".venv_trainer_cuda" / "Scripts" / "python.exe")
+        _append_candidate(candidates, seen, label=f"bootstrap_selected[{source_key}]", priority="bootstrap_selected", candidate=source_selected)
+        if prefer_cuda:
+            _append_candidate(candidates, seen, label=f"bootstrap_cuda[{source_key}]", priority="bootstrap_cuda", candidate=cuda_bootstrap)
+            _append_candidate(candidates, seen, label=f".venv_trainer_cuda[{source_key}]", priority="venv_cuda", candidate=source_root / ".venv_trainer_cuda" / "Scripts" / "python.exe")
+            _append_candidate(candidates, seen, label=f"bootstrap_cpu[{source_key}]", priority="bootstrap_cpu", candidate=cpu_bootstrap)
+            _append_candidate(candidates, seen, label=f".venv_trainer[{source_key}]", priority="venv_cpu", candidate=source_root / ".venv_trainer" / "Scripts" / "python.exe")
+        else:
+            _append_candidate(candidates, seen, label=f"bootstrap_cpu[{source_key}]", priority="bootstrap_cpu", candidate=cpu_bootstrap)
+            _append_candidate(candidates, seen, label=f".venv_trainer[{source_key}]", priority="venv_cpu", candidate=source_root / ".venv_trainer" / "Scripts" / "python.exe")
+            _append_candidate(candidates, seen, label=f"bootstrap_cuda[{source_key}]", priority="bootstrap_cuda", candidate=cuda_bootstrap)
+            _append_candidate(candidates, seen, label=f".venv_trainer_cuda[{source_key}]", priority="venv_cuda", candidate=source_root / ".venv_trainer_cuda" / "Scripts" / "python.exe")
     _append_candidate(candidates, seen, label="current_sys_executable", priority="current", candidate=sys.executable)
 
     probes = [
@@ -207,6 +245,7 @@ def resolve_training_python(
         "schema": "p50_python_resolver_v2",
         "generated_at": now_iso(),
         "repo_root": str(root),
+        "bootstrap_source_root": str(bootstrap_source_root),
         "requested": {
             "explicit_python": explicit_python,
             "explicit_env": explicit_env,
@@ -214,7 +253,7 @@ def resolve_training_python(
             "require_cuda": bool(require_cuda),
             "allow_cpu_fallback": bool(allow_cpu_fallback),
         },
-        "bootstrap_state_path": str((root / "docs" / "artifacts" / "p58" / "bootstrap" / "latest_bootstrap_state.json").resolve()),
+        "bootstrap_state_path": str((bootstrap_source_root / "docs" / "artifacts" / "p58" / "bootstrap" / "latest_bootstrap_state.json").resolve()),
         "bootstrap_recommended_mode": bootstrap_mode,
         "selected": selected,
         "selection_reason": selection_reason,

@@ -266,6 +266,7 @@ def _worker_run(spec: dict[str, Any]) -> None:
     max_steps_per_episode = max(1, _safe_int(spec.get("max_steps_per_episode"), 120))
     episodes_per_worker = max(1, _safe_int(spec.get("episodes_per_worker"), 1))
     worker_step_cap = max(0, _safe_int(spec.get("worker_step_cap"), 0))
+    preserve_seed_identity = bool(spec.get("preserve_seed_identity", False))
 
     warnings: list[str] = []
     episodes: list[dict[str, Any]] = []
@@ -289,8 +290,9 @@ def _worker_run(spec: dict[str, Any]) -> None:
                 break
             base_seed = worker_seeds[(episode_index - 1) % len(worker_seeds)]
             episode_token = f"{base_seed}-w{worker_id:02d}-ep{episode_index:04d}"
+            reset_seed = base_seed if preserve_seed_identity else episode_token
             try:
-                obs, info = adapter.reset(seed=episode_token)
+                obs, info = adapter.reset(seed=reset_seed)
             except Exception as exc:
                 warnings.append(f"reset_failed:{episode_token}:{exc}")
                 status = "degraded"
@@ -397,6 +399,7 @@ def _worker_run(spec: dict[str, Any]) -> None:
         "runtime": {
             "rollout_device_requested": str(spec.get("rollout_device") or "cpu"),
             "rollout_device_resolved": str(policy.load_meta.get("resolved_device") or "cpu"),
+            "preserve_seed_identity": bool(preserve_seed_identity),
         },
         "episodes": episodes,
     }
@@ -435,6 +438,7 @@ def run_distributed_rollout(
     rollout_device: str = "cpu",
     runtime_profile: dict[str, Any] | None = None,
     progress_path: str | Path | None = None,
+    preserve_seed_identity: bool = False,
 ) -> dict[str, Any]:
     started = time.time()
     seed_list = [str(seed).strip() for seed in (seeds or ["AAAAAAA", "BBBBBBB"]) if str(seed).strip()]
@@ -474,6 +478,7 @@ def run_distributed_rollout(
                 "worker_step_cap": int(worker_step_cap),
                 "greedy": bool(greedy),
                 "rollout_device": str(rollout_device or "cpu"),
+                "preserve_seed_identity": bool(preserve_seed_identity),
             }
         )
 
@@ -580,6 +585,7 @@ def run_distributed_rollout(
             "total_steps_cap": int(total_steps_cap),
             "greedy": bool(greedy),
             "rollout_device": str(rollout_device or "cpu"),
+            "preserve_seed_identity": bool(preserve_seed_identity),
         },
         "paths": {
             "rollout_buffer_jsonl": str(rollout_buffer_path),
