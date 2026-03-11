@@ -499,3 +499,30 @@ R2-S4 之后的默认下一步仍然是 pure RL：
 - P45 world-model coupling is currently a reserved extension point, not an active training loss in the shipped P42 update loop.
 - P46 does not yet convert PPO-lite into a model-based RL trainer; imagined replay remains a separate research lane.
 - P47 does not yet turn PPO-lite into a model-based search policy; rerank-assisted RL inference remains a reserved extension point.
+
+## R3 研究程序更新（2026-03-11）
+
+本轮没有切回 `teacher / warm-start` 主线，而是在 pure RL 路线上连续推进了多轮 batch 与认证：
+
+- 已确认仍有效：
+  - legality parity 修复后的评测协议可继续使用
+  - `reward_survival` 仍是纯 RL 的可信基线
+  - `bucket-aware replay + curriculum / reward refine` 在 smoke 上能带来稳定正收益
+- 已确认不值得继续作为默认主线：
+  - flat self-imitation
+  - 在错误 source pack 基础上的 compound replay
+- R3 新增的关键结论：
+  - 修复 `source_type_minimum_counts` 与 tracked-slice 选择后，PPO 现在可以真正按 `source_type` / `slice` 进入训练，而不是只停留在 manifest
+  - `arena_compound_slice_seed` 已能真实进入 replay
+  - `arena_slice_gap_seed` 已在后续 gap-focused 配方中真正进入训练选择
+  - strongest certified pure-RL 目前仍未超过 `r2s3-c4-certification`
+
+当前更明确的主瓶颈是：
+- failure source 覆盖仍偏窄
+- `resource_pressure_misplay` / `shop_or_economy_misallocation` / position-sensitive / stateful-joker 仍未形成足够稳定的训练压力
+- strongest certified pure-RL 与 heuristic champion 仍有显著 gap
+
+因此下一阶段默认继续 pure RL，而不是切到 warm-start：
+- 优先扩大 failure source coverage
+- 优先提高 `arena_slice_gap_seed`、`resource_pressure_misplay`、`shop_or_economy_misallocation` 的有效样本占比
+- 在 richer source 上继续做 slice-targeted replay 与认证级 compare

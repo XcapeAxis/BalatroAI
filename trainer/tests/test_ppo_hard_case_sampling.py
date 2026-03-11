@@ -136,6 +136,261 @@ class PPOHardCaseSamplingTest(unittest.TestCase):
             self.assertEqual(plan["bucket_minimum_counts"]["resource_pressure_misplay"], 1)
             self.assertEqual(plan["bucket_minimum_counts"]["low_score_survival"], 1)
 
+    def test_source_type_quota_caps_force_non_dominant_source_into_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "failure_pack_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "p40_failure_pack_manifest_v2",
+                        "status": "ok",
+                        "failures": [
+                            {
+                                "seed": "AAAAAAA",
+                                "episode_id": "arena-1",
+                                "failure_types": ["champion_regression_segment"],
+                                "failure_bucket": "risk_undercommit",
+                                "slice_tags": ["slice_action_type:play"],
+                                "risk_tags": ["resource_relaxed"],
+                                "replay_weight": 4.0,
+                                "source_type": "arena_failure_mining",
+                            },
+                            {
+                                "seed": "BBBBBBB",
+                                "episode_id": "arena-2",
+                                "failure_types": ["champion_regression_segment"],
+                                "failure_bucket": "risk_undercommit",
+                                "slice_tags": ["slice_action_type:play"],
+                                "risk_tags": ["resource_relaxed"],
+                                "replay_weight": 3.5,
+                                "source_type": "arena_failure_mining",
+                            },
+                            {
+                                "seed": "CCCCCCC",
+                                "episode_id": "candidate-slice-1",
+                                "failure_types": ["candidate_slice_failure_seed"],
+                                "failure_bucket": "shop_or_economy_misallocation",
+                                "slice_tags": ["slice_action_type:shop"],
+                                "risk_tags": ["resource_tight"],
+                                "replay_weight": 1.1,
+                                "source_type": "arena_candidate_slice_seed",
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            cfg = PPOConfig.from_mapping(
+                {
+                    "hard_case_sampling": {
+                        "enabled": True,
+                        "failure_pack_manifest": str(manifest_path),
+                        "max_failure_cases": 2,
+                        "max_failure_seeds": 3,
+                        "source_type_quota_caps": {
+                            "arena_failure_mining": 1,
+                            "arena_candidate_slice_seed": 1,
+                        },
+                        "source_type_sampling_weights": {
+                            "arena_candidate_slice_seed": 1.4,
+                        },
+                    }
+                }
+            )
+            plan = _resolve_hard_case_plan(cfg=cfg, repo_root=root)
+            self.assertEqual(plan["status"], "ok")
+            self.assertEqual(plan["selected_failure_count"], 2)
+            self.assertEqual(plan["source_type_selected_counts"]["arena_failure_mining"], 1)
+            self.assertEqual(plan["source_type_selected_counts"]["arena_candidate_slice_seed"], 1)
+            self.assertEqual(plan["source_type_quota_caps"]["arena_failure_mining"], 1)
+
+    def test_slice_minimum_counts_force_shop_slice_into_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "failure_pack_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "p40_failure_pack_manifest_v2",
+                        "status": "ok",
+                        "failures": [
+                            {
+                                "seed": "AAAAAAA",
+                                "episode_id": "discard-1",
+                                "failure_types": ["champion_regression_segment"],
+                                "failure_bucket": "risk_undercommit",
+                                "slice_tags": ["slice_action_type:discard"],
+                                "risk_tags": ["resource_relaxed"],
+                                "replay_weight": 4.0,
+                                "source_type": "arena_failure_mining",
+                            },
+                            {
+                                "seed": "BBBBBBB",
+                                "episode_id": "discard-2",
+                                "failure_types": ["champion_regression_segment"],
+                                "failure_bucket": "risk_undercommit",
+                                "slice_tags": ["slice_action_type:discard"],
+                                "risk_tags": ["resource_relaxed"],
+                                "replay_weight": 3.5,
+                                "source_type": "arena_failure_mining",
+                            },
+                            {
+                                "seed": "CCCCCCC",
+                                "episode_id": "shop-1",
+                                "failure_types": ["candidate_slice_failure_seed"],
+                                "failure_bucket": "shop_or_economy_misallocation",
+                                "slice_tags": ["slice_action_type:shop"],
+                                "risk_tags": ["resource_tight"],
+                                "replay_weight": 0.8,
+                                "source_type": "arena_candidate_slice_seed",
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            cfg = PPOConfig.from_mapping(
+                {
+                    "hard_case_sampling": {
+                        "enabled": True,
+                        "failure_pack_manifest": str(manifest_path),
+                        "max_failure_cases": 2,
+                        "max_failure_seeds": 3,
+                        "slice_minimum_counts": {
+                            "slice_action_type:shop": 1,
+                        },
+                    }
+                }
+            )
+            plan = _resolve_hard_case_plan(cfg=cfg, repo_root=root)
+            self.assertEqual(plan["status"], "ok")
+            self.assertEqual(plan["selected_failure_count"], 2)
+            self.assertEqual(plan["slice_selected_counts"]["slice_action_type:shop"], 1)
+            self.assertEqual(plan["slice_minimum_counts"]["slice_action_type:shop"], 1)
+
+    def test_slice_minimum_counts_match_non_primary_tracked_slice(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "failure_pack_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "p40_failure_pack_manifest_v2",
+                        "status": "ok",
+                        "failures": [
+                            {
+                                "seed": "AAAAAAA",
+                                "episode_id": "resource-1",
+                                "failure_types": ["champion_regression_segment"],
+                                "failure_bucket": "resource_pressure_misplay",
+                                "slice_tags": ["slice_resource_pressure:high", "slice_action_type:shop"],
+                                "risk_tags": ["resource_tight"],
+                                "replay_weight": 3.0,
+                                "source_type": "arena_slice_gap_seed",
+                            },
+                            {
+                                "seed": "BBBBBBB",
+                                "episode_id": "play-1",
+                                "failure_types": ["champion_regression_segment"],
+                                "failure_bucket": "risk_undercommit",
+                                "slice_tags": ["slice_action_type:play"],
+                                "risk_tags": ["resource_relaxed"],
+                                "replay_weight": 2.5,
+                                "source_type": "arena_failure_mining",
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            cfg = PPOConfig.from_mapping(
+                {
+                    "hard_case_sampling": {
+                        "enabled": True,
+                        "failure_pack_manifest": str(manifest_path),
+                        "max_failure_cases": 2,
+                        "max_failure_seeds": 2,
+                        "slice_sampling_weights": {
+                            "slice_resource_pressure:high": 1.2,
+                            "slice_action_type:shop": 1.4,
+                        },
+                        "slice_minimum_counts": {
+                            "slice_action_type:shop": 1,
+                        },
+                    }
+                }
+            )
+            plan = _resolve_hard_case_plan(cfg=cfg, repo_root=root)
+            self.assertEqual(plan["status"], "ok")
+            self.assertEqual(plan["selected_failure_count"], 2)
+            self.assertEqual(plan["slice_selected_counts"]["slice_action_type:shop"], 1)
+            self.assertEqual(plan["slice_selected_counts"]["slice_resource_pressure:high"], 1)
+
+    def test_source_type_minimum_counts_force_candidate_source_into_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "failure_pack_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "p40_failure_pack_manifest_v2",
+                        "status": "ok",
+                        "failures": [
+                            {
+                                "seed": "AAAAAAA",
+                                "episode_id": "arena-1",
+                                "failure_types": ["champion_regression_segment"],
+                                "failure_bucket": "risk_undercommit",
+                                "slice_tags": ["slice_action_type:play"],
+                                "risk_tags": ["resource_relaxed"],
+                                "replay_weight": 5.0,
+                                "source_type": "arena_failure_mining",
+                            },
+                            {
+                                "seed": "BBBBBBB",
+                                "episode_id": "arena-2",
+                                "failure_types": ["champion_regression_segment"],
+                                "failure_bucket": "risk_undercommit",
+                                "slice_tags": ["slice_action_type:play"],
+                                "risk_tags": ["resource_relaxed"],
+                                "replay_weight": 4.5,
+                                "source_type": "arena_failure_mining",
+                            },
+                            {
+                                "seed": "CCCCCCC",
+                                "episode_id": "candidate-1",
+                                "failure_types": ["candidate_slice_failure_seed"],
+                                "failure_bucket": "shop_or_economy_misallocation",
+                                "slice_tags": ["slice_action_type:shop"],
+                                "risk_tags": ["resource_tight"],
+                                "replay_weight": 0.7,
+                                "source_type": "arena_candidate_slice_seed",
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            cfg = PPOConfig.from_mapping(
+                {
+                    "hard_case_sampling": {
+                        "enabled": True,
+                        "failure_pack_manifest": str(manifest_path),
+                        "max_failure_cases": 2,
+                        "max_failure_seeds": 3,
+                        "source_type_minimum_counts": {
+                            "arena_candidate_slice_seed": 1,
+                        },
+                    }
+                }
+            )
+            plan = _resolve_hard_case_plan(cfg=cfg, repo_root=root)
+            self.assertEqual(plan["status"], "ok")
+            self.assertEqual(plan["selected_failure_count"], 2)
+            self.assertEqual(plan["source_type_selected_counts"]["arena_candidate_slice_seed"], 1)
+            self.assertEqual(plan["source_type_minimum_counts"]["arena_candidate_slice_seed"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

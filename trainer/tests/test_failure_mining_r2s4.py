@@ -5,7 +5,9 @@ import unittest
 from pathlib import Path
 
 from trainer.closed_loop.failure_mining import (
+    _bucket_from_slice_tag,
     _build_slice_priority_weights,
+    _compound_actionable_slice_tags,
     _refine_failure_bucket_for_slice_pressure,
     _resolve_failure_sources,
     _row_selection_matches_policy,
@@ -31,6 +33,27 @@ class R2S4SlicePriorityWeightsTest(unittest.TestCase):
         self.assertGreater(weights["slice_action_type:play"], 2.5)
 
 
+class R3SliceBucketMappingTest(unittest.TestCase):
+    def test_bucket_from_slice_tag_handles_actionable_and_unknown_tags(self) -> None:
+        self.assertEqual(_bucket_from_slice_tag("slice_action_type:discard"), "discard_mismanagement")
+        self.assertEqual(_bucket_from_slice_tag("slice_action_type:shop"), "shop_or_economy_misallocation")
+        self.assertEqual(_bucket_from_slice_tag("slice_resource_pressure:medium"), "resource_pressure_misplay")
+        self.assertEqual(_bucket_from_slice_tag("slice_stage:early"), "early_collapse")
+        self.assertEqual(_bucket_from_slice_tag("slice_position_sensitive:unknown"), "")
+
+    def test_compound_actionable_slice_tags_drop_unknown_and_primary(self) -> None:
+        tags = [
+            "slice_resource_pressure:high",
+            "slice_action_type:shop",
+            "slice_position_sensitive:unknown",
+            "slice_action_type:shop",
+        ]
+        self.assertEqual(
+            _compound_actionable_slice_tags(tags, primary_tag="slice_resource_pressure:high"),
+            ["slice_action_type:shop"],
+        )
+
+
 class R2S4SelectionPolicyTest(unittest.TestCase):
     def test_bucket_and_source_caps_are_enforced(self) -> None:
         payload = {
@@ -46,6 +69,7 @@ class R2S4SelectionPolicyTest(unittest.TestCase):
                 selection_by_seed={"AAAAAAA": 0},
                 selection_by_bucket={"discard_mismanagement": 0},
                 selection_by_source={"run-a": 0},
+                selection_by_source_type={"arena_failure_mining": 0},
                 max_failures_per_type=1,
                 max_failures_per_seed=0,
                 max_failures_per_bucket={},
@@ -59,6 +83,7 @@ class R2S4SelectionPolicyTest(unittest.TestCase):
                 selection_by_seed={},
                 selection_by_bucket={"discard_mismanagement": 2},
                 selection_by_source={"run-a": 0},
+                selection_by_source_type={"arena_failure_mining": 0},
                 max_failures_per_type=0,
                 max_failures_per_seed=0,
                 max_failures_per_bucket={"discard_mismanagement": 2},
@@ -72,10 +97,34 @@ class R2S4SelectionPolicyTest(unittest.TestCase):
                 selection_by_seed={},
                 selection_by_bucket={},
                 selection_by_source={"run-a": 3},
+                selection_by_source_type={"arena_failure_mining": 0},
                 max_failures_per_type=0,
                 max_failures_per_seed=0,
                 max_failures_per_bucket={},
                 max_failures_per_source={"run-a": 3},
+            )
+        )
+
+    def test_source_type_minimums_can_be_checked_separately(self) -> None:
+        payload = {
+            "seed": "AAAAAAA",
+            "failure_bucket": "shop_or_economy_misallocation",
+            "source_run_id": "run-a",
+            "source_type": "arena_candidate_slice_seed",
+            "failure_types": ["candidate_slice_failure_seed"],
+        }
+        self.assertTrue(
+            _row_selection_matches_policy(
+                payload=payload,
+                selection_by_type={},
+                selection_by_seed={},
+                selection_by_bucket={},
+                selection_by_source={},
+                selection_by_source_type={"arena_candidate_slice_seed": 0},
+                max_failures_per_type=0,
+                max_failures_per_seed=0,
+                max_failures_per_bucket={},
+                max_failures_per_source={},
             )
         )
 

@@ -292,18 +292,22 @@ def _normalized_weight_mapping(raw: dict[str, Any] | None) -> dict[str, float]:
 
 
 def _tag_weight(tags: list[str], weights: dict[str, float]) -> tuple[float, str]:
-    if not tags or not weights:
+    if not tags:
         return 1.0, ""
+    normalized_tags = [str(tag).strip() for tag in tags if str(tag).strip()]
+    if not normalized_tags:
+        return 1.0, ""
+    if not weights:
+        return 1.0, normalized_tags[0]
     best_tag = ""
     best_weight = 1.0
-    for tag in tags:
-        token = str(tag).strip()
-        if not token:
-            continue
+    for token in normalized_tags:
         weight = max(0.0, _safe_float(weights.get(token), 0.0))
         if weight > best_weight:
             best_weight = weight
             best_tag = token
+    if not best_tag:
+        best_tag = normalized_tags[0]
     return best_weight, best_tag
 
 
@@ -354,6 +358,11 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
     }
     slice_sampling_weights = _normalized_weight_mapping(hard_cfg.slice_sampling_weights or {})
     risk_tag_sampling_weights = _normalized_weight_mapping(hard_cfg.risk_tag_sampling_weights or {})
+    source_type_sampling_weights = {
+        str(source_type).strip(): max(0.0, _safe_float(weight, 0.0))
+        for source_type, weight in (hard_cfg.source_type_sampling_weights or {}).items()
+        if str(source_type).strip()
+    }
     bucket_quota_caps = {
         str(bucket).strip(): max(0, _safe_int(cap, 0))
         for bucket, cap in (hard_cfg.bucket_quota_caps or {}).items()
@@ -369,15 +378,35 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
         for tag, cap in (hard_cfg.slice_quota_caps or {}).items()
         if str(tag).strip()
     }
+    slice_minimum_counts = {
+        str(tag).strip(): max(0, _safe_int(count, 0))
+        for tag, count in (hard_cfg.slice_minimum_counts or {}).items()
+        if str(tag).strip()
+    }
     risk_tag_quota_caps = {
         str(tag).strip(): max(0, _safe_int(cap, 0))
         for tag, cap in (hard_cfg.risk_tag_quota_caps or {}).items()
         if str(tag).strip()
     }
+    source_type_quota_caps = {
+        str(source_type).strip(): max(0, _safe_int(cap, 0))
+        for source_type, cap in (hard_cfg.source_type_quota_caps or {}).items()
+        if str(source_type).strip()
+    }
+    source_type_minimum_counts = {
+        str(source_type).strip(): max(0, _safe_int(count, 0))
+        for source_type, count in (hard_cfg.source_type_minimum_counts or {}).items()
+        if str(source_type).strip()
+    }
     bucket_seed_caps = {
         str(bucket).strip(): max(0, _safe_int(cap, 0))
         for bucket, cap in (hard_cfg.bucket_seed_caps or {}).items()
         if str(bucket).strip()
+    }
+    tracked_slice_tokens = {
+        str(token).strip()
+        for token in (set(slice_sampling_weights) | set(slice_minimum_counts) | set(slice_quota_caps))
+        if str(token).strip()
     }
 
     failure_seed_counts: Counter[str] = Counter()
@@ -404,14 +433,21 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
             continue
         if allowed_risk_tags and not any(token in allowed_risk_tags for token in risk_tags):
             continue
+        source_type = str(row.get("source_type") or "unknown").strip() or "unknown"
         bucket_weight = max(0.01, bucket_sampling_weights.get(failure_bucket, 1.0))
         slice_weight, primary_slice_tag = _tag_weight(slice_tags, slice_sampling_weights)
         risk_weight, primary_risk_tag = _tag_weight(risk_tags, risk_tag_sampling_weights)
+        source_type_weight = max(0.01, source_type_sampling_weights.get(source_type, 1.0))
         payload = {
             "seed": row_seed,
             "failure_types": failure_types,
             "failure_bucket": failure_bucket,
             "slice_tags": slice_tags,
+            "tracked_slice_tags": [
+                str(tag).strip()
+                for tag in slice_tags
+                if str(tag).strip() and str(tag).strip() in tracked_slice_tokens
+            ],
             "risk_tags": risk_tags,
             "primary_slice_tag": primary_slice_tag,
             "primary_risk_tag": primary_risk_tag,
@@ -424,16 +460,18 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
             "bucket_sampling_weight": bucket_weight,
             "slice_sampling_weight": slice_weight,
             "risk_tag_sampling_weight": risk_weight,
+            "source_type_sampling_weight": source_type_weight,
             "weighted_replay_priority": max(
                 0.01,
                 _safe_float(row.get("replay_weight"), 1.0)
                 * max(0.0, float(hard_cfg.replay_weight_scale))
                 * bucket_weight
                 * slice_weight
-                * risk_weight,
+                * risk_weight
+                * source_type_weight,
             ),
             "selection_reason": str(row.get("selection_reason") or ""),
-            "source_type": str(row.get("source_type") or ""),
+            "source_type": source_type,
             "source_run_id": str(row.get("source_run_id") or ""),
         }
         candidate_rows.append(payload)
@@ -444,6 +482,7 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
             -_safe_float(item.get("bucket_sampling_weight"), 0.0),
             -_safe_float(item.get("slice_sampling_weight"), 0.0),
             -_safe_float(item.get("risk_tag_sampling_weight"), 0.0),
+            -_safe_float(item.get("source_type_sampling_weight"), 0.0),
             -_safe_float(item.get("replay_weight"), 0.0),
             _safe_float(item.get("total_score"), 0.0),
             str(item.get("episode_id") or ""),
@@ -456,6 +495,7 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
     selected_by_bucket_seed: defaultdict[str, Counter[str]] = defaultdict(Counter)
     selected_by_slice: Counter[str] = Counter()
     selected_by_risk: Counter[str] = Counter()
+    selected_by_source_type: Counter[str] = Counter()
     source_type_counts: Counter[str] = Counter()
     per_type_cap = max(0, int(hard_cfg.max_failures_per_type or 0))
     per_seed_cap = max(0, int(hard_cfg.max_failures_per_seed or 0))
@@ -465,6 +505,96 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
     seen_primary_seeds: set[str] = set()
     selected_episode_ids: set[str] = set()
     max_primary_seeds = max(0, int(hard_cfg.max_failure_seeds or 0))
+
+    def _row_slice_tokens(row: dict[str, Any]) -> list[str]:
+        raw_tokens = row.get("tracked_slice_tags") if isinstance(row.get("tracked_slice_tags"), list) else []
+        tokens: list[str] = []
+        seen: set[str] = set()
+        for token in raw_tokens:
+            text = str(token).strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            tokens.append(text)
+        if tokens:
+            return tokens
+        primary_token = str(row.get("primary_slice_tag") or "").strip()
+        return [primary_token] if primary_token else []
+
+    def _row_has_slice_token(row: dict[str, Any], slice_token: str) -> bool:
+        token = str(slice_token).strip()
+        if not token:
+            return False
+        return token in _row_slice_tokens(row)
+
+    def _slice_caps_allow(row: dict[str, Any]) -> bool:
+        for slice_token in _row_slice_tokens(row):
+            slice_cap = max(0, slice_quota_caps.get(slice_token, 0))
+            if slice_cap > 0 and selected_by_slice[slice_token] >= slice_cap:
+                return False
+        return True
+
+    def _row_is_selectable(row: dict[str, Any]) -> bool:
+        seed_token = str(row.get("seed") or "")
+        if per_seed_cap > 0 and selected_by_seed[seed_token] >= per_seed_cap:
+            return False
+        bucket_token = str(row.get("failure_bucket") or "unknown")
+        bucket_cap = max(0, bucket_quota_caps.get(bucket_token, 0))
+        if bucket_cap > 0 and selected_by_bucket[bucket_token] >= bucket_cap:
+            return False
+        bucket_seed_cap = max(0, bucket_seed_caps.get(bucket_token, 0))
+        if bucket_seed_cap > 0 and selected_by_bucket_seed[bucket_token][seed_token] >= bucket_seed_cap:
+            return False
+        if not _slice_caps_allow(row):
+            return False
+        primary_risk_tag = str(row.get("primary_risk_tag") or "")
+        if primary_risk_tag:
+            risk_cap = max(0, risk_tag_quota_caps.get(primary_risk_tag, 0))
+            if risk_cap > 0 and selected_by_risk[primary_risk_tag] >= risk_cap:
+                return False
+        source_type_token = str(row.get("source_type") or "unknown")
+        source_type_cap = max(0, source_type_quota_caps.get(source_type_token, 0))
+        if source_type_cap > 0 and selected_by_source_type[source_type_token] >= source_type_cap:
+            return False
+        if bool(hard_cfg.balance_across_failure_types) and per_type_cap > 0:
+            failure_tokens = row.get("failure_types") if isinstance(row.get("failure_types"), list) else []
+            if any(selected_by_type[str(token)] >= per_type_cap for token in failure_tokens):
+                return False
+        episode_id = str(row.get("episode_id") or "")
+        if episode_id and episode_id in selected_episode_ids:
+            return False
+        return True
+
+    def _select_row(row: dict[str, Any]) -> None:
+        selected_row = dict(row)
+        selected_row["selected_for_training"] = True
+        selected_rows.append(selected_row)
+        seed_token = str(row.get("seed") or "")
+        bucket_token = str(row.get("failure_bucket") or "unknown")
+        primary_risk_tag = str(row.get("primary_risk_tag") or "")
+        source_type_token = str(row.get("source_type") or "unknown")
+        episode_id = str(row.get("episode_id") or "")
+        selected_by_seed[seed_token] += 1
+        selected_by_bucket[bucket_token] += 1
+        selected_by_bucket_seed[bucket_token][seed_token] += 1
+        for slice_token in _row_slice_tokens(row):
+            selected_by_slice[slice_token] += 1
+        if primary_risk_tag:
+            selected_by_risk[primary_risk_tag] += 1
+        selected_by_source_type[source_type_token] += 1
+        failure_seed_counts[seed_token] += 1
+        for token in row.get("failure_types") if isinstance(row.get("failure_types"), list) else []:
+            failure_type_counts[str(token)] += 1
+            selected_by_type[str(token)] += 1
+        failure_bucket_counts[bucket_token] += 1
+        for tag in row.get("slice_tags") if isinstance(row.get("slice_tags"), list) else []:
+            slice_tag_counts[str(tag)] += 1
+        for tag in row.get("risk_tags") if isinstance(row.get("risk_tags"), list) else []:
+            risk_tag_counts[str(tag)] += 1
+        source_type_counts[str(row.get("source_type") or "unknown")] += 1
+        if episode_id:
+            selected_episode_ids.add(episode_id)
+
     for row in candidate_rows:
         seed_token = str(row.get("seed") or "")
         if seed_token and seed_token not in seen_primary_seeds and (max_primary_seeds <= 0 or len(seen_primary_seeds) < max_primary_seeds):
@@ -485,109 +615,54 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
         for row in ordered_rows:
             if str(row.get("failure_bucket") or "unknown") != bucket_token:
                 continue
-            if per_seed_cap > 0 and selected_by_seed[str(row.get("seed") or "")] >= per_seed_cap:
+            if not _row_is_selectable(row):
                 continue
-            bucket_cap = max(0, bucket_quota_caps.get(bucket_token, 0))
-            if bucket_cap > 0 and selected_by_bucket[bucket_token] >= bucket_cap:
-                break
-            bucket_seed_cap = max(0, bucket_seed_caps.get(bucket_token, 0))
-            if bucket_seed_cap > 0 and selected_by_bucket_seed[bucket_token][str(row.get("seed") or "")] >= bucket_seed_cap:
-                continue
-            primary_slice_tag = str(row.get("primary_slice_tag") or "")
-            if primary_slice_tag:
-                slice_cap = max(0, slice_quota_caps.get(primary_slice_tag, 0))
-                if slice_cap > 0 and selected_by_slice[primary_slice_tag] >= slice_cap:
-                    continue
-            primary_risk_tag = str(row.get("primary_risk_tag") or "")
-            if primary_risk_tag:
-                risk_cap = max(0, risk_tag_quota_caps.get(primary_risk_tag, 0))
-                if risk_cap > 0 and selected_by_risk[primary_risk_tag] >= risk_cap:
-                    continue
-            if bool(hard_cfg.balance_across_failure_types) and per_type_cap > 0:
-                failure_tokens = row.get("failure_types") if isinstance(row.get("failure_types"), list) else []
-                if any(selected_by_type[str(token)] >= per_type_cap for token in failure_tokens):
-                    continue
-            episode_id = str(row.get("episode_id") or "")
-            if episode_id and episode_id in selected_episode_ids:
-                continue
-            selected_row = dict(row)
-            selected_row["selected_for_training"] = True
-            selected_rows.append(selected_row)
-            seed_token = str(row.get("seed") or "")
-            selected_by_seed[seed_token] += 1
-            selected_by_bucket[bucket_token] += 1
-            selected_by_bucket_seed[bucket_token][seed_token] += 1
-            if primary_slice_tag:
-                selected_by_slice[primary_slice_tag] += 1
-            if primary_risk_tag:
-                selected_by_risk[primary_risk_tag] += 1
-            failure_seed_counts[seed_token] += 1
-            for token in row.get("failure_types") if isinstance(row.get("failure_types"), list) else []:
-                failure_type_counts[str(token)] += 1
-                selected_by_type[str(token)] += 1
-            failure_bucket_counts[bucket_token] += 1
-            for tag in row.get("slice_tags") if isinstance(row.get("slice_tags"), list) else []:
-                slice_tag_counts[str(tag)] += 1
-            for tag in row.get("risk_tags") if isinstance(row.get("risk_tags"), list) else []:
-                risk_tag_counts[str(tag)] += 1
-            source_type_counts[str(row.get("source_type") or "unknown")] += 1
-            if episode_id:
-                selected_episode_ids.add(episode_id)
+            _select_row(row)
             if len(selected_rows) >= max_failure_cases or selected_by_bucket[bucket_token] >= minimum_count:
                 break
         if len(selected_rows) >= max_failure_cases:
             break
 
+    for source_type_token, target_count in sorted(
+        source_type_minimum_counts.items(),
+        key=lambda item: (-item[1], item[0]),
+    ):
+        minimum_count = max(0, target_count)
+        if minimum_count <= 0:
+            continue
+        for row in ordered_rows:
+            if str(row.get("source_type") or "unknown") != source_type_token:
+                continue
+            if not _row_is_selectable(row):
+                continue
+            _select_row(row)
+            if len(selected_rows) >= max_failure_cases or selected_by_source_type[source_type_token] >= minimum_count:
+                break
+        if len(selected_rows) >= max_failure_cases:
+            break
+
+    for slice_token, target_count in sorted(
+        slice_minimum_counts.items(),
+        key=lambda item: (-item[1], item[0]),
+    ):
+        minimum_count = max(0, target_count)
+        if minimum_count <= 0:
+            continue
+        for row in ordered_rows:
+            if not _row_has_slice_token(row, slice_token):
+                continue
+            if not _row_is_selectable(row):
+                continue
+            _select_row(row)
+            if len(selected_rows) >= max_failure_cases or selected_by_slice[slice_token] >= minimum_count:
+                break
+        if len(selected_rows) >= max_failure_cases:
+            break
+
     for row in ordered_rows:
-        if per_seed_cap > 0 and selected_by_seed[str(row.get("seed") or "")] >= per_seed_cap:
+        if not _row_is_selectable(row):
             continue
-        bucket_token = str(row.get("failure_bucket") or "unknown")
-        bucket_cap = max(0, bucket_quota_caps.get(bucket_token, 0))
-        if bucket_cap > 0 and selected_by_bucket[bucket_token] >= bucket_cap:
-            continue
-        bucket_seed_cap = max(0, bucket_seed_caps.get(bucket_token, 0))
-        if bucket_seed_cap > 0 and selected_by_bucket_seed[bucket_token][str(row.get("seed") or "")] >= bucket_seed_cap:
-            continue
-        primary_slice_tag = str(row.get("primary_slice_tag") or "")
-        if primary_slice_tag:
-            slice_cap = max(0, slice_quota_caps.get(primary_slice_tag, 0))
-            if slice_cap > 0 and selected_by_slice[primary_slice_tag] >= slice_cap:
-                continue
-        primary_risk_tag = str(row.get("primary_risk_tag") or "")
-        if primary_risk_tag:
-            risk_cap = max(0, risk_tag_quota_caps.get(primary_risk_tag, 0))
-            if risk_cap > 0 and selected_by_risk[primary_risk_tag] >= risk_cap:
-                continue
-        if bool(hard_cfg.balance_across_failure_types) and per_type_cap > 0:
-            failure_tokens = row.get("failure_types") if isinstance(row.get("failure_types"), list) else []
-            if any(selected_by_type[str(token)] >= per_type_cap for token in failure_tokens):
-                continue
-        episode_id = str(row.get("episode_id") or "")
-        if episode_id and episode_id in selected_episode_ids:
-            continue
-        selected_row = dict(row)
-        selected_row["selected_for_training"] = True
-        selected_rows.append(selected_row)
-        seed_token = str(row.get("seed") or "")
-        selected_by_seed[seed_token] += 1
-        selected_by_bucket[bucket_token] += 1
-        selected_by_bucket_seed[bucket_token][seed_token] += 1
-        if primary_slice_tag:
-            selected_by_slice[primary_slice_tag] += 1
-        if primary_risk_tag:
-            selected_by_risk[primary_risk_tag] += 1
-        failure_seed_counts[seed_token] += 1
-        for token in row.get("failure_types") if isinstance(row.get("failure_types"), list) else []:
-            failure_type_counts[str(token)] += 1
-            selected_by_type[str(token)] += 1
-        failure_bucket_counts[bucket_token] += 1
-        for tag in row.get("slice_tags") if isinstance(row.get("slice_tags"), list) else []:
-            slice_tag_counts[str(tag)] += 1
-        for tag in row.get("risk_tags") if isinstance(row.get("risk_tags"), list) else []:
-            risk_tag_counts[str(tag)] += 1
-        source_type_counts[str(row.get("source_type") or "unknown")] += 1
-        if episode_id:
-            selected_episode_ids.add(episode_id)
+        _select_row(row)
         if len(selected_rows) >= max_failure_cases:
             break
 
@@ -633,9 +708,13 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
         "bucket_minimum_counts": dict(sorted(bucket_minimum_counts.items())),
         "bucket_seed_caps": dict(sorted(bucket_seed_caps.items())),
         "slice_sampling_weights": dict(sorted(slice_sampling_weights.items())),
+        "slice_minimum_counts": dict(sorted(slice_minimum_counts.items())),
         "slice_quota_caps": dict(sorted(slice_quota_caps.items())),
         "risk_tag_sampling_weights": dict(sorted(risk_tag_sampling_weights.items())),
         "risk_tag_quota_caps": dict(sorted(risk_tag_quota_caps.items())),
+        "source_type_sampling_weights": dict(sorted(source_type_sampling_weights.items())),
+        "source_type_minimum_counts": dict(sorted(source_type_minimum_counts.items())),
+        "source_type_quota_caps": dict(sorted(source_type_quota_caps.items())),
         "bucket_selected_counts": dict(sorted(selected_by_bucket.items())),
         "bucket_selected_ratios": _counter_ratios(selected_by_bucket),
         "scarce_failure_buckets": scarce_failure_buckets(failure_bucket_counts),
@@ -645,6 +724,8 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
         "slice_selected_ratios": _counter_ratios(selected_by_slice),
         "risk_selected_counts": dict(sorted(selected_by_risk.items())),
         "risk_selected_ratios": _counter_ratios(selected_by_risk),
+        "source_type_selected_counts": dict(sorted(selected_by_source_type.items())),
+        "source_type_selected_ratios": _counter_ratios(selected_by_source_type),
         "source_type_counts": dict(sorted(source_type_counts.items())),
         "selected_failures_preview": selected_rows[:16],
         "mean_replay_weight": float(statistics.mean([_safe_float(row.get('replay_weight'), 0.0) for row in selected_rows]))
@@ -1691,7 +1772,13 @@ def run_ppo_lite_training(
         "bucket_sampling_weights": dict(hard_case_plan.get("bucket_sampling_weights") or {}),
         "bucket_quota_caps": dict(hard_case_plan.get("bucket_quota_caps") or {}),
         "bucket_minimum_counts": dict(hard_case_plan.get("bucket_minimum_counts") or {}),
+        "source_type_counts": dict(hard_case_plan.get("source_type_selected_counts") or hard_case_plan.get("source_type_counts") or {}),
+        "source_type_ratios": dict(hard_case_plan.get("source_type_selected_ratios") or {}),
+        "source_type_sampling_weights": dict(hard_case_plan.get("source_type_sampling_weights") or {}),
+        "source_type_minimum_counts": dict(hard_case_plan.get("source_type_minimum_counts") or {}),
+        "source_type_quota_caps": dict(hard_case_plan.get("source_type_quota_caps") or {}),
         "slice_tag_counts": dict(hard_case_plan.get("slice_tag_counts") or {}),
+        "slice_minimum_counts": dict(hard_case_plan.get("slice_minimum_counts") or {}),
         "risk_tag_counts": dict(hard_case_plan.get("risk_tag_counts") or {}),
         "mean_replay_weight": _safe_float(hard_case_plan.get("mean_replay_weight"), 0.0),
         "failure_type_coverage": int(hard_case_plan.get("failure_type_coverage") or 0),
@@ -1996,7 +2083,12 @@ def run_ppo_lite_training(
         "bucket_quota_caps": dict(hard_case_plan.get("bucket_quota_caps") or {}),
         "bucket_minimum_counts": dict(hard_case_plan.get("bucket_minimum_counts") or {}),
         "bucket_mix_delta_vs_target": bucket_mix_delta_vs_target,
+        "source_type_counts": dict(hard_case_plan.get("source_type_selected_counts") or hard_case_plan.get("source_type_counts") or {}),
+        "source_type_sampling_weights": dict(hard_case_plan.get("source_type_sampling_weights") or {}),
+        "source_type_minimum_counts": dict(hard_case_plan.get("source_type_minimum_counts") or {}),
+        "source_type_quota_caps": dict(hard_case_plan.get("source_type_quota_caps") or {}),
         "slice_sampling_weights": dict(hard_case_plan.get("slice_sampling_weights") or {}),
+        "slice_minimum_counts": dict(hard_case_plan.get("slice_minimum_counts") or {}),
         "slice_quota_caps": dict(hard_case_plan.get("slice_quota_caps") or {}),
         "slice_selected_counts": dict(hard_case_plan.get("slice_selected_counts") or {}),
         "slice_selected_ratios": slice_ratios,
@@ -2021,6 +2113,8 @@ def run_ppo_lite_training(
         "slice_tag_ratios": _counter_ratios(hard_case_plan.get("slice_tag_counts") or {}),
         "risk_tag_counts": dict(hard_case_plan.get("risk_tag_counts") or {}),
         "risk_tag_ratios": _counter_ratios(hard_case_plan.get("risk_tag_counts") or {}),
+        "source_type_counts": dict(hard_case_plan.get("source_type_selected_counts") or hard_case_plan.get("source_type_counts") or {}),
+        "source_type_minimum_counts": dict(hard_case_plan.get("source_type_minimum_counts") or {}),
         "slice_sampling_weights": dict(hard_case_plan.get("slice_sampling_weights") or {}),
         "slice_selected_counts": dict(hard_case_plan.get("slice_selected_counts") or {}),
         "slice_selected_ratios": slice_ratios,

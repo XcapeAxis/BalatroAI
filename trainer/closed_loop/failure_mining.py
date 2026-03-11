@@ -414,6 +414,7 @@ def _row_selection_matches_policy(
     selection_by_seed: Counter[str],
     selection_by_bucket: Counter[str],
     selection_by_source: Counter[str],
+    selection_by_source_type: Counter[str],
     max_failures_per_type: int,
     max_failures_per_seed: int,
     max_failures_per_bucket: dict[str, int],
@@ -480,17 +481,45 @@ def _refine_failure_bucket_for_slice_pressure(
 
 def _bucket_from_slice_tag(tag: str) -> str:
     token = str(tag or "").strip().lower()
+    if not token:
+        return ""
+    if token.endswith(":unknown") or token.endswith(":none") or token.endswith(":absent") or token.endswith(":false"):
+        return ""
     if token.startswith("slice_action_type:shop"):
         return "shop_or_economy_misallocation"
+    if token.startswith("slice_action_type:discard"):
+        return "discard_mismanagement"
     if token.startswith("slice_action_type:play"):
         return "risk_undercommit"
-    if token.startswith("slice_resource_pressure:high"):
+    if token.startswith("slice_resource_pressure:high") or token.startswith("slice_resource_pressure:medium"):
         return "resource_pressure_misplay"
+    if token.startswith("slice_stage:early"):
+        return "early_collapse"
     if token.startswith("slice_position_sensitive:true") or token.startswith("slice_position_sensitive:yes"):
         return "position_sensitive_misplay"
     if token.startswith("slice_stateful_joker_present:true") or token.startswith("slice_stateful_joker_present:yes"):
         return "stateful_joker_misplay"
-    return "low_score_survival"
+    return ""
+
+
+def _compound_actionable_slice_tags(slice_tags: list[str], *, primary_tag: str) -> list[str]:
+    primary = str(primary_tag or "").strip().lower()
+    results: list[str] = []
+    seen: set[str] = set()
+    for tag in slice_tags:
+        token = str(tag or "").strip()
+        if not token:
+            continue
+        lowered = token.lower()
+        if lowered == primary:
+            continue
+        if lowered in seen:
+            continue
+        if not _bucket_from_slice_tag(token):
+            continue
+        seen.add(lowered)
+        results.append(token)
+    return results
 
 
 def _replay_weight_for(*, failure_types: set[str], score: float, low_threshold: float, risk_tags: list[str]) -> float:
@@ -644,11 +673,17 @@ def run_failure_mining(
     max_failures_per_bucket = _normalized_int_mapping(criteria_cfg.get("max_failures_per_bucket"))
     min_failures_per_bucket = _normalized_int_mapping(criteria_cfg.get("min_failures_per_bucket"))
     max_failures_per_source = _normalized_int_mapping(criteria_cfg.get("max_failures_per_source"))
+    min_failures_per_source_type = _normalized_int_mapping(criteria_cfg.get("min_failures_per_source_type"))
     bucket_priority_weights = _normalized_float_mapping(criteria_cfg.get("bucket_priority_weights"))
     source_priority_weights = _normalized_float_mapping(criteria_cfg.get("source_priority_weights"))
     policy_priority_weights = _normalized_float_mapping(criteria_cfg.get("policy_priority_weights"))
     max_slice_gap_failures_per_source = int(criteria_cfg.get("max_slice_gap_failures_per_source") or 0)
     slice_gap_priority_weight = float(criteria_cfg.get("slice_gap_priority_weight") or 1.25)
+    max_candidate_slice_failures_per_source = int(criteria_cfg.get("max_candidate_slice_failures_per_source") or 0)
+    candidate_slice_priority_weight = float(criteria_cfg.get("candidate_slice_priority_weight") or 1.15)
+    max_compound_slice_failures_per_source = int(criteria_cfg.get("max_compound_slice_failures_per_source") or 0)
+    compound_slice_priority_weight = float(criteria_cfg.get("compound_slice_priority_weight") or 1.10)
+    skip_unknown_slice_gap_tags = bool(criteria_cfg.get("skip_unknown_slice_gap_tags", True))
 
     quick_cfg = cfg.get("quick") if isinstance(cfg.get("quick"), dict) else {}
     max_episode_scan = int(quick_cfg.get("max_episode_scan") or 240) if quick else 0
@@ -732,6 +767,7 @@ def run_failure_mining(
     selection_by_seed: Counter[str] = Counter()
     selection_by_bucket: Counter[str] = Counter()
     selection_by_source: Counter[str] = Counter()
+    selection_by_source_type: Counter[str] = Counter()
     candidate_rows_for_selection: list[dict[str, Any]] = []
 
     for spec in source_specs:
@@ -980,7 +1016,9 @@ def run_failure_mining(
             }
             candidate_rows_for_selection.append(payload)
 
-        if max_slice_gap_failures_per_source > 0 and source_champion_policy:
+        if (
+            max_slice_gap_failures_per_source > 0 or max_candidate_slice_failures_per_source > 0
+        ) and (source_champion_policy or source_candidate_policy):
             gap_rows = sorted(
                 [
                     row
@@ -995,104 +1033,286 @@ def run_failure_mining(
                     str(item.get("slice_label") or ""),
                 ),
             )
-            added_gap_rows = 0
-            seen_gap_tags: set[str] = set()
-            for gap_row in gap_rows:
-                if added_gap_rows >= max_slice_gap_failures_per_source:
-                    break
-                slice_tag = _slice_tag_from_row(gap_row)
-                if not slice_tag or slice_tag in seen_gap_tags:
-                    continue
-                bucket = _bucket_from_slice_tag(slice_tag)
-                bucket_priority = bucket_priority_weights.get(bucket, 1.0)
-                champion_gap = max(
-                    1,
-                    _safe_int(gap_row.get("champion_count"), 0) - _safe_int(gap_row.get("candidate_count"), 0),
-                )
-                score_delta = _safe_float(
-                    ((gap_row.get("metrics") or {}) if isinstance(gap_row.get("metrics"), dict) else {}).get("mean_total_score_delta"),
-                    0.0,
-                )
-                matching_rows = [
-                    row
-                    for row in rows
-                    if str(row.get("policy_id") or "").strip() == source_champion_policy
-                    and slice_tag in _infer_slice_tags(row)
-                ]
-                if not matching_rows:
-                    continue
-                matching_rows.sort(
-                    key=lambda row: (
-                        -_safe_float(row.get("total_score"), 0.0),
-                        -_safe_int(row.get("rounds_survived"), 0),
-                        str(row.get("seed") or ""),
+            if max_slice_gap_failures_per_source > 0 and source_champion_policy:
+                added_gap_rows = 0
+                seen_gap_tags: set[str] = set()
+                added_compound_gap_rows = 0
+                seen_compound_gap_tags: set[str] = set()
+                for gap_row in gap_rows:
+                    if added_gap_rows >= max_slice_gap_failures_per_source:
+                        break
+                    slice_tag = _slice_tag_from_row(gap_row)
+                    if not slice_tag or slice_tag in seen_gap_tags:
+                        continue
+                    bucket = _bucket_from_slice_tag(slice_tag)
+                    if skip_unknown_slice_gap_tags and not bucket:
+                        continue
+                    if not bucket:
+                        bucket = "low_score_survival"
+                    bucket_priority = bucket_priority_weights.get(bucket, 1.0)
+                    champion_gap = max(
+                        1,
+                        _safe_int(gap_row.get("champion_count"), 0) - _safe_int(gap_row.get("candidate_count"), 0),
                     )
-                )
-                picked = matching_rows[0]
-                slice_tags = _infer_slice_tags(picked)
-                risk_tags = _infer_risk_tags(
-                    picked,
-                    high_risk_round_threshold=high_risk_round_threshold,
-                    low_threshold=low_threshold,
-                )
-                replay_weight = round(
-                    (1.5 + min(1.5, 0.2 * float(champion_gap)) + min(1.0, abs(score_delta) / 200.0))
-                    * max(0.1, source_priority)
-                    * max(0.1, bucket_priority)
-                    * max(0.1, slice_gap_priority_weight),
-                    4,
-                )
-                episode_id = "{run}|gap|{policy}|{seed}|{ep}".format(
-                    run=source_run_id,
-                    policy=str(picked.get("policy_id") or ""),
-                    seed=str(picked.get("seed") or ""),
-                    ep=_safe_int(picked.get("episode_index"), 0),
-                )
-                candidate_rows_for_selection.append(
-                    {
-                        "episode_id": episode_id,
-                        "policy_id": str(picked.get("policy_id") or ""),
-                        "seed": str(picked.get("seed") or ""),
-                        "episode_index": _safe_int(picked.get("episode_index"), 0),
-                        "status": str(picked.get("status") or ""),
-                        "error": str(picked.get("error") or ""),
-                        "total_score": _safe_float(picked.get("total_score"), 0.0),
-                        "rounds_survived": _safe_int(picked.get("rounds_survived"), 0),
-                        "invalid_action_rate": _safe_float(picked.get("invalid_action_rate"), 0.0),
-                        "timeout_rate": _safe_float(picked.get("timeout_rate"), 0.0),
-                        "failure_types": ["slice_coverage_gap_seed", "triage_degraded_slice"],
-                        "failure_bucket": bucket,
-                        "bucket_reason": "slice_coverage_gap_seed",
-                        "failure_bucket_candidates": [bucket],
-                        "failure_bucket_signals": [f"slice_gap:{slice_tag}"],
-                        "slice_tags": slice_tags,
-                        "risk_tags": risk_tags,
-                        "source_type": "arena_slice_gap_seed",
-                        "selection_reason": f"{bucket},slice_coverage_gap_seed,{slice_tag}",
-                        "replay_weight": replay_weight,
-                        "source": {
-                            "arena_run_dir": str(arena_run_dir),
-                            "episode_records": str(episode_records_path),
-                            "summary_table": str(summary_path),
-                            "triage_report": str(triage_report_path) if isinstance(triage_report_path, Path) else "",
-                            "slice_breakdown": str(slice_breakdown_path) if isinstance(slice_breakdown_path, Path) else "",
-                            "line": _safe_int(picked.get("_source_line"), 0),
-                        },
-                        "source_run_id": source_run_id,
-                        "source_campaign_id": str(cfg.get("campaign_id") or ""),
-                        "source_checkpoint_refs": {
-                            "candidate_policy": source_candidate_policy,
-                            "champion_policy": source_champion_policy,
-                        },
-                        "source_priority": source_priority,
-                        "bucket_priority": bucket_priority,
-                        "triage_slice_hits": [slice_tag],
-                        "triage_priority": slice_gap_priority_weight,
-                        "raw_episode": picked,
-                    }
-                )
-                seen_gap_tags.add(slice_tag)
-                added_gap_rows += 1
+                    score_delta = _safe_float(
+                        ((gap_row.get("metrics") or {}) if isinstance(gap_row.get("metrics"), dict) else {}).get("mean_total_score_delta"),
+                        0.0,
+                    )
+                    matching_rows = [
+                        row
+                        for row in rows
+                        if str(row.get("policy_id") or "").strip() == source_champion_policy
+                        and slice_tag in _infer_slice_tags(row)
+                    ]
+                    if not matching_rows:
+                        continue
+                    matching_rows.sort(
+                        key=lambda row: (
+                            -_safe_float(row.get("total_score"), 0.0),
+                            -_safe_int(row.get("rounds_survived"), 0),
+                            str(row.get("seed") or ""),
+                        )
+                    )
+                    picked = matching_rows[0]
+                    slice_tags = _infer_slice_tags(picked)
+                    risk_tags = _infer_risk_tags(
+                        picked,
+                        high_risk_round_threshold=high_risk_round_threshold,
+                        low_threshold=low_threshold,
+                    )
+                    replay_weight = round(
+                        (1.5 + min(1.5, 0.2 * float(champion_gap)) + min(1.0, abs(score_delta) / 200.0))
+                        * max(0.1, source_priority)
+                        * max(0.1, bucket_priority)
+                        * max(0.1, slice_gap_priority_weight),
+                        4,
+                    )
+                    episode_id = "{run}|gap|{policy}|{seed}|{ep}".format(
+                        run=source_run_id,
+                        policy=str(picked.get("policy_id") or ""),
+                        seed=str(picked.get("seed") or ""),
+                        ep=_safe_int(picked.get("episode_index"), 0),
+                    )
+                    candidate_rows_for_selection.append(
+                        {
+                            "episode_id": episode_id,
+                            "policy_id": str(picked.get("policy_id") or ""),
+                            "seed": str(picked.get("seed") or ""),
+                            "episode_index": _safe_int(picked.get("episode_index"), 0),
+                            "status": str(picked.get("status") or ""),
+                            "error": str(picked.get("error") or ""),
+                            "total_score": _safe_float(picked.get("total_score"), 0.0),
+                            "rounds_survived": _safe_int(picked.get("rounds_survived"), 0),
+                            "invalid_action_rate": _safe_float(picked.get("invalid_action_rate"), 0.0),
+                            "timeout_rate": _safe_float(picked.get("timeout_rate"), 0.0),
+                            "failure_types": ["slice_coverage_gap_seed", "triage_degraded_slice"],
+                            "failure_bucket": bucket,
+                            "bucket_reason": "slice_coverage_gap_seed",
+                            "failure_bucket_candidates": [bucket],
+                            "failure_bucket_signals": [f"slice_gap:{slice_tag}"],
+                            "slice_tags": slice_tags,
+                            "risk_tags": risk_tags,
+                            "source_type": "arena_slice_gap_seed",
+                            "selection_reason": f"{bucket},slice_coverage_gap_seed,{slice_tag}",
+                            "replay_weight": replay_weight,
+                            "source": {
+                                "arena_run_dir": str(arena_run_dir),
+                                "episode_records": str(episode_records_path),
+                                "summary_table": str(summary_path),
+                                "triage_report": str(triage_report_path) if isinstance(triage_report_path, Path) else "",
+                                "slice_breakdown": str(slice_breakdown_path) if isinstance(slice_breakdown_path, Path) else "",
+                                "line": _safe_int(picked.get("_source_line"), 0),
+                            },
+                            "source_run_id": source_run_id,
+                            "source_campaign_id": str(cfg.get("campaign_id") or ""),
+                            "source_checkpoint_refs": {
+                                "candidate_policy": source_candidate_policy,
+                                "champion_policy": source_champion_policy,
+                            },
+                            "source_priority": source_priority,
+                            "bucket_priority": bucket_priority,
+                            "triage_slice_hits": [slice_tag],
+                            "triage_priority": slice_gap_priority_weight,
+                            "raw_episode": picked,
+                        }
+                    )
+                    seen_gap_tags.add(slice_tag)
+                    added_gap_rows += 1
+                    if max_compound_slice_failures_per_source > 0 and added_compound_gap_rows < max_compound_slice_failures_per_source:
+                        for compound_slice_tag in _compound_actionable_slice_tags(slice_tags, primary_tag=slice_tag):
+                            if added_compound_gap_rows >= max_compound_slice_failures_per_source:
+                                break
+                            normalized_compound_tag = str(compound_slice_tag).strip().lower()
+                            if normalized_compound_tag in seen_compound_gap_tags:
+                                continue
+                            compound_bucket = _bucket_from_slice_tag(compound_slice_tag)
+                            if not compound_bucket:
+                                continue
+                            compound_bucket_priority = bucket_priority_weights.get(compound_bucket, 1.0)
+                            compound_replay_weight = round(
+                                replay_weight
+                                * max(0.1, compound_slice_priority_weight)
+                                * max(0.1, compound_bucket_priority)
+                                * 0.86,
+                                4,
+                            )
+                            compound_episode_id = "{run}|compound_gap|{policy}|{seed}|{ep}|{tag}".format(
+                                run=source_run_id,
+                                policy=str(picked.get("policy_id") or ""),
+                                seed=str(picked.get("seed") or ""),
+                                ep=_safe_int(picked.get("episode_index"), 0),
+                                tag=normalized_compound_tag.replace(":", "_"),
+                            )
+                            candidate_rows_for_selection.append(
+                                {
+                                    "episode_id": compound_episode_id,
+                                    "policy_id": str(picked.get("policy_id") or ""),
+                                    "seed": str(picked.get("seed") or ""),
+                                    "episode_index": _safe_int(picked.get("episode_index"), 0),
+                                    "status": str(picked.get("status") or ""),
+                                    "error": str(picked.get("error") or ""),
+                                    "total_score": _safe_float(picked.get("total_score"), 0.0),
+                                    "rounds_survived": _safe_int(picked.get("rounds_survived"), 0),
+                                    "invalid_action_rate": _safe_float(picked.get("invalid_action_rate"), 0.0),
+                                    "timeout_rate": _safe_float(picked.get("timeout_rate"), 0.0),
+                                    "failure_types": ["compound_slice_failure_seed", "triage_degraded_slice"],
+                                    "failure_bucket": compound_bucket,
+                                    "bucket_reason": "compound_slice_failure_seed",
+                                    "failure_bucket_candidates": [compound_bucket],
+                                    "failure_bucket_signals": [f"compound_slice_gap:{compound_slice_tag}"],
+                                    "slice_tags": slice_tags,
+                                    "risk_tags": risk_tags,
+                                    "source_type": "arena_compound_slice_seed",
+                                    "selection_reason": f"{compound_bucket},compound_slice_failure_seed,{compound_slice_tag}",
+                                    "replay_weight": compound_replay_weight,
+                                    "source": {
+                                        "arena_run_dir": str(arena_run_dir),
+                                        "episode_records": str(episode_records_path),
+                                        "summary_table": str(summary_path),
+                                        "triage_report": str(triage_report_path) if isinstance(triage_report_path, Path) else "",
+                                        "slice_breakdown": str(slice_breakdown_path) if isinstance(slice_breakdown_path, Path) else "",
+                                        "line": _safe_int(picked.get("_source_line"), 0),
+                                    },
+                                    "source_run_id": source_run_id,
+                                    "source_campaign_id": str(cfg.get("campaign_id") or ""),
+                                    "source_checkpoint_refs": {
+                                        "candidate_policy": source_candidate_policy,
+                                        "champion_policy": source_champion_policy,
+                                    },
+                                    "source_priority": source_priority,
+                                    "bucket_priority": compound_bucket_priority,
+                                    "triage_slice_hits": [compound_slice_tag],
+                                    "triage_priority": compound_slice_priority_weight,
+                                    "raw_episode": picked,
+                                }
+                            )
+                            seen_compound_gap_tags.add(normalized_compound_tag)
+                            added_compound_gap_rows += 1
+
+            if max_candidate_slice_failures_per_source > 0 and source_candidate_policy:
+                added_candidate_gap_rows = 0
+                seen_candidate_gap_tags: set[str] = set()
+                for gap_row in gap_rows:
+                    if added_candidate_gap_rows >= max_candidate_slice_failures_per_source:
+                        break
+                    slice_tag = _slice_tag_from_row(gap_row)
+                    if not slice_tag or slice_tag in seen_candidate_gap_tags:
+                        continue
+                    bucket = _bucket_from_slice_tag(slice_tag)
+                    if skip_unknown_slice_gap_tags and not bucket:
+                        continue
+                    if not bucket:
+                        bucket = "low_score_survival"
+                    bucket_priority = bucket_priority_weights.get(bucket, 1.0)
+                    champion_gap = max(
+                        1,
+                        _safe_int(gap_row.get("champion_count"), 0) - _safe_int(gap_row.get("candidate_count"), 0),
+                    )
+                    score_delta = _safe_float(
+                        ((gap_row.get("metrics") or {}) if isinstance(gap_row.get("metrics"), dict) else {}).get("mean_total_score_delta"),
+                        0.0,
+                    )
+                    matching_rows = [
+                        row
+                        for row in rows
+                        if str(row.get("policy_id") or "").strip() == source_candidate_policy
+                        and slice_tag in _infer_slice_tags(row)
+                    ]
+                    if not matching_rows:
+                        continue
+                    matching_rows.sort(
+                        key=lambda row: (
+                            _safe_float(row.get("total_score"), 0.0),
+                            _safe_int(row.get("rounds_survived"), 0),
+                            -_safe_float(row.get("invalid_action_rate"), 0.0),
+                            str(row.get("seed") or ""),
+                        )
+                    )
+                    picked = matching_rows[0]
+                    slice_tags = _infer_slice_tags(picked)
+                    risk_tags = _infer_risk_tags(
+                        picked,
+                        high_risk_round_threshold=high_risk_round_threshold,
+                        low_threshold=low_threshold,
+                    )
+                    replay_weight = round(
+                        (1.2 + min(1.2, 0.18 * float(champion_gap)) + min(0.9, abs(score_delta) / 220.0))
+                        * max(0.1, source_priority)
+                        * max(0.1, bucket_priority)
+                        * max(0.1, candidate_slice_priority_weight),
+                        4,
+                    )
+                    episode_id = "{run}|candidate_gap|{policy}|{seed}|{ep}".format(
+                        run=source_run_id,
+                        policy=str(picked.get("policy_id") or ""),
+                        seed=str(picked.get("seed") or ""),
+                        ep=_safe_int(picked.get("episode_index"), 0),
+                    )
+                    candidate_rows_for_selection.append(
+                        {
+                            "episode_id": episode_id,
+                            "policy_id": str(picked.get("policy_id") or ""),
+                            "seed": str(picked.get("seed") or ""),
+                            "episode_index": _safe_int(picked.get("episode_index"), 0),
+                            "status": str(picked.get("status") or ""),
+                            "error": str(picked.get("error") or ""),
+                            "total_score": _safe_float(picked.get("total_score"), 0.0),
+                            "rounds_survived": _safe_int(picked.get("rounds_survived"), 0),
+                            "invalid_action_rate": _safe_float(picked.get("invalid_action_rate"), 0.0),
+                            "timeout_rate": _safe_float(picked.get("timeout_rate"), 0.0),
+                            "failure_types": ["candidate_slice_failure_seed", "triage_degraded_slice"],
+                            "failure_bucket": bucket,
+                            "bucket_reason": "candidate_slice_failure_seed",
+                            "failure_bucket_candidates": [bucket],
+                            "failure_bucket_signals": [f"candidate_slice_gap:{slice_tag}"],
+                            "slice_tags": slice_tags,
+                            "risk_tags": risk_tags,
+                            "source_type": "arena_candidate_slice_seed",
+                            "selection_reason": f"{bucket},candidate_slice_failure_seed,{slice_tag}",
+                            "replay_weight": replay_weight,
+                            "source": {
+                                "arena_run_dir": str(arena_run_dir),
+                                "episode_records": str(episode_records_path),
+                                "summary_table": str(summary_path),
+                                "triage_report": str(triage_report_path) if isinstance(triage_report_path, Path) else "",
+                                "slice_breakdown": str(slice_breakdown_path) if isinstance(slice_breakdown_path, Path) else "",
+                                "line": _safe_int(picked.get("_source_line"), 0),
+                            },
+                            "source_run_id": source_run_id,
+                            "source_campaign_id": str(cfg.get("campaign_id") or ""),
+                            "source_checkpoint_refs": {
+                                "candidate_policy": source_candidate_policy,
+                                "champion_policy": source_champion_policy,
+                            },
+                            "source_priority": source_priority,
+                            "bucket_priority": bucket_priority,
+                            "triage_slice_hits": [slice_tag],
+                            "triage_priority": candidate_slice_priority_weight,
+                            "raw_episode": picked,
+                        }
+                    )
+                    seen_candidate_gap_tags.add(slice_tag)
+                    added_candidate_gap_rows += 1
 
     candidate_rows_for_selection.sort(
         key=lambda item: (
@@ -1111,6 +1331,7 @@ def run_failure_mining(
         selection_by_seed[str(payload.get("seed") or "")] += 1
         selection_by_bucket[str(payload.get("failure_bucket") or "")] += 1
         selection_by_source[str(payload.get("source_run_id") or "")] += 1
+        selection_by_source_type[str(payload.get("source_type") or "")] += 1
         for token in payload.get("failure_types") if isinstance(payload.get("failure_types"), list) else []:
             by_type[str(token)] += 1
             selection_by_type[str(token)] += 1
@@ -1137,6 +1358,7 @@ def run_failure_mining(
                 selection_by_seed=selection_by_seed,
                 selection_by_bucket=selection_by_bucket,
                 selection_by_source=selection_by_source,
+                selection_by_source_type=selection_by_source_type,
                 max_failures_per_type=max_failures_per_type,
                 max_failures_per_seed=max_failures_per_seed,
                 max_failures_per_bucket=max_failures_per_bucket,
@@ -1148,6 +1370,30 @@ def run_failure_mining(
                 warnings.append(f"failure cap reached while satisfying bucket minimums: {max_failures}")
                 break
 
+    if min_failures_per_source_type and len(selected) < max(1, max_failures):
+        for payload in candidate_rows_for_selection:
+            source_type = str(payload.get("source_type") or "")
+            target = _safe_int(min_failures_per_source_type.get(source_type), 0)
+            if target <= 0 or selection_by_source_type[source_type] >= target:
+                continue
+            if not _row_selection_matches_policy(
+                payload=payload,
+                selection_by_type=selection_by_type,
+                selection_by_seed=selection_by_seed,
+                selection_by_bucket=selection_by_bucket,
+                selection_by_source=selection_by_source,
+                selection_by_source_type=selection_by_source_type,
+                max_failures_per_type=max_failures_per_type,
+                max_failures_per_seed=max_failures_per_seed,
+                max_failures_per_bucket=max_failures_per_bucket,
+                max_failures_per_source=max_failures_per_source,
+            ):
+                continue
+            _record_selected(payload)
+            if len(selected) >= max(1, max_failures):
+                warnings.append(f"failure cap reached while satisfying source-type minimums: {max_failures}")
+                break
+
     for payload in candidate_rows_for_selection:
         if str(payload.get("episode_id") or "") in selected_ids:
             continue
@@ -1157,6 +1403,7 @@ def run_failure_mining(
             selection_by_seed=selection_by_seed,
             selection_by_bucket=selection_by_bucket,
             selection_by_source=selection_by_source,
+            selection_by_source_type=selection_by_source_type,
             max_failures_per_type=max_failures_per_type,
             max_failures_per_seed=max_failures_per_seed,
             max_failures_per_bucket=max_failures_per_bucket,
@@ -1225,6 +1472,9 @@ def run_failure_mining(
             "max_failures_per_bucket": max_failures_per_bucket,
             "min_failures_per_bucket": min_failures_per_bucket,
             "max_failures_per_source": max_failures_per_source,
+            "min_failures_per_source_type": min_failures_per_source_type,
+            "max_compound_slice_failures_per_source": max_compound_slice_failures_per_source,
+            "compound_slice_priority_weight": compound_slice_priority_weight,
             "bucket_priority_weights": bucket_priority_weights,
             "source_priority_weights": source_priority_weights,
             "policy_priority_weights": policy_priority_weights,

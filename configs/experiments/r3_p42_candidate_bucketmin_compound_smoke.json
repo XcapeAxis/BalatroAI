@@ -1,0 +1,25 @@
+{
+  "schema": "p42_candidate_train_config_v1",
+  "candidate_modes": [
+    "rl_ppo_lite"
+  ],
+  "allow_legacy_fallback": false,
+  "output": {
+    "artifacts_root": "docs/artifacts/research/r3_candidate_train"
+  },
+  "seeds": [
+    "AAAAAAA",
+    "BBBBBBB",
+    "CCCCCCC",
+    "DDDDDDD"
+  ],
+  "rl_config": "configs/experiments/r3_p42_rl_bucketmin_compound_smoke.yaml",
+  "hard_case_sampling": {
+    "enabled": true,
+    "failure_pack_manifest": "docs/artifacts/research/r3_failure_buckets/r3-b7-compound-fixed/failure_pack_manifest.json"
+  },
+  "training": {
+    "timeout_sec": 5400
+  },
+  "__yaml_source_sha256__": "5fd840a7d51f8e2a9c2969ea4a93fee16fdacad608e57731ea02c61240b579e2"
+}

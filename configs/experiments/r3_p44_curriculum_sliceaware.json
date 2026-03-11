@@ -1,0 +1,265 @@
+{
+  "schema": "p44_curriculum_config_v1",
+  "schedule": [
+    {
+      "stage": "stabilize",
+      "start_iteration": 1,
+      "until_iteration": 1
+    },
+    {
+      "stage": "pressure",
+      "start_iteration": 2,
+      "until_iteration": 2
+    },
+    {
+      "stage": "balance_or_exploit",
+      "start_iteration": 3,
+      "until_iteration": 0
+    }
+  ],
+  "stages": {
+    "stabilize": {
+      "source_sampling_weights": {
+        "self_play": 0.36,
+        "arena_failures": 0.64
+      },
+      "reward": {
+        "survival_bonus": 0.08,
+        "score_delta_weight": 0.84,
+        "invalid_action_penalty": 0.13
+      },
+      "hard_case_sampling": {
+        "seed_replay_factor": 3,
+        "max_failures_per_type": 5,
+        "max_failures_per_seed": 2,
+        "bucket_sampling_weights": {
+          "resource_pressure_misplay": 1.52,
+          "shop_or_economy_misallocation": 1.4,
+          "discard_mismanagement": 1.14,
+          "low_score_survival": 1.18,
+          "risk_undercommit": 0.88,
+          "early_collapse": 0.82
+        },
+        "bucket_quota_caps": {
+          "resource_pressure_misplay": 4,
+          "shop_or_economy_misallocation": 4,
+          "discard_mismanagement": 3,
+          "low_score_survival": 3,
+          "risk_undercommit": 4
+        },
+        "bucket_minimum_counts": {
+          "resource_pressure_misplay": 2,
+          "shop_or_economy_misallocation": 1
+        },
+        "source_type_sampling_weights": {
+          "arena_candidate_slice_seed": 1.74,
+          "arena_slice_gap_seed": 1.16,
+          "arena_failure_mining": 0.9
+        },
+        "source_type_quota_caps": {
+          "arena_candidate_slice_seed": 6,
+          "arena_slice_gap_seed": 4,
+          "arena_failure_mining": 5
+        },
+        "slice_sampling_weights": {
+          "slice_stage:early": 1.16,
+          "slice_resource_pressure:high": 1.46,
+          "slice_resource_pressure:medium": 1.18,
+          "slice_action_type:discard": 1.1,
+          "slice_action_type:shop": 1.42
+        },
+        "slice_minimum_counts": {
+          "slice_action_type:shop": 1,
+          "slice_resource_pressure:high": 1
+        },
+        "slice_quota_caps": {
+          "slice_stage:early": 12,
+          "slice_resource_pressure:high": 8,
+          "slice_action_type:shop": 6,
+          "slice_action_type:discard": 6
+        },
+        "risk_tag_sampling_weights": {
+          "resource_tight": 1.24,
+          "low_score_tail": 1.12,
+          "early_collapse": 0.92
+        }
+      },
+      "self_imitation": {
+        "enabled": false,
+        "replay_ratio": 0.0
+      },
+      "rollout": {
+        "max_steps": 120
+      },
+      "difficulty": {
+        "max_ante": 0,
+        "stake": "WHITE"
+      }
+    },
+    "pressure": {
+      "source_sampling_weights": {
+        "self_play": 0.18,
+        "arena_failures": 0.82
+      },
+      "reward": {
+        "survival_bonus": 0.05,
+        "score_delta_weight": 1.1,
+        "invalid_action_penalty": 0.15
+      },
+      "hard_case_sampling": {
+        "seed_replay_factor": 4,
+        "max_failures_per_type": 5,
+        "max_failures_per_seed": 2,
+        "bucket_sampling_weights": {
+          "resource_pressure_misplay": 1.64,
+          "shop_or_economy_misallocation": 1.5,
+          "discard_mismanagement": 1.12,
+          "low_score_survival": 1.2,
+          "position_sensitive_misplay": 1.26,
+          "stateful_joker_misplay": 1.24,
+          "risk_undercommit": 0.84,
+          "early_collapse": 0.76
+        },
+        "bucket_quota_caps": {
+          "resource_pressure_misplay": 6,
+          "shop_or_economy_misallocation": 5,
+          "discard_mismanagement": 4,
+          "low_score_survival": 3,
+          "position_sensitive_misplay": 3,
+          "stateful_joker_misplay": 3,
+          "risk_undercommit": 5
+        },
+        "bucket_minimum_counts": {
+          "resource_pressure_misplay": 2,
+          "shop_or_economy_misallocation": 2,
+          "low_score_survival": 1
+        },
+        "source_type_sampling_weights": {
+          "arena_candidate_slice_seed": 1.8,
+          "arena_slice_gap_seed": 1.18,
+          "arena_failure_mining": 0.88
+        },
+        "source_type_quota_caps": {
+          "arena_candidate_slice_seed": 6,
+          "arena_slice_gap_seed": 4,
+          "arena_failure_mining": 5
+        },
+        "slice_sampling_weights": {
+          "slice_action_type:shop": 1.48,
+          "slice_action_type:discard": 1.08,
+          "slice_resource_pressure:high": 1.52,
+          "slice_resource_pressure:medium": 1.2,
+          "slice_stage:early": 1.02
+        },
+        "slice_minimum_counts": {
+          "slice_action_type:shop": 1,
+          "slice_resource_pressure:high": 2
+        },
+        "slice_quota_caps": {
+          "slice_action_type:shop": 6,
+          "slice_action_type:discard": 6,
+          "slice_resource_pressure:high": 8
+        },
+        "risk_tag_sampling_weights": {
+          "resource_tight": 1.32,
+          "low_score_tail": 1.14,
+          "early_collapse": 0.84
+        }
+      },
+      "self_imitation": {
+        "enabled": false,
+        "replay_ratio": 0.0
+      },
+      "rollout": {
+        "max_steps": 150
+      },
+      "difficulty": {
+        "max_ante": 1,
+        "stake": "WHITE"
+      }
+    },
+    "balance_or_exploit": {
+      "source_sampling_weights": {
+        "self_play": 0.2,
+        "arena_failures": 0.72,
+        "replay_mix": 0.08
+      },
+      "reward": {
+        "survival_bonus": 0.03,
+        "score_delta_weight": 1.2,
+        "invalid_action_penalty": 0.16
+      },
+      "hard_case_sampling": {
+        "seed_replay_factor": 4,
+        "max_failures_per_type": 5,
+        "max_failures_per_seed": 2,
+        "bucket_sampling_weights": {
+          "resource_pressure_misplay": 1.56,
+          "shop_or_economy_misallocation": 1.48,
+          "discard_mismanagement": 1.1,
+          "low_score_survival": 1.18,
+          "position_sensitive_misplay": 1.28,
+          "stateful_joker_misplay": 1.26,
+          "risk_undercommit": 0.86
+        },
+        "bucket_quota_caps": {
+          "resource_pressure_misplay": 6,
+          "shop_or_economy_misallocation": 5,
+          "discard_mismanagement": 4,
+          "low_score_survival": 4,
+          "position_sensitive_misplay": 4,
+          "stateful_joker_misplay": 4,
+          "risk_undercommit": 5
+        },
+        "bucket_minimum_counts": {
+          "resource_pressure_misplay": 2,
+          "shop_or_economy_misallocation": 2,
+          "low_score_survival": 1
+        },
+        "source_type_sampling_weights": {
+          "arena_candidate_slice_seed": 1.74,
+          "arena_slice_gap_seed": 1.14,
+          "arena_failure_mining": 0.9
+        },
+        "source_type_quota_caps": {
+          "arena_candidate_slice_seed": 6,
+          "arena_slice_gap_seed": 4,
+          "arena_failure_mining": 5
+        },
+        "slice_sampling_weights": {
+          "slice_action_type:shop": 1.5,
+          "slice_action_type:discard": 1.06,
+          "slice_resource_pressure:high": 1.54,
+          "slice_resource_pressure:medium": 1.18,
+          "slice_stage:early": 1.0
+        },
+        "slice_minimum_counts": {
+          "slice_action_type:shop": 2,
+          "slice_resource_pressure:high": 2
+        },
+        "slice_quota_caps": {
+          "slice_action_type:shop": 6,
+          "slice_action_type:discard": 6,
+          "slice_resource_pressure:high": 8
+        },
+        "risk_tag_sampling_weights": {
+          "resource_tight": 1.34,
+          "low_score_tail": 1.12,
+          "early_collapse": 0.82
+        }
+      },
+      "self_imitation": {
+        "enabled": false,
+        "replay_ratio": 0.0
+      },
+      "rollout": {
+        "max_steps": 165
+      },
+      "difficulty": {
+        "max_ante": 2,
+        "stake": "WHITE"
+      }
+    }
+  },
+  "__yaml_source_sha256__": "41bedd4a7fbbeaf085cdca7efa7304f9495182e532224f35f61e1664b387af28"
+}

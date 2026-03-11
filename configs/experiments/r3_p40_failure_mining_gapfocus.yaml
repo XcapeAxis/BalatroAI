@@ -1,0 +1,81 @@
+schema: p41_failure_mining_config_v1
+
+output:
+  artifacts_root: docs/artifacts/research/r3_failure_buckets
+
+input:
+  p39_root: docs/artifacts/research/r2s4_certification/r2s4-c2-bucketmin-stageaware-cert-20260311-0231/arena_eval/champion_eval
+  arena_run_dirs:
+    - docs/artifacts/research/r2s3_certification/r2s3-c4-certification/arena_eval/arena_runs/r2s3-c4-certification-arena
+    - docs/artifacts/research/r2s4_certification/r2s4-c1-sourceexpand-cert-20260311-0214/arena_eval/arena_runs/r2s4-c1-sourceexpand-cert-20260311-0214-arena
+    - docs/artifacts/research/r2s4_certification/r2s4-c2-bucketmin-stageaware-cert-20260311-0231/arena_eval/arena_runs/r2s4-c2-bucketmin-stageaware-cert-20260311-0231-arena
+    - docs/artifacts/research/r3_certification/r3-c1-sliceaware-cert/arena_eval/arena_runs/r3-c1-sliceaware-cert-arena
+  triage_report_jsons:
+    - docs/artifacts/research/r2s3_certification/r2s3-c4-certification/triage_report.json
+    - docs/artifacts/research/r2s4_certification/r2s4-c1-sourceexpand-cert-20260311-0214/triage_report.json
+    - docs/artifacts/research/r2s4_certification/r2s4-c2-bucketmin-stageaware-cert-20260311-0231/triage_report.json
+    - docs/artifacts/research/r3_certification/r3-c1-sliceaware-cert/triage_report.json
+  promotion_decision_jsons:
+    - docs/artifacts/research/r2s3_certification/r2s3-c4-certification/promotion_decision.json
+    - docs/artifacts/research/r2s4_certification/r2s4-c1-sourceexpand-cert-20260311-0214/promotion_decision.json
+    - docs/artifacts/research/r2s4_certification/r2s4-c2-bucketmin-stageaware-cert-20260311-0231/promotion_decision.json
+    - docs/artifacts/research/r3_certification/r3-c1-sliceaware-cert/promotion_decision.json
+
+criteria:
+  candidate_policy: model_policy
+  champion_policy: heuristic_baseline
+  bottom_quantile: 0.65
+  champion_score_regression_ratio: 0.03
+  high_risk_round_threshold: 2
+  max_failures: 160
+  max_failures_per_type: 24
+  max_failures_per_seed: 4
+  max_slice_gap_failures_per_source: 8
+  slice_gap_priority_weight: 1.42
+  max_candidate_slice_failures_per_source: 4
+  candidate_slice_priority_weight: 1.26
+  max_compound_slice_failures_per_source: 2
+  compound_slice_priority_weight: 1.10
+  skip_unknown_slice_gap_tags: false
+  max_failures_per_bucket:
+    resource_pressure_misplay: 24
+    shop_or_economy_misallocation: 20
+    discard_mismanagement: 16
+    position_sensitive_misplay: 12
+    stateful_joker_misplay: 12
+    low_score_survival: 18
+    early_collapse: 16
+    risk_undercommit: 14
+    risk_overcommit: 12
+  min_failures_per_bucket:
+    resource_pressure_misplay: 4
+    shop_or_economy_misallocation: 4
+    low_score_survival: 4
+    early_collapse: 3
+  min_failures_per_source_type:
+    arena_slice_gap_seed: 4
+    arena_candidate_slice_seed: 2
+    arena_compound_slice_seed: 1
+  max_failures_per_source:
+    r2s3-c4-certification-arena: 40
+    r2s4-c1-sourceexpand-cert-20260311-0214-arena: 40
+    r2s4-c2-bucketmin-stageaware-cert-20260311-0231-arena: 40
+    r3-c1-sliceaware-cert-arena: 40
+  bucket_priority_weights:
+    resource_pressure_misplay: 1.40
+    shop_or_economy_misallocation: 1.40
+    discard_mismanagement: 1.04
+    position_sensitive_misplay: 1.26
+    stateful_joker_misplay: 1.24
+    low_score_survival: 1.12
+    early_collapse: 1.08
+    risk_undercommit: 0.82
+    risk_overcommit: 1.02
+  source_priority_weights:
+    r2s3-c4-certification-arena: 1.00
+    r2s4-c1-sourceexpand-cert-20260311-0214-arena: 1.10
+    r2s4-c2-bucketmin-stageaware-cert-20260311-0231-arena: 1.14
+    r3-c1-sliceaware-cert-arena: 1.18
+
+quick:
+  max_episode_scan: 840
