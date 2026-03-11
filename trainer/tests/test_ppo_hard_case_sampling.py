@@ -391,6 +391,73 @@ class PPOHardCaseSamplingTest(unittest.TestCase):
             self.assertEqual(plan["source_type_selected_counts"]["arena_candidate_slice_seed"], 1)
             self.assertEqual(plan["source_type_minimum_counts"]["arena_candidate_slice_seed"], 1)
 
+    def test_source_variant_minimum_counts_force_gap_variant_into_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "failure_pack_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "p40_failure_pack_manifest_v2",
+                        "status": "ok",
+                        "failures": [
+                            {
+                                "seed": "AAAAAAA",
+                                "episode_id": "discard-1",
+                                "failure_types": ["champion_regression_segment"],
+                                "failure_bucket": "discard_mismanagement",
+                                "slice_tags": ["slice_action_type:discard"],
+                                "risk_tags": ["resource_relaxed"],
+                                "replay_weight": 5.0,
+                                "source_type": "arena_failure_mining",
+                                "source_variant": "slice_action_type:discard",
+                            },
+                            {
+                                "seed": "BBBBBBB",
+                                "episode_id": "discard-2",
+                                "failure_types": ["champion_regression_segment"],
+                                "failure_bucket": "discard_mismanagement",
+                                "slice_tags": ["slice_action_type:discard"],
+                                "risk_tags": ["resource_relaxed"],
+                                "replay_weight": 4.5,
+                                "source_type": "arena_failure_mining",
+                                "source_variant": "slice_action_type:discard",
+                            },
+                            {
+                                "seed": "CCCCCCC",
+                                "episode_id": "pos-gap-1",
+                                "failure_types": ["candidate_slice_failure_seed"],
+                                "failure_bucket": "position_sensitive_misplay",
+                                "slice_tags": ["slice_position_sensitive:true"],
+                                "risk_tags": ["resource_relaxed"],
+                                "replay_weight": 0.8,
+                                "source_type": "arena_candidate_slice_seed",
+                                "source_variant": "slice_position_sensitive:true",
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            cfg = PPOConfig.from_mapping(
+                {
+                    "hard_case_sampling": {
+                        "enabled": True,
+                        "failure_pack_manifest": str(manifest_path),
+                        "max_failure_cases": 2,
+                        "max_failure_seeds": 3,
+                        "source_variant_minimum_counts": {
+                            "slice_position_sensitive:true": 1,
+                        },
+                    }
+                }
+            )
+            plan = _resolve_hard_case_plan(cfg=cfg, repo_root=root)
+            self.assertEqual(plan["status"], "ok")
+            self.assertEqual(plan["selected_failure_count"], 2)
+            self.assertEqual(plan["source_variant_selected_counts"]["slice_position_sensitive:true"], 1)
+            self.assertEqual(plan["source_variant_minimum_counts"]["slice_position_sensitive:true"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

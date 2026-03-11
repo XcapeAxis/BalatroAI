@@ -398,6 +398,21 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
         for source_type, count in (hard_cfg.source_type_minimum_counts or {}).items()
         if str(source_type).strip()
     }
+    source_variant_sampling_weights = {
+        str(source_variant).strip(): max(0.0, _safe_float(weight, 0.0))
+        for source_variant, weight in (hard_cfg.source_variant_sampling_weights or {}).items()
+        if str(source_variant).strip()
+    }
+    source_variant_quota_caps = {
+        str(source_variant).strip(): max(0, _safe_int(cap, 0))
+        for source_variant, cap in (hard_cfg.source_variant_quota_caps or {}).items()
+        if str(source_variant).strip()
+    }
+    source_variant_minimum_counts = {
+        str(source_variant).strip(): max(0, _safe_int(count, 0))
+        for source_variant, count in (hard_cfg.source_variant_minimum_counts or {}).items()
+        if str(source_variant).strip()
+    }
     bucket_seed_caps = {
         str(bucket).strip(): max(0, _safe_int(cap, 0))
         for bucket, cap in (hard_cfg.bucket_seed_caps or {}).items()
@@ -434,10 +449,12 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
         if allowed_risk_tags and not any(token in allowed_risk_tags for token in risk_tags):
             continue
         source_type = str(row.get("source_type") or "unknown").strip() or "unknown"
+        source_variant = str(row.get("source_variant") or "").strip()
         bucket_weight = max(0.01, bucket_sampling_weights.get(failure_bucket, 1.0))
         slice_weight, primary_slice_tag = _tag_weight(slice_tags, slice_sampling_weights)
         risk_weight, primary_risk_tag = _tag_weight(risk_tags, risk_tag_sampling_weights)
         source_type_weight = max(0.01, source_type_sampling_weights.get(source_type, 1.0))
+        source_variant_weight = max(0.01, source_variant_sampling_weights.get(source_variant, 1.0)) if source_variant else 1.0
         payload = {
             "seed": row_seed,
             "failure_types": failure_types,
@@ -461,6 +478,7 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
             "slice_sampling_weight": slice_weight,
             "risk_tag_sampling_weight": risk_weight,
             "source_type_sampling_weight": source_type_weight,
+            "source_variant_sampling_weight": source_variant_weight,
             "weighted_replay_priority": max(
                 0.01,
                 _safe_float(row.get("replay_weight"), 1.0)
@@ -468,10 +486,12 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
                 * bucket_weight
                 * slice_weight
                 * risk_weight
-                * source_type_weight,
+                * source_type_weight
+                * source_variant_weight,
             ),
             "selection_reason": str(row.get("selection_reason") or ""),
             "source_type": source_type,
+            "source_variant": source_variant,
             "source_run_id": str(row.get("source_run_id") or ""),
         }
         candidate_rows.append(payload)
@@ -483,6 +503,7 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
             -_safe_float(item.get("slice_sampling_weight"), 0.0),
             -_safe_float(item.get("risk_tag_sampling_weight"), 0.0),
             -_safe_float(item.get("source_type_sampling_weight"), 0.0),
+            -_safe_float(item.get("source_variant_sampling_weight"), 0.0),
             -_safe_float(item.get("replay_weight"), 0.0),
             _safe_float(item.get("total_score"), 0.0),
             str(item.get("episode_id") or ""),
@@ -496,7 +517,9 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
     selected_by_slice: Counter[str] = Counter()
     selected_by_risk: Counter[str] = Counter()
     selected_by_source_type: Counter[str] = Counter()
+    selected_by_source_variant: Counter[str] = Counter()
     source_type_counts: Counter[str] = Counter()
+    source_variant_counts: Counter[str] = Counter()
     per_type_cap = max(0, int(hard_cfg.max_failures_per_type or 0))
     per_seed_cap = max(0, int(hard_cfg.max_failures_per_seed or 0))
     max_failure_cases = max(1, int(hard_cfg.max_failure_cases or 0))
@@ -556,6 +579,10 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
         source_type_cap = max(0, source_type_quota_caps.get(source_type_token, 0))
         if source_type_cap > 0 and selected_by_source_type[source_type_token] >= source_type_cap:
             return False
+        source_variant_token = str(row.get("source_variant") or "")
+        source_variant_cap = max(0, source_variant_quota_caps.get(source_variant_token, 0))
+        if source_variant_token and source_variant_cap > 0 and selected_by_source_variant[source_variant_token] >= source_variant_cap:
+            return False
         if bool(hard_cfg.balance_across_failure_types) and per_type_cap > 0:
             failure_tokens = row.get("failure_types") if isinstance(row.get("failure_types"), list) else []
             if any(selected_by_type[str(token)] >= per_type_cap for token in failure_tokens):
@@ -573,6 +600,7 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
         bucket_token = str(row.get("failure_bucket") or "unknown")
         primary_risk_tag = str(row.get("primary_risk_tag") or "")
         source_type_token = str(row.get("source_type") or "unknown")
+        source_variant_token = str(row.get("source_variant") or "")
         episode_id = str(row.get("episode_id") or "")
         selected_by_seed[seed_token] += 1
         selected_by_bucket[bucket_token] += 1
@@ -582,6 +610,8 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
         if primary_risk_tag:
             selected_by_risk[primary_risk_tag] += 1
         selected_by_source_type[source_type_token] += 1
+        if source_variant_token:
+            selected_by_source_variant[source_variant_token] += 1
         failure_seed_counts[seed_token] += 1
         for token in row.get("failure_types") if isinstance(row.get("failure_types"), list) else []:
             failure_type_counts[str(token)] += 1
@@ -592,6 +622,8 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
         for tag in row.get("risk_tags") if isinstance(row.get("risk_tags"), list) else []:
             risk_tag_counts[str(tag)] += 1
         source_type_counts[str(row.get("source_type") or "unknown")] += 1
+        if source_variant_token:
+            source_variant_counts[source_variant_token] += 1
         if episode_id:
             selected_episode_ids.add(episode_id)
 
@@ -637,6 +669,24 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
                 continue
             _select_row(row)
             if len(selected_rows) >= max_failure_cases or selected_by_source_type[source_type_token] >= minimum_count:
+                break
+        if len(selected_rows) >= max_failure_cases:
+            break
+
+    for source_variant_token, target_count in sorted(
+        source_variant_minimum_counts.items(),
+        key=lambda item: (-item[1], item[0]),
+    ):
+        minimum_count = max(0, target_count)
+        if minimum_count <= 0:
+            continue
+        for row in ordered_rows:
+            if str(row.get("source_variant") or "") != source_variant_token:
+                continue
+            if not _row_is_selectable(row):
+                continue
+            _select_row(row)
+            if len(selected_rows) >= max_failure_cases or selected_by_source_variant[source_variant_token] >= minimum_count:
                 break
         if len(selected_rows) >= max_failure_cases:
             break
@@ -715,6 +765,9 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
         "source_type_sampling_weights": dict(sorted(source_type_sampling_weights.items())),
         "source_type_minimum_counts": dict(sorted(source_type_minimum_counts.items())),
         "source_type_quota_caps": dict(sorted(source_type_quota_caps.items())),
+        "source_variant_sampling_weights": dict(sorted(source_variant_sampling_weights.items())),
+        "source_variant_minimum_counts": dict(sorted(source_variant_minimum_counts.items())),
+        "source_variant_quota_caps": dict(sorted(source_variant_quota_caps.items())),
         "bucket_selected_counts": dict(sorted(selected_by_bucket.items())),
         "bucket_selected_ratios": _counter_ratios(selected_by_bucket),
         "scarce_failure_buckets": scarce_failure_buckets(failure_bucket_counts),
@@ -727,6 +780,9 @@ def _resolve_hard_case_plan(*, cfg: PPOConfig, repo_root: Path) -> dict[str, Any
         "source_type_selected_counts": dict(sorted(selected_by_source_type.items())),
         "source_type_selected_ratios": _counter_ratios(selected_by_source_type),
         "source_type_counts": dict(sorted(source_type_counts.items())),
+        "source_variant_selected_counts": dict(sorted(selected_by_source_variant.items())),
+        "source_variant_selected_ratios": _counter_ratios(selected_by_source_variant),
+        "source_variant_counts": dict(sorted(source_variant_counts.items())),
         "selected_failures_preview": selected_rows[:16],
         "mean_replay_weight": float(statistics.mean([_safe_float(row.get('replay_weight'), 0.0) for row in selected_rows]))
         if selected_rows
@@ -1777,6 +1833,11 @@ def run_ppo_lite_training(
         "source_type_sampling_weights": dict(hard_case_plan.get("source_type_sampling_weights") or {}),
         "source_type_minimum_counts": dict(hard_case_plan.get("source_type_minimum_counts") or {}),
         "source_type_quota_caps": dict(hard_case_plan.get("source_type_quota_caps") or {}),
+        "source_variant_counts": dict(hard_case_plan.get("source_variant_selected_counts") or hard_case_plan.get("source_variant_counts") or {}),
+        "source_variant_ratios": dict(hard_case_plan.get("source_variant_selected_ratios") or {}),
+        "source_variant_sampling_weights": dict(hard_case_plan.get("source_variant_sampling_weights") or {}),
+        "source_variant_minimum_counts": dict(hard_case_plan.get("source_variant_minimum_counts") or {}),
+        "source_variant_quota_caps": dict(hard_case_plan.get("source_variant_quota_caps") or {}),
         "slice_tag_counts": dict(hard_case_plan.get("slice_tag_counts") or {}),
         "slice_minimum_counts": dict(hard_case_plan.get("slice_minimum_counts") or {}),
         "risk_tag_counts": dict(hard_case_plan.get("risk_tag_counts") or {}),
@@ -2033,6 +2094,11 @@ def run_ppo_lite_training(
         for tag, weight in (hard_case_plan.get("risk_tag_sampling_weights") or {}).items()
         if str(tag).strip()
     }
+    source_variant_target_weights = {
+        str(tag): max(0.0, _safe_float(weight, 0.0))
+        for tag, weight in (hard_case_plan.get("source_variant_sampling_weights") or {}).items()
+        if str(tag).strip()
+    }
     bucket_mix_delta_vs_target: dict[str, float] = {}
     bucket_ratios = dict(hard_case_plan.get("bucket_selected_ratios") or {})
     if bucket_target_weights:
@@ -2069,6 +2135,18 @@ def run_ppo_lite_training(
                 _safe_float(risk_ratios.get(tag), 0.0) - _safe_float(normalized_targets.get(tag), 0.0),
                 6,
             )
+    source_variant_mix_delta_vs_target: dict[str, float] = {}
+    source_variant_ratios = dict(hard_case_plan.get("source_variant_selected_ratios") or {})
+    if source_variant_target_weights:
+        weight_sum = sum(source_variant_target_weights.values())
+        normalized_targets = {
+            tag: round(_safe_ratio(weight, weight_sum), 6) for tag, weight in source_variant_target_weights.items()
+        } if weight_sum > 0.0 else {}
+        for tag in sorted(set(source_variant_ratios) | set(normalized_targets)):
+            source_variant_mix_delta_vs_target[tag] = round(
+                _safe_float(source_variant_ratios.get(tag), 0.0) - _safe_float(normalized_targets.get(tag), 0.0),
+                6,
+            )
     bucket_metrics_json = run_dir / "bucket_metrics.json"
     slice_metrics_json = run_dir / "slice_metrics.json"
     training_summary_md = run_dir / "training_summary.md"
@@ -2087,6 +2165,12 @@ def run_ppo_lite_training(
         "source_type_sampling_weights": dict(hard_case_plan.get("source_type_sampling_weights") or {}),
         "source_type_minimum_counts": dict(hard_case_plan.get("source_type_minimum_counts") or {}),
         "source_type_quota_caps": dict(hard_case_plan.get("source_type_quota_caps") or {}),
+        "source_variant_counts": dict(hard_case_plan.get("source_variant_selected_counts") or hard_case_plan.get("source_variant_counts") or {}),
+        "source_variant_ratios": source_variant_ratios,
+        "source_variant_sampling_weights": source_variant_target_weights,
+        "source_variant_minimum_counts": dict(hard_case_plan.get("source_variant_minimum_counts") or {}),
+        "source_variant_quota_caps": dict(hard_case_plan.get("source_variant_quota_caps") or {}),
+        "source_variant_mix_delta_vs_target": source_variant_mix_delta_vs_target,
         "slice_sampling_weights": dict(hard_case_plan.get("slice_sampling_weights") or {}),
         "slice_minimum_counts": dict(hard_case_plan.get("slice_minimum_counts") or {}),
         "slice_quota_caps": dict(hard_case_plan.get("slice_quota_caps") or {}),
@@ -2115,6 +2199,12 @@ def run_ppo_lite_training(
         "risk_tag_ratios": _counter_ratios(hard_case_plan.get("risk_tag_counts") or {}),
         "source_type_counts": dict(hard_case_plan.get("source_type_selected_counts") or hard_case_plan.get("source_type_counts") or {}),
         "source_type_minimum_counts": dict(hard_case_plan.get("source_type_minimum_counts") or {}),
+        "source_variant_counts": dict(hard_case_plan.get("source_variant_selected_counts") or hard_case_plan.get("source_variant_counts") or {}),
+        "source_variant_ratios": source_variant_ratios,
+        "source_variant_sampling_weights": source_variant_target_weights,
+        "source_variant_minimum_counts": dict(hard_case_plan.get("source_variant_minimum_counts") or {}),
+        "source_variant_quota_caps": dict(hard_case_plan.get("source_variant_quota_caps") or {}),
+        "source_variant_mix_delta_vs_target": source_variant_mix_delta_vs_target,
         "slice_sampling_weights": dict(hard_case_plan.get("slice_sampling_weights") or {}),
         "slice_selected_counts": dict(hard_case_plan.get("slice_selected_counts") or {}),
         "slice_selected_ratios": slice_ratios,

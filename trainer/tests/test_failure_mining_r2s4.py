@@ -8,9 +8,11 @@ from trainer.closed_loop.failure_mining import (
     _bucket_from_slice_tag,
     _build_slice_priority_weights,
     _compound_actionable_slice_tags,
+    _infer_source_variant,
     _refine_failure_bucket_for_slice_pressure,
     _resolve_failure_sources,
     _row_selection_matches_policy,
+    _source_variant_from_slice_tag,
 )
 
 
@@ -40,6 +42,9 @@ class R3SliceBucketMappingTest(unittest.TestCase):
         self.assertEqual(_bucket_from_slice_tag("slice_resource_pressure:medium"), "resource_pressure_misplay")
         self.assertEqual(_bucket_from_slice_tag("slice_stage:early"), "early_collapse")
         self.assertEqual(_bucket_from_slice_tag("slice_position_sensitive:unknown"), "")
+        self.assertEqual(_source_variant_from_slice_tag("slice_action_type:shop"), "slice_action_type:shop")
+        self.assertEqual(_source_variant_from_slice_tag("slice_stateful_joker_present:true"), "slice_stateful_joker_present:true")
+        self.assertEqual(_source_variant_from_slice_tag("slice_position_sensitive:false"), "")
 
     def test_compound_actionable_slice_tags_drop_unknown_and_primary(self) -> None:
         tags = [
@@ -51,6 +56,19 @@ class R3SliceBucketMappingTest(unittest.TestCase):
         self.assertEqual(
             _compound_actionable_slice_tags(tags, primary_tag="slice_resource_pressure:high"),
             ["slice_action_type:shop"],
+        )
+
+    def test_source_variant_prefers_action_type_over_generic_pressure(self) -> None:
+        self.assertEqual(
+            _infer_source_variant(
+                slice_tags=[
+                    "slice_stage:early",
+                    "slice_resource_pressure:medium",
+                    "slice_action_type:discard",
+                ],
+                failure_bucket="risk_undercommit",
+            ),
+            "slice_action_type:discard",
         )
 
 

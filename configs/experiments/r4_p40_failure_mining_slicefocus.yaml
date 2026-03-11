@@ -1,0 +1,75 @@
+schema: p41_failure_mining_config_v1
+
+output:
+  artifacts_root: docs/artifacts/research/r4_failure_buckets
+
+input:
+  p39_root: docs/artifacts/research/r4_certification/20260311-144303/arena_eval/champion_eval
+  arena_run_dirs:
+    - docs/artifacts/research/r2s3_certification/r2s3-c4-certification/arena_eval/arena_runs/r2s3-c4-certification-arena
+    - docs/artifacts/research/r3_certification/r3-c3-gapfocus-cert/arena_eval/arena_runs/r3-c3-gapfocus-cert-arena
+    - docs/artifacts/research/r4_certification/20260311-144303/arena_eval/arena_runs/20260311-144303-arena
+  triage_report_jsons:
+    - docs/artifacts/research/r2s3_certification/r2s3-c4-certification/triage_report.json
+    - docs/artifacts/research/r3_certification/r3-c3-gapfocus-cert/triage_report.json
+    - docs/artifacts/research/r4_certification/20260311-144303/triage_report.json
+  promotion_decision_jsons:
+    - docs/artifacts/research/r2s3_certification/r2s3-c4-certification/promotion_decision.json
+    - docs/artifacts/research/r3_certification/r3-c3-gapfocus-cert/promotion_decision.json
+    - docs/artifacts/research/r4_certification/20260311-144303/promotion_decision.json
+
+criteria:
+  candidate_policy: model_policy
+  champion_policy: heuristic_baseline
+  bottom_quantile: 0.68
+  champion_score_regression_ratio: 0.025
+  high_risk_round_threshold: 2
+  max_failures: 192
+  max_failures_per_type: 24
+  max_failures_per_seed: 4
+  max_slice_gap_failures_per_source: 10
+  slice_gap_priority_weight: 1.54
+  max_candidate_slice_failures_per_source: 5
+  candidate_slice_priority_weight: 1.34
+  max_compound_slice_failures_per_source: 2
+  compound_slice_priority_weight: 1.12
+  skip_unknown_slice_gap_tags: false
+  max_failures_per_bucket:
+    resource_pressure_misplay: 24
+    shop_or_economy_misallocation: 22
+    discard_mismanagement: 22
+    low_score_survival: 18
+    early_collapse: 18
+    risk_undercommit: 16
+    position_sensitive_misplay: 12
+    stateful_joker_misplay: 12
+  min_failures_per_bucket:
+    resource_pressure_misplay: 4
+    shop_or_economy_misallocation: 3
+    discard_mismanagement: 3
+    low_score_survival: 3
+    early_collapse: 2
+  min_failures_per_source_type:
+    arena_slice_gap_seed: 4
+    arena_candidate_slice_seed: 3
+    arena_compound_slice_seed: 1
+  max_failures_per_source:
+    r2s3-c4-certification-arena: 40
+    r3-c3-gapfocus-cert-arena: 40
+    20260311-144303-arena: 64
+  bucket_priority_weights:
+    resource_pressure_misplay: 1.44
+    shop_or_economy_misallocation: 1.40
+    discard_mismanagement: 1.30
+    low_score_survival: 1.16
+    early_collapse: 1.10
+    risk_undercommit: 0.92
+    position_sensitive_misplay: 1.20
+    stateful_joker_misplay: 1.18
+  source_priority_weights:
+    r2s3-c4-certification-arena: 1.00
+    r3-c3-gapfocus-cert-arena: 1.10
+    20260311-144303-arena: 1.24
+
+quick:
+  max_episode_scan: 960

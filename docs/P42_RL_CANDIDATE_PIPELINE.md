@@ -526,3 +526,29 @@ R2-S4 之后的默认下一步仍然是 pure RL：
 - 优先扩大 failure source coverage
 - 优先提高 `arena_slice_gap_seed`、`resource_pressure_misplay`、`shop_or_economy_misallocation` 的有效样本占比
 - 在 richer source 上继续做 slice-targeted replay 与认证级 compare
+
+## R4 长时研究更新（2026-03-11）
+本轮继续留在 pure RL 主线，没有切回 warm-start / teacher。
+
+- strongest certified pure-RL 已更新为：
+  - `rl_policy:p42_rl_candidate:20260311-221824-candidate-rl:aaaaaaa,bbbbbbb,ccccccc,ddddddd:aec12dffb2`
+  - certified score `104.5`
+  - 相对旧 strongest certified baseline（`r2s3-c4`）提升 `+6.25`
+- strongest R4 fast-pass 为：
+  - `rl_policy:p42_rl_candidate:20260311-153941-rl:aaaaaaa,bbbbbbb,ccccccc,ddddddd:4328783bc3`
+  - `eval_mean_score = 128.625`
+- 已再次确认有效：
+  - `bucket-aware replay`
+  - `curriculum / reward refine`
+  - `deep slice-targeted scarcity scaling`
+- 已再次确认不值得继续作为主线：
+  - flat self-imitation
+  - 只靠 `source expansion + bucket minima` 而不扩大非重叠 source 的子家族
+- 当前最明确的下一阶段方向：
+  - richer non-overlapping failure source expansion
+  - 优先补 `resource_pressure_misplay`
+  - 优先补 `shop_or_economy_misallocation`
+  - 优先补 `position_sensitive_misplay`
+  - 优先补 `stateful_joker_misplay`
+
+这意味着：pure RL 主线仍值得继续，但下一轮默认不再原地加深同一 scarcity family，而是先把 source coverage 做宽再重新认证。

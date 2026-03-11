@@ -101,6 +101,28 @@ def _dominant_bucket_value(counts: dict[str, int]) -> str:
     return str(ordered[0][0])
 
 
+def _slice_token(key: str, value: Any) -> str:
+    if value is None:
+        return "unknown"
+    if key in {"slice_position_sensitive", "slice_stateful_joker_present"}:
+        if value is True:
+            return "true"
+        if value is False:
+            return "false"
+    token = str(value).strip()
+    return token if token else "unknown"
+
+
+def _record_unified_slice_counts(
+    bucket_counts: dict[str, dict[str, int]],
+    slice_labels: dict[str, Any],
+    *,
+    keys: tuple[str, ...],
+) -> None:
+    for key in keys:
+        bucket_counts[key][_slice_token(key, slice_labels.get(key))] += 1
+
+
 def _build_policy_adapter(
     policy_id: str,
     *,
@@ -251,15 +273,16 @@ def _run_episode(
             bucket_counts["position_sensitive"]["no"] += 1
         else:
             bucket_counts["position_sensitive"]["unknown"] += 1
-        # Unified P41 slices (kept in addition to legacy buckets for backward compatibility).
-        for key in (
-            "slice_stage",
-            "slice_resource_pressure",
-            "slice_position_sensitive",
-            "slice_stateful_joker_present",
-        ):
-            token = str(pre_action_slices.get(key) if pre_action_slices.get(key) is not None else "unknown")
-            bucket_counts[key][token] += 1
+        _record_unified_slice_counts(
+            bucket_counts,
+            pre_action_slices,
+            keys=(
+                "slice_stage",
+                "slice_resource_pressure",
+                "slice_position_sensitive",
+                "slice_stateful_joker_present",
+            ),
+        )
 
         legal_actions = _legal_actions_hint(state)
         try:
@@ -275,7 +298,12 @@ def _run_episode(
         action_counter[action_type] += 1
         step_slices = compute_slice_labels({"state": state, "phase": phase, "action_type": action_type})
         bucket_counts["action_type"][as_legacy_action_bucket(str(step_slices.get("slice_action_type") or "unknown"))] += 1
-        bucket_counts["slice_action_type"][str(step_slices.get("slice_action_type") or "unknown")] += 1
+        bucket_counts["slice_action_type"][_slice_token("slice_action_type", step_slices.get("slice_action_type"))] += 1
+        _record_unified_slice_counts(
+            bucket_counts,
+            step_slices,
+            keys=("slice_position_sensitive", "slice_stateful_joker_present"),
+        )
 
         try:
             next_state, _reward, done, _info = backend.step(action)

@@ -1,0 +1,83 @@
+schema: p41_failure_mining_config_v1
+
+output:
+  artifacts_root: docs/artifacts/research/r4_failure_buckets
+
+input:
+  p39_root: docs/artifacts/research/r3_certification/r3-c3-gapfocus-cert/arena_eval/champion_eval
+  arena_run_dirs:
+    - docs/artifacts/research/r2s3_certification/r2s3-c4-certification/arena_eval/arena_runs/r2s3-c4-certification-arena
+    - docs/artifacts/research/r2s4_certification/r2s4-c2-bucketmin-stageaware-cert-20260311-0231/arena_eval/arena_runs/r2s4-c2-bucketmin-stageaware-cert-20260311-0231-arena
+    - docs/artifacts/research/r3_certification/r3-c2-bucketmin-compound-cert/arena_eval/arena_runs/r3-c2-bucketmin-compound-cert-arena
+    - docs/artifacts/research/r3_certification/r3-c3-gapfocus-cert/arena_eval/arena_runs/r3-c3-gapfocus-cert-arena
+  triage_report_jsons:
+    - docs/artifacts/research/r2s3_certification/r2s3-c4-certification/triage_report.json
+    - docs/artifacts/research/r2s4_certification/r2s4-c2-bucketmin-stageaware-cert-20260311-0231/triage_report.json
+    - docs/artifacts/research/r3_certification/r3-c2-bucketmin-compound-cert/triage_report.json
+    - docs/artifacts/research/r3_certification/r3-c3-gapfocus-cert/triage_report.json
+  promotion_decision_jsons:
+    - docs/artifacts/research/r2s3_certification/r2s3-c4-certification/promotion_decision.json
+    - docs/artifacts/research/r2s4_certification/r2s4-c2-bucketmin-stageaware-cert-20260311-0231/promotion_decision.json
+    - docs/artifacts/research/r3_certification/r3-c2-bucketmin-compound-cert/promotion_decision.json
+    - docs/artifacts/research/r3_certification/r3-c3-gapfocus-cert/promotion_decision.json
+
+criteria:
+  candidate_policy: model_policy
+  champion_policy: heuristic_baseline
+  bottom_quantile: 0.68
+  champion_score_regression_ratio: 0.025
+  high_risk_round_threshold: 2
+  max_failures: 192
+  max_failures_per_type: 28
+  max_failures_per_seed: 4
+  max_slice_gap_failures_per_source: 10
+  slice_gap_priority_weight: 1.48
+  max_candidate_slice_failures_per_source: 5
+  candidate_slice_priority_weight: 1.32
+  max_compound_slice_failures_per_source: 3
+  compound_slice_priority_weight: 1.16
+  skip_unknown_slice_gap_tags: false
+  max_failures_per_bucket:
+    resource_pressure_misplay: 26
+    shop_or_economy_misallocation: 24
+    discard_mismanagement: 18
+    position_sensitive_misplay: 16
+    stateful_joker_misplay: 16
+    low_score_survival: 18
+    early_collapse: 16
+    risk_undercommit: 14
+    risk_overcommit: 14
+  min_failures_per_bucket:
+    resource_pressure_misplay: 4
+    shop_or_economy_misallocation: 4
+    position_sensitive_misplay: 2
+    stateful_joker_misplay: 2
+    low_score_survival: 3
+    early_collapse: 2
+  min_failures_per_source_type:
+    arena_slice_gap_seed: 4
+    arena_candidate_slice_seed: 3
+    arena_compound_slice_seed: 2
+  max_failures_per_source:
+    r2s3-c4-certification-arena: 48
+    r2s4-c2-bucketmin-stageaware-cert-20260311-0231-arena: 48
+    r3-c2-bucketmin-compound-cert-arena: 48
+    r3-c3-gapfocus-cert-arena: 48
+  bucket_priority_weights:
+    resource_pressure_misplay: 1.46
+    shop_or_economy_misallocation: 1.44
+    position_sensitive_misplay: 1.34
+    stateful_joker_misplay: 1.34
+    discard_mismanagement: 1.04
+    low_score_survival: 1.14
+    early_collapse: 1.06
+    risk_undercommit: 0.86
+    risk_overcommit: 1.02
+  source_priority_weights:
+    r2s3-c4-certification-arena: 1.00
+    r2s4-c2-bucketmin-stageaware-cert-20260311-0231-arena: 1.08
+    r3-c2-bucketmin-compound-cert-arena: 1.12
+    r3-c3-gapfocus-cert-arena: 1.18
+
+quick:
+  max_episode_scan: 960

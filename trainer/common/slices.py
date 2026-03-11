@@ -175,7 +175,10 @@ def infer_slice_position_sensitive(sample: dict[str, Any]) -> bool | str:
         if any(k in joined for k in ("position", "order", "left", "right", "swap", "reorder")):
             return True
 
-    jokers = state.get("jokers") if isinstance(state.get("jokers"), list) else []
+    raw_jokers = state.get("jokers")
+    if isinstance(raw_jokers, list) and not raw_jokers:
+        return False
+    jokers = raw_jokers if isinstance(raw_jokers, list) else []
     if jokers:
         for joker in jokers:
             if not isinstance(joker, dict):
@@ -191,9 +194,12 @@ def infer_slice_position_sensitive(sample: dict[str, Any]) -> bool | str:
 def infer_slice_stateful_joker_present(sample: dict[str, Any]) -> bool | str:
     """Detect whether likely stateful jokers are present."""
     state = _extract_state(sample)
-    jokers = state.get("jokers") if isinstance(state.get("jokers"), list) else []
-    if not jokers:
+    raw_jokers = state.get("jokers")
+    if not isinstance(raw_jokers, list):
         return "unknown"
+    jokers = raw_jokers
+    if not jokers:
+        return False
     for joker in jokers:
         if not isinstance(joker, dict):
             continue

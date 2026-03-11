@@ -502,6 +502,52 @@ def _bucket_from_slice_tag(tag: str) -> str:
     return ""
 
 
+def _source_variant_from_slice_tag(tag: str) -> str:
+    token = str(tag or "").strip().lower()
+    if not token:
+        return ""
+    if token.endswith(":unknown") or token.endswith(":none") or token.endswith(":absent") or token.endswith(":false"):
+        return ""
+    for prefix in (
+        "slice_position_sensitive:true",
+        "slice_stateful_joker_present:true",
+        "slice_action_type:shop",
+        "slice_action_type:discard",
+        "slice_resource_pressure:high",
+        "slice_resource_pressure:medium",
+        "slice_action_type:play",
+        "slice_stage:early",
+    ):
+        if token.startswith(prefix):
+            return token
+    return ""
+
+
+def _infer_source_variant(*, slice_tags: list[str], failure_bucket: str) -> str:
+    actionable_tokens = [
+        _source_variant_from_slice_tag(tag)
+        for tag in slice_tags
+        if _source_variant_from_slice_tag(tag)
+    ]
+    if actionable_tokens:
+        priority = {
+            "slice_position_sensitive:true": 0,
+            "slice_stateful_joker_present:true": 1,
+            "slice_action_type:shop": 2,
+            "slice_action_type:discard": 3,
+            "slice_resource_pressure:high": 4,
+            "slice_resource_pressure:medium": 5,
+            "slice_action_type:play": 6,
+            "slice_stage:early": 7,
+        }
+        actionable_tokens.sort(key=lambda token: (priority.get(token, 99), token))
+        return actionable_tokens[0]
+    bucket_token = str(failure_bucket or "").strip().lower()
+    if bucket_token:
+        return f"bucket:{bucket_token}"
+    return ""
+
+
 def _compound_actionable_slice_tags(slice_tags: list[str], *, primary_tag: str) -> list[str]:
     primary = str(primary_tag or "").strip().lower()
     results: list[str] = []
@@ -757,6 +803,7 @@ def run_failure_mining(
     by_bucket: Counter[str] = Counter()
     by_source: Counter[str] = Counter()
     by_source_type: Counter[str] = Counter()
+    by_source_variant: Counter[str] = Counter()
     by_slice: Counter[str] = Counter()
     by_risk: Counter[str] = Counter()
     by_policy: Counter[str] = Counter()
@@ -768,6 +815,7 @@ def run_failure_mining(
     selection_by_bucket: Counter[str] = Counter()
     selection_by_source: Counter[str] = Counter()
     selection_by_source_type: Counter[str] = Counter()
+    selection_by_source_variant: Counter[str] = Counter()
     candidate_rows_for_selection: list[dict[str, Any]] = []
 
     for spec in source_specs:
@@ -985,6 +1033,7 @@ def run_failure_mining(
                 "slice_tags": slice_tags,
                 "risk_tags": risk_tags,
                 "source_type": str(spec.get("source_type") or "arena_failure_mining"),
+                "source_variant": _infer_source_variant(slice_tags=slice_tags, failure_bucket=failure_bucket),
                 "selection_reason": _selection_reason(
                     failure_types=failure_types,
                     failure_bucket=failure_bucket,
@@ -1113,6 +1162,8 @@ def run_failure_mining(
                             "slice_tags": slice_tags,
                             "risk_tags": risk_tags,
                             "source_type": "arena_slice_gap_seed",
+                            "source_variant": _source_variant_from_slice_tag(slice_tag)
+                            or _infer_source_variant(slice_tags=slice_tags, failure_bucket=bucket),
                             "selection_reason": f"{bucket},slice_coverage_gap_seed,{slice_tag}",
                             "replay_weight": replay_weight,
                             "source": {
@@ -1183,6 +1234,8 @@ def run_failure_mining(
                                     "slice_tags": slice_tags,
                                     "risk_tags": risk_tags,
                                     "source_type": "arena_compound_slice_seed",
+                                    "source_variant": _source_variant_from_slice_tag(compound_slice_tag)
+                                    or _infer_source_variant(slice_tags=slice_tags, failure_bucket=compound_bucket),
                                     "selection_reason": f"{compound_bucket},compound_slice_failure_seed,{compound_slice_tag}",
                                     "replay_weight": compound_replay_weight,
                                     "source": {
@@ -1288,6 +1341,8 @@ def run_failure_mining(
                             "slice_tags": slice_tags,
                             "risk_tags": risk_tags,
                             "source_type": "arena_candidate_slice_seed",
+                            "source_variant": _source_variant_from_slice_tag(slice_tag)
+                            or _infer_source_variant(slice_tags=slice_tags, failure_bucket=bucket),
                             "selection_reason": f"{bucket},candidate_slice_failure_seed,{slice_tag}",
                             "replay_weight": replay_weight,
                             "source": {
@@ -1332,12 +1387,16 @@ def run_failure_mining(
         selection_by_bucket[str(payload.get("failure_bucket") or "")] += 1
         selection_by_source[str(payload.get("source_run_id") or "")] += 1
         selection_by_source_type[str(payload.get("source_type") or "")] += 1
+        if str(payload.get("source_variant") or "").strip():
+            selection_by_source_variant[str(payload.get("source_variant") or "").strip()] += 1
         for token in payload.get("failure_types") if isinstance(payload.get("failure_types"), list) else []:
             by_type[str(token)] += 1
             selection_by_type[str(token)] += 1
         by_bucket[str(payload.get("failure_bucket") or "unknown")] += 1
         by_source[str(payload.get("source_run_id") or "unknown")] += 1
         by_source_type[str(payload.get("source_type") or "unknown")] += 1
+        if str(payload.get("source_variant") or "").strip():
+            by_source_variant[str(payload.get("source_variant") or "").strip()] += 1
         by_bucket_reason[str(payload.get("bucket_reason") or "unknown")] += 1
         for tag in payload.get("slice_tags") if isinstance(payload.get("slice_tags"), list) else []:
             by_slice[str(tag)] += 1
@@ -1438,6 +1497,7 @@ def run_failure_mining(
                     "slice_tags": item["slice_tags"],
                     "risk_tags": item["risk_tags"],
                     "source_type": item["source_type"],
+                    "source_variant": str(item.get("source_variant") or ""),
                     "selection_reason": item["selection_reason"],
                     "replay_weight": item["replay_weight"],
                     "selected_for_training": True,
@@ -1509,6 +1569,7 @@ def run_failure_mining(
                 "slice_tags": item["slice_tags"],
                 "risk_tags": item["risk_tags"],
                 "source_type": item["source_type"],
+                "source_variant": str(item.get("source_variant") or ""),
                 "selection_reason": item["selection_reason"],
                 "replay_weight": item["replay_weight"],
                 "total_score": item["total_score"],
@@ -1538,6 +1599,7 @@ def run_failure_mining(
         "by_bucket": dict(sorted(by_bucket.items())),
         "by_source": dict(sorted(by_source.items())),
         "by_source_type": dict(sorted(by_source_type.items())),
+        "by_source_variant": dict(sorted(by_source_variant.items())),
         "known_failure_buckets": list(KNOWN_FAILURE_BUCKETS),
         "scarce_buckets": scarce_failure_buckets(by_bucket),
         "by_slice_tag": dict(sorted(by_slice.items())),

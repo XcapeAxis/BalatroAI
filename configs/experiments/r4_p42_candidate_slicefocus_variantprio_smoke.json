@@ -1,0 +1,22 @@
+{
+  "schema": "p42_candidate_train_config_v1",
+  "candidate_modes": [
+    "rl_ppo_lite"
+  ],
+  "allow_legacy_fallback": false,
+  "output": {
+    "artifacts_root": "docs/artifacts/research/r4_candidate_train"
+  },
+  "seeds": [
+    "AAAAAAA",
+    "BBBBBBB",
+    "CCCCCCC",
+    "DDDDDDD"
+  ],
+  "rl_config": "configs/experiments/r4_p42_rl_slicefocus_smoke.yaml",
+  "failure_pack_manifest": "docs/artifacts/research/r4_failure_buckets/20260311-150348/failure_pack_manifest.json",
+  "training": {
+    "timeout_sec": 5400
+  },
+  "__yaml_source_sha256__": "1037cae8a2dbda91adb4042340b9bdb1f05ed6c2d56a1d940753c56580f24b58"
+}
