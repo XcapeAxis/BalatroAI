@@ -1,0 +1,22 @@
+{
+  "schema": "p42_candidate_train_config_v1",
+  "candidate_modes": [
+    "rl_ppo_lite"
+  ],
+  "allow_legacy_fallback": false,
+  "output": {
+    "artifacts_root": "docs/artifacts/research/r6_candidate_train"
+  },
+  "seeds": [
+    "AAAAAAA",
+    "BBBBBBB",
+    "CCCCCCC",
+    "DDDDDDD"
+  ],
+  "training": {
+    "timeout_sec": 5400
+  },
+  "rl_config": "configs/experiments/r6_p42_rl_gap_swap_scarcity_nonoverlap_smoke.yaml",
+  "failure_pack_manifest": "docs/artifacts/research/r6_failure_buckets/r6-b10-gap-swap-balanced-nonoverlap-failure-20260312/failure_pack_manifest.json",
+  "__yaml_source_sha256__": "00bbed76d86e8a142374e18c9de6687b089679ab0be77374d6bf2626754fbef5"
+}

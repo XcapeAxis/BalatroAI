@@ -983,6 +983,73 @@ def _select_self_imitation_payload(
     }
 
 
+def _select_prior_rollout_reuse_payload(
+    *,
+    current_step_count: int,
+    rollout_history: list[dict[str, Any]],
+    cfg: PPOConfig,
+) -> dict[str, Any]:
+    disabled_payload = {
+        "enabled": False,
+        "status": "disabled",
+        "selected_step_count": 0,
+        "replay_ratio": 0.0,
+        "selected_source_update_count": 0,
+        "source_update_indices": [],
+        "steps": [],
+    }
+    ratio = max(0.0, float(cfg.train.rollout_reuse_ratio))
+    max_updates = max(0, int(cfg.train.rollout_reuse_updates))
+    max_steps = max(0, int(cfg.train.rollout_reuse_max_steps))
+    if ratio <= 0.0 or max_updates <= 0 or max_steps <= 0 or current_step_count <= 0:
+        return disabled_payload
+    recent_history = [row for row in rollout_history[-max_updates:] if isinstance(row, dict)]
+    if not recent_history:
+        disabled_payload["status"] = "stub"
+        disabled_payload["reason"] = "no_prior_rollouts"
+        return disabled_payload
+
+    selected_limit = min(max_steps, max(1, int(math.ceil(float(current_step_count) * ratio))))
+    candidate_steps: list[dict[str, Any]] = []
+    source_update_indices: list[int] = []
+    for history_row in reversed(recent_history):
+        source_update = max(0, _safe_int(history_row.get("update_index"), 0))
+        source_update_indices.append(source_update)
+        history_steps = history_row.get("steps") if isinstance(history_row.get("steps"), list) else []
+        for step in history_steps:
+            if not isinstance(step, dict):
+                continue
+            cloned = dict(step)
+            info_summary = dict(cloned.get("info_summary") or {}) if isinstance(cloned.get("info_summary"), dict) else {}
+            info_summary["replay_source"] = "prior_rollout_reuse"
+            info_summary["rollout_source_update"] = int(source_update)
+            cloned["info_summary"] = info_summary
+            cloned["replay_source"] = "prior_rollout_reuse"
+            cloned["rollout_source_update"] = int(source_update)
+            candidate_steps.append(cloned)
+            if len(candidate_steps) >= selected_limit:
+                break
+        if len(candidate_steps) >= selected_limit:
+            break
+    if not candidate_steps:
+        disabled_payload["status"] = "stub"
+        disabled_payload["reason"] = "history_present_but_no_steps"
+        disabled_payload["source_update_indices"] = [int(idx) for idx in source_update_indices]
+        disabled_payload["selected_source_update_count"] = len(source_update_indices)
+        return disabled_payload
+    replay_ratio = _safe_ratio(float(len(candidate_steps)), float(current_step_count))
+    return {
+        "enabled": True,
+        "status": "ok",
+        "selected_step_count": len(candidate_steps),
+        "replay_ratio": replay_ratio,
+        "selected_source_update_count": len(source_update_indices),
+        "source_update_indices": [int(idx) for idx in source_update_indices],
+        "actor_refresh_interval_updates": int(cfg.train.actor_refresh_interval_updates),
+        "steps": candidate_steps,
+    }
+
+
 def _runtime_profile_name(runtime_profile: dict[str, Any]) -> str:
     if not isinstance(runtime_profile, dict):
         return ""
@@ -1162,6 +1229,14 @@ def _train_one_seed(
     self_imitation_updates: list[dict[str, Any]] = []
     self_imitation_ratio_hist: list[float] = []
     self_imitation_episode_hist: list[int] = []
+    rollout_reuse_updates: list[dict[str, Any]] = []
+    rollout_reuse_ratio_hist: list[float] = []
+    rollout_reuse_step_hist: list[int] = []
+    rollout_reuse_source_update_hist: list[int] = []
+    actor_policy_lag_hist: list[int] = []
+    cached_rollout_snapshot: dict[str, Any] | None = None
+    cached_rollout_snapshot_update = 0
+    prior_rollout_history: list[dict[str, Any]] = []
 
     for update_idx in range(1, int(cfg.train.max_updates) + 1):
         applied_cfg_dict, stage_payload = scheduler.apply_to_config(cfg_raw, training_iteration=update_idx)
@@ -1207,8 +1282,13 @@ def _train_one_seed(
         }
         hard_case_updates.append(hard_case_update_payload)
         update_started = time.time()
+        actor_refresh_interval = max(1, int(applied_cfg.train.actor_refresh_interval_updates))
+        if cached_rollout_snapshot is None or (update_idx - cached_rollout_snapshot_update) >= actor_refresh_interval:
+            cached_rollout_snapshot = _cpu_model_snapshot(model)
+            cached_rollout_snapshot_update = int(update_idx)
+        policy_lag_updates = max(0, int(update_idx) - int(cached_rollout_snapshot_update))
         rollout_summary = run_distributed_rollout(
-            policy_snapshot=_cpu_model_snapshot(model),
+            policy_snapshot=cached_rollout_snapshot,
             policy_id="ppo_lite",
             num_workers=int(applied_cfg.distributed.num_workers),
             seeds=rollout_seed_schedule,
@@ -1245,8 +1325,14 @@ def _train_one_seed(
             cfg=applied_cfg,
             stage_payload=stage_payload,
         )
+        rollout_reuse_payload = _select_prior_rollout_reuse_payload(
+            current_step_count=len(steps),
+            rollout_history=prior_rollout_history,
+            cfg=applied_cfg,
+        )
+        reuse_steps = rollout_reuse_payload.get("steps") if isinstance(rollout_reuse_payload.get("steps"), list) else []
         replay_steps = self_imitation_payload.get("steps") if isinstance(self_imitation_payload.get("steps"), list) else []
-        train_steps = list(steps) + list(replay_steps)
+        train_steps = list(steps) + list(reuse_steps) + list(replay_steps)
         self_imitation_update_payload = {
             "update_index": int(update_idx),
             "status": str(self_imitation_payload.get("status") or "disabled"),
@@ -1263,6 +1349,17 @@ def _train_one_seed(
             "selected_episodes": list(self_imitation_payload.get("selected_episodes") or [])[:8],
         }
         self_imitation_updates.append(self_imitation_update_payload)
+        rollout_reuse_update_payload = {
+            "update_index": int(update_idx),
+            "status": str(rollout_reuse_payload.get("status") or "disabled"),
+            "selected_step_count": int(rollout_reuse_payload.get("selected_step_count") or 0),
+            "replay_ratio": _safe_float(rollout_reuse_payload.get("replay_ratio"), 0.0),
+            "selected_source_update_count": int(rollout_reuse_payload.get("selected_source_update_count") or 0),
+            "source_update_indices": list(rollout_reuse_payload.get("source_update_indices") or []),
+            "actor_refresh_interval_updates": actor_refresh_interval,
+            "policy_lag_updates": int(policy_lag_updates),
+        }
+        rollout_reuse_updates.append(rollout_reuse_update_payload)
 
         oom_policy = str(resolved_runtime.get("oom_fallback_policy") or "reduce_batch").strip().lower()
         attempt_cfg = applied_cfg
@@ -1323,6 +1420,10 @@ def _train_one_seed(
         invalid_hist.append(invalid_rate)
         self_imitation_ratio_hist.append(_safe_float(self_imitation_update_payload.get("replay_ratio"), 0.0))
         self_imitation_episode_hist.append(int(self_imitation_update_payload.get("selected_episode_count") or 0))
+        rollout_reuse_ratio_hist.append(_safe_float(rollout_reuse_update_payload.get("replay_ratio"), 0.0))
+        rollout_reuse_step_hist.append(int(rollout_reuse_update_payload.get("selected_step_count") or 0))
+        rollout_reuse_source_update_hist.append(int(rollout_reuse_update_payload.get("selected_source_update_count") or 0))
+        actor_policy_lag_hist.append(int(policy_lag_updates))
         policy_loss_hist.append(_safe_float(update_metrics.get("policy_loss"), 0.0))
         value_loss_hist.append(_safe_float(update_metrics.get("value_loss"), 0.0))
         entropy_hist.append(_safe_float(update_metrics.get("entropy"), 0.0))
@@ -1375,10 +1476,16 @@ def _train_one_seed(
                 "oom_restart_count": oom_restart_count,
                 "self_imitation_selected_episodes": int(self_imitation_update_payload.get("selected_episode_count") or 0),
                 "self_imitation_replay_ratio": _safe_float(self_imitation_update_payload.get("replay_ratio"), 0.0),
+                "rollout_reuse_selected_steps": int(rollout_reuse_update_payload.get("selected_step_count") or 0),
+                "rollout_reuse_ratio": _safe_float(rollout_reuse_update_payload.get("replay_ratio"), 0.0),
+                "rollout_reuse_source_updates": int(rollout_reuse_update_payload.get("selected_source_update_count") or 0),
+                "actor_refresh_interval_updates": int(actor_refresh_interval),
+                "policy_lag_updates": int(policy_lag_updates),
             },
             "runtime_profile": runtime_profile,
             "hard_case_sampling": hard_case_update_payload,
             "self_imitation": self_imitation_update_payload,
+            "rollout_reuse": rollout_reuse_update_payload,
         }
         save_torch_checkpoint(last_ckpt, checkpoint_payload)
         if mean_reward >= best_reward:
@@ -1415,6 +1522,11 @@ def _train_one_seed(
                 "hard_case_selected_failures": int(hard_case_plan.get("selected_failure_count") or 0),
                 "self_imitation_selected_episodes": int(self_imitation_update_payload.get("selected_episode_count") or 0),
                 "self_imitation_replay_ratio": _safe_float(self_imitation_update_payload.get("replay_ratio"), 0.0),
+                "rollout_reuse_selected_steps": int(rollout_reuse_update_payload.get("selected_step_count") or 0),
+                "rollout_reuse_ratio": _safe_float(rollout_reuse_update_payload.get("replay_ratio"), 0.0),
+                "rollout_reuse_source_updates": int(rollout_reuse_update_payload.get("selected_source_update_count") or 0),
+                "actor_refresh_interval_updates": int(actor_refresh_interval),
+                "policy_lag_updates": int(policy_lag_updates),
                 "learner_device": learner_device,
                 "rollout_device": rollout_device,
                 "gpu_mem_mb": gpu_mem_mb,
@@ -1448,6 +1560,11 @@ def _train_one_seed(
                     "hard_case_selected_failures": int(hard_case_plan.get("selected_failure_count") or 0),
                     "self_imitation_selected_episodes": int(self_imitation_update_payload.get("selected_episode_count") or 0),
                     "self_imitation_replay_ratio": _safe_float(self_imitation_update_payload.get("replay_ratio"), 0.0),
+                    "rollout_reuse_selected_steps": int(rollout_reuse_update_payload.get("selected_step_count") or 0),
+                    "rollout_reuse_ratio": _safe_float(rollout_reuse_update_payload.get("replay_ratio"), 0.0),
+                    "rollout_reuse_source_updates": int(rollout_reuse_update_payload.get("selected_source_update_count") or 0),
+                    "actor_refresh_interval_updates": int(actor_refresh_interval),
+                    "policy_lag_updates": int(policy_lag_updates),
                 },
                 device_profile=runtime_profile,
                 learner_device=learner_device,
@@ -1457,6 +1574,19 @@ def _train_one_seed(
                 warning=(warnings[-1] if warnings else ""),
             ),
         )
+        history_step_cap = max(
+            max(1, int(applied_cfg.train.rollout_reuse_max_steps or 0)),
+            min(len(steps), max(1, int(math.ceil(float(len(steps)) * max(float(applied_cfg.train.rollout_reuse_ratio), 0.0))))),
+        )
+        prior_rollout_history.append(
+            {
+                "update_index": int(update_idx),
+                "steps": [dict(row) for row in steps[:history_step_cap] if isinstance(row, dict)],
+            }
+        )
+        history_keep = max(0, int(applied_cfg.train.rollout_reuse_updates or 0))
+        if history_keep > 0 and len(prior_rollout_history) > history_keep:
+            prior_rollout_history = prior_rollout_history[-history_keep:]
 
     if warnings:
         with warnings_log_path.open("a", encoding="utf-8", newline="\n") as fp:
@@ -1492,6 +1622,11 @@ def _train_one_seed(
         "hard_case_mean_replay_weight": _safe_float(hard_case_plan.get("mean_replay_weight"), 0.0),
         "self_imitation_selected_episodes": int(sum(self_imitation_episode_hist)),
         "self_imitation_replay_ratio": float(statistics.mean(self_imitation_ratio_hist)) if self_imitation_ratio_hist else 0.0,
+        "rollout_reuse_selected_steps": int(sum(rollout_reuse_step_hist)),
+        "rollout_reuse_replay_ratio": float(statistics.mean(rollout_reuse_ratio_hist)) if rollout_reuse_ratio_hist else 0.0,
+        "rollout_reuse_source_updates": float(statistics.mean(rollout_reuse_source_update_hist)) if rollout_reuse_source_update_hist else 0.0,
+        "actor_refresh_interval_updates": int(cfg.train.actor_refresh_interval_updates),
+        "mean_policy_lag_updates": float(statistics.mean(actor_policy_lag_hist)) if actor_policy_lag_hist else 0.0,
     }
     hard_case_schedule_path = seed_dir / "hard_case_schedule.json"
     _write_json(
@@ -1524,6 +1659,24 @@ def _train_one_seed(
             "mean_replay_ratio": float(statistics.mean(self_imitation_ratio_hist)) if self_imitation_ratio_hist else 0.0,
         },
     )
+    rollout_reuse_path = seed_dir / "rollout_reuse_stats.json"
+    _write_json(
+        rollout_reuse_path,
+        {
+            "schema": "p44_rollout_reuse_stats_v1",
+            "generated_at": _now_iso(),
+            "seed": str(seed),
+            "enabled": any(str(row.get("status") or "") == "ok" for row in rollout_reuse_updates),
+            "actor_refresh_interval_updates": int(cfg.train.actor_refresh_interval_updates),
+            "rollout_reuse_ratio": float(cfg.train.rollout_reuse_ratio),
+            "rollout_reuse_updates": int(cfg.train.rollout_reuse_updates),
+            "rollout_reuse_max_steps": int(cfg.train.rollout_reuse_max_steps),
+            "updates": rollout_reuse_updates,
+            "selected_step_total": int(sum(rollout_reuse_step_hist)),
+            "mean_replay_ratio": float(statistics.mean(rollout_reuse_ratio_hist)) if rollout_reuse_ratio_hist else 0.0,
+            "mean_policy_lag_updates": float(statistics.mean(actor_policy_lag_hist)) if actor_policy_lag_hist else 0.0,
+        },
+    )
     _write_json(seed_dir / "metrics.json", metrics)
     return {
         "seed": str(seed),
@@ -1537,6 +1690,7 @@ def _train_one_seed(
         "runtime_profile": runtime_profile,
         "hard_case_schedule_json": str(hard_case_schedule_path),
         "self_imitation_stats_json": str(self_imitation_path),
+        "rollout_reuse_stats_json": str(rollout_reuse_path),
     }
 
 
@@ -1786,6 +1940,12 @@ def run_ppo_lite_training(
         payload = _read_json_payload(stats_path) if str(stats_path).strip() else None
         if isinstance(payload, dict):
             self_imitation_seed_stats.append(payload)
+    rollout_reuse_seed_stats: list[dict[str, Any]] = []
+    for row in seed_results:
+        stats_path = Path(str(row.get("rollout_reuse_stats_json") or ""))
+        payload = _read_json_payload(stats_path) if str(stats_path).strip() else None
+        if isinstance(payload, dict):
+            rollout_reuse_seed_stats.append(payload)
 
     reward_schedule_payload = {
         "schema": "p44_reward_schedule_v1",
@@ -1960,6 +2120,56 @@ def run_ppo_lite_training(
             f"- mean_replay_ratio: `{best_trajectory_stats_payload['mean_replay_ratio']}`",
         ],
     )
+    rollout_reuse_manifest_json = run_dir / "rollout_reuse_manifest.json"
+    rollout_reuse_stats_json = run_dir / "rollout_reuse_stats.json"
+    rollout_reuse_stats_md = run_dir / "rollout_reuse_stats.md"
+    rollout_reuse_stats_payload = {
+        "schema": "p44_rollout_reuse_run_stats_v1",
+        "generated_at": _now_iso(),
+        "run_id": run_token,
+        "enabled": any(bool(row.get("enabled")) for row in rollout_reuse_seed_stats),
+        "actor_refresh_interval_updates": int(cfg.train.actor_refresh_interval_updates),
+        "rollout_reuse_ratio": float(cfg.train.rollout_reuse_ratio),
+        "rollout_reuse_updates": int(cfg.train.rollout_reuse_updates),
+        "rollout_reuse_max_steps": int(cfg.train.rollout_reuse_max_steps),
+        "selected_step_total": int(sum(int(row.get("selected_step_total") or 0) for row in rollout_reuse_seed_stats)),
+        "mean_replay_ratio": (
+            float(statistics.mean([_safe_float(row.get("mean_replay_ratio"), 0.0) for row in rollout_reuse_seed_stats]))
+            if rollout_reuse_seed_stats
+            else 0.0
+        ),
+        "mean_policy_lag_updates": (
+            float(statistics.mean([_safe_float(row.get("mean_policy_lag_updates"), 0.0) for row in rollout_reuse_seed_stats]))
+            if rollout_reuse_seed_stats
+            else 0.0
+        ),
+        "seed_stats": rollout_reuse_seed_stats,
+    }
+    _write_json(
+        rollout_reuse_manifest_json,
+        {
+            "schema": "p44_rollout_reuse_manifest_v1",
+            "generated_at": _now_iso(),
+            "run_id": run_token,
+            "seed_stats": [str(row.get("seed") or "") for row in rollout_reuse_seed_stats],
+        },
+    )
+    _write_json(rollout_reuse_stats_json, rollout_reuse_stats_payload)
+    _write_markdown(
+        rollout_reuse_stats_md,
+        [
+            f"# Rollout Reuse Stats ({run_token})",
+            "",
+            f"- enabled: `{rollout_reuse_stats_payload['enabled']}`",
+            f"- actor_refresh_interval_updates: `{rollout_reuse_stats_payload['actor_refresh_interval_updates']}`",
+            f"- rollout_reuse_ratio: `{rollout_reuse_stats_payload['rollout_reuse_ratio']}`",
+            f"- rollout_reuse_updates: `{rollout_reuse_stats_payload['rollout_reuse_updates']}`",
+            f"- rollout_reuse_max_steps: `{rollout_reuse_stats_payload['rollout_reuse_max_steps']}`",
+            f"- selected_step_total: `{rollout_reuse_stats_payload['selected_step_total']}`",
+            f"- mean_replay_ratio: `{rollout_reuse_stats_payload['mean_replay_ratio']}`",
+            f"- mean_policy_lag_updates: `{rollout_reuse_stats_payload['mean_policy_lag_updates']}`",
+        ],
+    )
 
     ok_rows = [row for row in seed_results if str(row.get("status")) == "ok"]
     checkpoint_candidates = [
@@ -2077,6 +2287,23 @@ def run_ppo_lite_training(
         "self_imitation_replay_ratio": _safe_float(best_trajectory_stats_payload.get("mean_replay_ratio"), 0.0),
         "self_imitation_stage_min": str(best_trajectory_stats_payload.get("stage_min") or ""),
         "self_imitation_quality_threshold": _safe_float(best_trajectory_stats_payload.get("quality_threshold"), 0.0),
+        "actor_refresh_interval_updates": int(cfg.train.actor_refresh_interval_updates),
+        "rollout_reuse_ratio": float(cfg.train.rollout_reuse_ratio),
+        "rollout_reuse_updates": int(cfg.train.rollout_reuse_updates),
+        "rollout_reuse_max_steps": int(cfg.train.rollout_reuse_max_steps),
+        "rollout_reuse_selected_steps": int(
+            sum(int(row.get("selected_step_total") or 0) for row in rollout_reuse_seed_stats)
+        ),
+        "rollout_reuse_replay_ratio": (
+            float(statistics.mean([_safe_float(row.get("mean_replay_ratio"), 0.0) for row in rollout_reuse_seed_stats]))
+            if rollout_reuse_seed_stats
+            else 0.0
+        ),
+        "mean_policy_lag_updates": (
+            float(statistics.mean([_safe_float(row.get("mean_policy_lag_updates"), 0.0) for row in rollout_reuse_seed_stats]))
+            if rollout_reuse_seed_stats
+            else 0.0
+        ),
         "certification_status": "fast_pass",
     }
     bucket_target_weights = {
@@ -2186,6 +2413,10 @@ def run_ppo_lite_training(
         "failure_bucket_coverage": int(hard_case_plan.get("failure_bucket_coverage") or 0),
         "known_failure_buckets": list(hard_case_plan.get("known_failure_buckets") or KNOWN_FAILURE_BUCKETS),
         "self_imitation_stage_min": str(cfg.self_imitation.stage_min or ""),
+        "actor_refresh_interval_updates": int(cfg.train.actor_refresh_interval_updates),
+        "rollout_reuse_ratio": float(cfg.train.rollout_reuse_ratio),
+        "rollout_reuse_updates": int(cfg.train.rollout_reuse_updates),
+        "rollout_reuse_max_steps": int(cfg.train.rollout_reuse_max_steps),
         "certification_status": "fast_pass",
     }
     slice_metrics_payload = {
@@ -2240,6 +2471,8 @@ def run_ppo_lite_training(
             "bucket_replay_stats_json": str(bucket_replay_stats_json),
             "best_trajectory_manifest_json": str(best_trajectory_manifest_json),
             "best_trajectory_stats_json": str(best_trajectory_stats_json),
+            "rollout_reuse_manifest_json": str(rollout_reuse_manifest_json),
+            "rollout_reuse_stats_json": str(rollout_reuse_stats_json),
             "curriculum_plan": str(curriculum_plan_path),
             "curriculum_applied": str(curriculum_applied_path),
             "reward_schedule_json": str(reward_schedule_json),
@@ -2282,6 +2515,7 @@ def run_ppo_lite_training(
                     "bucket_metrics_json": str(bucket_metrics_json.resolve()),
                     "slice_metrics_json": str(slice_metrics_json.resolve()),
                     "best_trajectory_stats_json": str(best_trajectory_stats_json.resolve()),
+                    "rollout_reuse_stats_json": str(rollout_reuse_stats_json.resolve()),
                     "reward_schedule_json": str(reward_schedule_json.resolve()),
                 },
                 "curriculum_profile": str(curriculum_plan_path.resolve()),
@@ -2310,6 +2544,10 @@ def run_ppo_lite_training(
             f"- hard_case_selected_failures: `{metrics_payload.get('hard_case_selected_failures')}`",
             f"- self_imitation_selected_episodes: `{metrics_payload.get('self_imitation_selected_episodes')}`",
             f"- self_imitation_replay_ratio: `{metrics_payload.get('self_imitation_replay_ratio')}`",
+            f"- actor_refresh_interval_updates: `{metrics_payload.get('actor_refresh_interval_updates')}`",
+            f"- rollout_reuse_ratio: `{metrics_payload.get('rollout_reuse_ratio')}`",
+            f"- rollout_reuse_selected_steps: `{metrics_payload.get('rollout_reuse_selected_steps')}`",
+            f"- mean_policy_lag_updates: `{metrics_payload.get('mean_policy_lag_updates')}`",
             f"- certification_status: `{metrics_payload.get('certification_status')}`",
         ],
     )
@@ -2326,6 +2564,9 @@ def run_ppo_lite_training(
             f"- hard_case_selected_failures: `{metrics_payload.get('hard_case_selected_failures')}`",
             f"- hard_case_failure_type_count: `{metrics_payload.get('hard_case_failure_type_count')}`",
             f"- self_imitation_replay_ratio: `{metrics_payload.get('self_imitation_replay_ratio')}`",
+            f"- rollout_reuse_replay_ratio: `{metrics_payload.get('rollout_reuse_replay_ratio')}`",
+            f"- rollout_reuse_selected_steps: `{metrics_payload.get('rollout_reuse_selected_steps')}`",
+            f"- mean_policy_lag_updates: `{metrics_payload.get('mean_policy_lag_updates')}`",
             "",
             "## Bucket Replay Coverage",
             *(
@@ -2363,6 +2604,8 @@ def run_ppo_lite_training(
                 "entropy": metrics_payload.get("entropy"),
                 "kl_divergence": metrics_payload.get("kl_divergence"),
                 "invalid_action_rate": metrics_payload.get("invalid_action_rate"),
+                "rollout_reuse_replay_ratio": metrics_payload.get("rollout_reuse_replay_ratio"),
+                "mean_policy_lag_updates": metrics_payload.get("mean_policy_lag_updates"),
                 "candidate_checkpoint": best_checkpoint,
             },
             device_profile=runtime_profile_payload,
@@ -2394,6 +2637,8 @@ def run_ppo_lite_training(
         "slice_metrics_json": str(slice_metrics_json),
         "best_trajectory_manifest_json": str(best_trajectory_manifest_json),
         "best_trajectory_stats_json": str(best_trajectory_stats_json),
+        "rollout_reuse_manifest_json": str(rollout_reuse_manifest_json),
+        "rollout_reuse_stats_json": str(rollout_reuse_stats_json),
         "summary_md": str(run_dir / "summary.md"),
         "training_summary_md": str(training_summary_md),
         "eval_seed_results": str(eval_summary.get("seed_results_json") or ""),

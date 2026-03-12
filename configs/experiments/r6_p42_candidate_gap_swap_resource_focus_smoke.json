@@ -1,0 +1,22 @@
+{
+  "schema": "p42_candidate_train_config_v1",
+  "candidate_modes": [
+    "rl_ppo_lite"
+  ],
+  "allow_legacy_fallback": false,
+  "output": {
+    "artifacts_root": "docs/artifacts/research/r6_candidate_train"
+  },
+  "seeds": [
+    "AAAAAAA",
+    "BBBBBBB",
+    "CCCCCCC",
+    "DDDDDDD"
+  ],
+  "training": {
+    "timeout_sec": 5400
+  },
+  "rl_config": "configs/experiments/r6_p42_rl_gap_swap_resource_focus_smoke.yaml",
+  "failure_pack_manifest": "docs/artifacts/research/r6_failure_buckets/r6-b8-gap-swap-resource-shop-failure-20260312/failure_pack_manifest.json",
+  "__yaml_source_sha256__": "d32150dc410122e8f483788c83d8c2dc2411cb0cd45d7d135e6b3c79fd880852"
+}

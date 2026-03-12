@@ -1,0 +1,22 @@
+{
+  "schema": "p42_candidate_train_config_v1",
+  "candidate_modes": [
+    "rl_ppo_lite"
+  ],
+  "allow_legacy_fallback": false,
+  "output": {
+    "artifacts_root": "docs/artifacts/research/r6_candidate_train"
+  },
+  "seeds": [
+    "AAAAAAA",
+    "BBBBBBB",
+    "CCCCCCC",
+    "DDDDDDD"
+  ],
+  "rl_config": "configs/experiments/r6_p42_rl_actorlag_reuse_smoke.yaml",
+  "failure_pack_manifest": "docs/artifacts/research/r4_failure_buckets/20260311-151416/failure_pack_manifest.json",
+  "training": {
+    "timeout_sec": 5400
+  },
+  "__yaml_source_sha256__": "e62584f74d35df47a30015f051b246cd4cac639a1fa5d69991a104951078dc1d"
+}

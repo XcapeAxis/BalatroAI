@@ -595,3 +595,12 @@ R5 的最终结论不是“source 进不去”，而是“source 已经进去了
 - `B13` 证明 `arena_compound_slice_seed` 与 `shop_or_economy_misallocation` 已经进入 PPO 训练；
 - `C3` 认证结果 candidate `57.25`，相对当前 strongest certified baseline `104.5` 退化 `-47.25`；
 - 因此 R5 达成 Outcome B：richer-source family plateau 已被进一步证实，下一默认方向应切到更高 ROI 的 pure RL 子方向，而不是继续在同一家族里微调。
+
+
+## R6 研究程序收口（2026-03-12）
+
+- strongest certified pure-RL 仍是 `rl_policy:p42_rl_candidate:20260311-221824-candidate-rl:aaaaaaa,bbbbbbb,ccccccc,ddddddd:aec12dffb2`，认证分数 `104.5`。
+- R6 先后尝试了 `architecture feasibility`、`stage-aware source scheduling`、`gap-swap richer-source`，并在 `C5/C6` 之后自动换挡到 `architecture-v2 feasibility`。
+- richer-source family 已经证明 source 扩容是真实发生的，但 `C5=67.5`、`C6=58.5` 说明该 family 在认证级别上形成 plateau。
+- `B13/B14` 则证明 actor lag / rollout reuse 可以在 balanced non-overlap pack 上落地，为下一轮纯 RL actor-learner spike 提供了最小可行基础。
+- 下一优先级不是回到 warm-start，而是先给 `architecture-v2` 做正式认证；若仍然无法接近 `104.5`，则再回到 richer-source expansion v2。

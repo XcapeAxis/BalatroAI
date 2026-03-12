@@ -71,6 +71,10 @@ class PPOTrainConfig:
     invalid_action_warn_threshold: float = 0.15
     max_kl_warn: float = 0.20
     nan_fail_fast: bool = True
+    actor_refresh_interval_updates: int = 1
+    rollout_reuse_ratio: float = 0.0
+    rollout_reuse_updates: int = 0
+    rollout_reuse_max_steps: int = 0
 
 
 @dataclass
@@ -331,6 +335,22 @@ class PPOConfig:
             ),
             max_kl_warn=max(0.0, _safe_float(train_raw.get("max_kl_warn"), 0.20)),
             nan_fail_fast=bool(train_raw.get("nan_fail_fast", True)),
+            actor_refresh_interval_updates=max(
+                1,
+                _safe_int(train_raw.get("actor_refresh_interval_updates"), 1),
+            ),
+            rollout_reuse_ratio=min(
+                1.0,
+                max(0.0, _safe_float(train_raw.get("rollout_reuse_ratio"), 0.0)),
+            ),
+            rollout_reuse_updates=max(
+                0,
+                _safe_int(train_raw.get("rollout_reuse_updates"), 0),
+            ),
+            rollout_reuse_max_steps=max(
+                0,
+                _safe_int(train_raw.get("rollout_reuse_max_steps"), 0),
+            ),
         )
         return cls(
             schema=str(payload.get("schema") or "p44_ppo_lite_config_v1"),
