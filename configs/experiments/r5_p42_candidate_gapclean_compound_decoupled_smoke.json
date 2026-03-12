@@ -1,0 +1,22 @@
+{
+  "schema": "p42_candidate_train_config_v1",
+  "candidate_modes": [
+    "rl_ppo_lite"
+  ],
+  "allow_legacy_fallback": false,
+  "output": {
+    "artifacts_root": "docs/artifacts/research/r5_candidate_train"
+  },
+  "seeds": [
+    "AAAAAAA",
+    "BBBBBBB",
+    "CCCCCCC",
+    "DDDDDDD"
+  ],
+  "rl_config": "configs/experiments/r5_p42_rl_source_rescue_slicefocus_smoke.yaml",
+  "failure_pack_manifest": "docs/artifacts/research/r5_failure_buckets/r5-b12-gapclean-compound-decoupled-20260312-111437/failure_pack_manifest.json",
+  "training": {
+    "timeout_sec": 5400
+  },
+  "__yaml_source_sha256__": "57b832a455cab50f5f795c1277535302e6833bbddb86949da3a32816e95efc1c"
+}

@@ -1,0 +1,114 @@
+{
+  "schema": "p41_failure_mining_config_v1",
+  "output": {
+    "artifacts_root": "docs/artifacts/research/r5_failure_buckets"
+  },
+  "input": {
+    "p39_root": "docs/artifacts/research/r4_certification/20260311-221824/arena_eval/champion_eval",
+    "arena_run_dirs": [
+      "docs/artifacts/research/r2s3_certification/r2s3-c4-certification/arena_eval/arena_runs/r2s3-c4-certification-arena",
+      "docs/artifacts/research/r3_certification/r3-c3-gapfocus-cert/arena_eval/arena_runs/r3-c3-gapfocus-cert-arena",
+      "docs/artifacts/research/r4_certification/20260311-150010/arena_eval/arena_runs/20260311-150010-arena",
+      "docs/artifacts/research/r4_certification/20260311-221824/arena_eval/arena_runs/20260311-221824-arena"
+    ],
+    "triage_report_jsons": [
+      "docs/artifacts/research/r2s3_certification/r2s3-c4-certification/triage_report.json",
+      "docs/artifacts/research/r3_certification/r3-c3-gapfocus-cert/triage_report.json",
+      "docs/artifacts/research/r4_certification/20260311-150010/triage_report.json",
+      "docs/artifacts/research/r4_certification/20260311-221824/triage_report.json"
+    ],
+    "promotion_decision_jsons": [
+      "docs/artifacts/research/r2s3_certification/r2s3-c4-certification/promotion_decision.json",
+      "docs/artifacts/research/r3_certification/r3-c3-gapfocus-cert/promotion_decision.json",
+      "docs/artifacts/research/r4_certification/20260311-150010/promotion_decision.json",
+      "docs/artifacts/research/r4_certification/20260311-221824/promotion_decision.json"
+    ]
+  },
+  "criteria": {
+    "candidate_policy": "model_policy",
+    "champion_policy": "heuristic_baseline",
+    "bottom_quantile": 0.7,
+    "champion_score_regression_ratio": 0.025,
+    "high_risk_round_threshold": 2,
+    "max_failures": 224,
+    "max_failures_per_type": 32,
+    "max_failures_per_seed": 4,
+    "max_failures_per_overlap_key": 1,
+    "allow_overlap_variant_swaps": true,
+    "overlap_swap_source_variants_allowlist": [
+      "bucket:shop_or_economy_misallocation",
+      "bucket:position_sensitive_misplay"
+    ],
+    "max_slice_gap_failures_per_source": 10,
+    "slice_gap_priority_weight": 1.48,
+    "max_candidate_slice_failures_per_source": 6,
+    "candidate_slice_priority_weight": 1.46,
+    "max_compound_slice_failures_per_source": 5,
+    "compound_slice_priority_weight": 1.28,
+    "skip_unknown_slice_gap_tags": true,
+    "max_failures_per_bucket": {
+      "resource_pressure_misplay": 28,
+      "shop_or_economy_misallocation": 24,
+      "discard_mismanagement": 16,
+      "position_sensitive_misplay": 18,
+      "stateful_joker_misplay": 16,
+      "low_score_survival": 18,
+      "early_collapse": 14,
+      "risk_undercommit": 8,
+      "risk_overcommit": 12
+    },
+    "min_failures_per_bucket": {
+      "resource_pressure_misplay": 5,
+      "shop_or_economy_misallocation": 4,
+      "position_sensitive_misplay": 3,
+      "low_score_survival": 3,
+      "early_collapse": 2
+    },
+    "min_failures_per_source_type": {
+      "arena_slice_gap_seed": 3,
+      "arena_candidate_slice_seed": 2,
+      "arena_compound_slice_seed": 3
+    },
+    "min_failures_per_source_variant": {
+      "bucket:resource_pressure_misplay": 2,
+      "bucket:shop_or_economy_misallocation": 3,
+      "bucket:position_sensitive_misplay": 2,
+      "slice_stage:early": 1
+    },
+    "max_failures_per_source_variant": {
+      "slice_action_type:discard": 3,
+      "slice_action_type:play": 3,
+      "bucket:resource_pressure_misplay": 5,
+      "bucket:shop_or_economy_misallocation": 4,
+      "bucket:position_sensitive_misplay": 4,
+      "slice_stage:early": 3
+    },
+    "max_failures_per_source": {
+      "r2s3-c4-certification-arena": 48,
+      "r3-c3-gapfocus-cert-arena": 48,
+      "20260311-150010-arena": 56,
+      "20260311-221824-arena": 64
+    },
+    "bucket_priority_weights": {
+      "resource_pressure_misplay": 1.46,
+      "shop_or_economy_misallocation": 1.58,
+      "position_sensitive_misplay": 1.48,
+      "stateful_joker_misplay": 1.3,
+      "discard_mismanagement": 0.96,
+      "low_score_survival": 1.14,
+      "early_collapse": 1.04,
+      "risk_undercommit": 0.64,
+      "risk_overcommit": 0.98
+    },
+    "source_priority_weights": {
+      "r2s3-c4-certification-arena": 1.0,
+      "r3-c3-gapfocus-cert-arena": 1.16,
+      "20260311-150010-arena": 1.24,
+      "20260311-221824-arena": 1.36
+    }
+  },
+  "quick": {
+    "max_episode_scan": 1200
+  },
+  "__yaml_source_sha256__": "2ba5eeb53b649525ce1a4790856d6cc076c0db2cf2370153acfaec7503b91765"
+}

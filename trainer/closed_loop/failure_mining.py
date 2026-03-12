@@ -415,14 +415,20 @@ def _row_selection_matches_policy(
     selection_by_bucket: Counter[str],
     selection_by_source: Counter[str],
     selection_by_source_type: Counter[str],
+    selection_by_source_variant: Counter[str],
+    selection_by_overlap_key: Counter[str],
     max_failures_per_type: int,
     max_failures_per_seed: int,
     max_failures_per_bucket: dict[str, int],
     max_failures_per_source: dict[str, int],
+    max_failures_per_source_variant: dict[str, int],
+    max_failures_per_overlap_key: int,
 ) -> bool:
     seed = str(payload.get("seed") or "")
     bucket = str(payload.get("failure_bucket") or "")
     source_run_id = str(payload.get("source_run_id") or "")
+    source_variant = str(payload.get("source_variant") or "")
+    overlap_key = _selection_overlap_key(payload)
     failure_types = payload.get("failure_types") if isinstance(payload.get("failure_types"), list) else []
     if max_failures_per_seed > 0 and selection_by_seed[seed] >= max_failures_per_seed:
         return False
@@ -433,6 +439,11 @@ def _row_selection_matches_policy(
         return False
     source_cap = _safe_int(max_failures_per_source.get(source_run_id), 0)
     if source_cap > 0 and selection_by_source[source_run_id] >= source_cap:
+        return False
+    variant_cap = _safe_int(max_failures_per_source_variant.get(source_variant), 0)
+    if source_variant and variant_cap > 0 and selection_by_source_variant[source_variant] >= variant_cap:
+        return False
+    if overlap_key and max_failures_per_overlap_key > 0 and selection_by_overlap_key[overlap_key] >= max_failures_per_overlap_key:
         return False
     return True
 
@@ -502,8 +513,17 @@ def _bucket_from_slice_tag(tag: str) -> str:
     return ""
 
 
-def _source_variant_from_slice_tag(tag: str) -> str:
+def _canonicalize_source_variant_token(tag: str) -> str:
     token = str(tag or "").strip().lower()
+    if token.startswith("slice_position_sensitive:yes"):
+        return token.replace(":yes", ":true", 1)
+    if token.startswith("slice_stateful_joker_present:yes"):
+        return token.replace(":yes", ":true", 1)
+    return token
+
+
+def _source_variant_from_slice_tag(tag: str) -> str:
+    token = _canonicalize_source_variant_token(tag)
     if not token:
         return ""
     if token.endswith(":unknown") or token.endswith(":none") or token.endswith(":absent") or token.endswith(":false"):
@@ -529,7 +549,22 @@ def _infer_source_variant(*, slice_tags: list[str], failure_bucket: str) -> str:
         for tag in slice_tags
         if _source_variant_from_slice_tag(tag)
     ]
+    bucket_token = str(failure_bucket or "").strip().lower()
+    bucket_source_override = {
+        "resource_pressure_misplay": "bucket:resource_pressure_misplay",
+        "shop_or_economy_misallocation": "bucket:shop_or_economy_misallocation",
+        "position_sensitive_misplay": "bucket:position_sensitive_misplay",
+        "stateful_joker_misplay": "bucket:stateful_joker_misplay",
+    }
+    bucket_override_requires_explicit = {
+        "position_sensitive_misplay": {"slice_position_sensitive:true"},
+        "stateful_joker_misplay": {"slice_stateful_joker_present:true"},
+    }
     if actionable_tokens:
+        if bucket_token in bucket_source_override:
+            required_tokens = bucket_override_requires_explicit.get(bucket_token, set())
+            if not required_tokens or not any(token in required_tokens for token in actionable_tokens):
+                return bucket_source_override[bucket_token]
         priority = {
             "slice_position_sensitive:true": 0,
             "slice_stateful_joker_present:true": 1,
@@ -542,10 +577,16 @@ def _infer_source_variant(*, slice_tags: list[str], failure_bucket: str) -> str:
         }
         actionable_tokens.sort(key=lambda token: (priority.get(token, 99), token))
         return actionable_tokens[0]
-    bucket_token = str(failure_bucket or "").strip().lower()
     if bucket_token:
         return f"bucket:{bucket_token}"
     return ""
+
+
+def _preferred_source_variant(*, primary_slice_tag: str, slice_tags: list[str], failure_bucket: str) -> str:
+    bucket_or_fallback = _infer_source_variant(slice_tags=slice_tags, failure_bucket=failure_bucket)
+    if bucket_or_fallback.startswith("bucket:"):
+        return bucket_or_fallback
+    return _source_variant_from_slice_tag(primary_slice_tag) or bucket_or_fallback
 
 
 def _compound_actionable_slice_tags(slice_tags: list[str], *, primary_tag: str) -> list[str]:
@@ -566,6 +607,238 @@ def _compound_actionable_slice_tags(slice_tags: list[str], *, primary_tag: str) 
         seen.add(lowered)
         results.append(token)
     return results
+
+
+def _selection_overlap_key(payload: dict[str, Any]) -> str:
+    source_run_id = str(payload.get("source_run_id") or "").strip()
+    policy_id = str(payload.get("policy_id") or "").strip()
+    seed = str(payload.get("seed") or "").strip()
+    episode_index = _safe_int(payload.get("episode_index"), -1)
+    if source_run_id or policy_id or seed or episode_index >= 0:
+        return f"{source_run_id}|{policy_id}|{seed}|{episode_index}"
+    return str(payload.get("episode_id") or "").strip()
+
+
+def _decrement_counter(counter: Counter[str], token: str) -> None:
+    key = str(token or "").strip()
+    if not key:
+        return
+    counter[key] -= 1
+    if counter[key] <= 0:
+        del counter[key]
+
+
+def _can_swap_overlap_selected_row(
+    *,
+    candidate_payload: dict[str, Any],
+    existing_payload: dict[str, Any],
+    selection_by_type: Counter[str],
+    selection_by_seed: Counter[str],
+    selection_by_bucket: Counter[str],
+    selection_by_source: Counter[str],
+    selection_by_source_type: Counter[str],
+    selection_by_source_variant: Counter[str],
+    selection_by_overlap_key: Counter[str],
+    max_failures_per_type: int,
+    max_failures_per_seed: int,
+    max_failures_per_bucket: dict[str, int],
+    max_failures_per_source: dict[str, int],
+    max_failures_per_source_variant: dict[str, int],
+    max_failures_per_overlap_key: int,
+    min_failures_per_bucket: dict[str, int],
+    min_failures_per_source_type: dict[str, int],
+    min_failures_per_source_variant: dict[str, int],
+) -> bool:
+    candidate_overlap = _selection_overlap_key(candidate_payload)
+    existing_overlap = _selection_overlap_key(existing_payload)
+    if not candidate_overlap or candidate_overlap != existing_overlap:
+        return False
+
+    candidate_variant = str(candidate_payload.get("source_variant") or "").strip()
+    existing_variant = str(existing_payload.get("source_variant") or "").strip()
+    if not candidate_variant or candidate_variant == existing_variant:
+        return False
+
+    temp_by_type = Counter(selection_by_type)
+    temp_by_seed = Counter(selection_by_seed)
+    temp_by_bucket = Counter(selection_by_bucket)
+    temp_by_source = Counter(selection_by_source)
+    temp_by_source_type = Counter(selection_by_source_type)
+    temp_by_source_variant = Counter(selection_by_source_variant)
+    temp_by_overlap_key = Counter(selection_by_overlap_key)
+
+    existing_seed = str(existing_payload.get("seed") or "").strip()
+    existing_bucket = str(existing_payload.get("failure_bucket") or "").strip()
+    existing_source = str(existing_payload.get("source_run_id") or "").strip()
+    existing_source_type = str(existing_payload.get("source_type") or "").strip()
+
+    _decrement_counter(temp_by_seed, existing_seed)
+    _decrement_counter(temp_by_bucket, existing_bucket)
+    _decrement_counter(temp_by_source, existing_source)
+    _decrement_counter(temp_by_source_type, existing_source_type)
+    _decrement_counter(temp_by_source_variant, existing_variant)
+    _decrement_counter(temp_by_overlap_key, existing_overlap)
+    for token in existing_payload.get("failure_types") if isinstance(existing_payload.get("failure_types"), list) else []:
+        _decrement_counter(temp_by_type, str(token))
+
+    if existing_bucket and temp_by_bucket[existing_bucket] < _safe_int(min_failures_per_bucket.get(existing_bucket), 0):
+        return False
+    if existing_source_type and temp_by_source_type[existing_source_type] < _safe_int(min_failures_per_source_type.get(existing_source_type), 0):
+        return False
+    if existing_variant and temp_by_source_variant[existing_variant] < _safe_int(min_failures_per_source_variant.get(existing_variant), 0):
+        return False
+
+    return _row_selection_matches_policy(
+        payload=candidate_payload,
+        selection_by_type=temp_by_type,
+        selection_by_seed=temp_by_seed,
+        selection_by_bucket=temp_by_bucket,
+        selection_by_source=temp_by_source,
+        selection_by_source_type=temp_by_source_type,
+        selection_by_source_variant=temp_by_source_variant,
+        selection_by_overlap_key=temp_by_overlap_key,
+        max_failures_per_type=max_failures_per_type,
+        max_failures_per_seed=max_failures_per_seed,
+        max_failures_per_bucket=max_failures_per_bucket,
+        max_failures_per_source=max_failures_per_source,
+        max_failures_per_source_variant=max_failures_per_source_variant,
+        max_failures_per_overlap_key=max_failures_per_overlap_key,
+    )
+
+
+def _pair_counter_from_groups(groups: list[list[dict[str, Any]]], field_name: str) -> dict[str, int]:
+    pairs: Counter[str] = Counter()
+    for rows in groups:
+        tokens = sorted(
+            {
+                str(row.get(field_name) or "").strip()
+                for row in rows
+                if str(row.get(field_name) or "").strip()
+            }
+        )
+        if len(tokens) < 2:
+            continue
+        for idx, left in enumerate(tokens):
+            for right in tokens[idx + 1 :]:
+                pairs[f"{left}__{right}"] += 1
+    return dict(sorted(pairs.items()))
+
+
+def _distribution_from_rows(rows: list[dict[str, Any]], field_name: str) -> dict[str, int]:
+    counter: Counter[str] = Counter()
+    for row in rows:
+        token = str(row.get(field_name) or "").strip()
+        if token:
+            counter[token] += 1
+    return dict(sorted(counter.items()))
+
+
+def _build_overlap_report(
+    *,
+    run_id: str,
+    candidate_rows: list[dict[str, Any]],
+    selected_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
+        groups: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            groups[_selection_overlap_key(row)].append(row)
+        overlap_groups = [group for group in groups.values() if len(group) > 1]
+        example_groups: list[dict[str, Any]] = []
+        for group in overlap_groups[:12]:
+            example_groups.append(
+                {
+                    "overlap_key": _selection_overlap_key(group[0]),
+                    "row_count": len(group),
+                    "source_types": sorted(
+                        {
+                            str(row.get("source_type") or "").strip()
+                            for row in group
+                            if str(row.get("source_type") or "").strip()
+                        }
+                    ),
+                    "source_variants": sorted(
+                        {
+                            str(row.get("source_variant") or "").strip()
+                            for row in group
+                            if str(row.get("source_variant") or "").strip()
+                        }
+                    ),
+                    "failure_buckets": sorted(
+                        {
+                            str(row.get("failure_bucket") or "").strip()
+                            for row in group
+                            if str(row.get("failure_bucket") or "").strip()
+                        }
+                    ),
+                    "episode_ids": sorted(
+                        {
+                            str(row.get("episode_id") or "").strip()
+                            for row in group
+                            if str(row.get("episode_id") or "").strip()
+                        }
+                    )[:6],
+                }
+            )
+        return {
+            "row_count": len(rows),
+            "unique_underlying_episodes": len(groups),
+            "overlap_group_count": len(overlap_groups),
+            "overlap_row_count": int(sum(len(group) for group in overlap_groups)),
+            "source_type_counts": _distribution_from_rows(rows, "source_type"),
+            "source_variant_counts": _distribution_from_rows(rows, "source_variant"),
+            "failure_bucket_counts": _distribution_from_rows(rows, "failure_bucket"),
+            "source_type_overlap_pairs": _pair_counter_from_groups(overlap_groups, "source_type"),
+            "source_variant_overlap_pairs": _pair_counter_from_groups(overlap_groups, "source_variant"),
+            "failure_bucket_overlap_pairs": _pair_counter_from_groups(overlap_groups, "failure_bucket"),
+            "overlap_examples": example_groups,
+        }
+
+    return {
+        "schema": "p40_failure_source_overlap_v1",
+        "generated_at": now_iso(),
+        "run_id": run_id,
+        "candidate_pool": _summarize(candidate_rows),
+        "selected_pool": _summarize(selected_rows),
+    }
+
+
+def _build_overlap_markdown(report: dict[str, Any]) -> list[str]:
+    candidate = report.get("candidate_pool") if isinstance(report.get("candidate_pool"), dict) else {}
+    selected = report.get("selected_pool") if isinstance(report.get("selected_pool"), dict) else {}
+    lines = [
+        f"# Failure Source Overlap ({str(report.get('run_id') or '')})",
+        "",
+        "## Candidate Pool",
+        f"- rows: `{_safe_int(candidate.get('row_count'), 0)}`",
+        f"- unique underlying episodes: `{_safe_int(candidate.get('unique_underlying_episodes'), 0)}`",
+        f"- overlap groups: `{_safe_int(candidate.get('overlap_group_count'), 0)}`",
+        f"- overlap rows: `{_safe_int(candidate.get('overlap_row_count'), 0)}`",
+        "",
+        "## Selected Pool",
+        f"- rows: `{_safe_int(selected.get('row_count'), 0)}`",
+        f"- unique underlying episodes: `{_safe_int(selected.get('unique_underlying_episodes'), 0)}`",
+        f"- overlap groups: `{_safe_int(selected.get('overlap_group_count'), 0)}`",
+        f"- overlap rows: `{_safe_int(selected.get('overlap_row_count'), 0)}`",
+        "",
+        "## Selected Source Variants",
+    ]
+    for key, value in dict(selected.get("source_variant_counts") or {}).items():
+        lines.append(f"- `{key}`: `{_safe_int(value, 0)}`")
+    lines.append("")
+    lines.append("## Selected Overlap Examples")
+    for item in list(selected.get("overlap_examples") or [])[:8]:
+        if not isinstance(item, dict):
+            continue
+        lines.append(
+            "- `{key}` rows=`{rows}` variants=`{variants}` buckets=`{buckets}`".format(
+                key=str(item.get("overlap_key") or ""),
+                rows=_safe_int(item.get("row_count"), 0),
+                variants=",".join(item.get("source_variants") or []),
+                buckets=",".join(item.get("failure_buckets") or []),
+            )
+        )
+    return lines
 
 
 def _replay_weight_for(*, failure_types: set[str], score: float, low_threshold: float, risk_tags: list[str]) -> float:
@@ -720,6 +993,13 @@ def run_failure_mining(
     min_failures_per_bucket = _normalized_int_mapping(criteria_cfg.get("min_failures_per_bucket"))
     max_failures_per_source = _normalized_int_mapping(criteria_cfg.get("max_failures_per_source"))
     min_failures_per_source_type = _normalized_int_mapping(criteria_cfg.get("min_failures_per_source_type"))
+    max_failures_per_source_variant = _normalized_int_mapping(criteria_cfg.get("max_failures_per_source_variant"))
+    min_failures_per_source_variant = _normalized_int_mapping(criteria_cfg.get("min_failures_per_source_variant"))
+    max_failures_per_overlap_key = int(criteria_cfg.get("max_failures_per_overlap_key") or 0)
+    allow_overlap_variant_swaps = bool(criteria_cfg.get("allow_overlap_variant_swaps", False))
+    overlap_swap_source_variants_allowlist = set(
+        _normalized_string_list(criteria_cfg.get("overlap_swap_source_variants_allowlist"))
+    )
     bucket_priority_weights = _normalized_float_mapping(criteria_cfg.get("bucket_priority_weights"))
     source_priority_weights = _normalized_float_mapping(criteria_cfg.get("source_priority_weights"))
     policy_priority_weights = _normalized_float_mapping(criteria_cfg.get("policy_priority_weights"))
@@ -816,6 +1096,9 @@ def run_failure_mining(
     selection_by_source: Counter[str] = Counter()
     selection_by_source_type: Counter[str] = Counter()
     selection_by_source_variant: Counter[str] = Counter()
+    selection_by_overlap_key: Counter[str] = Counter()
+    selected_by_overlap_payload: dict[str, dict[str, Any]] = {}
+    swap_events: list[dict[str, Any]] = []
     candidate_rows_for_selection: list[dict[str, Any]] = []
 
     for spec in source_specs:
@@ -1066,7 +1349,9 @@ def run_failure_mining(
             candidate_rows_for_selection.append(payload)
 
         if (
-            max_slice_gap_failures_per_source > 0 or max_candidate_slice_failures_per_source > 0
+            max_slice_gap_failures_per_source > 0
+            or max_candidate_slice_failures_per_source > 0
+            or max_compound_slice_failures_per_source > 0
         ) and (source_champion_policy or source_candidate_policy):
             gap_rows = sorted(
                 [
@@ -1082,11 +1367,100 @@ def run_failure_mining(
                     str(item.get("slice_label") or ""),
                 ),
             )
+            added_compound_gap_rows = 0
+            seen_compound_gap_tags: set[str] = set()
+
+            def _append_compound_gap_rows(
+                *,
+                picked: dict[str, Any],
+                source_run_id: str,
+                replay_weight: float,
+                source_priority: float,
+                slice_tags: list[str],
+                risk_tags: list[str],
+                primary_slice_tag: str,
+            ) -> None:
+                nonlocal added_compound_gap_rows
+                if max_compound_slice_failures_per_source <= 0:
+                    return
+                for compound_slice_tag in _compound_actionable_slice_tags(slice_tags, primary_tag=primary_slice_tag):
+                    if added_compound_gap_rows >= max_compound_slice_failures_per_source:
+                        break
+                    normalized_compound_tag = str(compound_slice_tag).strip().lower()
+                    if normalized_compound_tag in seen_compound_gap_tags:
+                        continue
+                    compound_bucket = _bucket_from_slice_tag(compound_slice_tag)
+                    if not compound_bucket:
+                        continue
+                    compound_bucket_priority = bucket_priority_weights.get(compound_bucket, 1.0)
+                    compound_replay_weight = round(
+                        replay_weight
+                        * max(0.1, compound_slice_priority_weight)
+                        * max(0.1, compound_bucket_priority)
+                        * 0.86,
+                        4,
+                    )
+                    compound_episode_id = "{run}|compound_gap|{policy}|{seed}|{ep}|{tag}".format(
+                        run=source_run_id,
+                        policy=str(picked.get("policy_id") or ""),
+                        seed=str(picked.get("seed") or ""),
+                        ep=_safe_int(picked.get("episode_index"), 0),
+                        tag=normalized_compound_tag.replace(":", "_"),
+                    )
+                    candidate_rows_for_selection.append(
+                        {
+                            "episode_id": compound_episode_id,
+                            "policy_id": str(picked.get("policy_id") or ""),
+                            "seed": str(picked.get("seed") or ""),
+                            "episode_index": _safe_int(picked.get("episode_index"), 0),
+                            "status": str(picked.get("status") or ""),
+                            "error": str(picked.get("error") or ""),
+                            "total_score": _safe_float(picked.get("total_score"), 0.0),
+                            "rounds_survived": _safe_int(picked.get("rounds_survived"), 0),
+                            "invalid_action_rate": _safe_float(picked.get("invalid_action_rate"), 0.0),
+                            "timeout_rate": _safe_float(picked.get("timeout_rate"), 0.0),
+                            "failure_types": ["compound_slice_failure_seed", "triage_degraded_slice"],
+                            "failure_bucket": compound_bucket,
+                            "bucket_reason": "compound_slice_failure_seed",
+                            "failure_bucket_candidates": [compound_bucket],
+                            "failure_bucket_signals": [f"compound_slice_gap:{compound_slice_tag}"],
+                            "slice_tags": slice_tags,
+                            "risk_tags": risk_tags,
+                            "source_type": "arena_compound_slice_seed",
+                            "source_variant": _preferred_source_variant(
+                                primary_slice_tag=compound_slice_tag,
+                                slice_tags=slice_tags,
+                                failure_bucket=compound_bucket,
+                            ),
+                            "selection_reason": f"{compound_bucket},compound_slice_failure_seed,{compound_slice_tag}",
+                            "replay_weight": compound_replay_weight,
+                            "source": {
+                                "arena_run_dir": str(arena_run_dir),
+                                "episode_records": str(episode_records_path),
+                                "summary_table": str(summary_path),
+                                "triage_report": str(triage_report_path) if isinstance(triage_report_path, Path) else "",
+                                "slice_breakdown": str(slice_breakdown_path) if isinstance(slice_breakdown_path, Path) else "",
+                                "line": _safe_int(picked.get("_source_line"), 0),
+                            },
+                            "source_run_id": source_run_id,
+                            "source_campaign_id": str(cfg.get("campaign_id") or ""),
+                            "source_checkpoint_refs": {
+                                "candidate_policy": source_candidate_policy,
+                                "champion_policy": source_champion_policy,
+                            },
+                            "source_priority": source_priority,
+                            "bucket_priority": compound_bucket_priority,
+                            "triage_slice_hits": [compound_slice_tag],
+                            "triage_priority": compound_slice_priority_weight,
+                            "raw_episode": picked,
+                        }
+                    )
+                    seen_compound_gap_tags.add(normalized_compound_tag)
+                    added_compound_gap_rows += 1
+
             if max_slice_gap_failures_per_source > 0 and source_champion_policy:
                 added_gap_rows = 0
                 seen_gap_tags: set[str] = set()
-                added_compound_gap_rows = 0
-                seen_compound_gap_tags: set[str] = set()
                 for gap_row in gap_rows:
                     if added_gap_rows >= max_slice_gap_failures_per_source:
                         break
@@ -1162,8 +1536,11 @@ def run_failure_mining(
                             "slice_tags": slice_tags,
                             "risk_tags": risk_tags,
                             "source_type": "arena_slice_gap_seed",
-                            "source_variant": _source_variant_from_slice_tag(slice_tag)
-                            or _infer_source_variant(slice_tags=slice_tags, failure_bucket=bucket),
+                            "source_variant": _preferred_source_variant(
+                                primary_slice_tag=slice_tag,
+                                slice_tags=slice_tags,
+                                failure_bucket=bucket,
+                            ),
                             "selection_reason": f"{bucket},slice_coverage_gap_seed,{slice_tag}",
                             "replay_weight": replay_weight,
                             "source": {
@@ -1189,78 +1566,80 @@ def run_failure_mining(
                     )
                     seen_gap_tags.add(slice_tag)
                     added_gap_rows += 1
-                    if max_compound_slice_failures_per_source > 0 and added_compound_gap_rows < max_compound_slice_failures_per_source:
-                        for compound_slice_tag in _compound_actionable_slice_tags(slice_tags, primary_tag=slice_tag):
-                            if added_compound_gap_rows >= max_compound_slice_failures_per_source:
-                                break
-                            normalized_compound_tag = str(compound_slice_tag).strip().lower()
-                            if normalized_compound_tag in seen_compound_gap_tags:
-                                continue
-                            compound_bucket = _bucket_from_slice_tag(compound_slice_tag)
-                            if not compound_bucket:
-                                continue
-                            compound_bucket_priority = bucket_priority_weights.get(compound_bucket, 1.0)
-                            compound_replay_weight = round(
-                                replay_weight
-                                * max(0.1, compound_slice_priority_weight)
-                                * max(0.1, compound_bucket_priority)
-                                * 0.86,
-                                4,
-                            )
-                            compound_episode_id = "{run}|compound_gap|{policy}|{seed}|{ep}|{tag}".format(
-                                run=source_run_id,
-                                policy=str(picked.get("policy_id") or ""),
-                                seed=str(picked.get("seed") or ""),
-                                ep=_safe_int(picked.get("episode_index"), 0),
-                                tag=normalized_compound_tag.replace(":", "_"),
-                            )
-                            candidate_rows_for_selection.append(
-                                {
-                                    "episode_id": compound_episode_id,
-                                    "policy_id": str(picked.get("policy_id") or ""),
-                                    "seed": str(picked.get("seed") or ""),
-                                    "episode_index": _safe_int(picked.get("episode_index"), 0),
-                                    "status": str(picked.get("status") or ""),
-                                    "error": str(picked.get("error") or ""),
-                                    "total_score": _safe_float(picked.get("total_score"), 0.0),
-                                    "rounds_survived": _safe_int(picked.get("rounds_survived"), 0),
-                                    "invalid_action_rate": _safe_float(picked.get("invalid_action_rate"), 0.0),
-                                    "timeout_rate": _safe_float(picked.get("timeout_rate"), 0.0),
-                                    "failure_types": ["compound_slice_failure_seed", "triage_degraded_slice"],
-                                    "failure_bucket": compound_bucket,
-                                    "bucket_reason": "compound_slice_failure_seed",
-                                    "failure_bucket_candidates": [compound_bucket],
-                                    "failure_bucket_signals": [f"compound_slice_gap:{compound_slice_tag}"],
-                                    "slice_tags": slice_tags,
-                                    "risk_tags": risk_tags,
-                                    "source_type": "arena_compound_slice_seed",
-                                    "source_variant": _source_variant_from_slice_tag(compound_slice_tag)
-                                    or _infer_source_variant(slice_tags=slice_tags, failure_bucket=compound_bucket),
-                                    "selection_reason": f"{compound_bucket},compound_slice_failure_seed,{compound_slice_tag}",
-                                    "replay_weight": compound_replay_weight,
-                                    "source": {
-                                        "arena_run_dir": str(arena_run_dir),
-                                        "episode_records": str(episode_records_path),
-                                        "summary_table": str(summary_path),
-                                        "triage_report": str(triage_report_path) if isinstance(triage_report_path, Path) else "",
-                                        "slice_breakdown": str(slice_breakdown_path) if isinstance(slice_breakdown_path, Path) else "",
-                                        "line": _safe_int(picked.get("_source_line"), 0),
-                                    },
-                                    "source_run_id": source_run_id,
-                                    "source_campaign_id": str(cfg.get("campaign_id") or ""),
-                                    "source_checkpoint_refs": {
-                                        "candidate_policy": source_candidate_policy,
-                                        "champion_policy": source_champion_policy,
-                                    },
-                                    "source_priority": source_priority,
-                                    "bucket_priority": compound_bucket_priority,
-                                    "triage_slice_hits": [compound_slice_tag],
-                                    "triage_priority": compound_slice_priority_weight,
-                                    "raw_episode": picked,
-                                }
-                            )
-                            seen_compound_gap_tags.add(normalized_compound_tag)
-                            added_compound_gap_rows += 1
+                    if added_compound_gap_rows < max_compound_slice_failures_per_source:
+                        _append_compound_gap_rows(
+                            picked=picked,
+                            source_run_id=source_run_id,
+                            replay_weight=replay_weight,
+                            source_priority=source_priority,
+                            slice_tags=slice_tags,
+                            risk_tags=risk_tags,
+                            primary_slice_tag=slice_tag,
+                        )
+
+            if (
+                max_compound_slice_failures_per_source > 0
+                and source_champion_policy
+                and max_slice_gap_failures_per_source <= 0
+            ):
+                for gap_row in gap_rows:
+                    if added_compound_gap_rows >= max_compound_slice_failures_per_source:
+                        break
+                    slice_tag = _slice_tag_from_row(gap_row)
+                    if not slice_tag:
+                        continue
+                    bucket = _bucket_from_slice_tag(slice_tag)
+                    if skip_unknown_slice_gap_tags and not bucket:
+                        continue
+                    if not bucket:
+                        bucket = "low_score_survival"
+                    bucket_priority = bucket_priority_weights.get(bucket, 1.0)
+                    champion_gap = max(
+                        1,
+                        _safe_int(gap_row.get("champion_count"), 0) - _safe_int(gap_row.get("candidate_count"), 0),
+                    )
+                    score_delta = _safe_float(
+                        ((gap_row.get("metrics") or {}) if isinstance(gap_row.get("metrics"), dict) else {}).get("mean_total_score_delta"),
+                        0.0,
+                    )
+                    matching_rows = [
+                        row
+                        for row in rows
+                        if str(row.get("policy_id") or "").strip() == source_champion_policy
+                        and slice_tag in _infer_slice_tags(row)
+                    ]
+                    if not matching_rows:
+                        continue
+                    matching_rows.sort(
+                        key=lambda row: (
+                            -_safe_float(row.get("total_score"), 0.0),
+                            -_safe_int(row.get("rounds_survived"), 0),
+                            str(row.get("seed") or ""),
+                        )
+                    )
+                    picked = matching_rows[0]
+                    slice_tags = _infer_slice_tags(picked)
+                    risk_tags = _infer_risk_tags(
+                        picked,
+                        high_risk_round_threshold=high_risk_round_threshold,
+                        low_threshold=low_threshold,
+                    )
+                    replay_weight = round(
+                        (1.5 + min(1.5, 0.2 * float(champion_gap)) + min(1.0, abs(score_delta) / 200.0))
+                        * max(0.1, source_priority)
+                        * max(0.1, bucket_priority)
+                        * max(0.1, slice_gap_priority_weight),
+                        4,
+                    )
+                    _append_compound_gap_rows(
+                        picked=picked,
+                        source_run_id=source_run_id,
+                        replay_weight=replay_weight,
+                        source_priority=source_priority,
+                        slice_tags=slice_tags,
+                        risk_tags=risk_tags,
+                        primary_slice_tag=slice_tag,
+                    )
 
             if max_candidate_slice_failures_per_source > 0 and source_candidate_policy:
                 added_candidate_gap_rows = 0
@@ -1341,8 +1720,11 @@ def run_failure_mining(
                             "slice_tags": slice_tags,
                             "risk_tags": risk_tags,
                             "source_type": "arena_candidate_slice_seed",
-                            "source_variant": _source_variant_from_slice_tag(slice_tag)
-                            or _infer_source_variant(slice_tags=slice_tags, failure_bucket=bucket),
+                            "source_variant": _preferred_source_variant(
+                                primary_slice_tag=slice_tag,
+                                slice_tags=slice_tags,
+                                failure_bucket=bucket,
+                            ),
                             "selection_reason": f"{bucket},candidate_slice_failure_seed,{slice_tag}",
                             "replay_weight": replay_weight,
                             "source": {
@@ -1389,6 +1771,10 @@ def run_failure_mining(
         selection_by_source_type[str(payload.get("source_type") or "")] += 1
         if str(payload.get("source_variant") or "").strip():
             selection_by_source_variant[str(payload.get("source_variant") or "").strip()] += 1
+        overlap_key = _selection_overlap_key(payload)
+        if overlap_key:
+            selection_by_overlap_key[overlap_key] += 1
+            selected_by_overlap_payload[overlap_key] = payload
         for token in payload.get("failure_types") if isinstance(payload.get("failure_types"), list) else []:
             by_type[str(token)] += 1
             selection_by_type[str(token)] += 1
@@ -1405,26 +1791,109 @@ def run_failure_mining(
         by_policy[str(payload.get("policy_id") or "")] += 1
         by_seed[str(payload.get("seed") or "")] += 1
 
+    def _remove_selected(payload: dict[str, Any]) -> None:
+        episode_id = str(payload.get("episode_id") or "")
+        if episode_id:
+            selected_ids.discard(episode_id)
+            for index, row in enumerate(selected):
+                if str(row.get("episode_id") or "") == episode_id:
+                    selected.pop(index)
+                    break
+        _decrement_counter(selection_by_seed, str(payload.get("seed") or ""))
+        _decrement_counter(selection_by_bucket, str(payload.get("failure_bucket") or ""))
+        _decrement_counter(selection_by_source, str(payload.get("source_run_id") or ""))
+        _decrement_counter(selection_by_source_type, str(payload.get("source_type") or ""))
+        _decrement_counter(selection_by_source_variant, str(payload.get("source_variant") or ""))
+        overlap_key = _selection_overlap_key(payload)
+        if overlap_key:
+            _decrement_counter(selection_by_overlap_key, overlap_key)
+            if selection_by_overlap_key.get(overlap_key, 0) <= 0:
+                selected_by_overlap_payload.pop(overlap_key, None)
+        for token in payload.get("failure_types") if isinstance(payload.get("failure_types"), list) else []:
+            _decrement_counter(selection_by_type, str(token))
+            _decrement_counter(by_type, str(token))
+        _decrement_counter(by_bucket, str(payload.get("failure_bucket") or "unknown"))
+        _decrement_counter(by_source, str(payload.get("source_run_id") or "unknown"))
+        _decrement_counter(by_source_type, str(payload.get("source_type") or "unknown"))
+        if str(payload.get("source_variant") or "").strip():
+            _decrement_counter(by_source_variant, str(payload.get("source_variant") or "").strip())
+        _decrement_counter(by_bucket_reason, str(payload.get("bucket_reason") or "unknown"))
+        for tag in payload.get("slice_tags") if isinstance(payload.get("slice_tags"), list) else []:
+            _decrement_counter(by_slice, str(tag))
+        for tag in payload.get("risk_tags") if isinstance(payload.get("risk_tags"), list) else []:
+            _decrement_counter(by_risk, str(tag))
+        _decrement_counter(by_policy, str(payload.get("policy_id") or ""))
+        _decrement_counter(by_seed, str(payload.get("seed") or ""))
+
     if min_failures_per_bucket:
         for payload in candidate_rows_for_selection:
             bucket = str(payload.get("failure_bucket") or "")
             target = _safe_int(min_failures_per_bucket.get(bucket), 0)
             if target <= 0 or selection_by_bucket[bucket] >= target:
                 continue
-            if not _row_selection_matches_policy(
+            if _row_selection_matches_policy(
                 payload=payload,
                 selection_by_type=selection_by_type,
                 selection_by_seed=selection_by_seed,
                 selection_by_bucket=selection_by_bucket,
                 selection_by_source=selection_by_source,
                 selection_by_source_type=selection_by_source_type,
+                selection_by_source_variant=selection_by_source_variant,
+                selection_by_overlap_key=selection_by_overlap_key,
                 max_failures_per_type=max_failures_per_type,
                 max_failures_per_seed=max_failures_per_seed,
                 max_failures_per_bucket=max_failures_per_bucket,
                 max_failures_per_source=max_failures_per_source,
+                max_failures_per_source_variant=max_failures_per_source_variant,
+                max_failures_per_overlap_key=max_failures_per_overlap_key,
             ):
-                continue
-            _record_selected(payload)
+                _record_selected(payload)
+            else:
+                swapped = False
+                overlap_key = _selection_overlap_key(payload)
+                existing_payload = selected_by_overlap_payload.get(overlap_key)
+                source_variant = str(payload.get("source_variant") or "")
+                if (
+                    allow_overlap_variant_swaps
+                    and existing_payload is not None
+                    and (not overlap_swap_source_variants_allowlist or not source_variant or source_variant in overlap_swap_source_variants_allowlist)
+                    and _can_swap_overlap_selected_row(
+                        candidate_payload=payload,
+                        existing_payload=existing_payload,
+                        selection_by_type=selection_by_type,
+                        selection_by_seed=selection_by_seed,
+                        selection_by_bucket=selection_by_bucket,
+                        selection_by_source=selection_by_source,
+                        selection_by_source_type=selection_by_source_type,
+                        selection_by_source_variant=selection_by_source_variant,
+                        selection_by_overlap_key=selection_by_overlap_key,
+                        max_failures_per_type=max_failures_per_type,
+                        max_failures_per_seed=max_failures_per_seed,
+                        max_failures_per_bucket=max_failures_per_bucket,
+                        max_failures_per_source=max_failures_per_source,
+                        max_failures_per_source_variant=max_failures_per_source_variant,
+                        max_failures_per_overlap_key=max_failures_per_overlap_key,
+                        min_failures_per_bucket=min_failures_per_bucket,
+                        min_failures_per_source_type=min_failures_per_source_type,
+                        min_failures_per_source_variant=min_failures_per_source_variant,
+                    )
+                ):
+                    removed_variant = str(existing_payload.get("source_variant") or "")
+                    _remove_selected(existing_payload)
+                    _record_selected(payload)
+                    swap_events.append(
+                        {
+                            "overlap_key": overlap_key,
+                            "removed_episode_id": str(existing_payload.get("episode_id") or ""),
+                            "removed_source_variant": removed_variant,
+                            "added_episode_id": str(payload.get("episode_id") or ""),
+                            "added_source_variant": source_variant,
+                            "reason": f"bucket_minimum:{bucket}",
+                        }
+                    )
+                    swapped = True
+                if not swapped:
+                    continue
             if len(selected) >= max(1, max_failures):
                 warnings.append(f"failure cap reached while satisfying bucket minimums: {max_failures}")
                 break
@@ -1435,22 +1904,144 @@ def run_failure_mining(
             target = _safe_int(min_failures_per_source_type.get(source_type), 0)
             if target <= 0 or selection_by_source_type[source_type] >= target:
                 continue
-            if not _row_selection_matches_policy(
+            if _row_selection_matches_policy(
                 payload=payload,
                 selection_by_type=selection_by_type,
                 selection_by_seed=selection_by_seed,
                 selection_by_bucket=selection_by_bucket,
                 selection_by_source=selection_by_source,
                 selection_by_source_type=selection_by_source_type,
+                selection_by_source_variant=selection_by_source_variant,
+                selection_by_overlap_key=selection_by_overlap_key,
                 max_failures_per_type=max_failures_per_type,
                 max_failures_per_seed=max_failures_per_seed,
                 max_failures_per_bucket=max_failures_per_bucket,
                 max_failures_per_source=max_failures_per_source,
+                max_failures_per_source_variant=max_failures_per_source_variant,
+                max_failures_per_overlap_key=max_failures_per_overlap_key,
             ):
-                continue
-            _record_selected(payload)
+                _record_selected(payload)
+            else:
+                swapped = False
+                overlap_key = _selection_overlap_key(payload)
+                existing_payload = selected_by_overlap_payload.get(overlap_key)
+                if (
+                    allow_overlap_variant_swaps
+                    and existing_payload is not None
+                    and _can_swap_overlap_selected_row(
+                        candidate_payload=payload,
+                        existing_payload=existing_payload,
+                        selection_by_type=selection_by_type,
+                        selection_by_seed=selection_by_seed,
+                        selection_by_bucket=selection_by_bucket,
+                        selection_by_source=selection_by_source,
+                        selection_by_source_type=selection_by_source_type,
+                        selection_by_source_variant=selection_by_source_variant,
+                        selection_by_overlap_key=selection_by_overlap_key,
+                        max_failures_per_type=max_failures_per_type,
+                        max_failures_per_seed=max_failures_per_seed,
+                        max_failures_per_bucket=max_failures_per_bucket,
+                        max_failures_per_source=max_failures_per_source,
+                        max_failures_per_source_variant=max_failures_per_source_variant,
+                        max_failures_per_overlap_key=max_failures_per_overlap_key,
+                        min_failures_per_bucket=min_failures_per_bucket,
+                        min_failures_per_source_type=min_failures_per_source_type,
+                        min_failures_per_source_variant=min_failures_per_source_variant,
+                    )
+                ):
+                    removed_source_type = str(existing_payload.get("source_type") or "")
+                    removed_variant = str(existing_payload.get("source_variant") or "")
+                    _remove_selected(existing_payload)
+                    _record_selected(payload)
+                    swap_events.append(
+                        {
+                            "overlap_key": overlap_key,
+                            "removed_episode_id": str(existing_payload.get("episode_id") or ""),
+                            "removed_source_type": removed_source_type,
+                            "removed_source_variant": removed_variant,
+                            "added_episode_id": str(payload.get("episode_id") or ""),
+                            "added_source_type": source_type,
+                            "added_source_variant": str(payload.get("source_variant") or ""),
+                            "reason": f"source_type_minimum:{source_type}",
+                        }
+                    )
+                    swapped = True
+                if not swapped:
+                    continue
             if len(selected) >= max(1, max_failures):
                 warnings.append(f"failure cap reached while satisfying source-type minimums: {max_failures}")
+                break
+
+    if min_failures_per_source_variant and len(selected) < max(1, max_failures):
+        for payload in candidate_rows_for_selection:
+            source_variant = str(payload.get("source_variant") or "")
+            target = _safe_int(min_failures_per_source_variant.get(source_variant), 0)
+            if target <= 0 or selection_by_source_variant[source_variant] >= target:
+                continue
+            if _row_selection_matches_policy(
+                payload=payload,
+                selection_by_type=selection_by_type,
+                selection_by_seed=selection_by_seed,
+                selection_by_bucket=selection_by_bucket,
+                selection_by_source=selection_by_source,
+                selection_by_source_type=selection_by_source_type,
+                selection_by_source_variant=selection_by_source_variant,
+                selection_by_overlap_key=selection_by_overlap_key,
+                max_failures_per_type=max_failures_per_type,
+                max_failures_per_seed=max_failures_per_seed,
+                max_failures_per_bucket=max_failures_per_bucket,
+                max_failures_per_source=max_failures_per_source,
+                max_failures_per_source_variant=max_failures_per_source_variant,
+                max_failures_per_overlap_key=max_failures_per_overlap_key,
+            ):
+                _record_selected(payload)
+            else:
+                swapped = False
+                overlap_key = _selection_overlap_key(payload)
+                existing_payload = selected_by_overlap_payload.get(overlap_key)
+                if (
+                    allow_overlap_variant_swaps
+                    and existing_payload is not None
+                    and (not overlap_swap_source_variants_allowlist or source_variant in overlap_swap_source_variants_allowlist)
+                    and _can_swap_overlap_selected_row(
+                        candidate_payload=payload,
+                        existing_payload=existing_payload,
+                        selection_by_type=selection_by_type,
+                        selection_by_seed=selection_by_seed,
+                        selection_by_bucket=selection_by_bucket,
+                        selection_by_source=selection_by_source,
+                        selection_by_source_type=selection_by_source_type,
+                        selection_by_source_variant=selection_by_source_variant,
+                        selection_by_overlap_key=selection_by_overlap_key,
+                        max_failures_per_type=max_failures_per_type,
+                        max_failures_per_seed=max_failures_per_seed,
+                        max_failures_per_bucket=max_failures_per_bucket,
+                        max_failures_per_source=max_failures_per_source,
+                        max_failures_per_source_variant=max_failures_per_source_variant,
+                        max_failures_per_overlap_key=max_failures_per_overlap_key,
+                        min_failures_per_bucket=min_failures_per_bucket,
+                        min_failures_per_source_type=min_failures_per_source_type,
+                        min_failures_per_source_variant=min_failures_per_source_variant,
+                    )
+                ):
+                    removed_variant = str(existing_payload.get("source_variant") or "")
+                    _remove_selected(existing_payload)
+                    _record_selected(payload)
+                    swap_events.append(
+                        {
+                            "overlap_key": overlap_key,
+                            "removed_episode_id": str(existing_payload.get("episode_id") or ""),
+                            "removed_source_variant": removed_variant,
+                            "added_episode_id": str(payload.get("episode_id") or ""),
+                            "added_source_variant": source_variant,
+                            "reason": f"source_variant_minimum:{source_variant}",
+                        }
+                    )
+                    swapped = True
+                if not swapped:
+                    continue
+            if len(selected) >= max(1, max_failures):
+                warnings.append(f"failure cap reached while satisfying source-variant minimums: {max_failures}")
                 break
 
     for payload in candidate_rows_for_selection:
@@ -1463,16 +2054,30 @@ def run_failure_mining(
             selection_by_bucket=selection_by_bucket,
             selection_by_source=selection_by_source,
             selection_by_source_type=selection_by_source_type,
+            selection_by_source_variant=selection_by_source_variant,
+            selection_by_overlap_key=selection_by_overlap_key,
             max_failures_per_type=max_failures_per_type,
             max_failures_per_seed=max_failures_per_seed,
             max_failures_per_bucket=max_failures_per_bucket,
             max_failures_per_source=max_failures_per_source,
+            max_failures_per_source_variant=max_failures_per_source_variant,
+            max_failures_per_overlap_key=max_failures_per_overlap_key,
         ):
             continue
         _record_selected(payload)
         if len(selected) >= max(1, max_failures):
             warnings.append(f"failure cap reached: {max_failures}")
             break
+
+    overlap_report = _build_overlap_report(
+        run_id=chosen_run_id,
+        candidate_rows=candidate_rows_for_selection,
+        selected_rows=selected,
+    )
+    overlap_report_json = run_dir / "overlap_report.json"
+    overlap_report_md = run_dir / "overlap_report.md"
+    write_json(overlap_report_json, overlap_report)
+    write_markdown(overlap_report_md, _build_overlap_markdown(overlap_report))
 
     candidate_mean = round(sum(candidate_mean_values) / max(1, len(candidate_mean_values)), 4) if candidate_mean_values else 0.0
     champion_mean = round(sum(champion_mean_values) / max(1, len(champion_mean_values)), 4) if champion_mean_values else 0.0
@@ -1533,6 +2138,9 @@ def run_failure_mining(
             "min_failures_per_bucket": min_failures_per_bucket,
             "max_failures_per_source": max_failures_per_source,
             "min_failures_per_source_type": min_failures_per_source_type,
+            "max_failures_per_overlap_key": max_failures_per_overlap_key,
+            "allow_overlap_variant_swaps": allow_overlap_variant_swaps,
+            "overlap_swap_source_variants_allowlist": sorted(overlap_swap_source_variants_allowlist),
             "max_compound_slice_failures_per_source": max_compound_slice_failures_per_source,
             "compound_slice_priority_weight": compound_slice_priority_weight,
             "bucket_priority_weights": bucket_priority_weights,
@@ -1555,6 +2163,9 @@ def run_failure_mining(
         "champion_regression_detected": champion_regression_detected,
         "low_score_threshold": low_threshold,
         "selected_count": len(selected),
+        "overlap_report_json": str(overlap_report_json),
+        "overlap_report_md": str(overlap_report_md),
+        "swap_events": swap_events,
         "failures": [
             {
                 "episode_id": item["episode_id"],
@@ -1600,6 +2211,33 @@ def run_failure_mining(
         "by_source": dict(sorted(by_source.items())),
         "by_source_type": dict(sorted(by_source_type.items())),
         "by_source_variant": dict(sorted(by_source_variant.items())),
+        "candidate_pool_source_type_counts": dict(
+            sorted(
+                Counter(
+                    str(item.get("source_type") or "").strip()
+                    for item in candidate_rows_for_selection
+                    if str(item.get("source_type") or "").strip()
+                ).items()
+            )
+        ),
+        "candidate_pool_source_variant_counts": dict(
+            sorted(
+                Counter(
+                    str(item.get("source_variant") or "").strip()
+                    for item in candidate_rows_for_selection
+                    if str(item.get("source_variant") or "").strip()
+                ).items()
+            )
+        ),
+        "candidate_pool_bucket_counts": dict(
+            sorted(
+                Counter(
+                    str(item.get("failure_bucket") or "").strip()
+                    for item in candidate_rows_for_selection
+                    if str(item.get("failure_bucket") or "").strip()
+                ).items()
+            )
+        ),
         "known_failure_buckets": list(KNOWN_FAILURE_BUCKETS),
         "scarce_buckets": scarce_failure_buckets(by_bucket),
         "by_slice_tag": dict(sorted(by_slice.items())),
@@ -1617,6 +2255,10 @@ def run_failure_mining(
         "working_rows": aggregate_working_rows,
         "candidate_policy": candidate_policy,
         "champion_policy": champion_policy,
+        "overlap_report_json": str(overlap_report_json),
+        "overlap_report_md": str(overlap_report_md),
+        "swap_event_count": len(swap_events),
+        "swap_events": swap_events,
     }
     md_lines = _build_markdown(
         run_id=chosen_run_id,

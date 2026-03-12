@@ -552,3 +552,46 @@ R2-S4 之后的默认下一步仍然是 pure RL：
   - 优先补 `stateful_joker_misplay`
 
 这意味着：pure RL 主线仍值得继续，但下一轮默认不再原地加深同一 scarcity family，而是先把 source coverage 做宽再重新认证。
+
+## R5 — Rich Failure Source Expansion & Certified Breakthrough（2026-03-12）
+
+R5 没有切回 `warm-start / teacher`，而是继续沿 pure RL 数据引擎推进，并把重点放在 richer non-overlapping failure sources 上。  
+这一轮的目标不是“再做一轮同配方微调”，而是回答两个更关键的问题：
+1. richer source family 是否能相对当前 strongest certified baseline 打出 `+10` 级别的认证突破；
+2. 如果做不到，瓶颈到底在训练配比，还是在 failure source 生成链本身。
+
+R5 的关键结果：
+- richer-source family 的两次认证都没有通过突破门槛：
+  - `C1` candidate `60.75`
+  - `C2` candidate `51.0`
+  - 二者都显著低于当前 strongest certified baseline `104.5`
+- 因此，R5 已形成可信 plateau 证据：  
+  richer-source 这条子家族在当前 source 生成方式下，还不足以带来认证级突破。
+- 在 plateau 证据成立后，R5 自动切向了更高 ROI 的纯 RL 子方向：
+  - `source rescue / overlap-aware selection`
+  - `gapclean compound-source probing`
+
+R5 新增的关键工程发现：
+- `source rescue` 已能把 `position_sensitive_misplay` 和 `resource_pressure_misplay` 拉进 final failure pack；
+- 但 `shop_or_economy_misallocation` 与 `stateful_joker_misplay` 仍然无法稳定进入最终训练样本；
+- 更关键的是，`gapclean` 分析暴露了一个结构性耦合：
+  - `compound_slice_failure_seed` 当前仍依赖 slice-gap 路径生成；
+  - 一旦关闭 gap path，`arena_compound_slice_seed` 会直接从 candidate pool 中消失。
+
+R5 的结论因此非常明确：
+- 当前 strongest certified pure-RL 仍然维持为：
+  - `rl_policy:p42_rl_candidate:20260311-221824-candidate-rl:aaaaaaa,bbbbbbb,ccccccc,ddddddd:aec12dffb2`
+  - certified score `104.5`
+- R5 没有拿到新的 certified breakthrough；
+- 但 R5 成功证明了下一阶段 pure RL 的最高 ROI 方向：
+  - 不是继续原地调 richer-source family 配比；
+  - 而是先解耦 `compound_slice_failure_seed` 与 slice-gap path 的结构耦合，
+  - 然后再做 richer non-overlapping source expansion，并重新认证。
+
+
+## R5 收口更新（2026-03-12）
+R5 的最终结论不是“source 进不去”，而是“source 已经进去了，但这一子家族仍然无法打出认证级突破”。
+- `B12` 修开了 `compound_slice_failure_seed` 对 slice-gap path 的耦合；
+- `B13` 证明 `arena_compound_slice_seed` 与 `shop_or_economy_misallocation` 已经进入 PPO 训练；
+- `C3` 认证结果 candidate `57.25`，相对当前 strongest certified baseline `104.5` 退化 `-47.25`；
+- 因此 R5 达成 Outcome B：richer-source family plateau 已被进一步证实，下一默认方向应切到更高 ROI 的 pure RL 子方向，而不是继续在同一家族里微调。
